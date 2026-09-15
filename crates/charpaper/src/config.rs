@@ -4,9 +4,9 @@
 //! composes them and adds the handful that belong to the application itself.
 
 use charpaper_scene::SceneConfig;
-use charpaper_wallpaper::AttachStrategy;
-use charpaper_wallpaper::LayeredMode;
 use charpaper_wallpaper::WallpaperConfig;
+
+use crate::cli::Cli;
 
 /// Everything the app needs to start up.
 #[derive(Clone, Debug, Default)]
@@ -56,88 +56,42 @@ impl Default for WindowConfig {
 }
 
 impl AppConfig {
-    /// Build the config from defaults, then apply command-line overrides.
-    ///
-    /// Unknown flags are reported and ignored rather than fatal, so a typo
-    /// never leaves you staring at a silent process.
-    pub fn from_args() -> Self {
-        let mut cfg = Self::default();
+    /// Apply command-line overrides on top of the defaults.
+    pub fn from_cli(cli: &Cli) -> Self {
+        // Struct-update syntax rather than `let mut cfg = default(); cfg.x = ..`,
+        // which clippy rightly flags as a missed initialiser.
+        let mut cfg = Self { inspect_and_exit: cli.inspect, ..Self::default() };
 
-        for arg in std::env::args().skip(1) {
-            match arg.as_str() {
-                "--help" | "-h" => {
-                    print_help();
-                    std::process::exit(0);
-                }
+        cfg.wallpaper.dump_window_tree = cli.tree;
 
-                "--inspect" => cfg.inspect_and_exit = true,
-                "--tree" => cfg.wallpaper.dump_window_tree = true,
+        if cli.no_spawn_workerw {
+            cfg.wallpaper.spawn_worker_w = false;
+        }
 
-                "--dry-run" => {
-                    cfg.wallpaper.dry_run = true;
-                    cfg.wallpaper.dump_window_tree = true;
-                    // In dry-run we never reparent, so the window would be
-                    // invisible forever if we left it hidden.
-                    cfg.window.start_hidden = false;
-                    cfg.window.decorations = true;
-                }
+        if let Some(strategy) = cli.strategy {
+            cfg.wallpaper.strategy = strategy;
+        }
 
-                "--windowed" => {
-                    cfg.wallpaper.enabled = false;
-                    cfg.window.start_hidden = false;
-                    cfg.window.decorations = true;
-                    cfg.window.skip_taskbar = false;
-                }
+        if let Some(layered) = cli.layered {
+            cfg.wallpaper.layered = layered;
+        }
 
-                "--no-spawn-workerw" => cfg.wallpaper.spawn_worker_w = false,
-                "--no-layered" => cfg.wallpaper.layered = LayeredMode::Never,
-                "--force-layered" => cfg.wallpaper.layered = LayeredMode::Always,
+        // A dry run never reparents, so a hidden borderless window would just
+        // be invisible. Show it like a normal one.
+        if cli.dry_run {
+            cfg.wallpaper.dry_run = true;
+            cfg.wallpaper.dump_window_tree = true;
+            cfg.window.start_hidden = false;
+            cfg.window.decorations = true;
+        }
 
-                other => {
-                    if let Some(value) = other.strip_prefix("--strategy=") {
-                        match AttachStrategy::parse(value) {
-                            Some(s) => cfg.wallpaper.strategy = s,
-                            None => eprintln!(
-                                "charpaper: unknown strategy {value:?}; \
-                                 expected auto|classic|raised|progman|none"
-                            ),
-                        }
-                    } else {
-                        eprintln!("charpaper: ignoring unknown argument {other:?}");
-                    }
-                }
-            }
+        if cli.windowed {
+            cfg.wallpaper.enabled = false;
+            cfg.window.start_hidden = false;
+            cfg.window.decorations = true;
+            cfg.window.skip_taskbar = false;
         }
 
         cfg
     }
-}
-fn print_help() {
-    println!(
-        "\
-charpaper -- a Bevy live wallpaper
-
-USAGE:
-    charpaper [FLAGS]
-
-DIAGNOSTICS (safe, read-only):
-    --inspect             Print what this machine's desktop window layout looks
-                          like, then exit. Never opens a window, never modifies
-                          anything. Start here when something doesn't work.
-    --dry-run             Run the app in a normal decorated window, print the
-                          full attach plan, but never touch the desktop.
-    --tree                Dump the desktop window tree during startup.
-
-MODES:
-    --windowed            Skip the wallpaper machinery entirely and run as an
-                          ordinary window. Use this while working on the scene.
-
-ATTACH TUNING (Windows):
-    --strategy=VALUE      auto (default) | classic | raised | progman | none
-    --no-spawn-workerw    Don't send the 0x052C message to Progman.
-    --no-layered          Never add WS_EX_LAYERED to our window.
-    --force-layered       Always add WS_EX_LAYERED to our window.
-
-    -h, --help            Show this message."
-    );
 }

@@ -15,12 +15,14 @@
 //! Start here if you are new to the project:
 //!
 //! ```text
+//!   cargo run -- --help        every flag, with descriptions
 //!   cargo run -- --inspect     what does this machine's desktop look like?
 //!   cargo run -- --windowed    just run the scene in a normal window
 //!   cargo run                  the real thing
 //! ```
 
 mod backend;
+mod cli;
 mod config;
 mod plugin;
 
@@ -33,7 +35,8 @@ use crate::config::AppConfig;
 use crate::plugin::WallpaperPlugin;
 
 fn main() {
-    let config = AppConfig::from_args();
+    let args = cli::parse();
+    let config = AppConfig::from_cli(&args);
 
     // `--inspect` is deliberately handled before Bevy exists. It opens no
     // window, allocates no GPU, and only reads. When something goes wrong on a

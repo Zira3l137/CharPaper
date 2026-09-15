@@ -6,5 +6,10 @@ edition.workspace = true
 # Deliberately no `bevy` here. This crate is the abstraction every backend
 # implements, and keeping the engine out of it means the Win32 half of the
 # project type-checks and rebuilds without touching Bevy at all.
+#
+# `clap` is here only for the `ValueEnum` derive on the two settings enums, so
+# that the CLI gets their variants without a hand-written parser in between.
+# With default features off it is small and pulls in nothing heavy.
 [dependencies]
+clap.workspace = true
 raw-window-handle.workspace = true

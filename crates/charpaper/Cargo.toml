@@ -8,6 +8,7 @@ charpaper-scene.workspace = true
 charpaper-wallpaper.workspace = true
 
 bevy.workspace = true
+clap.workspace = true
 
 # Only compiled, and only required, on Windows.
 [target.'cfg(windows)'.dependencies]

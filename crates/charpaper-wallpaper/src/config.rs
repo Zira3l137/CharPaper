@@ -1,44 +1,38 @@
 //! Settings that describe *how* to attach, independent of any platform.
 
+use clap::ValueEnum;
+
 /// How we want the window glued to the desktop.
 ///
-/// See `docs/how-it-works.md` for what these actually mean on Windows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The `ValueEnum` derive is what lets `--strategy` take these by name, list
+/// them in `--help` and reject anything else, with no parser of our own to
+/// keep in sync.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AttachStrategy {
     /// Look at the machine and pick the right one. Almost always correct.
     Auto,
 
     /// Windows 10 / older Windows 11: parent to the top-level `WorkerW` window
     /// that sits behind the icon layer.
+    #[value(name = "classic")]
     ClassicWorkerW,
 
     /// Newer Windows 11 ("raised desktop"): there is no top-level `WorkerW`.
     /// Become a layered child of `Progman`, z-ordered below the icons.
+    #[value(name = "raised")]
     RaisedDesktopChild,
 
     /// Last resort: parent straight to `Progman`. Draws over the icons, which
     /// is wrong, but proves the pipeline works.
+    #[value(name = "progman")]
     ProgmanDirect,
 
     /// Don't attach at all.
     None,
 }
 
-impl AttachStrategy {
-    pub fn parse(s: &str) -> Option<Self> {
-        Some(match s {
-            "auto" => Self::Auto,
-            "classic" => Self::ClassicWorkerW,
-            "raised" => Self::RaisedDesktopChild,
-            "progman" => Self::ProgmanDirect,
-            "none" => Self::None,
-            _ => return None,
-        })
-    }
-}
-
 /// Whether our window gets the `WS_EX_LAYERED` extended style.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayeredMode {
     /// Add it only when the chosen strategy needs it (raised-desktop path).
     Auto,
