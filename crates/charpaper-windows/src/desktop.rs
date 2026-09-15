@@ -341,7 +341,7 @@ fn set_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), Wal
     let previous = unsafe { sys::SetParent(hwnd, parent) };
     let code = sys::last_error();
     if previous == 0 && code != 0 {
-        return Err(WallpaperError::NativeCall { what: "SetParent", code });
+        return Err(WallpaperError::native("SetParent", code));
     }
     log.push(format!("SetParent({hwnd:#x} -> {parent:#x}), previous parent {previous:#x}"));
     Ok(())
@@ -357,19 +357,16 @@ fn set_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), Wal
 /// parent's space, because a secondary monitor above or left of the primary
 /// gives you negative screen coordinates.
 fn fill_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), WallpaperError> {
-    let rect = sys::window_rect(parent).ok_or(WallpaperError::NativeCall {
-        what: "GetWindowRect(parent)",
-        code: sys::last_error(),
-    })?;
+    // `ok_or_else` rather than `ok_or`: the closure must not read the thread's
+    // last-error code until we know the call actually failed.
+    let rect = sys::window_rect(parent)
+        .ok_or_else(|| WallpaperError::native("GetWindowRect(parent)", sys::last_error()))?;
 
     let (w, h) = (rect.width(), rect.height());
     let ok =
         unsafe { sys::SetWindowPos(hwnd, 0, 0, 0, w, h, sys::SWP_NOACTIVATE | sys::SWP_NOZORDER) };
     if ok == 0 {
-        return Err(WallpaperError::NativeCall {
-            what: "SetWindowPos(fill)",
-            code: sys::last_error(),
-        });
+        return Err(WallpaperError::native("SetWindowPos(fill)", sys::last_error()));
     }
     log.push(format!("sized to parent: {w}x{h} at child-relative (0, 0)"));
     Ok(())

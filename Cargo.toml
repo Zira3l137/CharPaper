@@ -23,6 +23,11 @@ clap = { version = "4.6", default-features = false, features = [
     "error-context",
 ] }
 
+# The two halves of Rust error handling. `thiserror` derives the boilerplate
+# for the typed error the libraries return; `anyhow` is the catch-all the
+# binary uses at its boundary. Both default to just "std", stated explicitly.
+thiserror = { version = "2.0", default-features = false, features = ["std"] }
+
 charpaper-scene = { path = "crates/charpaper-scene" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
 charpaper-windows = { path = "crates/charpaper-windows" }
