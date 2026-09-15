@@ -6,15 +6,10 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 
-# One place to state a version. Members write `bevy.workspace = true`, so a
-# version bump is a one-line change and the crates can never drift apart.
 [workspace.dependencies]
 bevy = "0.19.1"
 raw-window-handle = "0.6"
 
-# Argument parsing, help text and validation. Default features off: colour,
-# did-you-mean suggestions and terminal-width help wrapping are most of what
-# clap's default set pulls in and none of it earns its place here.
 clap = { version = "4.6", default-features = false, features = [
     "std",
     "derive",
@@ -23,9 +18,6 @@ clap = { version = "4.6", default-features = false, features = [
     "error-context",
 ] }
 
-# The two halves of Rust error handling. `thiserror` derives the boilerplate
-# for the typed error the libraries return; `anyhow` is the catch-all the
-# binary uses at its boundary. Both default to just "std", stated explicitly.
 anyhow = { version = "1.0", default-features = false, features = ["std"] }
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
 
@@ -38,8 +30,6 @@ charpaper-scene = { path = "crates/charpaper-scene" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
 charpaper-windows = { path = "crates/charpaper-windows" }
 
-# Profiles only take effect in the workspace root, so they live here rather
-# than in any member manifest.
 [profile.dev]
 opt-level = 1
 

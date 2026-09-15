@@ -11,6 +11,5 @@ anyhow.workspace = true
 bevy.workspace = true
 clap.workspace = true
 
-# Only compiled, and only required, on Windows.
 [target.'cfg(windows)'.dependencies]
 charpaper-windows.workspace = true
