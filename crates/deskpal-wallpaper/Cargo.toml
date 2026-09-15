@@ -1,0 +1,10 @@
+[package]
+name = "deskpal-wallpaper"
+version.workspace = true
+edition.workspace = true
+
+# Deliberately no `bevy` here. This crate is the abstraction every backend
+# implements, and keeping the engine out of it means the Win32 half of the
+# project type-checks and rebuilds without touching Bevy at all.
+[dependencies]
+raw-window-handle.workspace = true

@@ -1,0 +1,14 @@
+[package]
+name = "deskpal"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+deskpal-scene.workspace = true
+deskpal-wallpaper.workspace = true
+
+bevy.workspace = true
+
+# Only compiled, and only required, on Windows.
+[target.'cfg(windows)'.dependencies]
+deskpal-windows.workspace = true

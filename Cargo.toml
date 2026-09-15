@@ -1,29 +1,23 @@
-[package]
-name = "deskpal"
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+# One place to state a version. Members write `bevy.workspace = true`, so a
+# version bump is a one-line change and the crates can never drift apart.
+[workspace.dependencies]
 bevy = "0.19.1"
-
-# We need this to read the native window handle (HWND on Windows) out of the
-# window Bevy created for us. Bevy hands it over as a `RawWindowHandle`, a type
-# defined by this crate, so we must depend on it directly to pattern-match on
-# it. Version 0.6 is what Bevy 0.19 already uses; Cargo unifies them into one
-# copy, which matters -- two different versions would be two different types.
 raw-window-handle = "0.6"
 
-# NOTE: there is deliberately NO `windows` crate dependency here.
-# The handful of Win32 functions we need are declared by hand in
-# src/wallpaper/windows/sys.rs. Reasons:
-#   1. The `windows` crate makes breaking signature changes almost every
-#      release (nullable HWND params became Option<HWND> around 0.61, most
-#      functions gained Result returns around 0.58). Hand declarations are
-#      immune to that churn.
-#   2. It pulls in a large metadata-generated dependency for a dozen symbols.
-#   3. Declaring them yourself shows exactly what the C ABI is, which is part
-#      of the point of this project.
+deskpal-scene = { path = "crates/deskpal-scene" }
+deskpal-wallpaper = { path = "crates/deskpal-wallpaper" }
+deskpal-windows = { path = "crates/deskpal-windows" }
 
+# Profiles only take effect in the workspace root, so they live here rather
+# than in any member manifest.
 [profile.dev]
 opt-level = 1
 

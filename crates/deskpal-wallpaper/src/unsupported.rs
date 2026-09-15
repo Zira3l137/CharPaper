@@ -4,13 +4,17 @@
 //! window instead of a wallpaper. This is what keeps `cargo check` honest on a
 //! non-Windows machine.
 //!
-//! To add Linux support later: copy this file to `linux.rs`, implement the two
-//! methods for real, and change the `#[cfg]` lines in `mod.rs`. Nothing outside
-//! this directory needs to know.
+//! To add Linux support later: add a `deskpal-linux` crate that implements the
+//! same trait, and extend the `#[cfg]` dispatch in `deskpal/src/backend.rs`.
+//! Nothing else changes.
 
 use raw_window_handle::RawWindowHandle;
 
-use super::{AttachOutcome, DesktopProbe, WallpaperBackend, WallpaperConfig, WallpaperError};
+use crate::backend::AttachOutcome;
+use crate::backend::DesktopProbe;
+use crate::backend::WallpaperBackend;
+use crate::config::WallpaperConfig;
+use crate::error::WallpaperError;
 
 pub struct UnsupportedBackend;
 

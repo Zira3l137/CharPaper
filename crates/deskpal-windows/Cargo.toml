@@ -1,0 +1,11 @@
+[package]
+name = "deskpal-windows"
+version.workspace = true
+edition.workspace = true
+
+# No `bevy` and no `windows` crate: hand-written FFI against user32/kernel32.
+# This is the most stable code in the project, so it should also be the least
+# frequently recompiled.
+[dependencies]
+deskpal-wallpaper.workspace = true
+raw-window-handle.workspace = true

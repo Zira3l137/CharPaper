@@ -4,8 +4,8 @@
 //!
 //! ```text
 //!   DefaultPlugins   -- windowing, rendering, input, assets, logging
-//!   ScenePlugin      -- what we draw (platform independent)
-//!   WallpaperPlugin  -- where the window lives (platform specific)
+//!   ScenePlugin      -- what we draw            (deskpal-scene)
+//!   WallpaperPlugin  -- where the window lives  (deskpal-wallpaper + backend)
 //! ```
 //!
 //! Keeping those last two apart is the whole cross-platform strategy. The scene
@@ -20,14 +20,17 @@
 //!   cargo run                  the real thing
 //! ```
 
+mod backend;
 mod config;
-mod scene;
-mod wallpaper;
+mod plugin;
 
 use bevy::prelude::*;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
-use config::AppConfig;
+use deskpal_scene::ScenePlugin;
+
+use crate::config::AppConfig;
+use crate::plugin::WallpaperPlugin;
 
 fn main() {
     let config = AppConfig::from_args();
@@ -36,7 +39,7 @@ fn main() {
     // window, allocates no GPU, and only reads. When something goes wrong on a
     // machine you cannot reproduce on, this is the first thing to run.
     if config.inspect_and_exit {
-        for line in wallpaper::inspect_report() {
+        for line in backend::inspect_report() {
             println!("{line}");
         }
         return;
@@ -73,7 +76,7 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(wallpaper::WallpaperPlugin { config: config.wallpaper.clone() })
-        .add_plugins(scene::ScenePlugin { config: config.scene.clone() })
+        .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
+        .add_plugins(ScenePlugin { config: config.scene.clone() })
         .run();
 }

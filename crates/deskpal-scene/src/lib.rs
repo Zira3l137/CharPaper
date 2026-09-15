@@ -1,8 +1,14 @@
-//! The thing we actually draw. Nothing here knows about wallpapers or Windows.
+//! The thing we actually draw.
+//!
+//! Knows nothing about wallpapers or operating systems, and nothing depends on
+//! it, so this is the crate you can iterate on without rebuilding anything
+//! else in the workspace.
+
+mod config;
+
+pub use config::SceneConfig;
 
 use bevy::prelude::*;
-
-use crate::config::SceneConfig;
 
 #[derive(Component)]
 struct Spinner;

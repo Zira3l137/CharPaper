@@ -1,18 +1,17 @@
 //! The Windows implementation of `WallpaperBackend`.
 //!
-//! This file is thin on purpose: it translates between the platform-neutral
-//! trait and the Win32 work in `desktop.rs`.
+//! Thin on purpose: it translates between the platform-neutral trait and the
+//! Win32 work in `desktop.rs`.
 
-mod desktop;
-pub mod sys;
+use deskpal_wallpaper::AttachOutcome;
+use deskpal_wallpaper::DesktopProbe;
+use deskpal_wallpaper::RawWindowHandle;
+use deskpal_wallpaper::WallpaperBackend;
+use deskpal_wallpaper::WallpaperConfig;
+use deskpal_wallpaper::WallpaperError;
 
-use raw_window_handle::RawWindowHandle;
-
-use super::AttachOutcome;
-use super::DesktopProbe;
-use super::WallpaperBackend;
-use super::WallpaperConfig;
-use super::WallpaperError;
+use crate::desktop;
+use crate::sys;
 
 #[derive(Default)]
 pub struct WindowsBackend {

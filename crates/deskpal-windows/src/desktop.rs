@@ -1,11 +1,12 @@
 //! Finding the desktop's background layer and gluing our window into it.
 
-use super::sys::Hwnd;
-use super::sys::{self};
-use crate::wallpaper::AttachStrategy;
-use crate::wallpaper::LayeredMode;
-use crate::wallpaper::WallpaperConfig;
-use crate::wallpaper::WallpaperError;
+use deskpal_wallpaper::AttachStrategy;
+use deskpal_wallpaper::LayeredMode;
+use deskpal_wallpaper::WallpaperConfig;
+use deskpal_wallpaper::WallpaperError;
+
+use crate::sys;
+use crate::sys::Hwnd;
 
 const WORKER_W_REQUEST_TIMEOUT_MS: u32 = 1000;
 
