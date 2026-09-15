@@ -4,8 +4,8 @@
 //!
 //! ```text
 //!   DefaultPlugins   -- windowing, rendering, input, assets, logging
-//!   ScenePlugin      -- what we draw            (deskpal-scene)
-//!   WallpaperPlugin  -- where the window lives  (deskpal-wallpaper + backend)
+//!   ScenePlugin      -- what we draw            (charpaper-scene)
+//!   WallpaperPlugin  -- where the window lives  (charpaper-wallpaper + backend)
 //! ```
 //!
 //! Keeping those last two apart is the whole cross-platform strategy. The scene
@@ -27,7 +27,7 @@ mod plugin;
 use bevy::prelude::*;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
-use deskpal_scene::ScenePlugin;
+use charpaper_scene::ScenePlugin;
 
 use crate::config::AppConfig;
 use crate::plugin::WallpaperPlugin;

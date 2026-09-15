@@ -1,9 +1,9 @@
 //! Finding the desktop's background layer and gluing our window into it.
 
-use deskpal_wallpaper::AttachStrategy;
-use deskpal_wallpaper::LayeredMode;
-use deskpal_wallpaper::WallpaperConfig;
-use deskpal_wallpaper::WallpaperError;
+use charpaper_wallpaper::AttachStrategy;
+use charpaper_wallpaper::LayeredMode;
+use charpaper_wallpaper::WallpaperConfig;
+use charpaper_wallpaper::WallpaperError;
 
 use crate::sys;
 use crate::sys::Hwnd;

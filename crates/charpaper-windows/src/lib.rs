@@ -1,6 +1,6 @@
 //! Windows backend for the desktop wallpaper.
 //!
-//! Depends on `deskpal-wallpaper` and nothing else -- no Bevy, and no `windows`
+//! Depends on `charpaper-wallpaper` and nothing else -- no Bevy, and no `windows`
 //! crate either. This is the most stable code in the project, and isolating it
 //! means editing the scene or upgrading the engine never rebuilds it.
 //!

@@ -4,8 +4,8 @@
 //! window instead of a wallpaper. This is what keeps `cargo check` honest on a
 //! non-Windows machine.
 //!
-//! To add Linux support later: add a `deskpal-linux` crate that implements the
-//! same trait, and extend the `#[cfg]` dispatch in `deskpal/src/backend.rs`.
+//! To add Linux support later: add a `charpaper-linux` crate that implements the
+//! same trait, and extend the `#[cfg]` dispatch in `charpaper/src/backend.rs`.
 //! Nothing else changes.
 
 use raw_window_handle::RawWindowHandle;

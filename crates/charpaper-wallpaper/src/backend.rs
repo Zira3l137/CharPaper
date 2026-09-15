@@ -2,6 +2,7 @@
 
 use raw_window_handle::RawWindowHandle;
 
+use crate::AttachStrategy;
 use crate::config::WallpaperConfig;
 use crate::error::WallpaperError;
 

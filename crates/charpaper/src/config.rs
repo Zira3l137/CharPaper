@@ -3,10 +3,10 @@
 //! Each domain crate owns and defaults its own settings; this type just
 //! composes them and adds the handful that belong to the application itself.
 
-use deskpal_scene::SceneConfig;
-use deskpal_wallpaper::AttachStrategy;
-use deskpal_wallpaper::LayeredMode;
-use deskpal_wallpaper::WallpaperConfig;
+use charpaper_scene::SceneConfig;
+use charpaper_wallpaper::AttachStrategy;
+use charpaper_wallpaper::LayeredMode;
+use charpaper_wallpaper::WallpaperConfig;
 
 /// Everything the app needs to start up.
 #[derive(Clone, Debug, Default)]
@@ -45,7 +45,7 @@ pub struct WindowConfig {
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            title: "deskpal".to_string(),
+            title: "charpaper".to_string(),
             width: 1280,
             height: 720,
             start_hidden: true,
@@ -98,12 +98,12 @@ impl AppConfig {
                         match AttachStrategy::parse(value) {
                             Some(s) => cfg.wallpaper.strategy = s,
                             None => eprintln!(
-                                "deskpal: unknown strategy {value:?}; \
+                                "charpaper: unknown strategy {value:?}; \
                                  expected auto|classic|raised|progman|none"
                             ),
                         }
                     } else {
-                        eprintln!("deskpal: ignoring unknown argument {other:?}");
+                        eprintln!("charpaper: ignoring unknown argument {other:?}");
                     }
                 }
             }
@@ -115,10 +115,10 @@ impl AppConfig {
 fn print_help() {
     println!(
         "\
-deskpal -- a Bevy live wallpaper
+charpaper -- a Bevy live wallpaper
 
 USAGE:
-    deskpal [FLAGS]
+    charpaper [FLAGS]
 
 DIAGNOSTICS (safe, read-only):
     --inspect             Print what this machine's desktop window layout looks

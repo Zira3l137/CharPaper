@@ -5,7 +5,6 @@
 #[derive(Debug)]
 pub enum WallpaperError {
     /// This OS has no backend yet.
-    #[expect(unused)]
     Unsupported(&'static str),
 
     /// The window handle Bevy gave us isn't the kind this backend understands.

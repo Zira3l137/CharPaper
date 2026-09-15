@@ -6,9 +6,8 @@
 
 mod config;
 
-pub use config::SceneConfig;
-
 use bevy::prelude::*;
+pub use config::SceneConfig;
 
 #[derive(Component)]
 struct Spinner;

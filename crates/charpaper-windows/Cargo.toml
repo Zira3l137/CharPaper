@@ -1,5 +1,5 @@
 [package]
-name = "deskpal-windows"
+name = "charpaper-windows"
 version.workspace = true
 edition.workspace = true
 
@@ -7,5 +7,5 @@ edition.workspace = true
 # This is the most stable code in the project, so it should also be the least
 # frequently recompiled.
 [dependencies]
-deskpal-wallpaper.workspace = true
+charpaper-wallpaper.workspace = true
 raw-window-handle.workspace = true

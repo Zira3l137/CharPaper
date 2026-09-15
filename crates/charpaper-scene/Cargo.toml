@@ -1,5 +1,5 @@
 [package]
-name = "deskpal-scene"
+name = "charpaper-scene"
 version.workspace = true
 edition.workspace = true
 

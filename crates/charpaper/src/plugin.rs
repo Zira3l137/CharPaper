@@ -8,10 +8,10 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::window::RawHandleWrapper;
-use deskpal_wallpaper::AttachStrategy;
-use deskpal_wallpaper::RawWindowHandle;
-use deskpal_wallpaper::WallpaperBackend;
-use deskpal_wallpaper::WallpaperConfig;
+use charpaper_wallpaper::AttachStrategy;
+use charpaper_wallpaper::RawWindowHandle;
+use charpaper_wallpaper::WallpaperBackend;
+use charpaper_wallpaper::WallpaperConfig;
 
 use crate::backend::create_backend;
 

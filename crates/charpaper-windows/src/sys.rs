@@ -122,7 +122,6 @@ unsafe extern "system" {
     pub fn EnumChildWindows(parent: Hwnd, callback: EnumWindowsProc, lparam: LParam) -> Bool;
 
     /// The root of the whole window tree.
-    #[expect(dead_code)]
     pub fn GetDesktopWindow() -> Hwnd;
 
     /// Send a message and give up after `timeout_ms` if the target hangs. We

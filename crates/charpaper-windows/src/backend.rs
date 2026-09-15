@@ -3,12 +3,12 @@
 //! Thin on purpose: it translates between the platform-neutral trait and the
 //! Win32 work in `desktop.rs`.
 
-use deskpal_wallpaper::AttachOutcome;
-use deskpal_wallpaper::DesktopProbe;
-use deskpal_wallpaper::RawWindowHandle;
-use deskpal_wallpaper::WallpaperBackend;
-use deskpal_wallpaper::WallpaperConfig;
-use deskpal_wallpaper::WallpaperError;
+use charpaper_wallpaper::AttachOutcome;
+use charpaper_wallpaper::DesktopProbe;
+use charpaper_wallpaper::RawWindowHandle;
+use charpaper_wallpaper::WallpaperBackend;
+use charpaper_wallpaper::WallpaperConfig;
+use charpaper_wallpaper::WallpaperError;
 
 use crate::desktop;
 use crate::sys;

@@ -12,9 +12,9 @@ edition = "2024"
 bevy = "0.19.1"
 raw-window-handle = "0.6"
 
-deskpal-scene = { path = "crates/deskpal-scene" }
-deskpal-wallpaper = { path = "crates/deskpal-wallpaper" }
-deskpal-windows = { path = "crates/deskpal-windows" }
+charpaper-scene = { path = "crates/charpaper-scene" }
+charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
+charpaper-windows = { path = "crates/charpaper-windows" }
 
 # Profiles only take effect in the workspace root, so they live here rather
 # than in any member manifest.

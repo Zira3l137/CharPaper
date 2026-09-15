@@ -1,5 +1,5 @@
 [package]
-name = "deskpal-wallpaper"
+name = "charpaper-wallpaper"
 version.workspace = true
 edition.workspace = true
 
