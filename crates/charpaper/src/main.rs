@@ -26,6 +26,8 @@ mod cli;
 mod config;
 mod plugin;
 
+use anyhow::Result;
+use anyhow::bail;
 use bevy::prelude::*;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
@@ -34,7 +36,7 @@ use charpaper_scene::ScenePlugin;
 use crate::config::AppConfig;
 use crate::plugin::WallpaperPlugin;
 
-fn main() {
+fn main() -> Result<()> {
     let args = cli::parse();
     let config = AppConfig::from_cli(&args);
 
@@ -45,10 +47,14 @@ fn main() {
         for line in backend::inspect_report() {
             println!("{line}");
         }
-        return;
+        return Ok(());
     }
 
-    App::new()
+    // Bevy reports failure through its return value rather than by panicking,
+    // so turn that into a process exit code instead of dropping it on the
+    // floor. This is the only fallible boundary in the program today; config
+    // loading and IO will land here too.
+    let exit = App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: config.window.title.clone(),
@@ -82,4 +88,9 @@ fn main() {
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
         .add_plugins(ScenePlugin { config: config.scene.clone() })
         .run();
+
+    match exit {
+        AppExit::Success => Ok(()),
+        AppExit::Error(code) => bail!("bevy exited with status {code}"),
+    }
 }

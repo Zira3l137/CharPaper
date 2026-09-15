@@ -179,6 +179,9 @@ fn decide(
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
             Step::Done(format!("attached to desktop using {how}"), outcome.notes)
         }
-        Err(err) => Step::Wait(err.to_string()),
+        // `{:#}` on an `anyhow::Error` walks the source chain, so a failed
+        // Win32 call logs "SetParent failed: The parameter is incorrect."
+        // rather than losing everything below the top message.
+        Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
     }
 }
