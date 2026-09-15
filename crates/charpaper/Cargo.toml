@@ -13,3 +13,8 @@ clap.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 charpaper-windows.workspace = true
+
+# winit needs a display-server backend and only Linux has these. Features are
+# additive, so this widens the workspace entry rather than replacing it.
+[target.'cfg(target_os = "linux")'.dependencies]
+bevy = { workspace = true, features = ["x11", "wayland"] }

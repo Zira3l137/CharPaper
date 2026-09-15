@@ -7,8 +7,40 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-bevy = "0.19.1"
-raw-window-handle = "0.6"
+# `default` is four umbrellas (2d, 3d, ui, audio) covering audio decoding,
+# glTF, text, UI, gizmos, picking, scenes, gamepads, clipboard and font
+# discovery. A cube on the desktop needs a window, a renderer and PBR.
+#
+# tonemapping_luts is not optional: Camera3d defaults to TonyMcMapface, whose
+# LUT is a ktx2 asset -- hence ktx2 and zstd_rust with it.
+bevy = { version = "0.19.1", default-features = false, features = [
+    "std",
+    "async_executor",
+    "multi_threaded",
+    "reflect_auto_register",
+
+    "bevy_asset",
+    "bevy_log",
+    "bevy_window",
+    "bevy_winit",
+
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "bevy_camera",
+    "bevy_light",
+    "bevy_mesh",
+    "bevy_material",
+    "bevy_shader",
+    "bevy_image",
+    "bevy_color",
+
+    "tonemapping_luts",
+    "ktx2",
+    "zstd_rust",
+] }
+
+raw-window-handle = { version = "0.6", default-features = false, features = ["std"] }
 
 clap = { version = "4.6", default-features = false, features = [
     "std",
@@ -21,9 +53,6 @@ clap = { version = "4.6", default-features = false, features = [
 anyhow = { version = "1.0", default-features = false, features = ["std"] }
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
 
-# Bevy's LogPlugin is a tracing subscriber, so the whole workspace emits into
-# it by depending on tracing itself. The bevy-free crates get structured logs
-# without gaining an engine dependency.
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 
 charpaper-scene = { path = "crates/charpaper-scene" }
@@ -35,6 +64,7 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
 
 [profile.release]
 lto = "thin"
