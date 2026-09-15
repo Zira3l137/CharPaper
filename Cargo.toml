@@ -1,4 +1,3 @@
-
 [package]
 name = "deskpal"
 version = "0.1.0"
@@ -7,16 +6,23 @@ edition = "2024"
 [dependencies]
 bevy = "0.19.1"
 
+# We need this to read the native window handle (HWND on Windows) out of the
+# window Bevy created for us. Bevy hands it over as a `RawWindowHandle`, a type
+# defined by this crate, so we must depend on it directly to pattern-match on
+# it. Version 0.6 is what Bevy 0.19 already uses; Cargo unifies them into one
+# copy, which matters -- two different versions would be two different types.
+raw-window-handle = "0.6"
+
 # NOTE: there is deliberately NO `windows` crate dependency here.
-# The Win32 functions we need (12 of them) are declared by hand in
-# src/platform/win32_sys.rs. Reasons:
+# The handful of Win32 functions we need are declared by hand in
+# src/wallpaper/windows/sys.rs. Reasons:
 #   1. The `windows` crate makes breaking signature changes almost every
 #      release (nullable HWND params became Option<HWND> around 0.61, most
 #      functions gained Result returns around 0.58). Hand declarations are
 #      immune to that churn.
 #   2. It pulls in a large metadata-generated dependency for a dozen symbols.
-#   3. Declaring them yourself shows exactly what the C ABI is, which is the
-#      point of this milestone.
+#   3. Declaring them yourself shows exactly what the C ABI is, which is part
+#      of the point of this project.
 
 [profile.dev]
 opt-level = 1

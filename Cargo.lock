@@ -2296,6 +2296,7 @@ name = "deskpal"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "raw-window-handle",
 ]
 
 [[package]]
