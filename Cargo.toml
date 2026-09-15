@@ -29,6 +29,11 @@ clap = { version = "4.6", default-features = false, features = [
 anyhow = { version = "1.0", default-features = false, features = ["std"] }
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
 
+# Bevy's LogPlugin is a tracing subscriber, so the whole workspace emits into
+# it by depending on tracing itself. The bevy-free crates get structured logs
+# without gaining an engine dependency.
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+
 charpaper-scene = { path = "crates/charpaper-scene" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
 charpaper-windows = { path = "crates/charpaper-windows" }

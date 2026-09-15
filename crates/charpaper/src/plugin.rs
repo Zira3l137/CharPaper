@@ -61,9 +61,6 @@ fn probe_desktop(
 
     match backend.0.probe(&config) {
         Ok(probe) => {
-            for line in &probe.report {
-                info!("{line}");
-            }
             if let Some(rec) = probe.recommended {
                 info!("auto strategy resolves to: {rec:?}");
             }
@@ -124,10 +121,7 @@ fn attach_window(
                 state.countdown = config.frames_between_attempts;
             }
         }
-        Step::Done(message, notes) => {
-            for note in notes {
-                info!("{note}");
-            }
+        Step::Done(message) => {
             info!("{message}");
             state.finished = true;
             reveal = true;
@@ -148,8 +142,8 @@ fn attach_window(
 enum Step {
     /// Not ready (or failed); try again next time.
     Wait(String),
-    /// Stop trying. Carries a summary line plus any backend notes to log.
-    Done(String, Vec<String>),
+    /// Stop trying, with a line to log.
+    Done(String),
 }
 
 fn decide(
@@ -158,7 +152,7 @@ fn decide(
     handle: Option<RawWindowHandle>,
 ) -> Step {
     if !config.enabled || config.strategy == AttachStrategy::None {
-        return Step::Done("wallpaper attach disabled".to_string(), Vec::new());
+        return Step::Done("wallpaper attach disabled".to_string());
     }
 
     // The window may simply not exist yet on the first frames.
@@ -167,17 +161,15 @@ fn decide(
     };
 
     if config.dry_run {
-        return Step::Done(
-            "dry run: no windows were modified".to_string(),
-            vec![format!("[dry-run] would attach native handle {raw:?}")],
-        );
+        debug!("[dry-run] would attach native handle {raw:?}");
+        return Step::Done("dry run: no windows were modified".to_string());
     }
 
     match backend.attach(raw, config) {
         Ok(outcome) => {
             let how =
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
-            Step::Done(format!("attached to desktop using {how}"), outcome.notes)
+            Step::Done(format!("attached to desktop using {how}"))
         }
         // `{:#}` on an `anyhow::Error` walks the source chain, so a failed
         // Win32 call logs "SetParent failed: The parameter is incorrect."

@@ -14,3 +14,4 @@ edition.workspace = true
 clap.workspace = true
 raw-window-handle.workspace = true
 thiserror.workspace = true
+tracing.workspace = true

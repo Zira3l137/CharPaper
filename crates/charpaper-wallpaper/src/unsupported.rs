@@ -30,13 +30,8 @@ impl WallpaperBackend for UnsupportedBackend {
     }
 
     fn probe(&mut self, _config: &WallpaperConfig) -> Result<DesktopProbe, WallpaperError> {
-        Ok(DesktopProbe {
-            report: vec![format!(
-                "no wallpaper backend for {}; running as a normal window",
-                std::env::consts::OS
-            )],
-            recommended: None,
-        })
+        tracing::info!("no wallpaper backend for {}; running as a normal window", std::env::consts::OS);
+        Ok(DesktopProbe { recommended: None })
     }
 
     fn attach(

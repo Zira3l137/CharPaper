@@ -10,6 +10,8 @@ use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WallpaperError;
 
+use tracing::debug;
+
 use crate::desktop;
 use crate::sys;
 
@@ -32,18 +34,19 @@ impl WallpaperBackend for WindowsBackend {
     }
 
     fn probe(&mut self, config: &WallpaperConfig) -> Result<DesktopProbe, WallpaperError> {
-        let mut report = Vec::new();
-        let shell = desktop::find_shell_windows(&mut report);
+        let shell = desktop::find_shell_windows();
 
         if config.dump_window_tree {
-            report.extend(desktop::dump_window_tree());
+            for line in desktop::dump_window_tree() {
+                debug!("{line}");
+            }
         }
 
         if shell.progman == 0 {
             return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
         }
 
-        Ok(DesktopProbe { report, recommended: Some(shell.recommended_strategy()) })
+        Ok(DesktopProbe { recommended: Some(shell.recommended_strategy()) })
     }
 
     fn attach(
@@ -58,19 +61,18 @@ impl WallpaperBackend for WindowsBackend {
         };
         let hwnd: sys::Hwnd = win32.hwnd.get();
 
-        let mut notes = vec![format!("our window HWND = {hwnd:#x}")];
-        let strategy = desktop::attach(hwnd, config, &mut notes)?;
+        debug!("our window HWND = {hwnd:#x}");
+        let strategy = desktop::attach(hwnd, config)?;
         self.attached_hwnd = Some(hwnd);
 
-        Ok(AttachOutcome { strategy_used: Some(strategy), notes })
+        Ok(AttachOutcome { strategy_used: Some(strategy) })
     }
 }
 
 /// Used by `--inspect`: a full read-only report, printed before Bevy starts.
 pub fn inspect_report() -> Vec<String> {
-    let mut out = Vec::new();
-    let shell = desktop::find_shell_windows(&mut out);
-    out.push(format!("recommended strategy: {:?}", shell.recommended_strategy()));
+    let shell = desktop::find_shell_windows();
+    let mut out = vec![format!("recommended strategy: {:?}", shell.recommended_strategy())];
     out.extend(desktop::dump_window_tree());
     out
 }

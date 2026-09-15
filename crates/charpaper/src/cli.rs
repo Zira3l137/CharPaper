@@ -8,6 +8,7 @@
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::LayeredMode;
 use clap::Parser;
+use clap::ValueEnum;
 
 #[derive(Parser, Debug)]
 #[command(name = "charpaper", version, about = "A Bevy live desktop wallpaper")]
@@ -49,6 +50,37 @@ pub struct Cli {
     /// the background WorkerW.
     #[arg(long)]
     pub no_spawn_workerw: bool,
+
+    /// Log level for charpaper's own crates.
+    #[arg(long, value_enum, default_value = "info")]
+    pub log_level: LogLevel,
+
+    /// Log level for Bevy, wgpu and everything else.
+    #[arg(long, value_enum, default_value = "warn")]
+    pub bevy_log_level: LogLevel,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug)]
+pub enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LogLevel {
+    pub fn as_directive(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Error => "error",
+            Self::Warn => "warn",
+            Self::Info => "info",
+            Self::Debug => "debug",
+            Self::Trace => "trace",
+        }
+    }
 }
 
 pub fn parse() -> Cli {

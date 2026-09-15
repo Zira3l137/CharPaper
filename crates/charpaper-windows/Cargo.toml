@@ -9,3 +9,4 @@ edition.workspace = true
 [dependencies]
 charpaper-wallpaper.workspace = true
 raw-window-handle.workspace = true
+tracing.workspace = true

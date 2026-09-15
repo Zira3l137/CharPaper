@@ -24,6 +24,7 @@
 mod backend;
 mod cli;
 mod config;
+mod logging;
 mod plugin;
 
 use anyhow::Result;
@@ -84,7 +85,7 @@ fn main() -> Result<()> {
                 ..default()
             }),
             ..default()
-        }))
+        }).set(logging::plugin(args.log_level, args.bevy_log_level)))
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
         .add_plugins(ScenePlugin { config: config.scene.clone() })
         .run();

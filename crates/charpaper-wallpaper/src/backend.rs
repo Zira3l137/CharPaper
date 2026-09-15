@@ -9,8 +9,6 @@ use crate::error::WallpaperError;
 /// What a read-only look at the desktop found.
 #[derive(Debug, Default)]
 pub struct DesktopProbe {
-    /// Human-readable lines to log. One per line, no trailing newlines.
-    pub report: Vec<String>,
     /// What `AttachStrategy::Auto` would resolve to on this machine.
     pub recommended: Option<AttachStrategy>,
 }
@@ -19,7 +17,6 @@ pub struct DesktopProbe {
 #[derive(Debug, Default)]
 pub struct AttachOutcome {
     pub strategy_used: Option<AttachStrategy>,
-    pub notes: Vec<String>,
 }
 
 /// One implementation per operating system.

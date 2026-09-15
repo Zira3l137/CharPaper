@@ -5,6 +5,10 @@ use charpaper_wallpaper::LayeredMode;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WallpaperError;
 
+use tracing::debug;
+use tracing::error;
+use tracing::warn;
+
 use crate::sys;
 use crate::sys::Hwnd;
 
@@ -52,7 +56,7 @@ impl ShellWindows {
 ///
 /// The `wparam = 0xD, lparam = 0x1` form is the one current Windows 11 builds
 /// respond to; the `0, 0` form is the classic Windows 7/10 incantation.
-pub fn request_worker_w(progman: Hwnd, log: &mut Vec<String>) {
+pub fn request_worker_w(progman: Hwnd) {
     const ATTEMPTS: [(usize, isize); 2] = [(0xD, 0x1), (0x0, 0x0)];
 
     for (wparam, lparam) in ATTEMPTS {
@@ -70,33 +74,33 @@ pub fn request_worker_w(progman: Hwnd, log: &mut Vec<String>) {
                 &mut result,
             )
         };
-        log.push(format!(
+        debug!(
             "sent 0x052C to Progman (wparam={wparam:#x}, lparam={lparam:#x}) -> \
              returned {sent}, result {result}"
-        ));
+        );
     }
 }
 
 /// Walk the window tree and work out what we are dealing with. Read-only.
-pub fn find_shell_windows(log: &mut Vec<String>) -> ShellWindows {
+pub fn find_shell_windows() -> ShellWindows {
     let mut found = ShellWindows::default();
 
     found.progman = sys::find_window("Progman");
     if found.progman == 0 {
-        log.push("Progman not found -- is Explorer running?".to_string());
+        error!("Progman not found -- is Explorer running?");
         return found;
     }
-    log.push(format!("Progman = {:#x}", found.progman));
+    debug!("Progman = {:#x}", found.progman);
 
     found.raised_desktop = sys::has_ex_style(found.progman, sys::WS_EX_NOREDIRECTIONBITMAP);
-    log.push(format!(
+    debug!(
         "desktop layout = {}",
         if found.raised_desktop {
             "raised (Progman has WS_EX_NOREDIRECTIONBITMAP)"
         } else {
             "classic"
         }
-    ));
+    );
 
     // --- classic search: a top-level window hosting SHELLDLL_DefView --------
     //
@@ -115,13 +119,13 @@ pub fn find_shell_windows(log: &mut Vec<String>) -> ShellWindows {
             if candidate != 0 {
                 found.worker_w = candidate;
             }
-            log.push(format!(
+            debug!(
                 "top-level {:#x} ({}) hosts SHELLDLL_DefView {:#x}; next WorkerW = {:#x}",
                 top,
                 sys::class_name(top),
                 defview,
                 candidate
-            ));
+            );
         }
     }
 
@@ -136,25 +140,22 @@ pub fn find_shell_windows(log: &mut Vec<String>) -> ShellWindows {
         // Deliberately overwrite: in this layout the top-level result, if any,
         // is not the window that paints our wallpaper.
         found.worker_w = child_worker;
-        log.push(format!(
+        debug!(
             "Progman children: SHELLDLL_DefView = {child_defview:#x}, WorkerW = {child_worker:#x}"
-        ));
+        );
     }
 
     if found.worker_w == 0 {
-        log.push("no WorkerW found".to_string());
+        warn!("no WorkerW found");
     }
 
     found
 }
 
 /// Attach `hwnd` to the desktop background layer.
-///
-/// Returns the strategy actually used plus a log of what happened.
 pub fn attach(
     hwnd: Hwnd,
     config: &WallpaperConfig,
-    log: &mut Vec<String>,
 ) -> Result<AttachStrategy, WallpaperError> {
     if !sys::is_window(hwnd) {
         return Err(WallpaperError::DesktopNotFound(
@@ -162,33 +163,33 @@ pub fn attach(
         ));
     }
 
-    let mut shell = find_shell_windows(log);
+    let mut shell = find_shell_windows();
 
     if config.spawn_worker_w && shell.progman != 0 && shell.worker_w == 0 {
-        log.push("no WorkerW yet; asking Explorer to create one".to_string());
-        request_worker_w(shell.progman, log);
+        debug!("no WorkerW yet; asking Explorer to create one");
+        request_worker_w(shell.progman);
         // Re-scan: the window now exists (or still does not, and we fall back).
-        shell = find_shell_windows(log);
+        shell = find_shell_windows();
     }
 
     let strategy = match config.strategy {
         AttachStrategy::Auto => shell.recommended_strategy(),
         explicit => explicit,
     };
-    log.push(format!("using strategy {strategy:?}"));
+    debug!("using strategy {strategy:?}");
 
     match strategy {
         AttachStrategy::None => Ok(strategy),
         AttachStrategy::RaisedDesktopChild => {
-            attach_raised(hwnd, &shell, config, log)?;
+            attach_raised(hwnd, &shell, config)?;
             Ok(strategy)
         }
         AttachStrategy::ClassicWorkerW => {
-            attach_classic(hwnd, &shell, log)?;
+            attach_classic(hwnd, &shell)?;
             Ok(strategy)
         }
         AttachStrategy::ProgmanDirect => {
-            attach_progman(hwnd, &shell, log)?;
+            attach_progman(hwnd, &shell)?;
             Ok(strategy)
         }
         AttachStrategy::Auto => unreachable!("Auto was resolved above"),
@@ -203,7 +204,6 @@ pub fn attach(
 fn attach_classic(
     hwnd: Hwnd,
     shell: &ShellWindows,
-    log: &mut Vec<String>,
 ) -> Result<(), WallpaperError> {
     if shell.worker_w == 0 {
         return Err(WallpaperError::DesktopNotFound(
@@ -211,8 +211,8 @@ fn attach_classic(
         ));
     }
 
-    set_parent(hwnd, shell.worker_w, log)?;
-    fill_parent(hwnd, shell.worker_w, log)?;
+    set_parent(hwnd, shell.worker_w)?;
+    fill_parent(hwnd, shell.worker_w)?;
     Ok(())
 }
 
@@ -222,18 +222,13 @@ fn attach_classic(
 fn attach_progman(
     hwnd: Hwnd,
     shell: &ShellWindows,
-    log: &mut Vec<String>,
 ) -> Result<(), WallpaperError> {
     if shell.progman == 0 {
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
     }
-    log.push(
-        "warning: ProgmanDirect draws on top of the desktop icons. \
-         Useful to prove rendering works, not a final answer."
-            .to_string(),
-    );
-    set_parent(hwnd, shell.progman, log)?;
-    fill_parent(hwnd, shell.progman, log)?;
+    warn!("ProgmanDirect draws over the desktop icons; it proves rendering works, nothing more");
+    set_parent(hwnd, shell.progman)?;
+    fill_parent(hwnd, shell.progman)?;
     Ok(())
 }
 
@@ -246,7 +241,6 @@ fn attach_raised(
     hwnd: Hwnd,
     shell: &ShellWindows,
     config: &WallpaperConfig,
-    log: &mut Vec<String>,
 ) -> Result<(), WallpaperError> {
     if shell.progman == 0 {
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
@@ -255,20 +249,20 @@ fn attach_raised(
     // Mark ourselves as a child window.
     let style = sys::get_window_long_ptr(hwnd, sys::GWL_STYLE);
     sys::set_window_long_ptr(hwnd, sys::GWL_STYLE, style | sys::WS_CHILD);
-    log.push(format!("added WS_CHILD (style {style:#x} -> {:#x})", style | sys::WS_CHILD));
+    debug!("added WS_CHILD (style {style:#x} -> {:#x})", style | sys::WS_CHILD);
 
-    set_window_attributes(hwnd, config, log);
-    set_parent(hwnd, shell.progman, log)?;
+    set_window_attributes(hwnd, config);
+    set_parent(hwnd, shell.progman)?;
 
-    ensure_window_behind_icon_layer(hwnd, shell, log);
-    ensure_worker_w_at_bottom(shell, log);
+    ensure_window_behind_icon_layer(hwnd, shell);
+    ensure_worker_w_at_bottom(shell);
 
-    fill_parent(hwnd, shell.progman, log)?;
+    fill_parent(hwnd, shell.progman)?;
     Ok(())
 }
 
 /// Sets the window attributes to layered + fully opaque based on the config.
-fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig, log: &mut Vec<String>) {
+fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig) {
     let want_layered = match config.layered {
         LayeredMode::Always => true,
         LayeredMode::Never => false,
@@ -280,14 +274,14 @@ fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig, log: &mut Vec<Str
             sys::set_window_long_ptr(hwnd, sys::GWL_EXSTYLE, ex | sys::WS_EX_LAYERED);
         }
         let ok = unsafe { sys::SetLayeredWindowAttributes(hwnd, 0, 255, sys::LWA_ALPHA) };
-        log.push(format!("WS_EX_LAYERED + alpha 255 applied (ok={})", ok != 0));
+        debug!("WS_EX_LAYERED + alpha 255 applied (ok={})", ok != 0);
     } else {
-        log.push("skipping WS_EX_LAYERED (--no-layered)".to_string());
+        debug!("skipping WS_EX_LAYERED (--layered never)");
     }
 }
 
 /// Moves `hwnd` behind the icon layer, if possible.
-fn ensure_window_behind_icon_layer(hwnd: Hwnd, shell: &ShellWindows, log: &mut Vec<String>) {
+fn ensure_window_behind_icon_layer(hwnd: Hwnd, shell: &ShellWindows) {
     if shell.defview != 0 {
         let ok = unsafe {
             sys::SetWindowPos(
@@ -300,13 +294,13 @@ fn ensure_window_behind_icon_layer(hwnd: Hwnd, shell: &ShellWindows, log: &mut V
                 sys::SWP_NOMOVE | sys::SWP_NOSIZE | sys::SWP_NOACTIVATE,
             )
         };
-        log.push(format!("placed below SHELLDLL_DefView (ok={})", ok != 0));
+        debug!("placed below SHELLDLL_DefView (ok={})", ok != 0);
     } else {
-        log.push("no SHELLDLL_DefView found; z-order may put us over the icons".to_string());
+        warn!("no SHELLDLL_DefView found; z-order may put us over the icons");
     }
 }
 
-fn ensure_worker_w_at_bottom(shell: &ShellWindows, log: &mut Vec<String>) {
+fn ensure_worker_w_at_bottom(shell: &ShellWindows) {
     if shell.worker_w == 0 {
         return;
     }
@@ -327,14 +321,14 @@ fn ensure_worker_w_at_bottom(shell: &ShellWindows, log: &mut Vec<String>) {
             sys::SWP_NOMOVE | sys::SWP_NOSIZE | sys::SWP_NOACTIVATE,
         )
     };
-    log.push(format!("pushed WorkerW to the bottom of the z-order (ok={})", ok != 0));
+    debug!("pushed WorkerW to the bottom of the z-order (ok={})", ok != 0);
 }
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-fn set_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), WallpaperError> {
+fn set_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
     // SetParent returns the *previous* parent. Zero means either failure or
     // "it had no parent", so we clear the error code and check it explicitly.
     unsafe { sys::SetLastError(0) };
@@ -343,7 +337,7 @@ fn set_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), Wal
     if previous == 0 && code != 0 {
         return Err(WallpaperError::native("SetParent", code));
     }
-    log.push(format!("SetParent({hwnd:#x} -> {parent:#x}), previous parent {previous:#x}"));
+    debug!("SetParent({hwnd:#x} -> {parent:#x}), previous parent {previous:#x}");
     Ok(())
 }
 
@@ -356,7 +350,7 @@ fn set_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), Wal
 /// it needs `MapWindowPoints` to translate screen coordinates into this
 /// parent's space, because a secondary monitor above or left of the primary
 /// gives you negative screen coordinates.
-fn fill_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), WallpaperError> {
+fn fill_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
     // `ok_or_else` rather than `ok_or`: the closure must not read the thread's
     // last-error code until we know the call actually failed.
     let rect = sys::window_rect(parent)
@@ -368,7 +362,7 @@ fn fill_parent(hwnd: Hwnd, parent: Hwnd, log: &mut Vec<String>) -> Result<(), Wa
     if ok == 0 {
         return Err(WallpaperError::native("SetWindowPos(fill)", sys::last_error()));
     }
-    log.push(format!("sized to parent: {w}x{h} at child-relative (0, 0)"));
+    debug!("sized to parent: {w}x{h} at child-relative (0, 0)");
     Ok(())
 }
 
