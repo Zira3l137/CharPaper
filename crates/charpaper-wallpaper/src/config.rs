@@ -3,10 +3,6 @@
 use clap::ValueEnum;
 
 /// How we want the window glued to the desktop.
-///
-/// The `ValueEnum` derive is what lets `--strategy` take these by name, list
-/// them in `--help` and reject anything else, with no parser of our own to
-/// keep in sync.
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AttachStrategy {
     /// Look at the machine and pick the right one. Almost always correct.
@@ -40,8 +36,7 @@ pub enum LayeredMode {
     Never,
 }
 
-/// Note there is no `Resource` derive here: that would drag Bevy into this
-/// crate. The Bevy side wraps this in a newtype resource instead.
+/// No `Resource` derive: that would drag Bevy in. The plugin wraps it.
 #[derive(Clone, Debug)]
 pub struct WallpaperConfig {
     /// Master switch. `false` means "just be a normal window".

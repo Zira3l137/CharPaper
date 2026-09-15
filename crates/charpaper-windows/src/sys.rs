@@ -17,9 +17,7 @@
 //!   `set_window_long_ptr` below clears the error code first.
 
 #![allow(non_snake_case)]
-// A few declarations here (GetDesktopWindow, for instance) are part of the
-// standard toolkit for this problem and are kept for the next milestone even
-// though nothing calls them yet. Warning about them every build is noise.
+// Some declarations are kept for the next milestone before anything calls them.
 
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -166,8 +164,8 @@ unsafe extern "system" {
     #[cfg(target_pointer_width = "64")]
     pub fn SetWindowLongPtrW(hwnd: Hwnd, index: i32, value: isize) -> isize;
 
-    // On 32-bit Windows the `Ptr` variants do not exist -- the headers `#define`
-    // them onto the plain versions. We mirror that with a cfg and a shim below.
+    // 32-bit Windows has no `Ptr` variants; the headers `#define` them onto
+    // the plain ones.
     #[cfg(target_pointer_width = "32")]
     pub fn GetWindowLongW(hwnd: Hwnd, index: i32) -> i32;
     #[cfg(target_pointer_width = "32")]
@@ -195,11 +193,6 @@ fn from_wide(buffer: &[u16]) -> String {
     let end = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
     OsString::from_wide(&buffer[..end]).to_string_lossy().into_owned()
 }
-
-// The next four functions come in 64-bit and 32-bit pairs. Writing them as two
-// whole `#[cfg]`-gated definitions (rather than one function with `#[cfg]`
-// blocks inside it) keeps us on unambiguously stable ground -- attributes on
-// tail expressions are a corner of the language best left alone.
 
 /// Read a window's style bits.
 #[cfg(target_pointer_width = "64")]

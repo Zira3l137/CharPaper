@@ -1,12 +1,5 @@
-//! The error type backends return.
-//!
-//! This is the *typed* half of the project's error handling: a closed set of
-//! things that can go wrong, which a caller can match on. `thiserror` writes
-//! the `Display` and `Error` impls from the `#[error]` attributes, so adding a
-//! variant no longer means editing a `match` somewhere else.
-//!
-//! Libraries return this; the binary converts it to `anyhow::Error` at its
-//! boundary. That split is why no crate here depends on both.
+//! The typed half of the project's error handling. Libraries return this; the
+//! binary converts it to `anyhow::Error` at its boundary.
 
 use thiserror::Error;
 
@@ -27,12 +20,9 @@ pub enum WallpaperError {
     #[error("could not find {0}")]
     DesktopNotFound(String),
 
-    /// A native call failed.
-    ///
-    /// The OS code is wrapped in an `io::Error` rather than stored bare,
-    /// because that is what turns `87` into "The parameter is incorrect".
-    /// `#[source]` puts it one level down the chain, so `Display` stays short
-    /// and the detail appears when something walks the chain.
+    /// The OS code is wrapped in an `io::Error` because that is what turns
+    /// `87` into "The parameter is incorrect". `#[source]` keeps it one level
+    /// down, so `Display` stays short.
     #[error("{what} failed")]
     NativeCall {
         what: &'static str,

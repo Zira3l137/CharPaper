@@ -68,8 +68,7 @@ pub fn request_worker_w(progman: Hwnd) {
                 wparam,
                 lparam,
                 sys::SMTO_NORMAL,
-                // One second. If Explorer is wedged we would rather log a
-                // failure than freeze the wallpaper process.
+                // A wedged Explorer must not freeze us.
                 WORKER_W_REQUEST_TIMEOUT_MS,
                 &mut result,
             )
@@ -102,19 +101,15 @@ pub fn find_shell_windows() -> ShellWindows {
         }
     );
 
-    // --- classic search: a top-level window hosting SHELLDLL_DefView --------
-    //
-    // We look at every top-level window and ask "do you have a DefView child?".
-    // The last match wins.
+    // Classic layout: a top-level window hosting SHELLDLL_DefView. Last match
+    // wins; multi-monitor setups have produced more than one candidate.
     for top in sys::top_level_windows() {
         let defview = sys::find_window_ex(top, 0, "SHELLDLL_DefView");
         if defview != 0 {
             found.defview = defview;
             found.defview_host = top;
-            // The wallpaper WorkerW is the next top-level WorkerW *after* the
-            // icon host in z-order. Passing 0 as the parent makes
-            // FindWindowExW search top-level windows, and `after` then means
-            // "start looking after this one".
+            // Passing 0 as the parent makes FindWindowExW search top-level
+            // windows, where `after` means "resume from this one in z-order".
             let candidate = sys::find_window_ex(0, top, "WorkerW");
             if candidate != 0 {
                 found.worker_w = candidate;
@@ -129,7 +124,7 @@ pub fn find_shell_windows() -> ShellWindows {
         }
     }
 
-    // --- raised-desktop search: both live inside Progman -------------------
+    // Raised-desktop layout: both live inside Progman.
     if found.raised_desktop {
         let child_defview = sys::find_window_ex(found.progman, 0, "SHELLDLL_DefView");
         let child_worker = sys::find_window_ex(found.progman, 0, "WorkerW");
@@ -137,8 +132,8 @@ pub fn find_shell_windows() -> ShellWindows {
             found.defview = child_defview;
             found.defview_host = found.progman;
         }
-        // Deliberately overwrite: in this layout the top-level result, if any,
-        // is not the window that paints our wallpaper.
+        // Overwrite: in this layout a top-level result, if any, is not the
+        // window that paints our wallpaper.
         found.worker_w = child_worker;
         debug!(
             "Progman children: SHELLDLL_DefView = {child_defview:#x}, WorkerW = {child_worker:#x}"
@@ -168,7 +163,6 @@ pub fn attach(
     if config.spawn_worker_w && shell.progman != 0 && shell.worker_w == 0 {
         debug!("no WorkerW yet; asking Explorer to create one");
         request_worker_w(shell.progman);
-        // Re-scan: the window now exists (or still does not, and we fall back).
         shell = find_shell_windows();
     }
 
@@ -246,7 +240,6 @@ fn attach_raised(
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
     }
 
-    // Mark ourselves as a child window.
     let style = sys::get_window_long_ptr(hwnd, sys::GWL_STYLE);
     sys::set_window_long_ptr(hwnd, sys::GWL_STYLE, style | sys::WS_CHILD);
     debug!("added WS_CHILD (style {style:#x} -> {:#x})", style | sys::WS_CHILD);

@@ -54,8 +54,7 @@ impl WallpaperBackend for WindowsBackend {
         handle: RawWindowHandle,
         config: &WallpaperConfig,
     ) -> Result<AttachOutcome, WallpaperError> {
-        // Bevy hands us a platform-agnostic enum; on Windows the payload is an
-        // `HWND` stored as a `NonZeroIsize`.
+        // On Windows the payload is an `HWND` stored as a `NonZeroIsize`.
         let RawWindowHandle::Win32(win32) = handle else {
             return Err(WallpaperError::WrongHandleKind);
         };

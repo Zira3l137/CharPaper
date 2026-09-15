@@ -25,20 +25,14 @@ pub struct AppConfig {
 pub struct WindowConfig {
     pub title: String,
 
-    /// Initial size. Once we attach to the desktop we resize to fill the
-    /// desktop area anyway, so this only matters in `--windowed` mode.
     pub width: u32,
     pub height: u32,
 
-    /// Start hidden, then reveal after the attach succeeds. This avoids a
-    /// visible flash of a normal window in the middle of your screen while we
-    /// reparent it.
+    /// Revealed by `WallpaperPlugin` once attach settles.
     pub start_hidden: bool,
 
-    /// Wallpapers have no title bar and no border.
     pub decorations: bool,
 
-    /// A wallpaper should not show up in the taskbar or in Alt-Tab.
     pub skip_taskbar: bool,
 }
 
@@ -58,8 +52,6 @@ impl Default for WindowConfig {
 impl AppConfig {
     /// Apply command-line overrides on top of the defaults.
     pub fn from_cli(cli: &Cli) -> Self {
-        // Struct-update syntax rather than `let mut cfg = default(); cfg.x = ..`,
-        // which clippy rightly flags as a missed initialiser.
         let mut cfg = Self { inspect_and_exit: cli.inspect, ..Self::default() };
 
         cfg.wallpaper.dump_window_tree = cli.tree;
@@ -76,8 +68,8 @@ impl AppConfig {
             cfg.wallpaper.layered = layered;
         }
 
-        // A dry run never reparents, so a hidden borderless window would just
-        // be invisible. Show it like a normal one.
+        // A dry run never reparents, so a hidden borderless window would
+        // stay invisible.
         if cli.dry_run {
             cfg.wallpaper.dry_run = true;
             cfg.wallpaper.dump_window_tree = true;

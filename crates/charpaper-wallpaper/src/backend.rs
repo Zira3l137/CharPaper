@@ -21,10 +21,8 @@ pub struct AttachOutcome {
 
 /// One implementation per operating system.
 ///
-/// `Send + Sync` so it can live in a Bevy `Resource`. The systems that call
-/// into it are pinned to the main thread separately (see `NonSendMarker`
-/// below), because window handles on Windows belong to the thread that made
-/// them.
+/// `Send + Sync` so it can live in a Bevy `Resource`; callers pin themselves to
+/// the main thread separately.
 pub trait WallpaperBackend: Send + Sync + 'static {
     fn name(&self) -> &'static str;
 
