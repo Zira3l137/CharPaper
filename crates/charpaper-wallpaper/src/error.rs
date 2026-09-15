@@ -5,7 +5,6 @@ use thiserror::Error;
 
 // Some variants are only ever constructed by one platform's backend, so on any
 // given target a few look unused.
-#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum WallpaperError {
     /// This OS has no backend yet.
