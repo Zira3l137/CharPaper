@@ -4,6 +4,7 @@
 //! composes them and adds the handful that belong to the application itself.
 
 use charpaper_scene::SceneConfig;
+use charpaper_ui::UiConfig;
 use charpaper_wallpaper::WallpaperConfig;
 
 use crate::cli::Cli;
@@ -14,6 +15,7 @@ pub struct AppConfig {
     pub window: WindowConfig,
     pub scene: SceneConfig,
     pub wallpaper: WallpaperConfig,
+    pub ui: UiConfig,
 
     /// `--inspect`: print a report about the desktop window layout and exit
     /// immediately, without ever opening a window. Completely read-only.

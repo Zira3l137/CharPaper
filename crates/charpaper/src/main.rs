@@ -15,6 +15,7 @@ use bevy::prelude::*;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
 use charpaper_scene::ScenePlugin;
+use charpaper_ui::CustomUiPlugin;
 
 use crate::config::AppConfig;
 use crate::plugin::WallpaperPlugin;
@@ -32,30 +33,38 @@ fn main() -> Result<()> {
     }
 
     let exit = App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: config.window.title.clone(),
-                resolution: WindowResolution::new(config.window.width, config.window.height),
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: config.window.title.clone(),
+                        resolution: WindowResolution::new(
+                            config.window.width,
+                            config.window.height,
+                        ),
 
-                decorations: config.window.decorations,
-                resizable: false,
+                        decorations: config.window.decorations,
+                        resizable: false,
 
-                // WallpaperPlugin reveals it once attach settles, so there is
-                // no flash of a floating window mid-reparent.
-                visible: !config.window.start_hidden,
+                        // WallpaperPlugin reveals it once attach settles, so there is
+                        // no flash of a floating window mid-reparent.
+                        visible: !config.window.start_hidden,
 
-                skip_taskbar: config.window.skip_taskbar,
+                        skip_taskbar: config.window.skip_taskbar,
 
-                // Not topmost: the desktop layer is below everything, and
-                // asking for topmost fights the reparenting.
-                window_level: WindowLevel::Normal,
+                        // Not topmost: the desktop layer is below everything, and
+                        // asking for topmost fights the reparenting.
+                        window_level: WindowLevel::Normal,
 
-                ..default()
-            }),
-            ..default()
-        }).set(logging::plugin(args.log_level, args.bevy_log_level)))
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(logging::plugin(args.log_level, args.bevy_log_level)),
+        )
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
         .add_plugins(ScenePlugin { config: config.scene.clone() })
+        .add_plugins(CustomUiPlugin { config: config.ui.clone() })
         .run();
 
     match exit {

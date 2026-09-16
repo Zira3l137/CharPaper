@@ -18,6 +18,7 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "async_executor",
     "multi_threaded",
     "reflect_auto_register",
+    "default_font",
 
     "bevy_asset",
     "bevy_log",
@@ -25,6 +26,10 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "bevy_winit",
 
     "bevy_render",
+    "bevy_ui",
+    "bevy_ui_render",
+    "ui_picking",
+    "bevy_picking",
     "bevy_core_pipeline",
     "bevy_pbr",
     "bevy_camera",
@@ -58,6 +63,7 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 charpaper-scene = { path = "crates/charpaper-scene" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
 charpaper-windows = { path = "crates/charpaper-windows" }
+charpaper-ui = { path = "crates/charpaper-ui"}
 
 [profile.dev]
 opt-level = 1
