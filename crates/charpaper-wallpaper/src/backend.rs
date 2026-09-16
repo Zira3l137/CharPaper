@@ -5,6 +5,7 @@ use raw_window_handle::RawWindowHandle;
 use crate::AttachStrategy;
 use crate::config::WallpaperConfig;
 use crate::error::WallpaperError;
+use crate::input::PointerSource;
 
 /// What a read-only look at the desktop found.
 #[derive(Debug, Default)]
@@ -35,4 +36,13 @@ pub trait WallpaperBackend: Send + Sync + 'static {
         handle: RawWindowHandle,
         config: &WallpaperConfig,
     ) -> Result<AttachOutcome, WallpaperError>;
+
+    /// Start recovering the pointer input that attaching took from our window.
+    ///
+    /// `Ok(None)` means there is nothing to recover: we are not attached, or
+    /// this platform keeps delivering input to the window on its own. That is
+    /// also the default, so backends that never swallow input skip this.
+    fn forward_input(&mut self) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
+        Ok(None)
+    }
 }

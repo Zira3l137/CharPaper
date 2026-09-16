@@ -12,6 +12,10 @@ mod backend;
 #[cfg(windows)]
 mod desktop;
 #[cfg(windows)]
+mod hook;
+#[cfg(windows)]
+mod pointer;
+#[cfg(windows)]
 pub mod sys;
 
 #[cfg(windows)]

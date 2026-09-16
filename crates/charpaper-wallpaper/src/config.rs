@@ -61,6 +61,9 @@ pub struct WallpaperConfig {
     /// `WindowConfig::start_hidden` to avoid a flash of a floating window.
     pub show_window_after_attach: bool,
 
+    /// Replay the mouse input the desktop keeps from us once attached.
+    pub forward_input: bool,
+
     /// The window handle does not exist on frame 0, and the shell sometimes
     /// needs a moment after login. Retry this many times before giving up.
     pub max_attempts: u32,
@@ -79,6 +82,7 @@ impl Default for WallpaperConfig {
             spawn_worker_w: true,
             layered: LayeredMode::Auto,
             show_window_after_attach: true,
+            forward_input: true,
             max_attempts: 20,
             frames_between_attempts: 15,
         }

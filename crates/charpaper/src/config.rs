@@ -62,6 +62,10 @@ impl AppConfig {
             cfg.wallpaper.spawn_worker_w = false;
         }
 
+        if cli.no_input_forwarding {
+            cfg.wallpaper.forward_input = false;
+        }
+
         if let Some(strategy) = cli.strategy {
             cfg.wallpaper.strategy = strategy;
         }

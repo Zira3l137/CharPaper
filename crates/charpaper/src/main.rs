@@ -6,6 +6,7 @@
 mod backend;
 mod cli;
 mod config;
+mod input;
 mod logging;
 mod plugin;
 

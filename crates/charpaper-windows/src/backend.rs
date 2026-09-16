@@ -4,7 +4,9 @@
 //! Win32 work in `desktop.rs`.
 
 use charpaper_wallpaper::AttachOutcome;
+use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::DesktopProbe;
+use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
@@ -13,12 +15,13 @@ use charpaper_wallpaper::WallpaperError;
 use tracing::debug;
 
 use crate::desktop;
+use crate::pointer::DesktopPointer;
 use crate::sys;
 
 #[derive(Default)]
 pub struct WindowsBackend {
-    /// Remembered so a future `detach` (or a re-attach after Explorer
-    /// restarts) has something to work with. Written but not yet read.
+    /// Only set once the window really is inside the desktop. Also what a
+    /// future `detach` (or a re-attach after Explorer restarts) will need.
     attached_hwnd: Option<sys::Hwnd>,
 }
 
@@ -62,9 +65,18 @@ impl WallpaperBackend for WindowsBackend {
 
         debug!("our window HWND = {hwnd:#x}");
         let strategy = desktop::attach(hwnd, config)?;
-        self.attached_hwnd = Some(hwnd);
+        if strategy != AttachStrategy::None {
+            self.attached_hwnd = Some(hwnd);
+        }
 
         Ok(AttachOutcome { strategy_used: Some(strategy) })
+    }
+
+    fn forward_input(&mut self) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
+        let Some(hwnd) = self.attached_hwnd else {
+            return Ok(None);
+        };
+        Ok(Some(Box::new(DesktopPointer::new(hwnd)?)))
     }
 }
 

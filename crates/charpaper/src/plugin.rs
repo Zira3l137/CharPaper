@@ -1,15 +1,19 @@
 //! Wires a [`WallpaperBackend`] into the Bevy app.
 
 use bevy::ecs::system::NonSendMarker;
+use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::window::RawHandleWrapper;
 use charpaper_wallpaper::AttachStrategy;
+use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 
 use crate::backend::create_backend;
+use crate::input::PointerSourceResource;
+use crate::input::replay_forwarded_pointer;
 
 /// `WallpaperConfig` cannot derive `Resource` without pulling Bevy into a
 /// Bevy-free crate. `Deref` means systems still read it as if it had.
@@ -36,7 +40,15 @@ impl Plugin for WallpaperPlugin {
             .insert_resource(BackendResource(create_backend()))
             .init_resource::<AttachState>()
             .add_systems(Startup, probe_desktop)
-            .add_systems(Update, attach_window);
+            .add_systems(Update, attach_window)
+            // winit writes its input before `First` even starts. Running at the
+            // front of `First` lets picking read ours in the same frame, too.
+            .add_systems(
+                First,
+                replay_forwarded_pointer
+                    .run_if(resource_exists::<PointerSourceResource>)
+                    .before(PickingSystems::Input),
+            );
     }
 }
 
@@ -67,6 +79,7 @@ fn probe_desktop(
 /// zero. Retrying also covers Explorer still booting right after login.
 fn attach_window(
     _main_thread: NonSendMarker,
+    mut commands: Commands,
     mut backend: ResMut<BackendResource>,
     config: Res<WallpaperSettings>,
     mut state: ResMut<AttachState>,
@@ -102,8 +115,11 @@ fn attach_window(
                 state.countdown = config.frames_between_attempts;
             }
         }
-        Step::Done(message) => {
+        Step::Done { message, input } => {
             info!("{message}");
+            if let Some(source) = input {
+                commands.insert_resource(PointerSourceResource::new(source));
+            }
             state.finished = true;
             reveal = true;
         }
@@ -124,7 +140,7 @@ enum Step {
     /// Not ready (or failed); try again next time.
     Wait(String),
     /// Stop trying, with a line to log.
-    Done(String),
+    Done { message: String, input: Option<Box<dyn PointerSource>> },
 }
 
 fn decide(
@@ -133,7 +149,7 @@ fn decide(
     handle: Option<RawWindowHandle>,
 ) -> Step {
     if !config.enabled || config.strategy == AttachStrategy::None {
-        return Step::Done("wallpaper attach disabled".to_string());
+        return Step::Done { message: "wallpaper attach disabled".to_string(), input: None };
     }
 
     let Some(raw) = handle else {
@@ -142,17 +158,49 @@ fn decide(
 
     if config.dry_run {
         debug!("[dry-run] would attach native handle {raw:?}");
-        return Step::Done("dry run: no windows were modified".to_string());
+        if config.forward_input {
+            debug!("[dry-run] would then ask the backend to forward pointer input");
+        }
+        let message = "dry run: no windows were modified".to_string();
+        return Step::Done { message, input: None };
     }
 
     match backend.attach(raw, config) {
         Ok(outcome) => {
             let how =
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
-            Step::Done(format!("attached to desktop using {how}"))
+            let message = format!("attached to desktop using {how}");
+            Step::Done { message, input: start_forwarding(backend, config) }
         }
         // `{:#}` walks the source chain, so a failed Win32 call logs
         // "SetParent failed: The parameter is incorrect." not just the former.
         Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
+    }
+}
+
+/// A failure here is logged and ignored: a wallpaper that renders but cannot
+/// be clicked is still better than no wallpaper.
+fn start_forwarding(
+    backend: &mut Box<dyn WallpaperBackend>,
+    config: &WallpaperConfig,
+) -> Option<Box<dyn PointerSource>> {
+    if !config.forward_input {
+        debug!("pointer input forwarding disabled");
+        return None;
+    }
+
+    match backend.forward_input() {
+        Ok(Some(source)) => {
+            info!("forwarding desktop pointer input to the window");
+            Some(source)
+        }
+        Ok(None) => {
+            debug!("backend reports the window receives input on its own");
+            None
+        }
+        Err(err) => {
+            warn!("pointer input forwarding unavailable: {:#}", anyhow::Error::new(err));
+            None
+        }
     }
 }

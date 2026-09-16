@@ -51,6 +51,12 @@ pub struct Cli {
     #[arg(long)]
     pub no_spawn_workerw: bool,
 
+    /// Do not replay the mouse input the desktop keeps from the wallpaper.
+    ///
+    /// The wallpaper still renders; it just stops reacting to the mouse.
+    #[arg(long)]
+    pub no_input_forwarding: bool,
+
     /// Log level for charpaper's own crates.
     #[arg(long, value_enum, default_value = "info")]
     pub log_level: LogLevel,

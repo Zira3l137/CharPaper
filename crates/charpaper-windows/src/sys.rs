@@ -33,6 +33,17 @@ pub type Bool = i32;
 pub type WParam = usize;
 pub type LParam = isize;
 pub type LResult = isize;
+/// A hook handle, as returned by `SetWindowsHookExW`.
+pub type HHook = isize;
+/// A loaded module (the .exe or a .dll). Same thing as an `HMODULE`.
+pub type HInstance = isize;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -52,7 +63,38 @@ impl Rect {
     }
 }
 
+/// One message pulled off a thread's message queue.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Msg {
+    pub hwnd: Hwnd,
+    pub message: u32,
+    pub wparam: WParam,
+    pub lparam: LParam,
+    pub time: u32,
+    pub pt: Point,
+}
+
+/// What a low-level mouse hook receives through its `lparam`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct MsLlHookStruct {
+    /// Screen coordinates, always in physical pixels regardless of DPI
+    /// awareness.
+    pub pt: Point,
+    /// Wheel delta or X button number in the high word, depending on the
+    /// message. Unused for everything else.
+    pub mouse_data: u32,
+    pub flags: u32,
+    pub time: u32,
+    pub extra_info: usize,
+}
+
 pub type EnumWindowsProc = unsafe extern "system" fn(Hwnd, LParam) -> Bool;
+
+/// `wparam` is the mouse message (`WM_MOUSEMOVE`, ...), `lparam` points at an
+/// [`MsLlHookStruct`].
+pub type HookProc = unsafe extern "system" fn(i32, WParam, LParam) -> LResult;
 
 // --- constants -------------------------------------------------------------
 
@@ -93,6 +135,37 @@ pub const SMTO_NORMAL: u32 = 0x0000;
 /// `WorkerW` window. Not in any header; discovered by reverse engineering and
 /// used by every live-wallpaper program in existence.
 pub const WM_SPAWN_WORKER_W: u32 = 0x052C;
+
+/// `SetWindowsHookExW` id for the global low-level mouse hook.
+pub const WH_MOUSE_LL: i32 = 14;
+/// The only hook `code` that carries an event; anything else must just be
+/// passed on.
+pub const HC_ACTION: i32 = 0;
+
+pub const WM_QUIT: u32 = 0x0012;
+pub const WM_USER: u32 = 0x0400;
+pub const PM_NOREMOVE: u32 = 0x0000;
+
+pub const WM_MOUSEMOVE: u32 = 0x0200;
+pub const WM_LBUTTONDOWN: u32 = 0x0201;
+pub const WM_LBUTTONUP: u32 = 0x0202;
+pub const WM_RBUTTONDOWN: u32 = 0x0204;
+pub const WM_RBUTTONUP: u32 = 0x0205;
+pub const WM_MBUTTONDOWN: u32 = 0x0207;
+pub const WM_MBUTTONUP: u32 = 0x0208;
+pub const WM_MOUSEWHEEL: u32 = 0x020A;
+pub const WM_XBUTTONDOWN: u32 = 0x020B;
+pub const WM_XBUTTONUP: u32 = 0x020C;
+pub const WM_MOUSEHWHEEL: u32 = 0x020E;
+
+pub const XBUTTON1: u16 = 0x0001;
+pub const XBUTTON2: u16 = 0x0002;
+
+/// One wheel notch. High-resolution wheels report fractions of it.
+pub const WHEEL_DELTA: i16 = 120;
+
+/// `GetAncestor` flag: walk parents all the way up to the top-level window.
+pub const GA_ROOT: u32 = 2;
 
 // --- imports ---------------------------------------------------------------
 
@@ -159,6 +232,32 @@ unsafe extern "system" {
     pub fn GetWindowTextW(hwnd: Hwnd, buffer: *mut u16, max_chars: i32) -> i32;
     pub fn IsWindow(hwnd: Hwnd) -> Bool;
 
+    /// Install a hook. With `thread_id == 0` it is global: every thread on
+    /// this desktop feeds it. Low-level hooks are called back on the
+    /// installing thread, which must keep pumping messages for that to happen.
+    pub fn SetWindowsHookExW(id: i32, proc_: HookProc, module: HInstance, thread_id: u32) -> HHook;
+    pub fn UnhookWindowsHookEx(hook: HHook) -> Bool;
+    /// Hand the event to the next hook in the chain. `hook` is ignored.
+    pub fn CallNextHookEx(hook: HHook, code: i32, wparam: WParam, lparam: LParam) -> LResult;
+
+    /// Block until a message arrives. Returns `0` for `WM_QUIT` and `-1` on
+    /// error, which is why the result is not a real boolean.
+    pub fn GetMessageW(msg: *mut Msg, hwnd: Hwnd, filter_min: u32, filter_max: u32) -> Bool;
+    pub fn PeekMessageW(
+        msg: *mut Msg,
+        hwnd: Hwnd,
+        filter_min: u32,
+        filter_max: u32,
+        remove: u32,
+    ) -> Bool;
+    pub fn PostThreadMessageW(thread_id: u32, msg: u32, wparam: WParam, lparam: LParam) -> Bool;
+
+    /// The deepest visible, enabled window under a screen point.
+    pub fn WindowFromPoint(point: Point) -> Hwnd;
+    pub fn GetAncestor(hwnd: Hwnd, flags: u32) -> Hwnd;
+    /// Screen coordinates to `hwnd`'s client coordinates, in place.
+    pub fn ScreenToClient(hwnd: Hwnd, point: *mut Point) -> Bool;
+
     #[cfg(target_pointer_width = "64")]
     pub fn GetWindowLongPtrW(hwnd: Hwnd, index: i32) -> isize;
     #[cfg(target_pointer_width = "64")]
@@ -176,6 +275,9 @@ unsafe extern "system" {
 unsafe extern "system" {
     pub fn GetLastError() -> u32;
     pub fn SetLastError(code: u32);
+    pub fn GetCurrentThreadId() -> u32;
+    /// `null` returns the handle of the running .exe.
+    pub fn GetModuleHandleW(name: *const u16) -> HInstance;
 }
 
 // --- small safe wrappers ---------------------------------------------------
@@ -262,6 +364,20 @@ pub fn window_rect(hwnd: Hwnd) -> Option<Rect> {
 
 pub fn is_window(hwnd: Hwnd) -> bool {
     unsafe { IsWindow(hwnd) != 0 }
+}
+
+pub fn window_from_point(point: Point) -> Hwnd {
+    unsafe { WindowFromPoint(point) }
+}
+
+pub fn root_ancestor(hwnd: Hwnd) -> Hwnd {
+    unsafe { GetAncestor(hwnd, GA_ROOT) }
+}
+
+pub fn screen_to_client(hwnd: Hwnd, screen: Point) -> Option<Point> {
+    let mut point = screen;
+    let ok = unsafe { ScreenToClient(hwnd, &mut point) };
+    (ok != 0).then_some(point)
 }
 
 pub fn has_ex_style(hwnd: Hwnd, style: isize) -> bool {
