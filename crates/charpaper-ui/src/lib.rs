@@ -7,6 +7,9 @@ pub use config::UiConfig;
 use crate::helpers::ButtonBuilder;
 use crate::helpers::ButtonReactiveExt;
 use crate::helpers::UiButton;
+use crate::helpers::UiNode;
+use crate::helpers::WithBackground;
+use crate::helpers::WithText;
 use crate::helpers::defaults::*;
 
 pub struct CustomUiPlugin {
