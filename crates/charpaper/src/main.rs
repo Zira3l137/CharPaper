@@ -17,6 +17,7 @@ use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
 use charpaper_scene::ScenePlugin;
 use charpaper_ui::CustomUiPlugin;
+use charpaper_ui::UiState;
 
 use crate::config::AppConfig;
 use crate::plugin::WallpaperPlugin;
@@ -65,7 +66,10 @@ fn main() -> Result<()> {
         )
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
         .add_plugins(ScenePlugin { config: config.scene.clone() })
-        .add_plugins(CustomUiPlugin { config: config.ui.clone() })
+        // TODO: 1. Deserialize state from disk if available
+        // TODO: 2. Serialize state to disk on exit
+        // TODO: 3. Reead UI locales into config on startup if available
+        .add_plugins(CustomUiPlugin { config: config.ui.clone(), state: UiState::default() })
         .run();
 
     match exit {

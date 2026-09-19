@@ -291,8 +291,22 @@ impl ButtonReactiveExt for EntityCommands<'_> {
 }
 
 #[derive(Component, Debug)]
+pub enum UiElement {
+    Container(UiContainer),
+    Button(UiButton),
+}
+
+#[derive(Component, Debug)]
+pub enum UiContainer {
+    MainMenu,
+    Tab1,
+    Tab2,
+}
+
+#[derive(Component, Debug)]
 pub enum UiButton {
     HideMenu,
+    RevealMenu,
     Exit,
 }
 
@@ -366,8 +380,8 @@ impl ButtonBuilder {
         )
     }
 
-    pub fn build_marked(self, marker: impl Component) -> impl Bundle {
-        (self.build(), marker)
+    pub fn build_with(self, extras: impl Bundle) -> impl Bundle {
+        (self.build(), extras)
     }
 }
 
@@ -423,8 +437,8 @@ impl<C: Bundle> ContainerBuilder<C> {
         )
     }
 
-    pub fn build_marked(self, marker: impl Component) -> impl Bundle {
-        (self.build(), marker)
+    pub fn build_with(self, extras: impl Bundle) -> impl Bundle {
+        (self.build(), extras)
     }
 }
 
