@@ -13,8 +13,14 @@ use crate::cli::LogLevel;
 
 /// `EnvFilter` matches the crate name as the compiler spells it, hence the
 /// underscores.
-const OUR_CRATES: [&str; 5] =
-    ["charpaper", "charpaper_scene", "charpaper_ui", "charpaper_wallpaper", "charpaper_windows"];
+const OUR_CRATES: [&str; 6] = [
+    "charpaper",
+    "charpaper_scene",
+    "charpaper_suite",
+    "charpaper_ui",
+    "charpaper_wallpaper",
+    "charpaper_windows",
+];
 
 pub fn plugin(ours: LogLevel, engine: LogLevel) -> LogPlugin {
     let mut filter = format!("{},{}", engine.as_directive(), DEFAULT_FILTER);

@@ -5,6 +5,8 @@
 //! `AppConfig::default()` in `config.rs` stays the single source of truth for
 //! defaults, rather than having them written down twice.
 
+use std::path::PathBuf;
+
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::LayeredMode;
 use clap::Parser;
@@ -19,6 +21,13 @@ pub struct Cli {
     /// here when something does not work.
     #[arg(long)]
     pub inspect: bool,
+
+    /// Check a character suite folder and exit.
+    ///
+    /// Reads only the structure of its files and opens no window. Exits with
+    /// an error if the suite would fail to load; warnings do not fail it.
+    #[arg(long, value_name = "DIR")]
+    pub check_suite: Option<PathBuf>,
 
     /// Run in an ordinary window and log the full attach plan without touching
     /// any desktop window.

@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 charpaper-scene.workspace = true
+charpaper-suite.workspace = true
 charpaper-wallpaper.workspace = true
 charpaper-ui.workspace = true
 

@@ -10,12 +10,16 @@ mod input;
 mod logging;
 mod plugin;
 
+use std::path::Path;
+
+use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use bevy::prelude::*;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
 use charpaper_scene::ScenePlugin;
+use charpaper_suite::Suite;
 use charpaper_ui::CustomUiPlugin;
 use charpaper_ui::UiState;
 
@@ -32,6 +36,10 @@ fn main() -> Result<()> {
             println!("{line}");
         }
         return Ok(());
+    }
+
+    if let Some(path) = &args.check_suite {
+        return check_suite(path);
     }
 
     let exit = App::new()
@@ -77,4 +85,24 @@ fn main() -> Result<()> {
         AppExit::Success => Ok(()),
         AppExit::Error(code) => bail!("bevy exited with status {code}"),
     }
+}
+
+/// Handled before Bevy exists, like `--inspect`, so it prints straight to
+/// stdout rather than through the log.
+fn check_suite(path: &Path) -> Result<()> {
+    let suite =
+        Suite::load(path).with_context(|| format!("cannot load suite at {}", path.display()))?;
+
+    let skins: Vec<&str> = suite.skins.iter().map(|s| s.name.as_str()).collect();
+    println!("suite    {:?}", suite.name);
+    println!("model    {}", suite.model.display());
+    println!("clips    {} animation file(s)", suite.animations.len());
+    println!("skins    [{}], default {:?}", skins.join(", "), suite.default_skin);
+
+    let report = charpaper_suite::inspect(&suite);
+    println!("{report}");
+    if report.errors() > 0 {
+        bail!("suite {:?} has {} error(s)", suite.name, report.errors());
+    }
+    Ok(())
 }
