@@ -62,9 +62,16 @@ clap = { version = "4.6", default-features = false, features = [
 anyhow = { version = "1.0", default-features = false, features = ["std"] }
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
 
+serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
+toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse"] }
+# Same major version and a subset of the features `bevy_gltf` enables, so the
+# full build compiles it only once.
+gltf = { version = "1.4", default-features = false, features = ["names"] }
+
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 
 charpaper-scene = { path = "crates/charpaper-scene" }
+charpaper-suite = { path = "crates/charpaper-suite" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
 charpaper-windows = { path = "crates/charpaper-windows" }
 charpaper-ui = { path = "crates/charpaper-ui"}
