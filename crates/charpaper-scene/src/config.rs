@@ -29,7 +29,7 @@ impl Default for SceneConfig {
             clear_color: [0.05, 0.06, 0.09],
             cube_color: [0.35, 0.65, 0.95],
             cube_size: 1.5,
-            camera_pos: [2.5, 2.5, 5.0],
+            camera_pos: [0.0, 1.0, 1.0],
         }
     }
 }

@@ -1,16 +1,33 @@
 //! The thing we actually draw.
-//!
-//! Knows nothing about wallpapers or operating systems, and nothing depends on
-//! it, so this is the crate you can iterate on without rebuilding anything
-//! else in the workspace.
 
 mod config;
+mod importer;
 
 use bevy::prelude::*;
 pub use config::SceneConfig;
 
+pub const BASE_ZOOM_SPEED: f32 = 0.1;
+pub const BASE_PAN_SPEED: f32 = 0.001;
+pub const BASE_SENSITIVITY: f32 = 0.005;
+
 #[derive(Component)]
-struct Spinner;
+struct OrbitCamera {
+    focus: Vec3, // the point being orbited
+    radius: f32,
+    yaw: f32,   // horizontal angle
+    pitch: f32, // vertical angle
+}
+
+impl Default for OrbitCamera {
+    fn default() -> Self {
+        Self {
+            focus: Vec3::ZERO,
+            radius: 2.0,
+            yaw: 0.0,
+            pitch: 0.0, // slight downward tilt to start
+        }
+    }
+}
 
 pub struct ScenePlugin {
     pub config: SceneConfig,
@@ -22,46 +39,22 @@ impl Plugin for ScenePlugin {
 
         app.insert_resource(ClearColor(Color::srgb(r, g, b)))
             .insert_resource(self.config.clone())
-            .add_systems(Startup, spawn_scene)
-            .add_systems(Update, spin_cube);
+            .add_observer(on_pan)
+            .add_observer(on_orbit)
+            .add_observer(on_zoom)
+            .add_systems(Startup, spawn_scene);
     }
 }
 
-fn spawn_scene(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    config: Res<SceneConfig>,
-) {
-    let [cr, cg, cb] = config.cube_color;
-    let [px, py, pz] = config.camera_pos;
-
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(config.cube_size, config.cube_size, config.cube_size))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(cr, cg, cb),
-            perceptual_roughness: 0.35,
-            metallic: 0.1,
-            ..default()
-        })),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        Spinner,
-    ));
-
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(12.0, 0.2, 12.0))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.12, 0.13, 0.16),
-            perceptual_roughness: 0.9,
-            ..default()
-        })),
-        Transform::from_xyz(0.0, -1.6, 0.0),
-    ));
+fn spawn_scene(mut commands: Commands, assets: Res<AssetServer>) {
+    commands
+        .spawn(WorldAssetRoot(assets.load(GltfAssetLabel::Scene(0).from_asset("models/test.glb"))));
 
     commands.spawn((
         DirectionalLight {
             illuminance: light_consts::lux::OVERCAST_DAY,
-            shadow_maps_enabled: false,
+            shadow_maps_enabled: true,
+            contact_shadows_enabled: true,
             ..default()
         },
         Transform::from_xyz(4.0, 8.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -69,19 +62,66 @@ fn spawn_scene(
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(px, py, pz).looking_at(Vec3::ZERO, Vec3::Y),
+        OrbitCamera::default(),
+        Transform::default(),
         AmbientLight { color: Color::srgb(0.6, 0.7, 1.0), brightness: 200.0, ..default() },
     ));
 }
 
-fn spin_cube(
-    time: Res<Time>,
-    config: Res<SceneConfig>,
-    mut spinners: Query<&mut Transform, With<Spinner>>,
+fn on_zoom(
+    event: On<Pointer<Scroll>>,
+    mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
 ) {
-    let radians_per_second = config.spin_speed_deg.to_radians();
+    let (camera, orbit) = &mut *query;
 
-    for mut transform in &mut spinners {
-        transform.rotate_y(radians_per_second * time.delta_secs());
+    let scroll_y = event.y;
+
+    let zoom_factor = 1.0 - scroll_y * BASE_ZOOM_SPEED;
+    orbit.radius = (orbit.radius * zoom_factor).clamp(1.0, 100.0);
+    update_camera_transform(camera, orbit);
+}
+
+fn on_pan(
+    event: On<Pointer<Drag>>,
+    mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+) {
+    if !matches!(event.button, PointerButton::Middle) {
+        return;
     }
+
+    let (camera, orbit) = &mut *query;
+
+    let delta = event.delta;
+    let right = camera.right().as_vec3();
+    let up = camera.up().as_vec3();
+    let pan_speed = BASE_PAN_SPEED * orbit.radius;
+
+    let world_delta = (-right * delta.x + up * delta.y) * pan_speed;
+
+    orbit.focus += world_delta;
+    update_camera_transform(camera, orbit);
+}
+
+fn on_orbit(
+    event: On<Pointer<Drag>>,
+    mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+) {
+    if !matches!(event.button, PointerButton::Secondary) {
+        return;
+    }
+
+    let (transform, orbit) = &mut *query;
+    let delta = event.delta;
+
+    orbit.yaw -= delta.x * BASE_SENSITIVITY;
+    orbit.pitch = (orbit.pitch - delta.y * BASE_SENSITIVITY).clamp(-1.54, 1.54); // avoid flipping past straight up/down (~88°)
+
+    update_camera_transform(transform, orbit);
+}
+
+fn update_camera_transform(transform: &mut Transform, orbit: &OrbitCamera) {
+    let rotation = Quat::from_euler(EulerRot::YXZ, orbit.yaw, orbit.pitch, 0.0);
+    let offset = rotation * Vec3::new(0.0, 0.0, orbit.radius);
+    transform.translation = orbit.focus + offset;
+    transform.look_at(orbit.focus, Vec3::Y);
 }

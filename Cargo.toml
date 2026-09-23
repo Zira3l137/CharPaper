@@ -39,6 +39,10 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "bevy_shader",
     "bevy_image",
     "bevy_color",
+    "bevy_animation",
+    "bevy_gltf",
+    "png",
+    "tga",
 
     "tonemapping_luts",
     "ktx2",
