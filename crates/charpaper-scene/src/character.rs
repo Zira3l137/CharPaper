@@ -20,6 +20,9 @@ pub struct CharacterState {
     /// A name from [`crate::CharacterClips`]. `None` stops the animation and
     /// leaves the character in whatever pose it was in.
     pub animation: Option<String>,
+    /// A camera from `cameras/`, by file name. `None` is the orbit camera,
+    /// which the mouse only moves while it is the one in use.
+    pub camera: Option<String>,
 }
 
 /// Parent of everything spawned from the suite, so replacing the suite is one

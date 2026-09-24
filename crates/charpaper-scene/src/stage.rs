@@ -15,6 +15,7 @@ use charpaper_suite::Tonemapping as SuiteTonemapping;
 
 use crate::OrbitCamera;
 use crate::PITCH_LIMIT;
+use crate::cameras::Following;
 use crate::suite::ActiveSuite;
 use crate::suite::asset_path;
 use crate::suite::load_scene;
@@ -78,6 +79,7 @@ pub(crate) fn spawn_stage(
     let mut camera = commands.spawn((
         Camera3d::default(),
         orbit,
+        Following::default(),
         transform,
         AmbientLight {
             color: srgb(ambient.color.unwrap_or(AMBIENT_COLOR)),

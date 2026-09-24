@@ -13,8 +13,11 @@ use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 
+use crate::OrbitCamera;
+use crate::character::CharacterState;
 use crate::suite::ActiveSuite;
 use crate::suite::asset_path;
+use crate::update_camera_transform;
 
 /// Camera files still loading. Removed once every rig has spawned.
 #[derive(Resource)]
@@ -32,6 +35,12 @@ pub(crate) struct CameraRig {
 #[derive(Component)]
 pub(crate) struct Lens(pub Entity);
 
+/// On the real camera: which rig it is currently copying, `None` for the orbit
+/// camera. Kept apart from [`CharacterState::camera`] so a switch can be told
+/// from an ordinary frame, and so a rig still loading reads as "not yet".
+#[derive(Component, Default)]
+pub(crate) struct Following(Option<String>);
+
 /// Loads each file whole, as a `Gltf`, rather than just its scene like the
 /// character's files: the rig needs the file's clip too, and a missing
 /// `#Animation0` label would be a load error for every static camera.
@@ -39,6 +48,7 @@ pub(crate) fn load_cameras(
     mut commands: Commands,
     suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
+    mut state: ResMut<CharacterState>,
 ) {
     let Some(suite) = suite else {
         return;
@@ -55,6 +65,7 @@ pub(crate) fn load_cameras(
         })
         .collect();
     commands.insert_resource(PendingRigs(rigs));
+    state.camera = suite.default_camera.clone();
 }
 
 pub(crate) fn spawn_rigs(
@@ -147,4 +158,52 @@ pub(crate) fn on_rig_ready(
         player.play(nodes[0]).repeat();
     }
     info!("camera {:?} ready, looping its clip", rig.name);
+}
+
+/// Moves the real camera onto the selected rig's lens every frame. Both
+/// `Transform` and `GlobalTransform` are written: propagation has already run
+/// this frame, so writing only `Transform` would show last frame's position.
+///
+/// The projection is copied only on a switch. It never animates (Blender can
+/// export animated focal length only through an extension Bevy cannot load),
+/// and assigning it makes Bevy fit its aspect ratio to the window again.
+pub(crate) fn follow_selected(
+    state: Res<CharacterState>,
+    rigs: Query<(&CameraRig, &Lens)>,
+    lenses: Query<(&GlobalTransform, &Projection), Without<OrbitCamera>>,
+    mut viewer: Query<(
+        &mut Transform,
+        &mut GlobalTransform,
+        &mut Projection,
+        &OrbitCamera,
+        &mut Following,
+    )>,
+) {
+    let Ok((mut transform, mut global, mut projection, orbit, mut following)) = viewer.single_mut()
+    else {
+        return;
+    };
+
+    let wanted = state.camera.as_deref();
+    let lens = wanted
+        .and_then(|name| rigs.iter().find(|(rig, _)| rig.name == name))
+        .and_then(|(_, lens)| lenses.get(lens.0).ok());
+
+    match lens {
+        Some((lens_global, lens_projection)) => {
+            if following.0.as_deref() != wanted {
+                *projection = lens_projection.clone();
+                following.0 = wanted.map(str::to_string);
+            }
+            *transform = lens_global.compute_transform();
+            *global = *lens_global;
+        }
+        None if following.0.is_some() => {
+            *projection = Projection::default();
+            update_camera_transform(&mut transform, orbit);
+            *global = GlobalTransform::from(*transform);
+            following.0 = None;
+        }
+        None => {}
+    }
 }

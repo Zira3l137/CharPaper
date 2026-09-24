@@ -10,7 +10,9 @@ mod stage;
 mod suite;
 
 pub use animation::CharacterClips;
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
+use bevy::transform::TransformSystems;
 pub use character::Character;
 pub use character::CharacterState;
 pub use config::SceneConfig;
@@ -88,6 +90,14 @@ impl Plugin for ScenePlugin {
                     cameras::spawn_rigs,
                     character::show_selected_skin.run_if(resource_changed::<CharacterState>),
                 ),
+            )
+            // After propagation so the rig's animated transform is final for
+            // this frame, and before frusta are built from the camera's.
+            .add_systems(
+                PostUpdate,
+                cameras::follow_selected
+                    .after(TransformSystems::Propagate)
+                    .before(VisibilitySystems::UpdateFrusta),
             );
     }
 }
@@ -95,7 +105,11 @@ impl Plugin for ScenePlugin {
 fn on_zoom(
     event: On<Pointer<Scroll>>,
     mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+    state: Res<CharacterState>,
 ) {
+    if state.camera.is_some() {
+        return;
+    }
     let (camera, orbit) = &mut *query;
 
     let scroll_y = event.y;
@@ -108,7 +122,11 @@ fn on_zoom(
 fn on_pan(
     event: On<Pointer<Drag>>,
     mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+    state: Res<CharacterState>,
 ) {
+    if state.camera.is_some() {
+        return;
+    }
     if !matches!(event.button, PointerButton::Middle) {
         return;
     }
@@ -129,7 +147,11 @@ fn on_pan(
 fn on_orbit(
     event: On<Pointer<Drag>>,
     mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+    state: Res<CharacterState>,
 ) {
+    if state.camera.is_some() {
+        return;
+    }
     if !matches!(event.button, PointerButton::Secondary) {
         return;
     }
