@@ -5,6 +5,7 @@ mod binding;
 mod character;
 mod config;
 mod importer;
+mod stage;
 mod suite;
 
 pub use animation::CharacterClips;
@@ -23,7 +24,7 @@ pub const BASE_PAN_SPEED: f32 = 0.001;
 pub const BASE_SENSITIVITY: f32 = 0.005;
 
 #[derive(Component)]
-struct OrbitCamera {
+pub(crate) struct OrbitCamera {
     focus: Vec3, // the point being orbited
     radius: f32,
     yaw: f32,   // horizontal angle
@@ -59,10 +60,10 @@ impl Plugin for ScenePlugin {
             .add_systems(
                 Startup,
                 (
-                    (suite::select_suite, (character::spawn_character, animation::load_clips))
-                        .chain(),
-                    spawn_scene,
-                ),
+                    suite::select_suite,
+                    (character::spawn_character, animation::load_clips, stage::spawn_stage),
+                )
+                    .chain(),
             )
             .add_systems(
                 Update,
@@ -79,25 +80,6 @@ impl Plugin for ScenePlugin {
                 ),
             );
     }
-}
-
-fn spawn_scene(mut commands: Commands) {
-    commands.spawn((
-        DirectionalLight {
-            illuminance: light_consts::lux::OVERCAST_DAY,
-            shadow_maps_enabled: true,
-            contact_shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_xyz(4.0, 8.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
-
-    commands.spawn((
-        Camera3d::default(),
-        OrbitCamera::default(),
-        Transform::default(),
-        AmbientLight { color: Color::srgb(0.6, 0.7, 1.0), brightness: 200.0, ..default() },
-    ));
 }
 
 fn on_zoom(
