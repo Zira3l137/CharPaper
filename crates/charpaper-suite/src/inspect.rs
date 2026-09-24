@@ -354,7 +354,18 @@ fn check_animations(suite: &Suite, model: &Gltf, report: &mut Report) {
 
     if let Some(default) = &suite.default_animation {
         if !clip_names.contains_key(default) {
-            let message = format!("default animation {default:?} is not one of the suite's clips");
+            let mut message =
+                format!("default animation {default:?} is not one of the suite's clips\n");
+            message.push_str(
+                format!(
+                    "available clips: {:#?}",
+                    clip_names
+                        .iter()
+                        .map(|(k, v)| format!("{k} - {}", v.display()))
+                        .collect::<Vec<_>>()
+                )
+                .as_str(),
+            );
             report.push(Severity::Error, None, message);
         }
     }
