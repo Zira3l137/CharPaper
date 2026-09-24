@@ -1,10 +1,13 @@
 //! The thing we actually draw.
 
+mod character;
 mod config;
 mod importer;
 mod suite;
 
 use bevy::prelude::*;
+pub use character::Character;
+pub use character::CharacterState;
 pub use config::SceneConfig;
 pub use suite::ActiveSuite;
 
@@ -48,14 +51,19 @@ impl Plugin for ScenePlugin {
             .add_observer(on_pan)
             .add_observer(on_orbit)
             .add_observer(on_zoom)
-            .add_systems(Startup, (suite::select_suite, spawn_scene));
+            .init_resource::<CharacterState>()
+            .add_systems(
+                Startup,
+                ((suite::select_suite, character::spawn_character).chain(), spawn_scene),
+            )
+            .add_systems(
+                Update,
+                character::show_selected_skin.run_if(resource_changed::<CharacterState>),
+            );
     }
 }
 
-fn spawn_scene(mut commands: Commands, assets: Res<AssetServer>) {
-    commands
-        .spawn(WorldAssetRoot(assets.load(GltfAssetLabel::Scene(0).from_asset("models/test.glb"))));
-
+fn spawn_scene(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             illuminance: light_consts::lux::OVERCAST_DAY,
