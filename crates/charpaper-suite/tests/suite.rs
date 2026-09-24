@@ -275,3 +275,33 @@ fn a_camera_file_cannot_take_the_orbit_cameras_name() {
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("reserved name"), "{err}");
 }
+
+#[test]
+fn camera_files_hold_one_camera_and_at_most_one_clip() {
+    let fixture = Fixture::new("camera-checks", "schema = 1");
+    let suite = fixture.load().unwrap();
+    assert!(messages(&suite, Severity::Error).is_empty());
+
+    fixture.write("cameras/closeup.gltf", &camera(&["Dolly", "Pan"]));
+    fixture.write("cameras/wide.gltf", &model());
+    let suite = fixture.load().unwrap();
+    let errors = messages(&suite, Severity::Error);
+    assert_eq!(errors.len(), 2, "{errors:#?}");
+    assert!(errors.iter().any(|e| e.contains("holds 2 clips (Dolly, Pan)")));
+    assert!(errors.iter().any(|e| e.contains("wide.gltf: holds no camera")));
+}
+
+#[test]
+fn animation_pointer_clips_get_a_readable_error() {
+    let fixture = Fixture::new("pointer", "schema = 1");
+    let zoom = camera(&["Zoom"]).replace(
+        r#""target": {"node": 0, "path": "translation"}"#,
+        r#""target": {"path": "pointer", "extensions": {"KHR_animation_pointer":
+            {"pointer": "/cameras/0/perspective/yfov"}}}"#,
+    );
+    fixture.write("cameras/closeup.gltf", &zoom);
+    let suite = fixture.load().unwrap();
+
+    let errors = messages(&suite, Severity::Error);
+    assert!(errors.iter().any(|e| e.contains("KHR_animation_pointer")), "{errors:#?}");
+}

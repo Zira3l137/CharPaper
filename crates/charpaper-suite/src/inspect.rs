@@ -13,6 +13,9 @@
 //!   does not matter for skins.
 //! - The model is only the armature. Any mesh in it would stay visible under
 //!   every skin, which is almost never what the artist meant.
+//! - A camera file is one camera and at most one clip. The clip only needs to
+//!   make sense inside its own file: it moves the camera or the empties the
+//!   camera hangs from, never the character.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -132,6 +135,11 @@ pub fn inspect(suite: &Suite) -> Report {
             check_skin_file(&skin.file, &gltf, &model, &bones, &mut report);
         }
     }
+    for camera in &suite.cameras {
+        if let Some(gltf) = open(suite, &camera.file, &mut report) {
+            check_camera_file(&camera.file, &gltf, &mut report);
+        }
+    }
 
     if let Some(scene) = &suite.environment.scene {
         open(suite, scene, &mut report);
@@ -175,8 +183,20 @@ fn read_document(path: &Path) -> Result<Document, String> {
     } else {
         std::fs::read(path).map_err(|e| e.to_string())?
     };
-    let root =
-        gltf::json::Root::from_slice(&json).map_err(|e| format!("invalid glTF JSON: {e}"))?;
+    let root = gltf::json::Root::from_slice(&json).map_err(|e| {
+        // The `gltf` crate, and so Bevy, cannot parse this extension at all:
+        // its channels have no target node. The raw parse error ("missing
+        // field `node`") would not tell the artist which export setting to
+        // change, so name the extension instead.
+        let pointer = b"KHR_animation_pointer";
+        match json.windows(pointer.len()).any(|w| w == pointer) {
+            true => "animates properties through KHR_animation_pointer (e.g. focal length), \
+                     which Bevy cannot load; turn off animation pointer export in Blender's \
+                     glTF exporter"
+                .to_string(),
+            false => format!("invalid glTF JSON: {e}"),
+        }
+    })?;
     Document::from_json(root).map_err(|e| e.to_string())
 }
 
@@ -450,6 +470,66 @@ fn check_skin_file(
              the character: {}",
             loose.len(),
             examples(&loose)
+        );
+        report.push(Severity::Warning, path, message);
+    }
+}
+
+fn check_camera_file(path: &Path, gltf: &Gltf, report: &mut Report) {
+    let path = Some(path);
+    let cameras: Vec<usize> =
+        gltf.doc.nodes().filter(|n| n.camera().is_some()).map(|n| n.index()).collect();
+    let &[camera] = cameras.as_slice() else {
+        let message = match cameras.len() {
+            0 => "holds no camera".to_string(),
+            n => {
+                let names: Vec<&str> = cameras.iter().map(|&c| gltf.names[c].as_str()).collect();
+                format!("holds {n} cameras ({}); export one camera per file", examples(&names))
+            }
+        };
+        report.push(Severity::Error, path, message);
+        return;
+    };
+
+    if !gltf.paths.contains_key(&camera) {
+        let message = format!(
+            "camera {:?} is outside the file's scene, so it would never be spawned",
+            gltf.names[camera]
+        );
+        report.push(Severity::Error, path, message);
+    }
+
+    if gltf.doc.meshes().len() > 0 {
+        let message = "contains meshes that will be loaded and never shown; export the camera \
+                       and the empties it hangs from only";
+        report.push(Severity::Warning, path, message.to_string());
+    }
+
+    let clips: Vec<Option<&str>> = gltf.doc.animations().map(|a| a.name()).collect();
+    if clips.len() > 1 {
+        let message = format!(
+            "holds {} clips ({}); a camera plays exactly one, looping",
+            clips.len(),
+            describe_clips(&clips)
+        );
+        report.push(Severity::Error, path, message);
+    }
+
+    let moving: HashSet<usize> = std::iter::once(camera).chain(gltf.ancestors(camera)).collect();
+    let idle: BTreeSet<&str> = gltf
+        .doc
+        .animations()
+        .flat_map(|a| a.channels())
+        .map(|c| c.target().node().index())
+        .filter(|node| !moving.contains(node))
+        .map(|node| gltf.names[node].as_str())
+        .collect();
+    if !idle.is_empty() {
+        let idle: Vec<&str> = idle.into_iter().collect();
+        let message = format!(
+            "{} animated node(s) do not carry the camera, so animating them changes nothing: {}",
+            idle.len(),
+            examples(&idle)
         );
         report.push(Severity::Warning, path, message);
     }
