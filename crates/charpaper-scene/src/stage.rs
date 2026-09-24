@@ -4,7 +4,12 @@
 //! whatever `suite.toml` says. A later user-override layer slots in between
 //! the suite and the value used.
 
+use bevy::camera::Exposure;
+use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
+use charpaper_suite::Post;
+use charpaper_suite::Tonemapping as SuiteTonemapping;
 
 use crate::OrbitCamera;
 use crate::suite::ActiveSuite;
@@ -15,9 +20,13 @@ const SUN_DIRECTION: [f32; 3] = [-4.0, -8.0, -4.0];
 const SUN_SHADOWS: bool = true;
 const AMBIENT_COLOR: [f32; 3] = [0.6, 0.7, 1.0];
 const AMBIENT_BRIGHTNESS: f32 = 200.0;
+const TONEMAPPING: Tonemapping = Tonemapping::TonyMcMapface;
+const EXPOSURE_COMPENSATION: f32 = 0.0;
+const BLOOM: f32 = 0.0;
 
 pub(crate) fn spawn_stage(mut commands: Commands, suite: Option<Res<ActiveSuite>>) {
     let lighting = suite.as_ref().map(|s| s.lighting.clone()).unwrap_or_default();
+    let post = suite.as_ref().map(|s| s.post.clone()).unwrap_or_default();
     let sun = lighting.sun.unwrap_or_default();
     let ambient = lighting.ambient.unwrap_or_default();
 
@@ -37,7 +46,7 @@ pub(crate) fn spawn_stage(mut commands: Commands, suite: Option<Res<ActiveSuite>
             .looking_to(Vec3::from_array(sun.direction.unwrap_or(SUN_DIRECTION)), Vec3::Y),
     ));
 
-    commands.spawn((
+    let mut camera = commands.spawn((
         Camera3d::default(),
         OrbitCamera::default(),
         Transform::default(),
@@ -47,6 +56,38 @@ pub(crate) fn spawn_stage(mut commands: Commands, suite: Option<Res<ActiveSuite>
             ..default()
         },
     ));
+    apply_post(&mut camera, &post);
+}
+
+/// Bloom is added only when asked for: it pulls in an HDR render target and a
+/// few extra passes, which a wallpaper running all day should not pay for by
+/// default.
+fn apply_post(camera: &mut EntityCommands, post: &Post) {
+    let tonemapping = post.tonemapping.map_or(TONEMAPPING, to_bevy);
+    // Bevy's exposure is in EV100, where a higher value means a darker image;
+    // the suite's is compensation, where higher means brighter.
+    let compensation = post.exposure.unwrap_or(EXPOSURE_COMPENSATION);
+    camera.insert((tonemapping, Exposure { ev100: Exposure::EV100_BLENDER - compensation }));
+
+    let bloom = post.bloom.unwrap_or(BLOOM);
+    if bloom > 0.0 {
+        camera.insert(Bloom { intensity: bloom, ..Bloom::NATURAL });
+    }
+}
+
+fn to_bevy(from: SuiteTonemapping) -> Tonemapping {
+    match from {
+        SuiteTonemapping::None => Tonemapping::None,
+        SuiteTonemapping::Reinhard => Tonemapping::Reinhard,
+        SuiteTonemapping::ReinhardLuminance => Tonemapping::ReinhardLuminance,
+        SuiteTonemapping::AcesFitted => Tonemapping::AcesFitted,
+        SuiteTonemapping::Agx => Tonemapping::AgX,
+        SuiteTonemapping::SomewhatBoringDisplayTransform => {
+            Tonemapping::SomewhatBoringDisplayTransform
+        }
+        SuiteTonemapping::TonyMcMapface => Tonemapping::TonyMcMapface,
+        SuiteTonemapping::BlenderFilmic => Tonemapping::BlenderFilmic,
+    }
 }
 
 fn srgb([r, g, b]: [f32; 3]) -> Color {

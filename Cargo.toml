@@ -31,6 +31,8 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "ui_picking",
     "bevy_picking",
     "bevy_core_pipeline",
+    # Bloom.
+    "bevy_post_process",
     "bevy_pbr",
     "bevy_camera",
     "bevy_light",
