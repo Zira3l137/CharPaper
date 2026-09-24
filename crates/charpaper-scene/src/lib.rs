@@ -22,6 +22,8 @@ pub const CHARACTERS_SOURCE: &str = "characters";
 pub const BASE_ZOOM_SPEED: f32 = 0.1;
 pub const BASE_PAN_SPEED: f32 = 0.001;
 pub const BASE_SENSITIVITY: f32 = 0.005;
+/// Just short of straight up or down (~88°), where the orbit would flip over.
+const PITCH_LIMIT: f32 = 1.54;
 
 #[derive(Component)]
 pub(crate) struct OrbitCamera {
@@ -128,7 +130,7 @@ fn on_orbit(
     let delta = event.delta;
 
     orbit.yaw -= delta.x * BASE_SENSITIVITY;
-    orbit.pitch = (orbit.pitch - delta.y * BASE_SENSITIVITY).clamp(-1.54, 1.54); // avoid flipping past straight up/down (~88°)
+    orbit.pitch = (orbit.pitch - delta.y * BASE_SENSITIVITY).clamp(-PITCH_LIMIT, PITCH_LIMIT);
 
     update_camera_transform(transform, orbit);
 }

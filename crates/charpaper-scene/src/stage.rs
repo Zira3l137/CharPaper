@@ -12,7 +12,9 @@ use charpaper_suite::Post;
 use charpaper_suite::Tonemapping as SuiteTonemapping;
 
 use crate::OrbitCamera;
+use crate::PITCH_LIMIT;
 use crate::suite::ActiveSuite;
+use crate::update_camera_transform;
 
 const SUN_ILLUMINANCE: f32 = light_consts::lux::OVERCAST_DAY;
 const SUN_COLOR: [f32; 3] = [1.0, 1.0, 1.0];
@@ -23,10 +25,16 @@ const AMBIENT_BRIGHTNESS: f32 = 200.0;
 const TONEMAPPING: Tonemapping = Tonemapping::TonyMcMapface;
 const EXPOSURE_COMPENSATION: f32 = 0.0;
 const BLOOM: f32 = 0.0;
+/// Roughly the chest of a human-sized character standing at the origin.
+const ORBIT_FOCUS: [f32; 3] = [0.0, 1.0, 0.0];
+const ORBIT_RADIUS: f32 = 2.0;
+const ORBIT_YAW_DEG: f32 = 0.0;
+const ORBIT_PITCH_DEG: f32 = 0.0;
 
 pub(crate) fn spawn_stage(mut commands: Commands, suite: Option<Res<ActiveSuite>>) {
     let lighting = suite.as_ref().map(|s| s.lighting.clone()).unwrap_or_default();
     let post = suite.as_ref().map(|s| s.post.clone()).unwrap_or_default();
+    let view = suite.as_ref().map(|s| s.camera.clone()).unwrap_or_default();
     let sun = lighting.sun.unwrap_or_default();
     let ambient = lighting.ambient.unwrap_or_default();
 
@@ -46,10 +54,23 @@ pub(crate) fn spawn_stage(mut commands: Commands, suite: Option<Res<ActiveSuite>
             .looking_to(Vec3::from_array(sun.direction.unwrap_or(SUN_DIRECTION)), Vec3::Y),
     ));
 
+    let orbit = OrbitCamera {
+        focus: Vec3::from_array(view.focus.unwrap_or(ORBIT_FOCUS)),
+        radius: view.radius.unwrap_or(ORBIT_RADIUS),
+        yaw: view.yaw_deg.unwrap_or(ORBIT_YAW_DEG).to_radians(),
+        pitch: view
+            .pitch_deg
+            .unwrap_or(ORBIT_PITCH_DEG)
+            .to_radians()
+            .clamp(-PITCH_LIMIT, PITCH_LIMIT),
+    };
+    let mut transform = Transform::default();
+    update_camera_transform(&mut transform, &orbit);
+
     let mut camera = commands.spawn((
         Camera3d::default(),
-        OrbitCamera::default(),
-        Transform::default(),
+        orbit,
+        transform,
         AmbientLight {
             color: srgb(ambient.color.unwrap_or(AMBIENT_COLOR)),
             brightness: ambient.brightness.unwrap_or(AMBIENT_BRIGHTNESS),
