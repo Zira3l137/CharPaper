@@ -24,6 +24,11 @@ use crate::manifest::SCHEMA_VERSION;
 
 const ANIMATIONS_DIR: &str = "animations";
 const SKINS_DIR: &str = "skins";
+const CAMERAS_DIR: &str = "cameras";
+
+/// The camera the app always has, which the user drags around the character.
+/// An exported camera cannot take this name.
+pub const ORBIT_CAMERA: &str = "orbit";
 const ENVIRONMENT_DIR: &str = "environment";
 
 #[derive(Debug, Clone)]
@@ -37,6 +42,10 @@ pub struct Suite {
     pub skins: Vec<Skin>,
     pub default_skin: Option<String>,
     pub default_animation: Option<String>,
+    /// Sorted by name.
+    pub cameras: Vec<ExportedCamera>,
+    /// `None` is the orbit camera.
+    pub default_camera: Option<String>,
     pub environment: Environment,
     pub lighting: Lighting,
     pub post: Post,
@@ -68,6 +77,13 @@ pub struct ClipBinding {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Skin {
+    pub name: String,
+    pub file: PathBuf,
+}
+
+/// A camera made in Blender, along with at most one clip moving it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExportedCamera {
     pub name: String,
     pub file: PathBuf,
 }
@@ -125,6 +141,22 @@ impl Suite {
             }
         };
 
+        let cameras: Vec<ExportedCamera> = named_files(root, CAMERAS_DIR, "camera")?
+            .into_iter()
+            .map(|(name, file)| ExportedCamera { name, file })
+            .collect();
+        if cameras.iter().any(|c| c.name == ORBIT_CAMERA) {
+            return Err(SuiteError::ReservedName { kind: "camera", name: ORBIT_CAMERA.into() });
+        }
+
+        let default_camera = match manifest.camera.default.as_deref() {
+            None | Some(ORBIT_CAMERA) => None,
+            Some(name) if !cameras.iter().any(|c| c.name == name) => {
+                return Err(SuiteError::UnknownDefault { kind: "camera", name: name.into() });
+            }
+            Some(name) => Some(name.to_string()),
+        };
+
         let environment = Environment {
             scene: match &manifest.environment.scene {
                 Some(path) => Some(existing(root, path)?),
@@ -146,6 +178,8 @@ impl Suite {
             skins,
             default_skin,
             default_animation: manifest.character.default_animation,
+            cameras,
+            default_camera,
             environment,
             lighting: manifest.lighting,
             post: manifest.post,

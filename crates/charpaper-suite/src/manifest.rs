@@ -164,13 +164,18 @@ pub enum Tonemapping {
     BlenderFilmic,
 }
 
-/// Where the camera starts. The user can still orbit and zoom.
+/// Which camera the app starts with, and where the built-in orbit camera
+/// starts. The user can switch cameras, and orbit and zoom the orbit camera.
 #[derive(Deserialize, JsonSchema, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Camera {
-    /// The point the camera orbits around, as [x, y, z]. Y is up.
+    /// Camera active at start: a file name in `cameras/` without its
+    /// extension, or `orbit` for the built-in orbit camera. Defaults to
+    /// `orbit`.
+    pub default: Option<String>,
+    /// The point the orbit camera orbits around, as [x, y, z]. Y is up.
     pub focus: Option<[f32; 3]>,
-    /// Distance from the focus point.
+    /// The orbit camera's distance from the focus point.
     pub radius: Option<f32>,
     /// Angle around the vertical axis, in degrees.
     pub yaw_deg: Option<f32>,

@@ -38,6 +38,9 @@ pub enum SuiteError {
     #[error("{kind} {name:?} exists as both a .glb and a .gltf")]
     DuplicateName { kind: &'static str, name: String },
 
+    #[error("{kind} {name:?} uses a reserved name; rename its file")]
+    ReservedName { kind: &'static str, name: String },
+
     #[error("default {kind} {name:?} is not one of the suite's {kind}s")]
     UnknownDefault { kind: &'static str, name: String },
 }

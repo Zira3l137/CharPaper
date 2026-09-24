@@ -74,11 +74,18 @@
       "additionalProperties": false
     },
     "Camera": {
-      "description": "Where the camera starts. The user can still orbit and zoom.",
+      "description": "Which camera the app starts with, and where the built-in orbit camera\nstarts. The user can switch cameras, and orbit and zoom the orbit camera.",
       "type": "object",
       "properties": {
+        "default": {
+          "description": "Camera active at start: a file name in `cameras/` without its\nextension, or `orbit` for the built-in orbit camera. Defaults to\n`orbit`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "focus": {
-          "description": "The point the camera orbits around, as [x, y, z]. Y is up.",
+          "description": "The point the orbit camera orbits around, as [x, y, z]. Y is up.",
           "type": [
             "array",
             "null"
@@ -99,7 +106,7 @@
           "format": "float"
         },
         "radius": {
-          "description": "Distance from the focus point.",
+          "description": "The orbit camera's distance from the focus point.",
           "type": [
             "number",
             "null"

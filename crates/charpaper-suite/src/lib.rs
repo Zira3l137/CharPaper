@@ -7,6 +7,7 @@
 //! ├── aki.glb       the only .glb/.gltf here: the armature, nothing else
 //! ├── animations/   every .glb/.gltf here is picked up
 //! ├── skins/        one .glb/.gltf per skin, named after the file
+//! ├── cameras/      one .glb/.gltf per camera, named after the file
 //! └── environment/  optional scene and skybox
 //! ```
 //!
@@ -14,6 +15,9 @@
 //! collection of meshes bound to the one armature. Switching skins hides every
 //! mesh of the old one and shows every mesh of the new one, so what a skin
 //! replaces is decided by what the artist put in it, never by configuration.
+//!
+//! A camera file is one Blender camera, optionally with one clip moving it.
+//! The user switches between those and the app's own orbit camera.
 //!
 //! [`manifest_schema`] describes `suite.toml` as a JSON Schema, which TOML
 //! editors use for completion, hover docs and validation. The repository keeps
@@ -37,6 +41,8 @@ pub use layout::AnimationFile;
 pub use layout::ClipBinding;
 pub use layout::ClipSet;
 pub use layout::Environment;
+pub use layout::ExportedCamera;
+pub use layout::ORBIT_CAMERA;
 pub use layout::Skin;
 pub use layout::Suite;
 pub use layout::discover;

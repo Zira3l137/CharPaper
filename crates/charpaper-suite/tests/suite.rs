@@ -16,7 +16,8 @@ const ACCESSORS: &str = r#""buffers": [{"uri": "unused.bin", "byteLength": 64}],
     {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
      "min": [0, 0, 0], "max": [1, 1, 1]},
     {"bufferView": 0, "componentType": 5126, "count": 2, "type": "SCALAR", "min": [0], "max": [1]},
-    {"bufferView": 0, "componentType": 5126, "count": 2, "type": "VEC4"}
+    {"bufferView": 0, "componentType": 5126, "count": 2, "type": "VEC4"},
+    {"bufferView": 0, "componentType": 5126, "count": 2, "type": "VEC3"}
 ]"#;
 
 const MESH: &str = r#""meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}]"#;
@@ -66,6 +67,33 @@ fn outfit(spine_y: f32) -> String {
     )
 }
 
+/// A camera under a rig empty, with one clip per name moving the rig.
+fn camera(clips: &[&str]) -> String {
+    let animations: Vec<String> = clips
+        .iter()
+        .map(|name| {
+            format!(
+                r#"{{"name": "{name}",
+                "channels": [{{"sampler": 0, "target": {{"node": 0, "path": "translation"}}}}],
+                "samplers": [{{"input": 1, "output": 3}}]}}"#
+            )
+        })
+        .collect();
+    let animations = match animations.is_empty() {
+        true => String::new(),
+        false => format!(r#""animations": [{}],"#, animations.join(", ")),
+    };
+    format!(
+        r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0]}}],
+        "nodes": [
+            {{"name": "Rig", "children": [1]}},
+            {{"name": "Lens", "camera": 0}}
+        ],
+        "cameras": [{{"type": "perspective", "perspective": {{"yfov": 0.6, "znear": 0.1}}}}],
+        {animations} {ACCESSORS}}}"#
+    )
+}
+
 struct Fixture(PathBuf);
 
 impl Fixture {
@@ -81,6 +109,8 @@ impl Fixture {
         fixture.write("skins/dress.gltf", &outfit(0.5));
         fixture.write("skins/notes.txt", "ignored");
         fixture.write("skins/textures/ignored.gltf", "not a skin");
+        fixture.write("cameras/closeup.gltf", &camera(&["Dolly"]));
+        fixture.write("cameras/wide.gltf", &camera(&[]));
         fixture
     }
 
@@ -182,6 +212,7 @@ fn bad_manifests_are_rejected() {
         ("future", "schema = 2", "schema version 2"),
         ("typo", "schema = 1\n[charater]", "not a valid suite manifest"),
         ("skin", "schema = 1\n[character]\ndefault_skin = \"gown\"", "default skin \"gown\""),
+        ("camera", "schema = 1\n[camera]\ndefault = \"drone\"", "default camera \"drone\""),
         ("skins", "schema = 1\n[skins.casual]", "not a valid suite manifest"),
     ];
     for (name, manifest, expected) in cases {
@@ -219,4 +250,28 @@ fn two_models_next_to_the_manifest_are_ambiguous() {
 
     fixture.write("suite.toml", "schema = 1\n[character]\nmodel = \"aki.gltf\"");
     assert_eq!(fixture.load().unwrap().model, Path::new("aki.gltf"));
+}
+
+#[test]
+fn cameras_are_found_and_orbit_stays_the_default() {
+    let fixture = Fixture::new("cameras", "schema = 1");
+    let suite = fixture.load().unwrap();
+    let names: Vec<&str> = suite.cameras.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["closeup", "wide"]);
+    assert_eq!(suite.cameras[0].file, Path::new("cameras/closeup.gltf"));
+    assert_eq!(suite.default_camera, None);
+
+    fixture.write("suite.toml", "schema = 1\n[camera]\ndefault = \"closeup\"");
+    assert_eq!(fixture.load().unwrap().default_camera.as_deref(), Some("closeup"));
+
+    fixture.write("suite.toml", "schema = 1\n[camera]\ndefault = \"orbit\"");
+    assert_eq!(fixture.load().unwrap().default_camera, None);
+}
+
+#[test]
+fn a_camera_file_cannot_take_the_orbit_cameras_name() {
+    let fixture = Fixture::new("orbit-file", "schema = 1");
+    fixture.write("cameras/orbit.glb", "unread");
+    let err = fixture.load().unwrap_err();
+    assert!(err.to_string().contains("reserved name"), "{err}");
 }
