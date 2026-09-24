@@ -29,6 +29,11 @@ pub struct Cli {
     #[arg(long, value_name = "DIR")]
     pub check_suite: Option<PathBuf>,
 
+    /// Which character suite to show: the name of a folder in `characters/`
+    /// next to the executable. Defaults to the first in name order.
+    #[arg(long, value_name = "NAME")]
+    pub suite: Option<String>,
+
     /// Run in an ordinary window and log the full attach plan without touching
     /// any desktop window.
     #[arg(long)]

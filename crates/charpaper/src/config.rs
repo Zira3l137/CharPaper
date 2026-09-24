@@ -57,6 +57,7 @@ impl AppConfig {
         let mut cfg = Self { inspect_and_exit: cli.inspect, ..Self::default() };
 
         cfg.wallpaper.dump_window_tree = cli.tree;
+        cfg.scene.suite = cli.suite.clone();
 
         if cli.no_spawn_workerw {
             cfg.wallpaper.spawn_worker_w = false;

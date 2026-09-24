@@ -7,3 +7,4 @@ edition.workspace = true
 # wallpapers or operating systems, so editing it never invalidates them.
 [dependencies]
 bevy.workspace = true
+charpaper-suite.workspace = true

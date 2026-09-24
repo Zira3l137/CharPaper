@@ -1,5 +1,7 @@
 //! Settings for the scene, owned by the crate that uses them.
 
+use std::path::PathBuf;
+
 use bevy::prelude::Resource;
 
 /// Derives `Resource` so the systems can read it with `Res<SceneConfig>`.
@@ -20,6 +22,14 @@ pub struct SceneConfig {
 
     /// Where the camera sits, in world units.
     pub camera_pos: [f32; 3],
+
+    /// The folder holding one sub-folder per character suite. The app must
+    /// register the same folder as the [`crate::CHARACTERS_SOURCE`] asset
+    /// source, or nothing in it can be loaded.
+    pub characters_dir: PathBuf,
+
+    /// Folder name of the suite to show. `None` shows the first in name order.
+    pub suite: Option<String>,
 }
 
 impl Default for SceneConfig {
@@ -30,6 +40,8 @@ impl Default for SceneConfig {
             cube_color: [0.35, 0.65, 0.95],
             cube_size: 1.5,
             camera_pos: [0.0, 1.0, 1.0],
+            characters_dir: PathBuf::from("characters"),
+            suite: None,
         }
     }
 }

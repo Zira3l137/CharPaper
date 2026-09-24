@@ -1,0 +1,91 @@
+//! Picks which character suite to show and reads its description.
+//!
+//! Reading a suite never touches its glTF files, so this runs synchronously at
+//! startup. A missing or broken suite is logged, not fatal: a wallpaper with
+//! nothing on it beats one that never starts.
+
+use std::error::Error;
+use std::path::Path;
+use std::path::PathBuf;
+
+use bevy::prelude::*;
+use charpaper_suite::Severity;
+use charpaper_suite::Suite;
+
+use crate::SceneConfig;
+
+/// The suite being shown. Absent when no suite could be loaded.
+///
+/// A newtype because `Suite` lives in a Bevy-free crate and cannot derive
+/// `Resource` itself.
+#[derive(Resource, Deref)]
+pub struct ActiveSuite(pub Suite);
+
+pub(crate) fn select_suite(mut commands: Commands, config: Res<SceneConfig>) {
+    let Some(root) = choose(&config.characters_dir, config.suite.as_deref()) else {
+        return;
+    };
+
+    let suite = match Suite::load(&root) {
+        Ok(suite) => suite,
+        Err(err) => {
+            error!("cannot load suite at {}: {}", root.display(), chain(&err));
+            return;
+        }
+    };
+
+    for finding in charpaper_suite::inspect(&suite).findings {
+        let file = finding.file.map(|f| format!("{}: ", f.display())).unwrap_or_default();
+        match finding.severity {
+            Severity::Error => error!("suite {:?}: {file}{}", suite.name, finding.message),
+            Severity::Warning => warn!("suite {:?}: {file}{}", suite.name, finding.message),
+        }
+    }
+
+    info!("showing suite {:?} from {}", suite.name, root.display());
+    commands.insert_resource(ActiveSuite(suite));
+}
+
+fn choose(dir: &Path, wanted: Option<&str>) -> Option<PathBuf> {
+    let found = match charpaper_suite::discover(dir) {
+        Ok(found) => found,
+        Err(err) => {
+            error!("cannot list character suites: {}", chain(&err));
+            return None;
+        }
+    };
+
+    let names: Vec<String> =
+        found.iter().filter_map(|p| p.file_name()).map(|n| n.to_string_lossy().into()).collect();
+    debug!("character suites in {}: {names:?}", dir.display());
+
+    match wanted {
+        Some(name) => {
+            let chosen = found.into_iter().find(|p| p.file_name().is_some_and(|n| n == name));
+            if chosen.is_none() {
+                error!("no suite named {name:?} in {} (found: {names:?})", dir.display());
+            }
+            chosen
+        }
+        None => {
+            let first = found.into_iter().next();
+            match &first {
+                Some(path) => info!("no suite chosen; using the first, {}", path.display()),
+                None => warn!("no character suites in {}", dir.display()),
+            }
+            first
+        }
+    }
+}
+
+/// `SuiteError` keeps details such as the TOML line and column in its source
+/// chain, which `Display` alone would drop.
+fn chain(err: &dyn Error) -> String {
+    let mut text = err.to_string();
+    let mut source = err.source();
+    while let Some(cause) = source {
+        text.push_str(&format!(": {cause}"));
+        source = cause.source();
+    }
+    text
+}

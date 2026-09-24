@@ -2,9 +2,15 @@
 
 mod config;
 mod importer;
+mod suite;
 
 use bevy::prelude::*;
 pub use config::SceneConfig;
+pub use suite::ActiveSuite;
+
+/// Asset source id for [`SceneConfig::characters_dir`], so suite files load as
+/// `characters://<suite>/<file>`.
+pub const CHARACTERS_SOURCE: &str = "characters";
 
 pub const BASE_ZOOM_SPEED: f32 = 0.1;
 pub const BASE_PAN_SPEED: f32 = 0.001;
@@ -42,7 +48,7 @@ impl Plugin for ScenePlugin {
             .add_observer(on_pan)
             .add_observer(on_orbit)
             .add_observer(on_zoom)
-            .add_systems(Startup, spawn_scene);
+            .add_systems(Startup, (suite::select_suite, spawn_scene));
     }
 }
 
