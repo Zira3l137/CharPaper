@@ -41,6 +41,9 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "bevy_color",
     "bevy_animation",
     "bevy_gltf",
+    # Without it the glTF loader skips animations entirely: no clips, and no
+    # `Gltf::animations` / `named_animations` fields to find them by.
+    "gltf_animation",
     "png",
     "tga",
 

@@ -1,5 +1,6 @@
 //! The thing we actually draw.
 
+mod animation;
 mod binding;
 mod character;
 mod config;
@@ -61,6 +62,7 @@ impl Plugin for ScenePlugin {
             .add_systems(
                 Update,
                 (
+                    animation::make_armature_animatable,
                     binding::bind_skins,
                     character::show_selected_skin.run_if(resource_changed::<CharacterState>),
                 ),
