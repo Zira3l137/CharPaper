@@ -5,6 +5,9 @@
 //! Each exported camera is loaded as a rig whose own `Camera` is switched off
 //! the moment it spawns, so it never renders. It only carries a transform,
 //! animated or not, and a projection for the real camera to copy.
+//!
+//! A rig's clip loops on its own clock from the moment the rig spawns, whether
+//! or not anyone is looking through it.
 
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
@@ -102,6 +105,8 @@ pub(crate) fn on_rig_ready(
     rigs: Query<&CameraRig>,
     children: Query<&Children>,
     mut cameras: Query<&mut Camera>,
+    mut players: Query<&mut AnimationPlayer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
     mut commands: Commands,
 ) {
     let Ok(rig) = rigs.get(ready.entity) else {
@@ -124,5 +129,22 @@ pub(crate) fn on_rig_ready(
         warn!("camera {:?}: its file holds {} cameras; using the first", rig.name, lenses.len());
     }
     commands.entity(ready.entity).insert(Lens(lens));
-    info!("camera {:?} ready", rig.name);
+
+    // Unlike the character's, a rig's clip moves nodes of its own file, so
+    // Bevy's loader has already marked them and put a player on their root.
+    // Only the graph is missing.
+    let Some(clip) = &rig.clip else {
+        info!("camera {:?} ready, static", rig.name);
+        return;
+    };
+    let Some(root) = children.iter_descendants(ready.entity).find(|&e| players.contains(e)) else {
+        warn!("camera {:?}: its clip animates nothing, so it stays static", rig.name);
+        return;
+    };
+    let (graph, nodes) = AnimationGraph::from_clips([clip.clone()]);
+    commands.entity(root).insert(AnimationGraphHandle(graphs.add(graph)));
+    if let Ok(mut player) = players.get_mut(root) {
+        player.play(nodes[0]).repeat();
+    }
+    info!("camera {:?} ready, looping its clip", rig.name);
 }
