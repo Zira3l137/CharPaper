@@ -111,11 +111,11 @@ fn load_scene(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<WorldA
     let folder = suite.root.file_name().unwrap_or_default();
     let path =
         AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE);
-    assets.load_with_settings(
-        GltfAssetLabel::Scene(0).from_asset(path),
-        |s: &mut GltfLoaderSettings| {
+    assets
+        .load_builder()
+        .with_settings(|s: &mut GltfLoaderSettings| {
             s.load_cameras = false;
             s.load_lights = false;
-        },
-    )
+        })
+        .load(GltfAssetLabel::Scene(0).from_asset(path))
 }
