@@ -92,6 +92,7 @@ pub struct ExportedCamera {
 pub struct Environment {
     pub scene: Option<PathBuf>,
     pub skybox: Option<PathBuf>,
+    pub skybox_brightness: Option<f32>,
 }
 
 impl Suite {
@@ -168,6 +169,7 @@ impl Suite {
                     sole(root, ENVIRONMENT_DIR, "`environment/`", |p| has_extension(p, &["ktx2"]))?
                 }
             },
+            skybox_brightness: manifest.environment.skybox_brightness,
         };
 
         Ok(Self {

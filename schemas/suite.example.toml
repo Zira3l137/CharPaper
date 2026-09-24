@@ -23,6 +23,7 @@ mode = "once"
 [environment]
 scene = "environment/room.glb"
 skybox = "environment/sky.ktx2"
+skybox_brightness = 1000.0
 
 [lighting.sun]
 illuminance = 10000.0

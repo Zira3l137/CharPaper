@@ -5,15 +5,11 @@
 //! cost is memory for skins nobody is looking at. Hidden meshes are skipped by
 //! the renderer, so they do not cost frame time.
 
-use std::path::Path;
-
-use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
-use charpaper_suite::Suite;
 
 use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
-use crate::suite::asset_path;
+use crate::suite::load_scene;
 
 /// What the viewer has picked. Systems react to changes, so writing here is
 /// how the UI will switch things.
@@ -62,7 +58,7 @@ pub(crate) fn spawn_character(
         Name::new("Suite armature"),
         Armature,
         ChildOf(character),
-        WorldAssetRoot(load_scene(&assets, &suite, &suite.model)),
+        WorldAssetRoot(load_scene(&assets, &suite, &suite.model, false)),
     ));
 
     for skin in &suite.skins {
@@ -71,7 +67,7 @@ pub(crate) fn spawn_character(
             SkinRoot { name: skin.name.clone() },
             ChildOf(character),
             Visibility::Hidden,
-            WorldAssetRoot(load_scene(&assets, &suite, &skin.file)),
+            WorldAssetRoot(load_scene(&assets, &suite, &skin.file, false)),
         ));
     }
 
@@ -101,20 +97,4 @@ pub(crate) fn visibility_for(shown: bool) -> Visibility {
         true => Visibility::Inherited,
         false => Visibility::Hidden,
     }
-}
-
-/// Scene 0 rather than the file's default scene: Bevy has no label for the
-/// default one, and Blender always exports the active scene as scene 0.
-///
-/// Cameras and lights in these files are ignored. Cameras have their own
-/// folder, and lighting belongs to `suite.toml`; a stray lamp exported with a
-/// skin would otherwise light the scene only while that skin is loaded.
-fn load_scene(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<WorldAsset> {
-    assets
-        .load_builder()
-        .with_settings(|s: &mut GltfLoaderSettings| {
-            s.load_cameras = false;
-            s.load_lights = false;
-        })
-        .load(GltfAssetLabel::Scene(0).from_asset(asset_path(suite, file)))
 }

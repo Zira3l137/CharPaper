@@ -9,6 +9,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use bevy::asset::AssetPath;
+use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use charpaper_suite::Severity;
 use charpaper_suite::Suite;
@@ -52,6 +53,28 @@ pub(crate) fn select_suite(mut commands: Commands, config: Res<SceneConfig>) {
 pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
     let folder = suite.root.file_name().unwrap_or_default();
     AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE)
+}
+
+/// Scene 0 rather than the file's default scene: Bevy has no label for the
+/// default one, and Blender always exports the active scene as scene 0.
+///
+/// Cameras are never loaded: exported cameras have their own folder. Lights
+/// are only wanted from the environment. Lighting otherwise belongs to
+/// `suite.toml`, and a stray lamp exported with a skin would light the scene
+/// only while that skin is loaded.
+pub(crate) fn load_scene(
+    assets: &AssetServer,
+    suite: &Suite,
+    file: &Path,
+    lights: bool,
+) -> Handle<WorldAsset> {
+    assets
+        .load_builder()
+        .with_settings(move |s: &mut GltfLoaderSettings| {
+            s.load_cameras = false;
+            s.load_lights = lights;
+        })
+        .load(GltfAssetLabel::Scene(0).from_asset(asset_path(suite, file)))
 }
 
 fn choose(dir: &Path, wanted: Option<&str>) -> Option<PathBuf> {

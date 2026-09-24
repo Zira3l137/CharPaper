@@ -1,4 +1,5 @@
-//! Everything around the character: lights, the camera and its effects.
+//! Everything around the character: the environment, lights, the camera and
+//! its effects.
 //!
 //! Each setting starts from an engine default below and is replaced by
 //! whatever `suite.toml` says. A later user-override layer slots in between
@@ -6,6 +7,7 @@
 
 use bevy::camera::Exposure;
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::light::Skybox;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use charpaper_suite::Post;
@@ -14,6 +16,8 @@ use charpaper_suite::Tonemapping as SuiteTonemapping;
 use crate::OrbitCamera;
 use crate::PITCH_LIMIT;
 use crate::suite::ActiveSuite;
+use crate::suite::asset_path;
+use crate::suite::load_scene;
 use crate::update_camera_transform;
 
 const SUN_ILLUMINANCE: f32 = light_consts::lux::OVERCAST_DAY;
@@ -30,8 +34,13 @@ const ORBIT_FOCUS: [f32; 3] = [0.0, 1.0, 0.0];
 const ORBIT_RADIUS: f32 = 2.0;
 const ORBIT_YAW_DEG: f32 = 0.0;
 const ORBIT_PITCH_DEG: f32 = 0.0;
+const SKYBOX_BRIGHTNESS: f32 = 1000.0;
 
-pub(crate) fn spawn_stage(mut commands: Commands, suite: Option<Res<ActiveSuite>>) {
+pub(crate) fn spawn_stage(
+    mut commands: Commands,
+    suite: Option<Res<ActiveSuite>>,
+    assets: Res<AssetServer>,
+) {
     let lighting = suite.as_ref().map(|s| s.lighting.clone()).unwrap_or_default();
     let post = suite.as_ref().map(|s| s.post.clone()).unwrap_or_default();
     let view = suite.as_ref().map(|s| s.camera.clone()).unwrap_or_default();
@@ -78,6 +87,24 @@ pub(crate) fn spawn_stage(mut commands: Commands, suite: Option<Res<ActiveSuite>
         },
     ));
     apply_post(&mut camera, &post);
+
+    let Some(suite) = suite else {
+        return;
+    };
+    let environment = &suite.environment;
+    if let Some(skybox) = &environment.skybox {
+        camera.insert(Skybox {
+            image: Some(assets.load(asset_path(&suite, skybox))),
+            brightness: environment.skybox_brightness.unwrap_or(SKYBOX_BRIGHTNESS),
+            ..default()
+        });
+    }
+    if let Some(scene) = &environment.scene {
+        commands.spawn((
+            Name::new("Environment"),
+            WorldAssetRoot(load_scene(&assets, &suite, scene, true)),
+        ));
+    }
 }
 
 /// Bloom is added only when asked for: it pulls in an HDR render target and a

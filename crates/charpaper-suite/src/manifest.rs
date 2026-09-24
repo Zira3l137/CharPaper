@@ -103,6 +103,8 @@ pub struct EnvironmentSection {
     /// A .ktx2 cubemap, relative to this file. Defaults to the only one in
     /// `environment/`, if any.
     pub skybox: Option<PathBuf>,
+    /// How bright the skybox looks, in cd/m². Defaults to 1000.
+    pub skybox_brightness: Option<f32>,
 }
 
 /// Scene lighting. Anything left out uses the app's defaults.

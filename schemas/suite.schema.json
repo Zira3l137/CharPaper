@@ -193,6 +193,14 @@
             "string",
             "null"
           ]
+        },
+        "skybox_brightness": {
+          "description": "How bright the skybox looks, in cd/m². Defaults to 1000.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
         }
       },
       "additionalProperties": false
