@@ -21,6 +21,9 @@ use crate::suite::asset_path;
 pub struct CharacterState {
     /// `None` shows no skin at all: just the bare armature, which is invisible.
     pub skin: Option<String>,
+    /// A name from [`crate::CharacterClips`]. `None` stops the animation and
+    /// leaves the character in whatever pose it was in.
+    pub animation: Option<String>,
 }
 
 /// Parent of everything spawned from the suite, so replacing the suite is one

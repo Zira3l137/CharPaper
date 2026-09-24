@@ -67,7 +67,13 @@ impl Plugin for ScenePlugin {
             .add_systems(
                 Update,
                 (
-                    (animation::make_armature_animatable, animation::build_graph).chain(),
+                    (
+                        animation::make_armature_animatable,
+                        animation::build_graph,
+                        animation::finish_once,
+                        animation::play_selected,
+                    )
+                        .chain(),
                     binding::bind_skins,
                     character::show_selected_skin.run_if(resource_changed::<CharacterState>),
                 ),

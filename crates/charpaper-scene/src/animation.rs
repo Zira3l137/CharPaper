@@ -1,6 +1,7 @@
 //! Plays the suite's clips on the armature.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use bevy::animation::AnimatedBy;
 use bevy::animation::AnimationTargetId;
@@ -9,8 +10,10 @@ use charpaper_suite::AnimationFile;
 use charpaper_suite::ClipSet;
 use charpaper_suite::PlayMode;
 
+use crate::SceneConfig;
 use crate::binding::InstanceReady;
 use crate::character::Armature;
+use crate::character::CharacterState;
 use crate::suite::ActiveSuite;
 use crate::suite::asset_path;
 
@@ -36,6 +39,11 @@ impl CharacterClips {
         self.clips.get(name).copied()
     }
 }
+
+/// What the armature is actually playing, as opposed to what
+/// [`CharacterState::animation`] asks for.
+#[derive(Component, Default)]
+pub(crate) struct Playing(Option<String>);
 
 /// Animation files still loading. Removed once the graph is built.
 #[derive(Resource)]
@@ -116,8 +124,10 @@ pub(crate) fn build_graph(
     assets: Res<AssetServer>,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    suite: Option<Res<ActiveSuite>>,
+    mut state: ResMut<CharacterState>,
 ) {
-    let Some(pending) = pending else {
+    let (Some(pending), Some(suite)) = (pending, suite) else {
         return;
     };
     let Ok(armature) = armature.single() else {
@@ -147,9 +157,86 @@ pub(crate) fn build_graph(
     }
 
     info!("{} animation(s): {:?}", clips.len(), clips.keys().collect::<Vec<_>>());
-    commands.entity(armature).insert(AnimationGraphHandle(graphs.add(graph)));
+    if let Some(default) = &suite.default_animation {
+        if !clips.contains_key(default) {
+            warn!("default animation {default:?} is not among them");
+        }
+    }
+
+    commands.entity(armature).insert((AnimationGraphHandle(graphs.add(graph)), Playing::default()));
     commands.insert_resource(CharacterClips { clips });
     commands.remove_resource::<PendingClips>();
+    state.animation = suite.default_animation.clone();
+}
+
+/// A `once` clip hands back to the default animation when it ends. When the
+/// default is itself `once`, it plays through and holds its last frame.
+pub(crate) fn finish_once(
+    mut state: ResMut<CharacterState>,
+    clips: Option<Res<CharacterClips>>,
+    suite: Option<Res<ActiveSuite>>,
+    armature: Query<(&AnimationPlayer, &Playing)>,
+) {
+    let (Some(clips), Some(suite)) = (clips, suite) else {
+        return;
+    };
+    let Ok((player, Playing(Some(name)))) = armature.single() else {
+        return;
+    };
+    let Some(clip) = clips.get(name) else {
+        return;
+    };
+    if clip.mode != PlayMode::Once || suite.default_animation.as_ref() == Some(name) {
+        return;
+    }
+    if player.animation(clip.node).is_some_and(|active| active.is_finished()) {
+        state.animation = suite.default_animation.clone();
+    }
+}
+
+/// Runs every frame rather than on change: a request can arrive before the
+/// graph exists, and comparing two names is cheaper than tracking that.
+pub(crate) fn play_selected(
+    state: Res<CharacterState>,
+    clips: Option<Res<CharacterClips>>,
+    config: Res<SceneConfig>,
+    mut armature: Query<(&mut AnimationPlayer, &mut AnimationTransitions, &mut Playing)>,
+) {
+    let Some(clips) = clips else {
+        return;
+    };
+    let Ok((mut player, mut transitions, mut playing)) = armature.single_mut() else {
+        return;
+    };
+    if playing.0 == state.animation {
+        return;
+    }
+    playing.0 = state.animation.clone();
+
+    let Some(name) = &state.animation else {
+        player.stop_all();
+        return;
+    };
+    let Some(clip) = clips.get(name) else {
+        warn!("no animation named {name:?}");
+        return;
+    };
+
+    let fade = Duration::from_secs_f32(config.animation_crossfade_secs.max(0.0));
+    let active = transitions.play(&mut player, clip.node, fade);
+    match clip.mode {
+        PlayMode::Loop => {
+            active.repeat();
+        }
+        PlayMode::Once => {}
+        // Speed 0 rather than pausing: `AnimationTransitions` never fades out
+        // a paused animation, so a paused pose would keep full weight under
+        // every animation played after it.
+        PlayMode::Pose => {
+            active.set_speed(0.0);
+        }
+    }
+    debug!("playing {name:?} ({:?})", clip.mode);
 }
 
 fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<(String, Handle<AnimationClip>, PlayMode)> {

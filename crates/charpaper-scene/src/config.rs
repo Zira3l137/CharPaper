@@ -30,6 +30,10 @@ pub struct SceneConfig {
 
     /// Folder name of the suite to show. `None` shows the first in name order.
     pub suite: Option<String>,
+
+    /// How long switching animations blends the old into the new, in seconds.
+    /// 0 switches instantly.
+    pub animation_crossfade_secs: f32,
 }
 
 impl Default for SceneConfig {
@@ -42,6 +46,7 @@ impl Default for SceneConfig {
             camera_pos: [0.0, 1.0, 1.0],
             characters_dir: PathBuf::from("characters"),
             suite: None,
+            animation_crossfade_secs: 0.25,
         }
     }
 }
