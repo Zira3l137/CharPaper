@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CharPaper suite manifest",
+  "description": "A CharPaper character suite: the `suite.toml` at the root of the suite's\nfolder.",
+  "type": "object",
+  "properties": {
+    "animations": {
+      "description": "Named animations, used to rename, pick or change how clips play. Files\nin `animations/` that are not mentioned here are used whole, each clip\nunder its own name. Once a file is mentioned, only the clips listed\nfor it are used.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ClipEntry"
+      }
+    },
+    "camera": {
+      "$ref": "#/$defs/Camera"
+    },
+    "character": {
+      "$ref": "#/$defs/CharacterSection"
+    },
+    "environment": {
+      "$ref": "#/$defs/EnvironmentSection"
+    },
+    "lighting": {
+      "$ref": "#/$defs/Lighting"
+    },
+    "name": {
+      "description": "Name shown in the app. Defaults to the folder name.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "post": {
+      "$ref": "#/$defs/Post"
+    },
+    "schema": {
+      "description": "Version of this file's format. Use 1.",
+      "type": "integer",
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema"
+  ],
+  "$defs": {
+    "Ambient": {
+      "description": "Light that reaches everything evenly, so shadowed areas are not black.",
+      "type": "object",
+      "properties": {
+        "brightness": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "color": {
+          "description": "sRGB color as [r, g, b], each 0.0 to 1.0.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        }
+      },
+      "additionalProperties": false
+    },
+    "Camera": {
+      "description": "Where the camera starts. The user can still orbit and zoom.",
+      "type": "object",
+      "properties": {
+        "focus": {
+          "description": "The point the camera orbits around, as [x, y, z]. Y is up.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "pitch_deg": {
+          "description": "Angle above the horizon, in degrees.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "radius": {
+          "description": "Distance from the focus point.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "yaw_deg": {
+          "description": "Angle around the vertical axis, in degrees.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CharacterSection": {
+      "description": "The character itself.",
+      "type": "object",
+      "properties": {
+        "default_animation": {
+          "description": "Animation played at start. Without one the character holds its rest\npose.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_skin": {
+          "description": "Skin worn at start: a file name in `skins/` without its extension.\nDefaults to the first skin in name order.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "description": "Path to the model (the armature), relative to this file. Only needed\nwhen more than one .glb/.gltf sits next to this file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClipEntry": {
+      "description": "One named animation.",
+      "type": "object",
+      "properties": {
+        "clip": {
+          "description": "The clip's name inside the file (the Blender action name). May be left\nout when the file holds exactly one clip.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file": {
+          "description": "Path to the file holding the clip, relative to this file.",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/PlayMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file"
+      ]
+    },
+    "EnvironmentSection": {
+      "description": "What surrounds the character.",
+      "type": "object",
+      "properties": {
+        "scene": {
+          "description": "A .glb/.gltf scene, relative to this file. Defaults to the only one in\n`environment/`, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skybox": {
+          "description": "A .ktx2 cubemap, relative to this file. Defaults to the only one in\n`environment/`, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Lighting": {
+      "description": "Scene lighting. Anything left out uses the app's defaults.",
+      "type": "object",
+      "properties": {
+        "ambient": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Ambient"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sun": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sun"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "PlayMode": {
+      "description": "How the animation plays. Defaults to `loop`.",
+      "oneOf": [
+        {
+          "description": "Repeats forever.",
+          "type": "string",
+          "const": "loop"
+        },
+        {
+          "description": "Plays once, then returns to the default animation.",
+          "type": "string",
+          "const": "once"
+        },
+        {
+          "description": "Holds the clip's first frame.",
+          "type": "string",
+          "const": "pose"
+        }
+      ]
+    },
+    "Post": {
+      "description": "Effects applied to the finished image.",
+      "type": "object",
+      "properties": {
+        "bloom": {
+          "description": "Bloom intensity; 0.0 turns bloom off.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "exposure": {
+          "description": "Exposure compensation in EV stops; positive is brighter.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "tonemapping": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tonemapping"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Sun": {
+      "description": "A distant light shining in one direction everywhere, like the sun.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "sRGB color as [r, g, b], each 0.0 to 1.0.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "direction": {
+          "description": "The direction the light travels as [x, y, z], not where it comes from.\nY is up.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "illuminance": {
+          "description": "Brightness in lux. Overcast daylight is about 1000, direct sunlight\nabout 100000.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "shadows": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Tonemapping": {
+      "description": "How bright colors are squeezed into what the screen can show.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "none",
+            "reinhard",
+            "reinhard_luminance",
+            "aces_fitted",
+            "agx",
+            "somewhat_boring_display_transform",
+            "tony_mc_mapface"
+          ]
+        },
+        {
+          "description": "Blender's \"Filmic\" view transform.",
+          "type": "string",
+          "const": "blender_filmic"
+        }
+      ]
+    }
+  }
+}

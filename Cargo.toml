@@ -67,6 +67,8 @@ toml = { version = "1.1", default-features = false, features = ["std", "serde", 
 # Same major version and a subset of the features `bevy_gltf` enables, so the
 # full build compiles it only once.
 gltf = { version = "1.4", default-features = false, features = ["names"] }
+schemars = { version = "1.2", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
 
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 

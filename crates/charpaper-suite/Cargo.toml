@@ -9,7 +9,9 @@ edition.workspace = true
 # compiled once and shared.
 [dependencies]
 gltf.workspace = true
+schemars.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 tracing.workspace = true

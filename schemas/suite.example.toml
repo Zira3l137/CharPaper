@@ -1,0 +1,46 @@
+#:schema https://raw.githubusercontent.com/Zira3l137/CharPaper/main/schemas/suite.schema.json
+
+# Every key except `schema` is optional. The folder layout already names the
+# model, the skins and every clip in `animations/`; this file only overrides.
+
+schema = 1
+name = "Aki"
+
+[character]
+model = "aki.glb"
+default_skin = "casual"
+default_animation = "idle"
+
+[animations.idle]
+file = "animations/locomotion.glb"
+clip = "Idle_Breathing"
+
+[animations.wave]
+file = "animations/gestures.glb"
+clip = "Wave"
+mode = "once"
+
+[environment]
+scene = "environment/room.glb"
+skybox = "environment/sky.ktx2"
+
+[lighting.sun]
+illuminance = 10000.0
+color = [1.0, 0.96, 0.9]
+direction = [-0.5, -1.0, -0.3]
+shadows = true
+
+[lighting.ambient]
+color = [0.6, 0.7, 1.0]
+brightness = 300.0
+
+[post]
+tonemapping = "tony_mc_mapface"
+exposure = 0.0
+bloom = 0.15
+
+[camera]
+focus = [0.0, 1.0, 0.0]
+radius = 2.0
+yaw_deg = 0.0
+pitch_deg = 10.0
