@@ -130,6 +130,13 @@ fn check_suite(path: &Path) -> Result<()> {
         .collect();
     let default_camera = suite.default_camera.as_deref().unwrap_or(ORBIT_CAMERA);
     println!("cameras  [{}], default {default_camera:?}", cameras.join(", "));
+    let show =
+        |path: &Option<PathBuf>| path.as_ref().map_or("none".into(), |p| p.display().to_string());
+    println!(
+        "env      scene {}, skybox {}",
+        show(&suite.environment.scene),
+        show(&suite.environment.skybox)
+    );
 
     let report = charpaper_suite::inspect(&suite);
     println!("{report}");

@@ -16,6 +16,8 @@
 //! - A camera file is one camera and at most one clip. The clip only needs to
 //!   make sense inside its own file: it moves the camera or the empties the
 //!   camera hangs from, never the character.
+//! - The environment scene is loaded without its cameras, and the skybox must
+//!   be a KTX2 cubemap this build of the app can decode.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -141,9 +143,7 @@ pub fn inspect(suite: &Suite) -> Report {
         }
     }
 
-    if let Some(scene) = &suite.environment.scene {
-        open(suite, scene, &mut report);
-    }
+    check_environment(suite, &mut report);
 
     report.findings.sort_by(|a, b| b.severity.cmp(&a.severity));
     report
@@ -532,6 +532,71 @@ fn check_camera_file(path: &Path, gltf: &Gltf, report: &mut Report) {
             examples(&idle)
         );
         report.push(Severity::Warning, path, message);
+    }
+}
+
+fn check_environment(suite: &Suite, report: &mut Report) {
+    if let Some(scene) = &suite.environment.scene {
+        if let Some(gltf) = open(suite, scene, report) {
+            let cameras: Vec<&str> = gltf
+                .doc
+                .nodes()
+                .filter(|n| n.camera().is_some())
+                .map(|n| gltf.names[n.index()].as_str())
+                .collect();
+            if !cameras.is_empty() {
+                let message = format!(
+                    "{} camera(s) will be ignored; cameras belong in `cameras/`: {}",
+                    cameras.len(),
+                    examples(&cameras)
+                );
+                report.push(Severity::Warning, Some(scene), message);
+            }
+        }
+    }
+
+    if let Some(skybox) = &suite.environment.skybox {
+        if let Err(message) = check_skybox(&suite.absolute(skybox)) {
+            report.push(Severity::Error, Some(skybox), message);
+        }
+    }
+}
+
+/// Reads only the fixed KTX2 header: a 12-byte identifier followed by nine
+/// little-endian `u32`s, of which the face count and supercompression scheme
+/// matter here.
+///
+/// Which supercompression schemes are accepted mirrors the Bevy features the
+/// workspace enables (`ktx2` and `zstd_rust`); enabling more there means
+/// accepting more here.
+fn check_skybox(path: &Path) -> Result<(), String> {
+    const IDENTIFIER: [u8; 12] =
+        [0xAB, b'K', b'T', b'X', b' ', b'2', b'0', 0xBB, b'\r', b'\n', 0x1A, b'\n'];
+
+    let mut file = File::open(path).map_err(|e| e.to_string())?;
+    let mut head = [0u8; 48];
+    file.read_exact(&mut head).map_err(|_| "file is too short to be a KTX2 texture".to_string())?;
+    if head[..12] != IDENTIFIER {
+        return Err("not a KTX2 texture; the skybox must be a .ktx2 cubemap".to_string());
+    }
+
+    let word = |at: usize| u32::from_le_bytes(head[at..at + 4].try_into().unwrap());
+    let faces = word(36);
+    if faces != 6 {
+        return Err(format!(
+            "has {faces} face(s); a skybox must be a cubemap with 6 (an equirectangular \
+             panorama has to be converted first)"
+        ));
+    }
+    match word(44) {
+        0 | 2 => Ok(()),
+        1 => Err("uses BasisLZ supercompression, which this build cannot decode; re-encode \
+                  with Zstandard or no supercompression"
+            .to_string()),
+        scheme => Err(format!(
+            "uses supercompression scheme {scheme}, which this build cannot decode; re-encode \
+             with Zstandard or no supercompression"
+        )),
     }
 }
 

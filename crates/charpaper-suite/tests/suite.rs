@@ -94,6 +94,15 @@ fn camera(clips: &[&str]) -> String {
     )
 }
 
+/// Just the fixed KTX2 header; inspection never reads further.
+fn ktx2(faces: u32, supercompression: u32) -> Vec<u8> {
+    let mut bytes = vec![0xAB, b'K', b'T', b'X', b' ', b'2', b'0', 0xBB, b'\r', b'\n', 0x1A, b'\n'];
+    for word in [0, 1, 64, 64, 0, 0, faces, 1, supercompression] {
+        bytes.extend_from_slice(&u32::to_le_bytes(word));
+    }
+    bytes
+}
+
 struct Fixture(PathBuf);
 
 impl Fixture {
@@ -114,7 +123,7 @@ impl Fixture {
         fixture
     }
 
-    fn write(&self, relative: &str, contents: &str) {
+    fn write(&self, relative: &str, contents: impl AsRef<[u8]>) {
         let path = self.0.join(relative);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, contents).unwrap();
@@ -304,4 +313,26 @@ fn animation_pointer_clips_get_a_readable_error() {
 
     let errors = messages(&suite, Severity::Error);
     assert!(errors.iter().any(|e| e.contains("KHR_animation_pointer")), "{errors:#?}");
+}
+
+#[test]
+fn environment_is_inspected() {
+    let fixture = Fixture::new("environment", "schema = 1");
+    fixture.write("environment/room.gltf", &camera(&[]));
+    fixture.write("environment/sky.ktx2", ktx2(6, 2));
+    let suite = fixture.load().unwrap();
+    assert!(messages(&suite, Severity::Error).is_empty());
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("room.gltf: 1 camera(s) will be ignored")));
+
+    let cases = [
+        (ktx2(1, 0), "has 1 face(s)"),
+        (ktx2(6, 1), "BasisLZ"),
+        (b"not a texture at all, just some words".repeat(2), "not a KTX2 texture"),
+    ];
+    for (bytes, expected) in cases {
+        fixture.write("environment/sky.ktx2", bytes);
+        let errors = messages(&fixture.load().unwrap(), Severity::Error);
+        assert!(errors.iter().any(|e| e.contains(expected)), "{expected}: {errors:#?}");
+    }
 }
