@@ -67,10 +67,9 @@ pub(crate) fn spawn_stage(
         focus: Vec3::from_array(view.focus.unwrap_or(ORBIT_FOCUS)),
         radius: view.radius.unwrap_or(ORBIT_RADIUS),
         yaw: view.yaw_deg.unwrap_or(ORBIT_YAW_DEG).to_radians(),
-        pitch: view
-            .pitch_deg
-            .unwrap_or(ORBIT_PITCH_DEG)
-            .to_radians()
+        // The orbit's own pitch is positive below the focus, so it is flipped
+        // to match the manifest's "degrees above the horizon".
+        pitch: (-view.pitch_deg.unwrap_or(ORBIT_PITCH_DEG).to_radians())
             .clamp(-PITCH_LIMIT, PITCH_LIMIT),
     };
     let mut transform = Transform::default();
