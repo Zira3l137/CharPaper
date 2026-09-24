@@ -19,6 +19,7 @@ use bevy::prelude::*;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
 use charpaper_scene::ScenePlugin;
+use charpaper_suite::ORBIT_CAMERA;
 use charpaper_suite::Suite;
 use charpaper_ui::CustomUiPlugin;
 use charpaper_ui::UiState;
@@ -98,6 +99,11 @@ fn check_suite(path: &Path) -> Result<()> {
     println!("model    {}", suite.model.display());
     println!("clips    {} animation file(s)", suite.animations.len());
     println!("skins    [{}], default {:?}", skins.join(", "), suite.default_skin);
+    let cameras: Vec<&str> = std::iter::once(ORBIT_CAMERA)
+        .chain(suite.cameras.iter().map(|c| c.name.as_str()))
+        .collect();
+    let default_camera = suite.default_camera.as_deref().unwrap_or(ORBIT_CAMERA);
+    println!("cameras  [{}], default {default_camera:?}", cameras.join(", "));
 
     let report = charpaper_suite::inspect(&suite);
     println!("{report}");
