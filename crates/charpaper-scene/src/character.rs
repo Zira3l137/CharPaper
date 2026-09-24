@@ -7,14 +7,13 @@
 
 use std::path::Path;
 
-use bevy::asset::AssetPath;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use charpaper_suite::Suite;
 
-use crate::CHARACTERS_SOURCE;
 use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
+use crate::suite::asset_path;
 
 /// What the viewer has picked. Systems react to changes, so writing here is
 /// how the UI will switch things.
@@ -108,14 +107,11 @@ pub(crate) fn visibility_for(shown: bool) -> Visibility {
 /// folder, and lighting belongs to `suite.toml`; a stray lamp exported with a
 /// skin would otherwise light the scene only while that skin is loaded.
 fn load_scene(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<WorldAsset> {
-    let folder = suite.root.file_name().unwrap_or_default();
-    let path =
-        AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE);
     assets
         .load_builder()
         .with_settings(|s: &mut GltfLoaderSettings| {
             s.load_cameras = false;
             s.load_lights = false;
         })
-        .load(GltfAssetLabel::Scene(0).from_asset(path))
+        .load(GltfAssetLabel::Scene(0).from_asset(asset_path(suite, file)))
 }

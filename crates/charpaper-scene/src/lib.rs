@@ -7,6 +7,7 @@ mod config;
 mod importer;
 mod suite;
 
+pub use animation::CharacterClips;
 use bevy::prelude::*;
 pub use character::Character;
 pub use character::CharacterState;
@@ -57,12 +58,16 @@ impl Plugin for ScenePlugin {
             .init_resource::<CharacterState>()
             .add_systems(
                 Startup,
-                ((suite::select_suite, character::spawn_character).chain(), spawn_scene),
+                (
+                    (suite::select_suite, (character::spawn_character, animation::load_clips))
+                        .chain(),
+                    spawn_scene,
+                ),
             )
             .add_systems(
                 Update,
                 (
-                    animation::make_armature_animatable,
+                    (animation::make_armature_animatable, animation::build_graph).chain(),
                     binding::bind_skins,
                     character::show_selected_skin.run_if(resource_changed::<CharacterState>),
                 ),

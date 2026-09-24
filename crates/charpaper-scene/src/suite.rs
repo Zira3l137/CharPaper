@@ -8,10 +8,12 @@ use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
 
+use bevy::asset::AssetPath;
 use bevy::prelude::*;
 use charpaper_suite::Severity;
 use charpaper_suite::Suite;
 
+use crate::CHARACTERS_SOURCE;
 use crate::SceneConfig;
 
 /// The suite being shown. Absent when no suite could be loaded.
@@ -44,6 +46,12 @@ pub(crate) fn select_suite(mut commands: Commands, config: Res<SceneConfig>) {
 
     info!("showing suite {:?} from {}", suite.name, root.display());
     commands.insert_resource(ActiveSuite(suite));
+}
+
+/// `characters://<suite folder>/<file>`, for a path relative to the suite.
+pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
+    let folder = suite.root.file_name().unwrap_or_default();
+    AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE)
 }
 
 fn choose(dir: &Path, wanted: Option<&str>) -> Option<PathBuf> {
