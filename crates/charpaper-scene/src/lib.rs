@@ -2,6 +2,7 @@
 
 mod animation;
 mod binding;
+mod cameras;
 mod character;
 mod config;
 mod importer;
@@ -58,12 +59,18 @@ impl Plugin for ScenePlugin {
             .add_observer(on_orbit)
             .add_observer(on_zoom)
             .add_observer(binding::mark_ready)
+            .add_observer(cameras::on_rig_ready)
             .init_resource::<CharacterState>()
             .add_systems(
                 Startup,
                 (
                     suite::select_suite,
-                    (character::spawn_character, animation::load_clips, stage::spawn_stage),
+                    (
+                        character::spawn_character,
+                        animation::load_clips,
+                        cameras::load_cameras,
+                        stage::spawn_stage,
+                    ),
                 )
                     .chain(),
             )
@@ -78,6 +85,7 @@ impl Plugin for ScenePlugin {
                     )
                         .chain(),
                     binding::bind_skins,
+                    cameras::spawn_rigs,
                     character::show_selected_skin.run_if(resource_changed::<CharacterState>),
                 ),
             );
