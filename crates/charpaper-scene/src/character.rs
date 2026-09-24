@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use charpaper_suite::Suite;
 
 use crate::CHARACTERS_SOURCE;
+use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
 
 /// What the viewer has picked. Systems react to changes, so writing here is
@@ -77,14 +78,26 @@ pub(crate) fn spawn_character(
 
 pub(crate) fn show_selected_skin(
     state: Res<CharacterState>,
-    mut skins: Query<(&SkinRoot, &mut Visibility)>,
+    mut skins: Query<(Entity, &SkinRoot, &mut Visibility)>,
+    mut parts: Query<(&SkinPart, &mut Visibility), Without<SkinRoot>>,
 ) {
-    for (skin, mut visibility) in &mut skins {
-        let wanted = match state.skin.as_deref() == Some(skin.name.as_str()) {
-            true => Visibility::Inherited,
-            false => Visibility::Hidden,
-        };
-        visibility.set_if_neq(wanted);
+    let mut selected = None;
+    for (entity, skin, mut visibility) in &mut skins {
+        let shown = state.skin.as_deref() == Some(skin.name.as_str());
+        if shown {
+            selected = Some(entity);
+        }
+        visibility.set_if_neq(visibility_for(shown));
+    }
+    for (part, mut visibility) in &mut parts {
+        visibility.set_if_neq(visibility_for(Some(part.0) == selected));
+    }
+}
+
+pub(crate) fn visibility_for(shown: bool) -> Visibility {
+    match shown {
+        true => Visibility::Inherited,
+        false => Visibility::Hidden,
     }
 }
 

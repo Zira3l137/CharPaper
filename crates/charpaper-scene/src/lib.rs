@@ -1,5 +1,6 @@
 //! The thing we actually draw.
 
+mod binding;
 mod character;
 mod config;
 mod importer;
@@ -51,6 +52,7 @@ impl Plugin for ScenePlugin {
             .add_observer(on_pan)
             .add_observer(on_orbit)
             .add_observer(on_zoom)
+            .add_observer(binding::mark_ready)
             .init_resource::<CharacterState>()
             .add_systems(
                 Startup,
@@ -58,7 +60,10 @@ impl Plugin for ScenePlugin {
             )
             .add_systems(
                 Update,
-                character::show_selected_skin.run_if(resource_changed::<CharacterState>),
+                (
+                    binding::bind_skins,
+                    character::show_selected_skin.run_if(resource_changed::<CharacterState>),
+                ),
             );
     }
 }
