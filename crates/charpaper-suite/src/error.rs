@@ -35,9 +35,9 @@ pub enum SuiteError {
     #[error("{place} holds several candidates ({found}); name one in suite.toml")]
     Ambiguous { place: &'static str, found: String },
 
-    #[error("skin {0:?} exists as both a .glb and a .gltf")]
-    DuplicateSkin(String),
+    #[error("{kind} {name:?} exists as both a .glb and a .gltf")]
+    DuplicateName { kind: &'static str, name: String },
 
-    #[error("default skin {0:?} is not one of the suite's skins")]
-    UnknownDefaultSkin(String),
+    #[error("default {kind} {name:?} is not one of the suite's {kind}s")]
+    UnknownDefault { kind: &'static str, name: String },
 }

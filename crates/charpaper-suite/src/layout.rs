@@ -106,11 +106,14 @@ impl Suite {
         };
 
         let animations = resolve_animations(root, &manifest)?;
-        let skins = resolve_skins(root)?;
+        let skins: Vec<Skin> = named_files(root, SKINS_DIR, "skin")?
+            .into_iter()
+            .map(|(name, file)| Skin { name, file })
+            .collect();
 
         let default_skin = match manifest.character.default_skin {
             Some(name) if !skins.iter().any(|s| s.name == name) => {
-                return Err(SuiteError::UnknownDefaultSkin(name));
+                return Err(SuiteError::UnknownDefault { kind: "skin", name });
             }
             Some(name) => Some(name),
             None => {
@@ -191,19 +194,24 @@ fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationF
     Ok(files)
 }
 
-/// Only files directly in `skins/` count. Sub-folders are left alone, so a
-/// `.gltf` skin can keep its `.bin` and textures in one.
-fn resolve_skins(root: &Path) -> Result<Vec<Skin>, SuiteError> {
-    let mut skins: BTreeMap<String, Skin> = BTreeMap::new();
-    for file in files_in(root, SKINS_DIR)?.into_iter().filter(|p| is_gltf(p)) {
+/// Every .glb/.gltf directly in `dir`, named after its file and sorted by
+/// name. Sub-folders are left alone, so a `.gltf` can keep its `.bin` and
+/// textures in one.
+fn named_files(
+    root: &Path,
+    dir: &str,
+    kind: &'static str,
+) -> Result<Vec<(String, PathBuf)>, SuiteError> {
+    let mut found: BTreeMap<String, PathBuf> = BTreeMap::new();
+    for file in files_in(root, dir)?.into_iter().filter(|p| is_gltf(p)) {
         let name = file.file_stem().unwrap_or_default().to_string_lossy().into_owned();
-        if skins.contains_key(&name) {
-            return Err(SuiteError::DuplicateSkin(name));
+        if found.contains_key(&name) {
+            return Err(SuiteError::DuplicateName { kind, name });
         }
-        debug!("discovered skin {name:?}");
-        skins.insert(name.clone(), Skin { name, file });
+        debug!("discovered {kind} {name:?}");
+        found.insert(name, file);
     }
-    Ok(skins.into_values().collect())
+    Ok(found.into_iter().collect())
 }
 
 /// Rejects anything that could reach outside the suite folder. The asset
