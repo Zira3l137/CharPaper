@@ -43,6 +43,7 @@ pub use layout::ClipSet;
 pub use layout::DIFFUSE_MAP;
 pub use layout::Environment;
 pub use layout::ExportedCamera;
+pub use layout::Look;
 pub use layout::ORBIT_CAMERA;
 pub use layout::SKYBOX_MAP;
 pub use layout::SPECULAR_MAP;

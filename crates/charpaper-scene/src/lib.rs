@@ -5,7 +5,9 @@ mod binding;
 mod cameras;
 mod character;
 mod config;
+mod environment;
 mod importer;
+mod look;
 mod stage;
 mod suite;
 
@@ -18,6 +20,10 @@ pub use character::Character;
 pub use character::CharacterState;
 pub use character::Picks;
 pub use config::SceneConfig;
+pub use look::ActiveLook;
+pub use look::LookBackup;
+pub use look::Resolved;
+pub use look::RestoreLook;
 pub use suite::ActiveSuite;
 
 /// Asset source id for [`SceneConfig::characters_dir`], so suite files load as
@@ -65,7 +71,13 @@ impl Plugin for ScenePlugin {
             .add_observer(binding::mark_ready)
             .add_observer(cameras::on_rig_ready)
             .init_resource::<CharacterState>()
+            // No built-in lighting: the environment's own lights and maps are
+            // all that light the character.
             .insert_resource(GlobalAmbientLight::NONE)
+            .init_resource::<environment::ShownEnvironment>()
+            .init_resource::<LookBackup>()
+            .add_message::<RestoreLook>()
+            .add_observer(environment::on_environment_ready)
             .add_systems(
                 Startup,
                 (
@@ -74,6 +86,7 @@ impl Plugin for ScenePlugin {
                         character::spawn_character,
                         animation::load_clips,
                         cameras::load_cameras,
+                        environment::choose_environment,
                         stage::spawn_stage,
                     ),
                 )
@@ -91,6 +104,12 @@ impl Plugin for ScenePlugin {
                         .chain(),
                     binding::bind_skins,
                     cameras::spawn_rigs,
+                    (
+                        environment::switch_environment,
+                        environment::spawn_environment_scenes,
+                        look::apply_look.run_if(look::look_needs_applying),
+                    )
+                        .chain(),
                     character::show_selected_skin.run_if(resource_changed::<CharacterState>),
                 ),
             )

@@ -120,7 +120,7 @@ pub struct EnvironmentEntry {
 }
 
 /// Effects applied to the finished image.
-#[derive(Deserialize, JsonSchema, Debug, Clone, Default)]
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Post {
     pub tonemapping: Option<Tonemapping>,

@@ -120,7 +120,35 @@ impl Environment {
     }
 }
 
+/// The settings the viewer can adjust while the app runs: everything in the
+/// manifest that changes how the scene looks rather than what is in it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Look {
+    pub post: Post,
+    /// Keyed by environment name. An environment without an entry uses the
+    /// defaults.
+    pub environments: BTreeMap<String, EnvironmentEntry>,
+}
+
+impl Look {
+    pub fn environment(&self, name: &str) -> EnvironmentEntry {
+        self.environments.get(name).cloned().unwrap_or_default()
+    }
+}
+
 impl Suite {
+    pub fn look(&self) -> Look {
+        Look {
+            post: self.post.clone(),
+            environments: self
+                .environments
+                .iter()
+                .filter(|e| e.settings != EnvironmentEntry::default())
+                .map(|e| (e.name.clone(), e.settings.clone()))
+                .collect(),
+        }
+    }
+
     pub fn load(root: impl AsRef<Path>) -> Result<Self, SuiteError> {
         let root = root.as_ref();
         let path = root.join(MANIFEST_FILE);

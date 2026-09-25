@@ -27,6 +27,9 @@ pub struct CharacterState {
     /// A camera from `cameras/`, by file name. `None` is the orbit camera,
     /// which the mouse only moves while it is the one in use.
     pub camera: Option<String>,
+    /// An environment by name. `None` shows none, which leaves the character
+    /// unlit.
+    pub environment: Option<String>,
 }
 
 /// The viewer's choices for one suite, as kept between runs.
@@ -45,6 +48,8 @@ pub struct Picks {
     /// `None` here means "no preference", not "orbit".
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<String>,
 }
 
 impl Picks {
@@ -53,6 +58,7 @@ impl Picks {
             skin: state.skin.clone(),
             animation: state.animation.clone(),
             camera: Some(state.camera.clone().unwrap_or_else(|| ORBIT_CAMERA.to_string())),
+            environment: state.environment.clone(),
         }
     }
 }
@@ -110,7 +116,7 @@ pub(crate) fn spawn_character(
         Name::new("Suite armature"),
         Armature,
         ChildOf(character),
-        WorldAssetRoot(load_scene(&assets, &suite, &suite.model, false)),
+        WorldAssetRoot(load_scene(&assets, &suite, &suite.model)),
     ));
 
     for skin in &suite.skins {
@@ -119,7 +125,7 @@ pub(crate) fn spawn_character(
             SkinRoot { name: skin.name.clone() },
             ChildOf(character),
             Visibility::Hidden,
-            WorldAssetRoot(load_scene(&assets, &suite, &skin.file, false)),
+            WorldAssetRoot(load_scene(&assets, &suite, &skin.file)),
         ));
     }
 

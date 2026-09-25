@@ -117,6 +117,7 @@ fn save(
         entry.skin = now.skin.or(entry.skin.take());
         entry.animation = now.animation.or(entry.animation.take());
         entry.camera = now.camera.or(entry.camera.take());
+        entry.environment = now.environment.or(entry.environment.take());
     }
     if next == file.saved {
         return;

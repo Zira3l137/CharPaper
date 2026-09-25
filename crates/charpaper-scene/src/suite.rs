@@ -17,6 +17,7 @@ use charpaper_suite::Suite;
 use crate::CHARACTERS_SOURCE;
 use crate::Picks;
 use crate::SceneConfig;
+use crate::look::ActiveLook;
 
 /// The suite being shown. Absent when no suite could be loaded.
 ///
@@ -59,6 +60,7 @@ pub(crate) fn select_suite(mut commands: Commands, config: Res<SceneConfig>) {
     }
 
     info!("showing suite {:?} from {}", suite.name, root.display());
+    commands.insert_resource(ActiveLook(suite.look()));
     commands.insert_resource(ActiveSuite(suite));
 }
 
@@ -68,24 +70,19 @@ pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
     AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE)
 }
 
-/// Scene 0 rather than the file's default scene: Bevy has no label for the
-/// default one, and Blender always exports the active scene as scene 0.
+/// A character file's scene: the model or a skin. Scene 0 rather than the
+/// file's default scene, since Bevy has no label for the default one and
+/// Blender always exports the active scene as scene 0.
 ///
-/// Cameras are never loaded: exported cameras have their own folder. Lights
-/// are only wanted from the environment. Lighting otherwise belongs to
-/// `suite.toml`, and a stray lamp exported with a skin would light the scene
-/// only while that skin is loaded.
-pub(crate) fn load_scene(
-    assets: &AssetServer,
-    suite: &Suite,
-    file: &Path,
-    lights: bool,
-) -> Handle<WorldAsset> {
+/// Cameras and lights are skipped. Cameras have their own folder, and all
+/// lighting comes from the environment; a stray lamp exported with a skin
+/// would otherwise light the scene only while that skin is worn.
+pub(crate) fn load_scene(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<WorldAsset> {
     assets
         .load_builder()
-        .with_settings(move |s: &mut GltfLoaderSettings| {
+        .with_settings(|s: &mut GltfLoaderSettings| {
             s.load_cameras = false;
-            s.load_lights = lights;
+            s.load_lights = false;
         })
         .load(GltfAssetLabel::Scene(0).from_asset(asset_path(suite, file)))
 }
