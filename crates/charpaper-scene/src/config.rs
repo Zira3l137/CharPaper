@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use bevy::prelude::Resource;
+use charpaper_bake::BakeSettings;
 
 use crate::Picks;
 
@@ -41,6 +42,9 @@ pub struct SceneConfig {
     /// The viewer's last choices, keyed by suite folder name. They win over
     /// the suite's own defaults wherever the suite still offers them.
     pub remembered: BTreeMap<String, Picks>,
+
+    /// How environment maps are baked from a panorama when they are missing.
+    pub bake: BakeSettings,
 }
 
 impl Default for SceneConfig {
@@ -55,6 +59,7 @@ impl Default for SceneConfig {
             suite: None,
             animation_crossfade_secs: 0.25,
             remembered: BTreeMap::new(),
+            bake: BakeSettings::default(),
         }
     }
 }

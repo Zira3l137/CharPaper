@@ -29,13 +29,23 @@ pub struct Cli {
     #[arg(long, value_name = "DIR")]
     pub check_suite: Option<PathBuf>,
 
+    /// Bake the missing reflection maps of every environment in a suite folder
+    /// that has a panorama (`.hdr` or `.exr`), then exit.
+    ///
+    /// The app also does this itself the first time it shows such an
+    /// environment. Existing maps are never touched; delete one to bake it
+    /// again.
+    #[arg(long, value_name = "DIR")]
+    pub bake_environments: Option<PathBuf>,
+
     /// Which character suite to show: the name of a folder in `characters/`
     /// next to the executable. Defaults to the first in name order.
     #[arg(long, value_name = "NAME")]
     pub suite: Option<String>,
 
     /// Run in an ordinary window and log the full attach plan without touching
-    /// any desktop window.
+    /// any desktop window. With `--bake-environments`, only list what would be
+    /// baked.
     #[arg(long)]
     pub dry_run: bool,
 
