@@ -1,0 +1,13 @@
+[package]
+name = "charpaper-bake"
+version.workspace = true
+edition.workspace = true
+
+# Bevy-free, like `charpaper-suite`: baking is plain number crunching on
+# images, so it builds fast, is unit-testable, and runs from the CLI without
+# starting the engine. `image` is the crate Bevy already decodes images with.
+[dependencies]
+charpaper-suite.workspace = true
+image.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

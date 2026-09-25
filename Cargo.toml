@@ -69,6 +69,9 @@ thiserror = { version = "2.0", default-features = false, features = ["std"] }
 
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
 toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse", "display"] }
+# The version `bevy_image` already builds, plus the two HDR formats Blender
+# saves environment maps in.
+image = { version = "0.25", default-features = false, features = ["hdr", "exr"] }
 # The version `bevy_macro_utils` already builds, plus writing.
 toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
 # Same major version and a subset of the features `bevy_gltf` enables, so the
@@ -81,6 +84,7 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 
 charpaper-scene = { path = "crates/charpaper-scene" }
 charpaper-suite = { path = "crates/charpaper-suite" }
+charpaper-bake = { path = "crates/charpaper-bake" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
 charpaper-windows = { path = "crates/charpaper-windows" }
 charpaper-ui = { path = "crates/charpaper-ui"}
@@ -91,6 +95,11 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
+
+# Baking an environment's maps is a few seconds of arithmetic when optimised
+# and a minute when not, so it is optimised in development builds too.
+[profile.dev.package.charpaper-bake]
+opt-level = 3
 
 [profile.release]
 lto = "thin"
