@@ -304,6 +304,8 @@ pub enum UiContainer {
     Page(Tab),
     Section(Section),
     OutfitGrid,
+    /// The row a cycler sits in, so single rows can be hidden.
+    Row(Cycler),
 }
 
 /// The groups of controls on the pages, so each can be shown once it has
@@ -313,6 +315,7 @@ pub enum Section {
     Outfit,
     Animation,
     Camera,
+    Environment,
 }
 
 /// The values stepped through with `<` and `>`.
@@ -320,6 +323,7 @@ pub enum Section {
 pub enum Cycler {
     Animation,
     Camera,
+    Environment,
 }
 
 /// The text showing a cycler's current value.

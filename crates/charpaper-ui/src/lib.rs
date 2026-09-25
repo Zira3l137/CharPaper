@@ -1,6 +1,7 @@
 mod config;
 mod helpers;
 mod pages;
+mod scene_tab;
 mod theme;
 mod widgets;
 
@@ -80,13 +81,14 @@ impl Plugin for CustomUiPlugin {
                 pages::show_animation.run_if(
                     resource_changed::<CharacterState>.or_eager(resource_added::<CharacterClips>),
                 ),
-                pages::show_cameras.run_if(resource_added::<ActiveSuite>),
-                pages::show_camera.run_if(resource_changed::<CharacterState>),
+                scene_tab::show_scene_tab.run_if(resource_added::<ActiveSuite>),
+                scene_tab::show_scene_values.run_if(resource_changed::<CharacterState>),
             )
                 .chain(),
         );
         app.add_observer(on_button_click);
         app.add_observer(pages::on_scene_click);
+        app.add_observer(scene_tab::on_scene_tab_click);
     }
 }
 
@@ -199,7 +201,7 @@ pub fn spawn_ui(mut commands: Commands, config: Res<UiConfig>, state: Res<UiStat
                             state.tab,
                             pages::character_page(locale),
                         ));
-                        content.spawn(page(Tab::Scene, state.tab, pages::scene_page(locale)));
+                        content.spawn(page(Tab::Scene, state.tab, scene_tab::scene_page(locale)));
                     });
                 panel.spawn(footer(locale));
             })

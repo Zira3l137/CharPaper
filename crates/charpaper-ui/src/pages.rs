@@ -1,4 +1,4 @@
-//! What the pages show, and how clicking on them changes the scene.
+//! The Character tab, and how clicking on it changes the scene.
 //!
 //! The scene owns the truth in [`CharacterState`]: clicks write to it, and the
 //! widgets restyle themselves from it. Nothing here keeps a copy, so a change
@@ -10,9 +10,6 @@ use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 
 use crate::StatusText;
-use crate::Tab;
-use crate::UiConfig;
-use crate::UiState;
 use crate::config::UiLocale;
 use crate::helpers::BaseBackground;
 use crate::helpers::Cycler;
@@ -49,14 +46,6 @@ pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
             cycler(locale.get_or("label.animation", "Animation"), Cycler::Animation),
         ),
     ]
-}
-
-pub(crate) fn scene_page(locale: &UiLocale) -> impl Bundle {
-    children![section(
-        locale.get_or("section.camera", "CAMERA"),
-        UiContainer::Section(Section::Camera),
-        cycler(locale.get_or("label.camera", "Camera"), Cycler::Camera),
-    )]
 }
 
 /// Skins are known as soon as the suite is, so their tiles are made once.
@@ -130,49 +119,11 @@ pub(crate) fn show_animation(
     }
 }
 
-/// With only the orbit camera there is nothing to pick, and the camera is the
-/// Scene tab's only content so far, so the tab and the tab bar stay hidden.
-/// A Scene tab remembered from another suite then falls back to the first.
-pub(crate) fn show_cameras(
-    suite: Res<ActiveSuite>,
-    nodes: Query<(&UiElement, &mut Node)>,
-    mut ui: ResMut<UiState>,
-) {
-    if suite.cameras.is_empty() {
-        if ui.tab == Tab::Scene {
-            ui.tab = Tab::default();
-        }
-        return;
-    }
-    for (element, mut node) in nodes {
-        match element {
-            UiElement::Container(UiContainer::Section(Section::Camera))
-            | UiElement::Container(UiContainer::TabBar)
-            | UiElement::Button(UiButton::Tab(Tab::Scene)) => node.display = Display::Flex,
-            _ => {}
-        }
-    }
-}
-
-pub(crate) fn show_camera(
-    state: Res<CharacterState>,
-    config: Res<UiConfig>,
-    values: Query<(&CyclerValue, &mut Text)>,
-) {
-    let orbit = config.locale.get_or("camera.orbit", "Orbit");
-    for (value, mut text) in values {
-        if value.0 == Cycler::Camera {
-            text.0 = state.camera.clone().unwrap_or_else(|| orbit.to_string());
-        }
-    }
-}
-
 /// Handles the clicks that change the scene. The panel's own buttons (tabs,
 /// collapse, quit) stay in `on_button_click`.
 pub(crate) fn on_scene_click(
     event: On<Pointer<Click>>,
     elements: Query<&UiElement>,
-    suite: Option<Res<ActiveSuite>>,
     clips: Option<Res<CharacterClips>>,
     mut state: ResMut<CharacterState>,
 ) {
@@ -191,26 +142,13 @@ pub(crate) fn on_scene_click(
                 state.animation = next;
             }
         }
-        UiButton::Previous(Cycler::Camera) | UiButton::Next(Cycler::Camera) => {
-            let Some(suite) = suite else {
-                return;
-            };
-            // `None` is the orbit camera, which every suite has.
-            let options: Vec<Option<String>> = std::iter::once(None)
-                .chain(suite.cameras.iter().map(|c| Some(c.name.clone())))
-                .collect();
-            let forward = matches!(button, UiButton::Next(_));
-            if let Some(next) = step(&options, &state.camera, forward) {
-                state.camera = next;
-            }
-        }
         _ => {}
     }
 }
 
 /// The option before or after `current`, wrapping around. An unknown or unset
 /// `current` steps to the first option.
-fn step<T: PartialEq + Clone>(options: &[T], current: &T, forward: bool) -> Option<T> {
+pub(crate) fn step<T: PartialEq + Clone>(options: &[T], current: &T, forward: bool) -> Option<T> {
     let len = options.len();
     if len == 0 {
         return None;

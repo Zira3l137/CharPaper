@@ -78,6 +78,7 @@ pub(crate) fn cycler(title: &str, cycler: Cycler) -> impl Bundle {
             height: Val::Px(36.0),
             ..default()
         },
+        UiElement::Container(UiContainer::Row(cycler)),
         Pickable::IGNORE,
         children![
             (
