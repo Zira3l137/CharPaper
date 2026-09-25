@@ -24,7 +24,7 @@ type FeedbackQuery<'w, 's> = Query<
     'w,
     's,
     (&'static BaseBackground, &'static mut BackgroundColor, &'static mut BackgroundGradient),
-    With<UiButton>,
+    With<UiElement>,
 >;
 
 #[allow(dead_code)]
@@ -92,6 +92,13 @@ pub trait WithBackground: UiNode {
     fn bg_color_mut(&mut self) -> &mut Color;
     fn bg_shadow_mut(&mut self) -> &mut ShadowStyle;
     fn bg_gradient_mut(&mut self) -> &mut Option<Gradient>;
+    fn border_color_mut(&mut self) -> &mut Color;
+
+    /// Only visible together with a non-zero [`UiNode::border`] width.
+    fn border_color(mut self, color: Color) -> Self {
+        *self.border_color_mut() = color;
+        self
+    }
 
     fn bg_color(mut self, color: Color) -> Self {
         *self.bg_color_mut() = color;
@@ -191,6 +198,10 @@ impl WithBackground for ButtonBuilder {
         &mut self.bg_color
     }
 
+    fn border_color_mut(&mut self) -> &mut Color {
+        &mut self.border_color
+    }
+
     fn bg_shadow_mut(&mut self) -> &mut ShadowStyle {
         &mut self.bg_shadow
     }
@@ -203,6 +214,10 @@ impl WithBackground for ButtonBuilder {
 impl WithBackground for ContainerBuilder {
     fn bg_color_mut(&mut self) -> &mut Color {
         &mut self.bg_color
+    }
+
+    fn border_color_mut(&mut self) -> &mut Color {
+        &mut self.border_color
     }
 
     fn bg_shadow_mut(&mut self) -> &mut ShadowStyle {
@@ -290,20 +305,20 @@ impl ButtonReactiveExt for EntityCommands<'_> {
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone, PartialEq)]
 pub enum UiElement {
     Container(UiContainer),
     Button(UiButton),
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone, PartialEq)]
 pub enum UiContainer {
     MainMenu,
     Tab1,
     Tab2,
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone, PartialEq)]
 pub enum UiButton {
     HideMenu,
     RevealMenu,
@@ -335,6 +350,7 @@ pub struct ButtonBuilder {
     bg_color: Color,
     bg_shadow: ShadowStyle,
     bg_gradient: Option<Gradient>,
+    border_color: Color,
 }
 
 impl Default for ButtonBuilder {
@@ -349,6 +365,7 @@ impl Default for ButtonBuilder {
             },
             bg_color: Color::default(),
             bg_gradient: None,
+            border_color: Color::NONE,
             font: TextFont::default(),
             text_color: TextColor::default(),
             text_shadow_color: Color::default(),
@@ -368,6 +385,7 @@ impl ButtonBuilder {
             self.inner,
             BaseBackground(base),
             BoxShadow(vec![self.bg_shadow]),
+            BorderColor::all(self.border_color),
             bg_color,
             bg_gradient,
             children![(
@@ -390,6 +408,7 @@ pub struct ContainerBuilder<C: Bundle = ()> {
     bg_color: Color,
     bg_shadow: ShadowStyle,
     bg_gradient: Option<Gradient>,
+    border_color: Color,
     children: C,
 }
 
@@ -405,6 +424,7 @@ impl Default for ContainerBuilder {
             },
             bg_color: Color::default(),
             bg_gradient: None,
+            border_color: Color::NONE,
             children: (),
             inner: Node::default(),
         }
@@ -419,6 +439,7 @@ impl<C: Bundle> ContainerBuilder<C> {
             bg_color: self.bg_color,
             bg_shadow: self.bg_shadow,
             bg_gradient: self.bg_gradient,
+            border_color: self.border_color,
             children,
         }
     }
@@ -430,6 +451,7 @@ impl<C: Bundle> ContainerBuilder<C> {
             self.inner,
             BaseBackground(base),
             BoxShadow(vec![self.bg_shadow]),
+            BorderColor::all(self.border_color),
             bg_color,
             bg_gradient,
             self.children,
