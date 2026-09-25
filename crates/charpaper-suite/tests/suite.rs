@@ -390,3 +390,20 @@ fn a_suite_without_environments_is_warned_about() {
     let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
     assert!(warnings.iter().any(|w| w.contains("no environments")), "{warnings:#?}");
 }
+
+#[test]
+fn a_panorama_makes_an_environment_whose_maps_are_baked_later() {
+    let fixture = Fixture::new("panorama", "schema = 1");
+    fixture.write("environment/dusk/sky.hdr", "read only when baking");
+    let suite = fixture.load().unwrap();
+
+    let dusk = suite.environments.iter().find(|e| e.name == "dusk").unwrap();
+    assert_eq!(dusk.panorama.as_deref(), Some(Path::new("environment/dusk/sky.hdr")));
+    assert!(dusk.needs_baking());
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(!warnings.iter().any(|w| w.contains("\"dusk\"")), "{warnings:#?}");
+
+    fixture.write("environment/dusk/other.exr", "a second panorama");
+    let err = fixture.load().unwrap_err();
+    assert!(err.to_string().contains("several panoramas"), "{err}");
+}

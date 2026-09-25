@@ -579,15 +579,18 @@ fn check_environments(suite: &Suite, report: &mut Report) {
             }
         }
 
+        // With a panorama, whatever is missing is baked from it on first load.
+        let baked_later = environment.panorama.is_some();
         if let (Some(path), None) | (None, Some(path)) =
             (&environment.diffuse, &environment.specular)
+            && !baked_later
         {
             let message = "reflections need both diffuse.ktx2 and specular.ktx2, so this one \
                            is not used for lighting";
             report.push(Severity::Warning, Some(path), message.to_string());
         }
 
-        if lights == 0 && environment.reflections().is_none() {
+        if lights == 0 && environment.reflections().is_none() && !baked_later {
             let message = format!(
                 "environment {:?} has no lights and no reflection maps, so the character will \
                  render black in it",

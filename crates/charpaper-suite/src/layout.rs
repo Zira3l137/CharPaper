@@ -95,12 +95,18 @@ pub struct ExportedCamera {
 }
 
 /// What surrounds the character: `environment/<name>.glb`, a folder
-/// `environment/<name>/` of pre-baked maps, or both. A folder alone is a
-/// sky-only environment.
+/// `environment/<name>/` of maps, or both. A folder alone is a sky-only
+/// environment.
+///
+/// The folder may hold a panorama instead of, or as well as, the maps: an
+/// equirectangular `.hdr` or `.exr`, as Blender's World uses. Whichever maps
+/// are missing are baked from it, once, and kept next to it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Environment {
     pub name: String,
     pub scene: Option<PathBuf>,
+    /// The panorama the maps are baked from.
+    pub panorama: Option<PathBuf>,
     /// Without its own, the specular map doubles as the skybox: its sharpest
     /// level is the unblurred surroundings.
     pub skybox: Option<PathBuf>,
@@ -110,6 +116,28 @@ pub struct Environment {
 }
 
 impl Environment {
+    /// Where its maps and panorama live, relative to the suite.
+    pub fn folder(&self) -> PathBuf {
+        Path::new(ENVIRONMENT_DIR).join(&self.name)
+    }
+
+    /// Looks for the maps on disk again, for after they have been baked.
+    pub fn find_maps(&mut self, root: &Path) {
+        let folder = self.folder();
+        let map = |file: &str| {
+            let path = folder.join(file);
+            root.join(&path).is_file().then_some(path)
+        };
+        (self.skybox, self.diffuse, self.specular) =
+            (map(SKYBOX_MAP), map(DIFFUSE_MAP), map(SPECULAR_MAP));
+    }
+
+    /// Whether some maps are missing that the panorama can bake.
+    pub fn needs_baking(&self) -> bool {
+        self.panorama.is_some()
+            && (self.skybox.is_none() || self.diffuse.is_none() || self.specular.is_none())
+    }
+
     /// Reflections need both maps; either alone is ignored.
     pub fn reflections(&self) -> Option<(&Path, &Path)> {
         Some((self.diffuse.as_deref()?, self.specular.as_deref()?))
@@ -278,12 +306,9 @@ fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationF
     Ok(files)
 }
 
-/// Every .glb/.gltf directly in `dir`, named after its file and sorted by
-/// name. Sub-folders are left alone, so a `.gltf` can keep its `.bin` and
-/// textures in one.
-/// A folder counts only when it holds a map or shares its name with a scene
-/// file. A `.gltf` scene's own textures folder is neither, and would otherwise
-/// show up as an empty environment.
+/// A folder counts only when it holds a map or a panorama, or shares its name
+/// with a scene file. A `.gltf` scene's own textures folder is none of those,
+/// and would otherwise show up as an empty environment.
 fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environment>, SuiteError> {
     let mut found: BTreeMap<String, Environment> =
         named_files(root, ENVIRONMENT_DIR, "environment")?
@@ -299,22 +324,31 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
         let Some(name) = folder.file_name().map(|n| n.to_string_lossy().into_owned()) else {
             continue;
         };
-        let map = |file: &str| {
-            let path = Path::new(ENVIRONMENT_DIR).join(&name).join(file);
-            root.join(&path).is_file().then_some(path)
-        };
-        let (skybox, diffuse, specular) = (map(SKYBOX_MAP), map(DIFFUSE_MAP), map(SPECULAR_MAP));
-        let has_maps = skybox.is_some() || diffuse.is_some() || specular.is_some();
-        if !has_maps && !found.contains_key(&name) {
+        let mut candidate = Environment { name: name.clone(), ..Default::default() };
+        candidate.find_maps(root);
+        let relative = candidate.folder();
+        let mut panoramas: Vec<PathBuf> = files_in(root, &relative.to_string_lossy())?
+            .into_iter()
+            .filter(|p| has_extension(p, &["hdr", "exr"]))
+            .collect();
+        if panoramas.len() > 1 {
+            let names: Vec<String> = panoramas.iter().map(|p| p.display().to_string()).collect();
+            return Err(SuiteError::SeveralPanoramas { folder: relative, found: names.join(", ") });
+        }
+        candidate.panorama = panoramas.pop();
+        let has_content = candidate.panorama.is_some()
+            || candidate.skybox.is_some()
+            || candidate.diffuse.is_some()
+            || candidate.specular.is_some();
+        if !has_content && !found.contains_key(&name) {
             continue;
         }
-        let environment = found
-            .entry(name.clone())
-            .or_insert_with(|| Environment { name: name.clone(), ..Default::default() });
-        environment.skybox = skybox;
-        environment.diffuse = diffuse;
-        environment.specular = specular;
-        debug!("environment {name:?}: maps folder found");
+        let environment = found.entry(name.clone()).or_insert_with(|| candidate.clone());
+        environment.panorama = candidate.panorama;
+        environment.skybox = candidate.skybox;
+        environment.diffuse = candidate.diffuse;
+        environment.specular = candidate.specular;
+        debug!("environment {name:?}: folder found");
     }
 
     for (name, settings) in &manifest.environments {
@@ -327,6 +361,9 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
     Ok(found.into_values().collect())
 }
 
+/// Every .glb/.gltf directly in `dir`, named after its file and sorted by
+/// name. Sub-folders are left alone, so a `.gltf` can keep its `.bin` and
+/// textures in one.
 fn named_files(
     root: &Path,
     dir: &str,

@@ -44,6 +44,9 @@ pub enum SuiteError {
     #[error("default {kind} {name:?} is not one of the suite's {kind}s")]
     UnknownDefault { kind: &'static str, name: String },
 
+    #[error("{folder:?} holds several panoramas ({found}); keep one")]
+    SeveralPanoramas { folder: PathBuf, found: String },
+
     #[error("{path} cannot be edited")]
     Edit {
         path: PathBuf,
