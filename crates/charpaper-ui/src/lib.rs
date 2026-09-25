@@ -9,6 +9,8 @@ use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 pub use config::UiConfig;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::config::UiLocale;
 use crate::helpers::BaseBackground;
@@ -26,7 +28,8 @@ use crate::widgets::*;
 
 /// The panel's pages. Only pages with something working behind them exist;
 /// the others from the design are added as their features land.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Tab {
     #[default]
     Character,
@@ -42,7 +45,9 @@ impl Tab {
     }
 }
 
-#[derive(Resource, Default, Debug, Clone)]
+/// Saved between runs by the app, so the panel reopens as it was left.
+#[derive(Resource, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct UiState {
     pub is_menu_closed: bool,
     pub tab: Tab,

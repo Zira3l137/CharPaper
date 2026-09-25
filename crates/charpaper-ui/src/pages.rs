@@ -12,6 +12,7 @@ use charpaper_scene::CharacterState;
 use crate::StatusText;
 use crate::Tab;
 use crate::UiConfig;
+use crate::UiState;
 use crate::config::UiLocale;
 use crate::helpers::BaseBackground;
 use crate::helpers::Cycler;
@@ -131,8 +132,16 @@ pub(crate) fn show_animation(
 
 /// With only the orbit camera there is nothing to pick, and the camera is the
 /// Scene tab's only content so far, so the tab and the tab bar stay hidden.
-pub(crate) fn show_cameras(suite: Res<ActiveSuite>, nodes: Query<(&UiElement, &mut Node)>) {
+/// A Scene tab remembered from another suite then falls back to the first.
+pub(crate) fn show_cameras(
+    suite: Res<ActiveSuite>,
+    nodes: Query<(&UiElement, &mut Node)>,
+    mut ui: ResMut<UiState>,
+) {
     if suite.cameras.is_empty() {
+        if ui.tab == Tab::Scene {
+            ui.tab = Tab::default();
+        }
         return;
     }
     for (element, mut node) in nodes {

@@ -6,3 +6,4 @@ edition.workspace = true
 [dependencies]
 bevy.workspace = true
 charpaper-scene.workspace = true
+serde.workspace = true

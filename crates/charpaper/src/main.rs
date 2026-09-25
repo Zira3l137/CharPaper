@@ -9,6 +9,7 @@ mod config;
 mod input;
 mod logging;
 mod plugin;
+mod state;
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -25,10 +26,11 @@ use charpaper_scene::ScenePlugin;
 use charpaper_suite::ORBIT_CAMERA;
 use charpaper_suite::Suite;
 use charpaper_ui::CustomUiPlugin;
-use charpaper_ui::UiState;
 
 use crate::config::AppConfig;
 use crate::plugin::WallpaperPlugin;
+use crate::state::STATE_FILE;
+use crate::state::StatePlugin;
 
 /// Folder next to the executable that holds one sub-folder per suite.
 const CHARACTERS_DIR: &str = "characters";
@@ -49,7 +51,11 @@ fn main() -> Result<()> {
         return check_suite(path);
     }
 
-    config.scene.characters_dir = characters_dir()?;
+    let exe_dir = exe_dir()?;
+    config.scene.characters_dir = exe_dir.join(CHARACTERS_DIR);
+    let state_path = exe_dir.join(STATE_FILE);
+    let loaded = state::load(&state_path);
+    config.scene.remembered = loaded.state.suites.clone();
     let characters =
         config.scene.characters_dir.to_str().with_context(|| {
             format!("{} is not valid UTF-8", config.scene.characters_dir.display())
@@ -94,10 +100,9 @@ fn main() -> Result<()> {
         )
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
         .add_plugins(ScenePlugin { config: config.scene.clone() })
-        // TODO: 1. Deserialize state from disk if available
-        // TODO: 2. Serialize state to disk on exit
-        // TODO: 3. Reead UI locales into config on startup if available
-        .add_plugins(CustomUiPlugin { config: config.ui.clone(), state: UiState::default() })
+        // TODO: Read UI locales into config on startup if available
+        .add_plugins(CustomUiPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() })
+        .add_plugins(StatePlugin { path: state_path, saved: loaded.state, problem: loaded.problem })
         .run();
 
     match exit {
@@ -106,12 +111,12 @@ fn main() -> Result<()> {
     }
 }
 
-/// Next to the executable, so under `cargo run` it is
-/// `target/<profile>/characters`.
-fn characters_dir() -> Result<PathBuf> {
+/// Where the app keeps everything it reads and writes: suites in
+/// `characters/`, choices in `state.toml`. Under `cargo run` that is
+/// `target/<profile>/`.
+fn exe_dir() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("cannot locate the executable")?;
-    let dir = exe.parent().context("the executable has no parent folder")?;
-    Ok(dir.join(CHARACTERS_DIR))
+    Ok(exe.parent().context("the executable has no parent folder")?.to_path_buf())
 }
 
 /// Handled before Bevy exists, like `--inspect`, so it prints straight to
