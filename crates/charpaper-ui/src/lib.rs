@@ -84,8 +84,11 @@ impl Plugin for CustomUiPlugin {
                     resource_changed::<CharacterState>.or_eager(resource_added::<CharacterClips>),
                 ),
                 scene_tab::show_scene_tab.run_if(resource_added::<ActiveSuite>),
+                // The suite changes when an environment's maps finish baking,
+                // which can make its Brightness row relevant.
                 scene_tab::show_rows.run_if(
-                    resource_changed::<CharacterState>.or_eager(resource_added::<ActiveSuite>),
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_exists_and_changed::<ActiveSuite>),
                 ),
                 scene_tab::show_scene_values.run_if(
                     resource_changed::<CharacterState>

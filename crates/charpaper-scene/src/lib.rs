@@ -75,6 +75,7 @@ impl Plugin for ScenePlugin {
             // all that light the character.
             .insert_resource(GlobalAmbientLight::NONE)
             .init_resource::<environment::ShownEnvironment>()
+            .init_resource::<environment::Baking>()
             .init_resource::<LookBackup>()
             .add_message::<RestoreLook>()
             .add_observer(environment::on_environment_ready)
@@ -106,6 +107,7 @@ impl Plugin for ScenePlugin {
                     cameras::spawn_rigs,
                     (
                         environment::switch_environment,
+                        environment::finish_bakes,
                         environment::spawn_environment_scenes,
                         look::apply_look.run_if(look::look_needs_applying),
                     )
