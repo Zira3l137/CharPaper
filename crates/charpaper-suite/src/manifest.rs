@@ -146,6 +146,33 @@ pub enum Tonemapping {
     BlenderFilmic,
 }
 
+impl Tonemapping {
+    pub const ALL: [Tonemapping; 8] = [
+        Tonemapping::None,
+        Tonemapping::Reinhard,
+        Tonemapping::ReinhardLuminance,
+        Tonemapping::AcesFitted,
+        Tonemapping::Agx,
+        Tonemapping::SomewhatBoringDisplayTransform,
+        Tonemapping::TonyMcMapface,
+        Tonemapping::BlenderFilmic,
+    ];
+
+    /// The name `suite.toml` uses.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Tonemapping::None => "none",
+            Tonemapping::Reinhard => "reinhard",
+            Tonemapping::ReinhardLuminance => "reinhard_luminance",
+            Tonemapping::AcesFitted => "aces_fitted",
+            Tonemapping::Agx => "agx",
+            Tonemapping::SomewhatBoringDisplayTransform => "somewhat_boring_display_transform",
+            Tonemapping::TonyMcMapface => "tony_mc_mapface",
+            Tonemapping::BlenderFilmic => "blender_filmic",
+        }
+    }
+}
+
 /// Which camera the app starts with, and where the built-in orbit camera
 /// starts. The user can switch cameras, and orbit and zoom the orbit camera.
 #[derive(Deserialize, JsonSchema, Debug, Clone, Default)]

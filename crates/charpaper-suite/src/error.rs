@@ -44,6 +44,13 @@ pub enum SuiteError {
     #[error("default {kind} {name:?} is not one of the suite's {kind}s")]
     UnknownDefault { kind: &'static str, name: String },
 
+    #[error("{path} cannot be edited")]
+    Edit {
+        path: PathBuf,
+        #[source]
+        source: toml_edit::TomlError,
+    },
+
     #[error("settings are given for {kind} {name:?}, which the suite does not have")]
     UnknownEntry { kind: &'static str, name: String },
 }

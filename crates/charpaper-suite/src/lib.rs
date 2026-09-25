@@ -27,11 +27,16 @@
 //! glTF. [`inspect`] then opens the glTF files and checks that the pieces fit
 //! together.
 
+mod edit;
 mod error;
 mod inspect;
 mod layout;
 mod manifest;
 
+pub use edit::BACKUP_FILE;
+pub use edit::has_backup;
+pub use edit::restore_look;
+pub use edit::save_look;
 pub use error::SuiteError;
 pub use inspect::Finding;
 pub use inspect::Report;
