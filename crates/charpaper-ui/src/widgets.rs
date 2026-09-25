@@ -70,7 +70,7 @@ pub(crate) fn section(title: &str, marker: UiContainer, content: impl Bundle) ->
 /// A label on the left and a value stepped through with `<` and `>`. The
 /// value text carries a [`CyclerValue`] so a system can rewrite it when the
 /// state behind it changes.
-pub(crate) fn cycler(title: &str, cycler: Cycler) -> impl Bundle {
+pub(crate) fn cycler(title: impl Into<String>, cycler: Cycler) -> impl Bundle {
     (
         Node {
             align_items: AlignItems::Center,

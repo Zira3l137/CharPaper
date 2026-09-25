@@ -316,6 +316,7 @@ pub enum Section {
     Animation,
     Camera,
     Environment,
+    Image,
 }
 
 /// The values stepped through with `<` and `>`.
@@ -324,6 +325,11 @@ pub enum Cycler {
     Animation,
     Camera,
     Environment,
+    Brightness,
+    Shadows,
+    Tonemapping,
+    Exposure,
+    Bloom,
 }
 
 /// The text showing a cycler's current value.
@@ -339,6 +345,7 @@ pub enum UiButton {
     Skin(String),
     Previous(Cycler),
     Next(Cycler),
+    RestoreLook,
 }
 
 #[derive(Component, Debug, Clone)]

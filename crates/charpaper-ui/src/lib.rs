@@ -6,9 +6,11 @@ mod theme;
 mod widgets;
 
 use bevy::prelude::*;
+use charpaper_scene::ActiveLook;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
+use charpaper_scene::LookBackup;
 pub use config::UiConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -82,7 +84,14 @@ impl Plugin for CustomUiPlugin {
                     resource_changed::<CharacterState>.or_eager(resource_added::<CharacterClips>),
                 ),
                 scene_tab::show_scene_tab.run_if(resource_added::<ActiveSuite>),
-                scene_tab::show_scene_values.run_if(resource_changed::<CharacterState>),
+                scene_tab::show_rows.run_if(
+                    resource_changed::<CharacterState>.or_eager(resource_added::<ActiveSuite>),
+                ),
+                scene_tab::show_scene_values.run_if(
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_exists_and_changed::<ActiveLook>),
+                ),
+                scene_tab::show_restore.run_if(resource_changed::<LookBackup>),
             )
                 .chain(),
         );
