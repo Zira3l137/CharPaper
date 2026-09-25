@@ -302,7 +302,27 @@ pub enum UiContainer {
     MainMenu,
     TabBar,
     Page(Tab),
+    Section(Section),
+    OutfitGrid,
 }
+
+/// The groups of controls on the pages, so each can be shown once it has
+/// something in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Section {
+    Outfit,
+    Animation,
+}
+
+/// The values stepped through with `<` and `>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cycler {
+    Animation,
+}
+
+/// The text showing a cycler's current value.
+#[derive(Component)]
+pub struct CyclerValue(pub Cycler);
 
 #[derive(Component, Debug, Clone, PartialEq)]
 pub enum UiButton {
@@ -310,6 +330,9 @@ pub enum UiButton {
     RevealMenu,
     Exit,
     Tab(Tab),
+    Skin(String),
+    Previous(Cycler),
+    Next(Cycler),
 }
 
 #[derive(Component, Debug, Clone)]

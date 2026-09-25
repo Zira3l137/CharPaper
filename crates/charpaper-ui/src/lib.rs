@@ -1,9 +1,13 @@
 mod config;
 mod helpers;
+mod pages;
 mod theme;
 mod widgets;
 
 use bevy::prelude::*;
+use charpaper_scene::ActiveSuite;
+use charpaper_scene::CharacterClips;
+use charpaper_scene::CharacterState;
 pub use config::UiConfig;
 
 use crate::config::UiLocale;
@@ -44,9 +48,9 @@ pub struct UiState {
     pub tab: Tab,
 }
 
-/// The line under the title in the panel's header.
+/// The line under the title in the panel's header: the suite's name.
 #[derive(Component)]
-struct StatusText;
+pub(crate) struct StatusText;
 
 pub struct CustomUiPlugin {
     pub config: UiConfig,
@@ -59,7 +63,19 @@ impl Plugin for CustomUiPlugin {
         app.insert_resource(self.state.clone());
         app.add_systems(Startup, spawn_ui);
         app.add_systems(Update, (update_ui, style_tabs).run_if(resource_changed::<UiState>));
+        app.add_systems(
+            Update,
+            (
+                pages::fill_outfits.run_if(resource_added::<ActiveSuite>),
+                pages::style_outfits.run_if(resource_changed::<CharacterState>),
+                pages::show_animation.run_if(
+                    resource_changed::<CharacterState>.or(resource_added::<CharacterClips>),
+                ),
+            )
+                .chain(),
+        );
         app.add_observer(on_button_click);
+        app.add_observer(pages::on_scene_click);
     }
 }
 
@@ -167,7 +183,11 @@ pub fn spawn_ui(mut commands: Commands, config: Res<UiConfig>, state: Res<UiStat
                         Pickable::IGNORE,
                     ))
                     .with_children(|content| {
-                        content.spawn(page(Tab::Character, state.tab, ()));
+                        content.spawn(page(
+                            Tab::Character,
+                            state.tab,
+                            pages::character_page(locale),
+                        ));
                         content.spawn(page(Tab::Scene, state.tab, ()));
                     });
                 panel.spawn(footer(locale));
@@ -294,5 +314,6 @@ fn on_button_click(
             state.is_menu_closed = false;
         }
         UiButton::Tab(tab) => state.tab = *tab,
+        _ => {}
     }
 }

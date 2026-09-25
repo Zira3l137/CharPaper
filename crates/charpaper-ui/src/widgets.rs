@@ -6,7 +6,10 @@ use bevy::prelude::*;
 use crate::helpers::Background;
 use crate::helpers::BaseBackground;
 use crate::helpers::ButtonBuilder;
+use crate::helpers::Cycler;
+use crate::helpers::CyclerValue;
 use crate::helpers::UiButton;
+use crate::helpers::UiContainer;
 use crate::helpers::UiElement;
 use crate::helpers::UiNode;
 use crate::helpers::WithBackground;
@@ -46,6 +49,67 @@ pub(crate) fn glyph_button(glyph: &str, action: UiButton) -> impl Bundle {
         .width(CONTROL_HEIGHT)
         .edit_node(|n| n.flex_shrink = 0.0)
         .build_with(UiElement::Button(action))
+}
+
+/// A titled group of controls on a page. Starts hidden: a section only shows
+/// once there is something to put in it.
+pub(crate) fn section(title: &str, marker: UiContainer, content: impl Bundle) -> impl Bundle {
+    (
+        Node {
+            display: Display::None,
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(8.0),
+            ..default()
+        },
+        UiElement::Container(marker),
+        Pickable::IGNORE,
+        children![label(title, SMALL_SIZE, TEXT_DIM), content],
+    )
+}
+
+/// A label on the left and a value stepped through with `<` and `>`. The
+/// value text carries a [`CyclerValue`] so a system can rewrite it when the
+/// state behind it changes.
+pub(crate) fn cycler(title: &str, cycler: Cycler) -> impl Bundle {
+    (
+        Node {
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(12.0),
+            height: Val::Px(36.0),
+            ..default()
+        },
+        Pickable::IGNORE,
+        children![
+            (
+                Node { width: LABEL_WIDTH, flex_shrink: 0.0, ..default() },
+                Pickable::IGNORE,
+                children![label(title, BODY_SIZE, TEXT_LABEL)],
+            ),
+            (
+                Node { flex_grow: 1.0, column_gap: Val::Px(4.0), ..default() },
+                Pickable::IGNORE,
+                children![
+                    glyph_button("<", UiButton::Previous(cycler)),
+                    (
+                        Node {
+                            flex_grow: 1.0,
+                            height: CONTROL_HEIGHT,
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            border: UiRect::all(LINE),
+                            border_radius: BorderRadius::all(RADIUS),
+                            ..default()
+                        },
+                        BackgroundColor(WELL_BG),
+                        BorderColor::all(BORDER),
+                        Pickable::IGNORE,
+                        children![(label("-", BODY_SIZE, TEXT), CyclerValue(cycler))],
+                    ),
+                    glyph_button(">", UiButton::Next(cycler)),
+                ],
+            ),
+        ],
+    )
 }
 
 /// Changes a button's resting fill. Hover feedback brightens from
