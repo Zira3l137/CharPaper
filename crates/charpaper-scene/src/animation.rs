@@ -14,6 +14,7 @@ use crate::SceneConfig;
 use crate::binding::InstanceReady;
 use crate::character::Armature;
 use crate::character::CharacterState;
+use crate::character::prefer;
 use crate::suite::ActiveSuite;
 use crate::suite::asset_path;
 
@@ -125,6 +126,7 @@ pub(crate) fn build_graph(
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
     suite: Option<Res<ActiveSuite>>,
+    config: Res<SceneConfig>,
     mut state: ResMut<CharacterState>,
 ) {
     let (Some(pending), Some(suite)) = (pending, suite) else {
@@ -163,10 +165,14 @@ pub(crate) fn build_graph(
         }
     }
 
+    state.animation = prefer(
+        suite.remembered(&config).animation,
+        |name| clips.contains_key(name),
+        suite.default_animation.clone(),
+    );
     commands.entity(armature).insert((AnimationGraphHandle(graphs.add(graph)), Playing::default()));
     commands.insert_resource(CharacterClips { clips });
     commands.remove_resource::<PendingClips>();
-    state.animation = suite.default_animation.clone();
 }
 
 /// A `once` clip hands back to the default animation when it ends. When the

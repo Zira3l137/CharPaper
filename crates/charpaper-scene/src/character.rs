@@ -6,7 +6,11 @@
 //! the renderer, so they do not cost frame time.
 
 use bevy::prelude::*;
+use charpaper_suite::ORBIT_CAMERA;
+use serde::Deserialize;
+use serde::Serialize;
 
+use crate::SceneConfig;
 use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
 use crate::suite::load_scene;
@@ -23,6 +27,50 @@ pub struct CharacterState {
     /// A camera from `cameras/`, by file name. `None` is the orbit camera,
     /// which the mouse only moves while it is the one in use.
     pub camera: Option<String>,
+}
+
+/// The viewer's choices for one suite, as kept between runs.
+///
+/// Each is a preference only. One the suite no longer offers, such as a
+/// renamed skin or a deleted camera, is ignored in favour of the suite's
+/// default rather than leaving the character bare.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Picks {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skin: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub animation: Option<String>,
+    /// [`ORBIT_CAMERA`] for the orbit camera. Unlike in [`CharacterState`],
+    /// `None` here means "no preference", not "orbit".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub camera: Option<String>,
+}
+
+impl Picks {
+    pub fn from_state(state: &CharacterState) -> Self {
+        Self {
+            skin: state.skin.clone(),
+            animation: state.animation.clone(),
+            camera: Some(state.camera.clone().unwrap_or_else(|| ORBIT_CAMERA.to_string())),
+        }
+    }
+}
+
+/// A remembered choice if `offered` still accepts it, otherwise `default`.
+pub(crate) fn prefer(
+    remembered: Option<String>,
+    offered: impl Fn(&str) -> bool,
+    default: Option<String>,
+) -> Option<String> {
+    match remembered {
+        Some(pick) if offered(&pick) => Some(pick),
+        Some(pick) => {
+            debug!("remembered choice {pick:?} is no longer offered; using the default");
+            default
+        }
+        None => default,
+    }
 }
 
 /// Parent of everything spawned from the suite, so replacing the suite is one
@@ -42,6 +90,7 @@ pub(crate) fn spawn_character(
     mut commands: Commands,
     suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
+    config: Res<SceneConfig>,
     mut state: ResMut<CharacterState>,
 ) {
     let Some(suite) = suite else {
@@ -74,7 +123,11 @@ pub(crate) fn spawn_character(
         ));
     }
 
-    state.skin = suite.default_skin.clone();
+    state.skin = prefer(
+        suite.remembered(&config).skin,
+        |skin| suite.skins.iter().any(|s| s.name == skin),
+        suite.default_skin.clone(),
+    );
 }
 
 pub(crate) fn show_selected_skin(

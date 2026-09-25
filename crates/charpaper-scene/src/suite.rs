@@ -15,6 +15,7 @@ use charpaper_suite::Severity;
 use charpaper_suite::Suite;
 
 use crate::CHARACTERS_SOURCE;
+use crate::Picks;
 use crate::SceneConfig;
 
 /// The suite being shown. Absent when no suite could be loaded.
@@ -23,6 +24,18 @@ use crate::SceneConfig;
 /// `Resource` itself.
 #[derive(Resource, Deref)]
 pub struct ActiveSuite(pub Suite);
+
+impl ActiveSuite {
+    /// The suite's folder name: how `--suite` names it, and how its
+    /// remembered choices are keyed.
+    pub fn folder(&self) -> String {
+        self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    }
+
+    pub(crate) fn remembered(&self, config: &SceneConfig) -> Picks {
+        config.remembered.get(&self.folder()).cloned().unwrap_or_default()
+    }
+}
 
 pub(crate) fn select_suite(mut commands: Commands, config: Res<SceneConfig>) {
     let Some(root) = choose(&config.characters_dir, config.suite.as_deref()) else {

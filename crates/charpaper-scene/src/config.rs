@@ -1,8 +1,11 @@
 //! Settings for the scene, owned by the crate that uses them.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use bevy::prelude::Resource;
+
+use crate::Picks;
 
 /// Derives `Resource` so the systems can read it with `Res<SceneConfig>`.
 ///
@@ -34,6 +37,10 @@ pub struct SceneConfig {
     /// How long switching animations blends the old into the new, in seconds.
     /// 0 switches instantly.
     pub animation_crossfade_secs: f32,
+
+    /// The viewer's last choices, keyed by suite folder name. They win over
+    /// the suite's own defaults wherever the suite still offers them.
+    pub remembered: BTreeMap<String, Picks>,
 }
 
 impl Default for SceneConfig {
@@ -47,6 +54,7 @@ impl Default for SceneConfig {
             characters_dir: PathBuf::from("characters"),
             suite: None,
             animation_crossfade_secs: 0.25,
+            remembered: BTreeMap::new(),
         }
     }
 }

@@ -12,9 +12,12 @@
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
+use charpaper_suite::ORBIT_CAMERA;
 
 use crate::OrbitCamera;
+use crate::SceneConfig;
 use crate::character::CharacterState;
+use crate::character::prefer;
 use crate::suite::ActiveSuite;
 use crate::suite::asset_path;
 use crate::update_camera_transform;
@@ -48,6 +51,7 @@ pub(crate) fn load_cameras(
     mut commands: Commands,
     suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
+    config: Res<SceneConfig>,
     mut state: ResMut<CharacterState>,
 ) {
     let Some(suite) = suite else {
@@ -65,7 +69,14 @@ pub(crate) fn load_cameras(
         })
         .collect();
     commands.insert_resource(PendingRigs(rigs));
-    state.camera = suite.default_camera.clone();
+    state.camera = match suite.remembered(&config).camera.as_deref() {
+        Some(ORBIT_CAMERA) => None,
+        remembered => prefer(
+            remembered.map(str::to_string),
+            |name| suite.cameras.iter().any(|c| c.name == name),
+            suite.default_camera.clone(),
+        ),
+    };
 }
 
 pub(crate) fn spawn_rigs(

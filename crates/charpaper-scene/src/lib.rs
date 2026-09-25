@@ -15,6 +15,7 @@ use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 pub use character::Character;
 pub use character::CharacterState;
+pub use character::Picks;
 pub use config::SceneConfig;
 pub use suite::ActiveSuite;
 
