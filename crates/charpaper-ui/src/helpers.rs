@@ -1,20 +1,6 @@
 use bevy::prelude::*;
 
-pub mod defaults {
-    #![allow(dead_code)]
-    use bevy::prelude::*;
-
-    pub(crate) const BTN_PADDING: Val = Val::Px(10.0);
-    pub(crate) const BTN_RADIUS: Val = Val::Px(8.0);
-    pub(crate) const BTN_BG_COLOR: Color = Color::srgba(0.1, 0.2, 0.5, 1.0);
-    pub(crate) const BTN_TEXT_SIZE: FontSize = FontSize::Px(16.0);
-    pub(crate) const BTN_WIDTH: Val = Val::Px(200.0);
-    pub(crate) const BTN_HEIGHT: Val = Val::Px(50.0);
-
-    pub(crate) const CONTAINER_BG_COLOR: Color = Color::hsva(0.0, 0.0, 0.1, 0.85);
-    pub(crate) const CONTAINER_BORDER_RADIUS: Val = Val::Px(8.0);
-    pub(crate) const CONTAINER_PADDING: Val = Val::Px(10.0);
-}
+use crate::Tab;
 
 const HOVER_DELTA: f32 = 0.08;
 const PRESS_DELTA: f32 = -0.08;
@@ -314,8 +300,8 @@ pub enum UiElement {
 #[derive(Component, Debug, Clone, PartialEq)]
 pub enum UiContainer {
     MainMenu,
-    Tab1,
-    Tab2,
+    TabBar,
+    Page(Tab),
 }
 
 #[derive(Component, Debug, Clone, PartialEq)]
@@ -323,6 +309,7 @@ pub enum UiButton {
     HideMenu,
     RevealMenu,
     Exit,
+    Tab(Tab),
 }
 
 #[derive(Component, Debug, Clone)]
