@@ -8,6 +8,7 @@ mod cli;
 mod config;
 mod input;
 mod logging;
+mod look_file;
 mod plugin;
 mod state;
 
@@ -28,6 +29,7 @@ use charpaper_suite::Suite;
 use charpaper_ui::CustomUiPlugin;
 
 use crate::config::AppConfig;
+use crate::look_file::LookFilePlugin;
 use crate::plugin::WallpaperPlugin;
 use crate::state::STATE_FILE;
 use crate::state::StatePlugin;
@@ -102,6 +104,7 @@ fn main() -> Result<()> {
         .add_plugins(ScenePlugin { config: config.scene.clone() })
         // TODO: Read UI locales into config on startup if available
         .add_plugins(CustomUiPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() })
+        .add_plugins(LookFilePlugin)
         .add_plugins(StatePlugin { path: state_path, saved: loaded.state, problem: loaded.problem })
         .run();
 
