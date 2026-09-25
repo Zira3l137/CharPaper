@@ -68,8 +68,12 @@ impl Plugin for CustomUiPlugin {
             (
                 pages::fill_outfits.run_if(resource_added::<ActiveSuite>),
                 pages::style_outfits.run_if(resource_changed::<CharacterState>),
+                // Eager, so `resource_added` runs every frame and its idea of
+                // "since last time" stays current; short-circuited behind a
+                // change on the same frame, it would report the clips as new
+                // once more on the next.
                 pages::show_animation.run_if(
-                    resource_changed::<CharacterState>.or(resource_added::<CharacterClips>),
+                    resource_changed::<CharacterState>.or_eager(resource_added::<CharacterClips>),
                 ),
                 pages::show_cameras.run_if(resource_added::<ActiveSuite>),
                 pages::show_camera.run_if(resource_changed::<CharacterState>),
