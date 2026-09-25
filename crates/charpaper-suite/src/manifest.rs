@@ -44,8 +44,10 @@ pub struct Manifest {
     pub animations: BTreeMap<String, ClipEntry>,
     #[serde(default)]
     pub environment: EnvironmentSection,
+    /// Settings for each environment, keyed by its name: the `.glb` file name
+    /// in `environment/` without its extension, or the name of its folder.
     #[serde(default)]
-    pub lighting: Lighting,
+    pub environments: BTreeMap<String, EnvironmentEntry>,
     #[serde(default)]
     pub post: Post,
     #[serde(default)]
@@ -97,46 +99,24 @@ pub enum PlayMode {
 #[derive(Deserialize, JsonSchema, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct EnvironmentSection {
-    /// A .glb/.gltf scene, relative to this file. Defaults to the only one in
-    /// `environment/`, if any.
-    pub scene: Option<PathBuf>,
-    /// A .ktx2 cubemap, relative to this file. Defaults to the only one in
-    /// `environment/`, if any.
-    pub skybox: Option<PathBuf>,
-    /// How bright the skybox looks, in cd/m². Defaults to 1000.
-    pub skybox_brightness: Option<f32>,
+    /// Environment shown at start. Defaults to the first in name order.
+    pub default: Option<String>,
 }
 
-/// Scene lighting. Anything left out uses the app's defaults.
-#[derive(Deserialize, JsonSchema, Debug, Clone, Default)]
+/// One environment's settings. Its lights come from its own `.glb`; these
+/// only adjust how the scene is shown while it is.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct Lighting {
-    pub sun: Option<Sun>,
-    pub ambient: Option<Ambient>,
-}
-
-/// A distant light shining in one direction everywhere, like the sun.
-#[derive(Deserialize, JsonSchema, Debug, Clone, Default)]
-#[serde(deny_unknown_fields)]
-pub struct Sun {
-    /// Brightness in lux. Overcast daylight is about 1000, direct sunlight
-    /// about 100000.
-    pub illuminance: Option<f32>,
-    /// sRGB color as [r, g, b], each 0.0 to 1.0.
-    pub color: Option<[f32; 3]>,
-    /// The direction the light travels as [x, y, z], not where it comes from.
-    /// Y is up.
-    pub direction: Option<[f32; 3]>,
-    pub shadows: Option<bool>,
-}
-
-/// Light that reaches everything evenly, so shadowed areas are not black.
-#[derive(Deserialize, JsonSchema, Debug, Clone, Default)]
-#[serde(deny_unknown_fields)]
-pub struct Ambient {
-    /// sRGB color as [r, g, b], each 0.0 to 1.0.
-    pub color: Option<[f32; 3]>,
+pub struct EnvironmentEntry {
+    /// How bright the skybox looks and how strongly the reflection maps light
+    /// the scene, in cd/m². Defaults to 1000.
     pub brightness: Option<f32>,
+    /// Whether the environment's lights cast shadows. glTF cannot say, so it
+    /// is set here. Defaults to true.
+    pub shadows: Option<bool>,
+    /// Exposure compensation in EV stops while this environment is shown,
+    /// replacing `post.exposure`. A sunlit scene needs far less than a room.
+    pub exposure: Option<f32>,
 }
 
 /// Effects applied to the finished image.

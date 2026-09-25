@@ -8,7 +8,7 @@
 //! ├── animations/   every .glb/.gltf here is picked up
 //! ├── skins/        one .glb/.gltf per skin, named after the file
 //! ├── cameras/      one .glb/.gltf per camera, named after the file
-//! └── environment/  optional scene and skybox
+//! └── environment/  per environment: a scene, a folder of maps, or both
 //! ```
 //!
 //! A skin is the whole visible character in one file, like a Blender
@@ -40,21 +40,22 @@ pub use inspect::inspect;
 pub use layout::AnimationFile;
 pub use layout::ClipBinding;
 pub use layout::ClipSet;
+pub use layout::DIFFUSE_MAP;
 pub use layout::Environment;
 pub use layout::ExportedCamera;
 pub use layout::ORBIT_CAMERA;
+pub use layout::SKYBOX_MAP;
+pub use layout::SPECULAR_MAP;
 pub use layout::Skin;
 pub use layout::Suite;
 pub use layout::discover;
-pub use manifest::Ambient;
 pub use manifest::Camera;
-pub use manifest::Lighting;
+pub use manifest::EnvironmentEntry;
 pub use manifest::MANIFEST_FILE;
 pub use manifest::Manifest;
 pub use manifest::PlayMode;
 pub use manifest::Post;
 pub use manifest::SCHEMA_VERSION;
-pub use manifest::Sun;
 pub use manifest::Tonemapping;
 
 /// `suite.toml` as a pretty-printed JSON Schema.

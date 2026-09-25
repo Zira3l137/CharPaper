@@ -95,12 +95,21 @@ fn camera(clips: &[&str]) -> String {
 }
 
 /// Just the fixed KTX2 header; inspection never reads further.
-fn ktx2(faces: u32, supercompression: u32) -> Vec<u8> {
+fn ktx2(faces: u32, levels: u32, supercompression: u32) -> Vec<u8> {
     let mut bytes = vec![0xAB, b'K', b'T', b'X', b' ', b'2', b'0', 0xBB, b'\r', b'\n', 0x1A, b'\n'];
-    for word in [0, 1, 64, 64, 0, 0, faces, 1, supercompression] {
+    for word in [0, 1, 64, 64, 0, 0, faces, levels, supercompression] {
         bytes.extend_from_slice(&u32::to_le_bytes(word));
     }
     bytes
+}
+
+/// A scene holding one directional light and nothing else.
+fn lit_scene() -> String {
+    r#"{"asset": {"version": "2.0"}, "scenes": [{"nodes": [0]}],
+        "extensionsUsed": ["KHR_lights_punctual"],
+        "extensions": {"KHR_lights_punctual": {"lights": [{"type": "directional"}]}},
+        "nodes": [{"name": "Sun", "extensions": {"KHR_lights_punctual": {"light": 0}}}]}"#
+        .to_string()
 }
 
 struct Fixture(PathBuf);
@@ -120,6 +129,7 @@ impl Fixture {
         fixture.write("skins/textures/ignored.gltf", "not a skin");
         fixture.write("cameras/closeup.gltf", &camera(&["Dolly"]));
         fixture.write("cameras/wide.gltf", &camera(&[]));
+        fixture.write("environment/stage.gltf", &lit_scene());
         fixture
     }
 
@@ -222,6 +232,9 @@ fn bad_manifests_are_rejected() {
         ("typo", "schema = 1\n[charater]", "not a valid suite manifest"),
         ("skin", "schema = 1\n[character]\ndefault_skin = \"gown\"", "default skin \"gown\""),
         ("camera", "schema = 1\n[camera]\ndefault = \"drone\"", "default camera \"drone\""),
+        ("env", "schema = 1\n[environment]\ndefault = \"moon\"", "default environment \"moon\""),
+        ("env-entry", "schema = 1\n[environments.moon]\nshadows = false", "environment \"moon\""),
+        ("lighting", "schema = 1\n[lighting.sun]\nilluminance = 1.0", "not a valid suite manifest"),
         ("skins", "schema = 1\n[skins.casual]", "not a valid suite manifest"),
     ];
     for (name, manifest, expected) in cases {
@@ -316,23 +329,64 @@ fn animation_pointer_clips_get_a_readable_error() {
 }
 
 #[test]
-fn environment_is_inspected() {
-    let fixture = Fixture::new("environment", "schema = 1");
+fn environments_come_from_scenes_and_map_folders() {
+    let manifest =
+        "schema = 1\n[environment]\ndefault = \"room\"\n[environments.room]\nexposure = 2.0";
+    let fixture = Fixture::new("environments", manifest);
     fixture.write("environment/room.gltf", &camera(&[]));
-    fixture.write("environment/sky.ktx2", ktx2(6, 2));
+    fixture.write("environment/room/diffuse.ktx2", ktx2(6, 1, 0));
+    fixture.write("environment/room/specular.ktx2", ktx2(6, 8, 2));
+    fixture.write("environment/sky/skybox.ktx2", ktx2(6, 1, 0));
+    fixture.write("environment/textures/wall.png", "not an environment");
     let suite = fixture.load().unwrap();
+
+    let names: Vec<&str> = suite.environments.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["room", "sky", "stage"]);
+    assert_eq!(suite.default_environment.as_deref(), Some("room"));
+    let room = &suite.environments[0];
+    assert_eq!(room.settings.exposure, Some(2.0));
+    assert!(room.reflections().is_some());
+    assert_eq!(room.sky(), Some(Path::new("environment/room/specular.ktx2")));
+    let sky = &suite.environments[1];
+    assert_eq!(
+        (sky.scene.as_ref(), sky.sky()),
+        (None, Some(Path::new("environment/sky/skybox.ktx2")))
+    );
+
     assert!(messages(&suite, Severity::Error).is_empty());
     let warnings = messages(&suite, Severity::Warning);
     assert!(warnings.iter().any(|w| w.contains("room.gltf: 1 camera(s) will be ignored")));
+    assert!(warnings.iter().any(|w| w.contains("\"sky\" has no lights and no reflection maps")));
+    assert!(!warnings.iter().any(|w| w.contains("\"room\" has no lights")), "{warnings:#?}");
+}
+
+#[test]
+fn environment_maps_are_inspected() {
+    let fixture = Fixture::new("environment-maps", "schema = 1");
+    fixture.write("environment/room/diffuse.ktx2", ktx2(6, 1, 0));
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("reflections need both")), "{warnings:#?}");
+
+    fixture.write("environment/room/specular.ktx2", ktx2(6, 1, 0));
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("has a single level")), "{warnings:#?}");
 
     let cases = [
-        (ktx2(1, 0), "has 1 face(s)"),
-        (ktx2(6, 1), "BasisLZ"),
+        (ktx2(1, 1, 0), "has 1 face(s)"),
+        (ktx2(6, 1, 1), "BasisLZ"),
         (b"not a texture at all, just some words".repeat(2), "not a KTX2 texture"),
     ];
     for (bytes, expected) in cases {
-        fixture.write("environment/sky.ktx2", bytes);
+        fixture.write("environment/room/diffuse.ktx2", bytes);
         let errors = messages(&fixture.load().unwrap(), Severity::Error);
         assert!(errors.iter().any(|e| e.contains(expected)), "{expected}: {errors:#?}");
     }
+}
+
+#[test]
+fn a_suite_without_environments_is_warned_about() {
+    let fixture = Fixture::new("no-environment", "schema = 1");
+    fs::remove_dir_all(fixture.0.join("environment")).unwrap();
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("no environments")), "{warnings:#?}");
 }

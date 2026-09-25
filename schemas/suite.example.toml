@@ -21,19 +21,12 @@ clip = "Wave"
 mode = "once"
 
 [environment]
-scene = "environment/room.glb"
-skybox = "environment/sky.ktx2"
-skybox_brightness = 1000.0
+default = "room"
 
-[lighting.sun]
-illuminance = 10000.0
-color = [1.0, 0.96, 0.9]
-direction = [-0.5, -1.0, -0.3]
+[environments.room]
+brightness = 1000.0
 shadows = true
-
-[lighting.ambient]
-color = [0.6, 0.7, 1.0]
-brightness = 300.0
+exposure = 1.5
 
 [post]
 tonemapping = "tony_mc_mapface"

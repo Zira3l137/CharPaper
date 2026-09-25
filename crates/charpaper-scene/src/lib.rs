@@ -11,6 +11,7 @@ mod suite;
 
 pub use animation::CharacterClips;
 use bevy::camera::visibility::VisibilitySystems;
+use bevy::light::GlobalAmbientLight;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 pub use character::Character;
@@ -64,6 +65,7 @@ impl Plugin for ScenePlugin {
             .add_observer(binding::mark_ready)
             .add_observer(cameras::on_rig_ready)
             .init_resource::<CharacterState>()
+            .insert_resource(GlobalAmbientLight::NONE)
             .add_systems(
                 Startup,
                 (

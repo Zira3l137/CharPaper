@@ -15,7 +15,7 @@ use tracing::debug;
 
 use crate::error::SuiteError;
 use crate::manifest::Camera;
-use crate::manifest::Lighting;
+use crate::manifest::EnvironmentEntry;
 use crate::manifest::MANIFEST_FILE;
 use crate::manifest::Manifest;
 use crate::manifest::PlayMode;
@@ -30,6 +30,11 @@ const CAMERAS_DIR: &str = "cameras";
 /// An exported camera cannot take this name.
 pub const ORBIT_CAMERA: &str = "orbit";
 const ENVIRONMENT_DIR: &str = "environment";
+
+/// The pre-baked maps an environment's folder may hold, by exact file name.
+pub const SKYBOX_MAP: &str = "skybox.ktx2";
+pub const DIFFUSE_MAP: &str = "diffuse.ktx2";
+pub const SPECULAR_MAP: &str = "specular.ktx2";
 
 #[derive(Debug, Clone)]
 pub struct Suite {
@@ -46,8 +51,9 @@ pub struct Suite {
     pub cameras: Vec<ExportedCamera>,
     /// `None` is the orbit camera.
     pub default_camera: Option<String>,
-    pub environment: Environment,
-    pub lighting: Lighting,
+    /// Sorted by name.
+    pub environments: Vec<Environment>,
+    pub default_environment: Option<String>,
     pub post: Post,
     pub camera: Camera,
 }
@@ -88,11 +94,30 @@ pub struct ExportedCamera {
     pub file: PathBuf,
 }
 
+/// What surrounds the character: `environment/<name>.glb`, a folder
+/// `environment/<name>/` of pre-baked maps, or both. A folder alone is a
+/// sky-only environment.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Environment {
+    pub name: String,
     pub scene: Option<PathBuf>,
+    /// Without its own, the specular map doubles as the skybox: its sharpest
+    /// level is the unblurred surroundings.
     pub skybox: Option<PathBuf>,
-    pub skybox_brightness: Option<f32>,
+    pub diffuse: Option<PathBuf>,
+    pub specular: Option<PathBuf>,
+    pub settings: EnvironmentEntry,
+}
+
+impl Environment {
+    /// Reflections need both maps; either alone is ignored.
+    pub fn reflections(&self) -> Option<(&Path, &Path)> {
+        Some((self.diffuse.as_deref()?, self.specular.as_deref()?))
+    }
+
+    pub fn sky(&self) -> Option<&Path> {
+        self.skybox.as_deref().or(self.specular.as_deref())
+    }
 }
 
 impl Suite {
@@ -127,6 +152,7 @@ impl Suite {
             .into_iter()
             .map(|(name, file)| Skin { name, file })
             .collect();
+        let environments = resolve_environments(root, &manifest)?;
 
         let default_skin = match manifest.character.default_skin {
             Some(name) if !skins.iter().any(|s| s.name == name) => {
@@ -158,18 +184,12 @@ impl Suite {
             Some(name) => Some(name.to_string()),
         };
 
-        let environment = Environment {
-            scene: match &manifest.environment.scene {
-                Some(path) => Some(existing(root, path)?),
-                None => sole(root, ENVIRONMENT_DIR, "`environment/`", is_gltf)?,
-            },
-            skybox: match &manifest.environment.skybox {
-                Some(path) => Some(existing(root, path)?),
-                None => {
-                    sole(root, ENVIRONMENT_DIR, "`environment/`", |p| has_extension(p, &["ktx2"]))?
-                }
-            },
-            skybox_brightness: manifest.environment.skybox_brightness,
+        let default_environment = match &manifest.environment.default {
+            Some(name) if !environments.iter().any(|e| &e.name == name) => {
+                return Err(SuiteError::UnknownDefault { kind: "environment", name: name.clone() });
+            }
+            Some(name) => Some(name.clone()),
+            None => environments.first().map(|e| e.name.clone()),
         };
 
         Ok(Self {
@@ -182,8 +202,8 @@ impl Suite {
             default_animation: manifest.character.default_animation,
             cameras,
             default_camera,
-            environment,
-            lighting: manifest.lighting,
+            environments,
+            default_environment,
             post: manifest.post,
             camera: manifest.camera,
         })
@@ -233,6 +253,52 @@ fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationF
 /// Every .glb/.gltf directly in `dir`, named after its file and sorted by
 /// name. Sub-folders are left alone, so a `.gltf` can keep its `.bin` and
 /// textures in one.
+/// A folder counts only when it holds a map or shares its name with a scene
+/// file. A `.gltf` scene's own textures folder is neither, and would otherwise
+/// show up as an empty environment.
+fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environment>, SuiteError> {
+    let mut found: BTreeMap<String, Environment> =
+        named_files(root, ENVIRONMENT_DIR, "environment")?
+            .into_iter()
+            .map(|(name, scene)| {
+                let environment =
+                    Environment { name: name.clone(), scene: Some(scene), ..Default::default() };
+                (name, environment)
+            })
+            .collect();
+
+    for folder in read_dir(&root.join(ENVIRONMENT_DIR))?.into_iter().filter(|p| p.is_dir()) {
+        let Some(name) = folder.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+            continue;
+        };
+        let map = |file: &str| {
+            let path = Path::new(ENVIRONMENT_DIR).join(&name).join(file);
+            root.join(&path).is_file().then_some(path)
+        };
+        let (skybox, diffuse, specular) = (map(SKYBOX_MAP), map(DIFFUSE_MAP), map(SPECULAR_MAP));
+        let has_maps = skybox.is_some() || diffuse.is_some() || specular.is_some();
+        if !has_maps && !found.contains_key(&name) {
+            continue;
+        }
+        let environment = found
+            .entry(name.clone())
+            .or_insert_with(|| Environment { name: name.clone(), ..Default::default() });
+        environment.skybox = skybox;
+        environment.diffuse = diffuse;
+        environment.specular = specular;
+        debug!("environment {name:?}: maps folder found");
+    }
+
+    for (name, settings) in &manifest.environments {
+        let Some(environment) = found.get_mut(name) else {
+            return Err(SuiteError::UnknownEntry { kind: "environment", name: name.clone() });
+        };
+        environment.settings = settings.clone();
+    }
+
+    Ok(found.into_values().collect())
+}
+
 fn named_files(
     root: &Path,
     dir: &str,

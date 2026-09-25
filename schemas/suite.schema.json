@@ -20,8 +20,12 @@
     "environment": {
       "$ref": "#/$defs/EnvironmentSection"
     },
-    "lighting": {
-      "$ref": "#/$defs/Lighting"
+    "environments": {
+      "description": "Settings for each environment, keyed by its name: the `.glb` file name\nin `environment/` without its extension, or the name of its folder.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/EnvironmentEntry"
+      }
     },
     "name": {
       "description": "Name shown in the app. Defaults to the folder name.",
@@ -46,33 +50,6 @@
     "schema"
   ],
   "$defs": {
-    "Ambient": {
-      "description": "Light that reaches everything evenly, so shadowed areas are not black.",
-      "type": "object",
-      "properties": {
-        "brightness": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "float"
-        },
-        "color": {
-          "description": "sRGB color as [r, g, b], each 0.0 to 1.0.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "number",
-            "format": "float"
-          },
-          "maxItems": 3,
-          "minItems": 3
-        }
-      },
-      "additionalProperties": false
-    },
     "Camera": {
       "description": "Which camera the app starts with, and where the built-in orbit camera\nstarts. The user can switch cameras, and orbit and zoom the orbit camera.",
       "type": "object",
@@ -176,57 +153,45 @@
         "file"
       ]
     },
-    "EnvironmentSection": {
-      "description": "What surrounds the character.",
+    "EnvironmentEntry": {
+      "description": "One environment's settings. Its lights come from its own `.glb`; these\nonly adjust how the scene is shown while it is.",
       "type": "object",
       "properties": {
-        "scene": {
-          "description": "A .glb/.gltf scene, relative to this file. Defaults to the only one in\n`environment/`, if any.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "skybox": {
-          "description": "A .ktx2 cubemap, relative to this file. Defaults to the only one in\n`environment/`, if any.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "skybox_brightness": {
-          "description": "How bright the skybox looks, in cd/m². Defaults to 1000.",
+        "brightness": {
+          "description": "How bright the skybox looks and how strongly the reflection maps light\nthe scene, in cd/m². Defaults to 1000.",
           "type": [
             "number",
             "null"
           ],
           "format": "float"
+        },
+        "exposure": {
+          "description": "Exposure compensation in EV stops while this environment is shown,\nreplacing `post.exposure`. A sunlit scene needs far less than a room.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "shadows": {
+          "description": "Whether the environment's lights cast shadows. glTF cannot say, so it\nis set here. Defaults to true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
     },
-    "Lighting": {
-      "description": "Scene lighting. Anything left out uses the app's defaults.",
+    "EnvironmentSection": {
+      "description": "What surrounds the character.",
       "type": "object",
       "properties": {
-        "ambient": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Ambient"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "sun": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Sun"
-            },
-            {
-              "type": "null"
-            }
+        "default": {
+          "description": "Environment shown at start. Defaults to the first in name order.",
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -280,53 +245,6 @@
             {
               "type": "null"
             }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "Sun": {
-      "description": "A distant light shining in one direction everywhere, like the sun.",
-      "type": "object",
-      "properties": {
-        "color": {
-          "description": "sRGB color as [r, g, b], each 0.0 to 1.0.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "number",
-            "format": "float"
-          },
-          "maxItems": 3,
-          "minItems": 3
-        },
-        "direction": {
-          "description": "The direction the light travels as [x, y, z], not where it comes from.\nY is up.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "number",
-            "format": "float"
-          },
-          "maxItems": 3,
-          "minItems": 3
-        },
-        "illuminance": {
-          "description": "Brightness in lux. Overcast daylight is about 1000, direct sunlight\nabout 100000.",
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "float"
-        },
-        "shadows": {
-          "type": [
-            "boolean",
-            "null"
           ]
         }
       },

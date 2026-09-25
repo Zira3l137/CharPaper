@@ -1,9 +1,9 @@
-//! Everything around the character: the environment, lights, the camera and
-//! its effects.
+//! Everything around the character: the environment, the camera and its
+//! effects.
 //!
-//! Each setting starts from an engine default below and is replaced by
-//! whatever `suite.toml` says. A later user-override layer slots in between
-//! the suite and the value used.
+//! There is no built-in lighting. The environment's own lights and reflection
+//! maps are all that light the character, so the app's global ambient light
+//! is switched off in `ScenePlugin`.
 
 use bevy::camera::Exposure;
 use bevy::core_pipeline::tonemapping::Tonemapping;
@@ -21,12 +21,6 @@ use crate::suite::asset_path;
 use crate::suite::load_scene;
 use crate::update_camera_transform;
 
-const SUN_ILLUMINANCE: f32 = light_consts::lux::OVERCAST_DAY;
-const SUN_COLOR: [f32; 3] = [1.0, 1.0, 1.0];
-const SUN_DIRECTION: [f32; 3] = [-4.0, -8.0, -4.0];
-const SUN_SHADOWS: bool = true;
-const AMBIENT_COLOR: [f32; 3] = [0.6, 0.7, 1.0];
-const AMBIENT_BRIGHTNESS: f32 = 200.0;
 const TONEMAPPING: Tonemapping = Tonemapping::TonyMcMapface;
 const EXPOSURE_COMPENSATION: f32 = 0.0;
 const BLOOM: f32 = 0.0;
@@ -42,27 +36,8 @@ pub(crate) fn spawn_stage(
     suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
 ) {
-    let lighting = suite.as_ref().map(|s| s.lighting.clone()).unwrap_or_default();
     let post = suite.as_ref().map(|s| s.post.clone()).unwrap_or_default();
     let view = suite.as_ref().map(|s| s.camera.clone()).unwrap_or_default();
-    let sun = lighting.sun.unwrap_or_default();
-    let ambient = lighting.ambient.unwrap_or_default();
-
-    let shadows = sun.shadows.unwrap_or(SUN_SHADOWS);
-    commands.spawn((
-        Name::new("Sun"),
-        DirectionalLight {
-            illuminance: sun.illuminance.unwrap_or(SUN_ILLUMINANCE),
-            color: srgb(sun.color.unwrap_or(SUN_COLOR)),
-            shadow_maps_enabled: shadows,
-            contact_shadows_enabled: shadows,
-            ..default()
-        },
-        // A directional light shines along its forward axis; `looking_to`
-        // copes with a direction parallel to Y or of zero length.
-        Transform::default()
-            .looking_to(Vec3::from_array(sun.direction.unwrap_or(SUN_DIRECTION)), Vec3::Y),
-    ));
 
     let orbit = OrbitCamera {
         focus: Vec3::from_array(view.focus.unwrap_or(ORBIT_FOCUS)),
@@ -76,27 +51,21 @@ pub(crate) fn spawn_stage(
     let mut transform = Transform::default();
     update_camera_transform(&mut transform, &orbit);
 
-    let mut camera = commands.spawn((
-        Camera3d::default(),
-        orbit,
-        Following::default(),
-        transform,
-        AmbientLight {
-            color: srgb(ambient.color.unwrap_or(AMBIENT_COLOR)),
-            brightness: ambient.brightness.unwrap_or(AMBIENT_BRIGHTNESS),
-            ..default()
-        },
-    ));
+    let mut camera = commands.spawn((Camera3d::default(), orbit, Following::default(), transform));
     apply_post(&mut camera, &post);
 
     let Some(suite) = suite else {
         return;
     };
-    let environment = &suite.environment;
-    if let Some(skybox) = &environment.skybox {
+    let Some(environment) =
+        suite.environments.iter().find(|e| Some(&e.name) == suite.default_environment.as_ref())
+    else {
+        return;
+    };
+    if let Some(sky) = environment.sky() {
         camera.insert(Skybox {
-            image: Some(assets.load(asset_path(&suite, skybox))),
-            brightness: environment.skybox_brightness.unwrap_or(SKYBOX_BRIGHTNESS),
+            image: Some(assets.load(asset_path(&suite, sky))),
+            brightness: environment.settings.brightness.unwrap_or(SKYBOX_BRIGHTNESS),
             ..default()
         });
     }
@@ -137,8 +106,4 @@ fn to_bevy(from: SuiteTonemapping) -> Tonemapping {
         SuiteTonemapping::TonyMcMapface => Tonemapping::TonyMcMapface,
         SuiteTonemapping::BlenderFilmic => Tonemapping::BlenderFilmic,
     }
-}
-
-fn srgb([r, g, b]: [f32; 3]) -> Color {
-    Color::srgb(r, g, b)
 }
