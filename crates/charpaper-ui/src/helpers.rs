@@ -312,12 +312,14 @@ pub enum UiContainer {
 pub enum Section {
     Outfit,
     Animation,
+    Camera,
 }
 
 /// The values stepped through with `<` and `>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cycler {
     Animation,
+    Camera,
 }
 
 /// The text showing a cycler's current value.

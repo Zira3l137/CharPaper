@@ -71,6 +71,8 @@ impl Plugin for CustomUiPlugin {
                 pages::show_animation.run_if(
                     resource_changed::<CharacterState>.or(resource_added::<CharacterClips>),
                 ),
+                pages::show_cameras.run_if(resource_added::<ActiveSuite>),
+                pages::show_camera.run_if(resource_changed::<CharacterState>),
             )
                 .chain(),
         );
@@ -188,7 +190,7 @@ pub fn spawn_ui(mut commands: Commands, config: Res<UiConfig>, state: Res<UiStat
                             state.tab,
                             pages::character_page(locale),
                         ));
-                        content.spawn(page(Tab::Scene, state.tab, ()));
+                        content.spawn(page(Tab::Scene, state.tab, pages::scene_page(locale)));
                     });
                 panel.spawn(footer(locale));
             })
@@ -231,17 +233,24 @@ fn header() -> impl Bundle {
 
 /// A flex row rather than the design's grid, so a tab can be hidden without
 /// leaving an empty column behind.
+///
+/// Every tab but the first starts hidden and the bar with them, until a page
+/// has something to show. A bar with a single tab would only take up room.
 fn tab_bar(locale: &UiLocale) -> impl Bundle {
     let tab = |tab: Tab| {
         button(tab.title(locale))
             .edit_node(|n| {
                 n.flex_grow = 1.0;
                 n.flex_basis = Val::ZERO;
+                if tab != Tab::default() {
+                    n.display = Display::None;
+                }
             })
             .build_with(UiElement::Button(UiButton::Tab(tab)))
     };
     (
         Node {
+            display: Display::None,
             flex_shrink: 0.0,
             column_gap: Val::Px(4.0),
             padding: UiRect::axes(Val::Px(16.0), Val::Px(12.0)),
