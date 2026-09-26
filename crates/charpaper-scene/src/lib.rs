@@ -77,6 +77,7 @@ impl Plugin for ScenePlugin {
             .add_observer(cameras::on_rig_ready)
             .init_resource::<CharacterState>()
             .init_resource::<character::ShownSkin>()
+            .init_resource::<cameras::ShownRig>()
             // No built-in lighting: the environment's own lights and maps are
             // all that light the character.
             .insert_resource(GlobalAmbientLight::NONE)
@@ -93,7 +94,7 @@ impl Plugin for ScenePlugin {
                     (
                         character::spawn_character,
                         animation::load_clips,
-                        cameras::load_cameras,
+                        cameras::choose_camera,
                         environment::choose_environment,
                         stage::spawn_stage,
                     ),
@@ -113,7 +114,7 @@ impl Plugin for ScenePlugin {
                     binding::bind_skins,
                     render::fit_scene_target,
                     render::apply_anti_aliasing.run_if(resource_changed::<RenderSettings>),
-                    cameras::spawn_rigs,
+                    (cameras::switch_rig, cameras::spawn_rig).chain(),
                     (
                         environment::switch_environment,
                         environment::finish_bakes,

@@ -6,8 +6,9 @@
 //! the moment it spawns, so it never renders. It only carries a transform,
 //! animated or not, and a projection for the real camera to copy.
 //!
-//! A rig's clip loops on its own clock from the moment the rig spawns, whether
-//! or not anyone is looking through it.
+//! Only the rig being looked through is loaded. Its clip loops on its own
+//! clock from the moment it spawns, so switching back to a camera starts its
+//! clip from the beginning.
 
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
@@ -22,15 +23,22 @@ use crate::suite::ActiveSuite;
 use crate::suite::asset_path;
 use crate::update_camera_transform;
 
-/// Camera files still loading. Removed once every rig has spawned.
-#[derive(Resource)]
-pub(crate) struct PendingRigs(Vec<(String, Handle<Gltf>)>);
+/// The rig in use, as opposed to [`CharacterState::camera`], the one asked
+/// for. Only that one rig is loaded; the others are not in memory at all.
+#[derive(Resource, Default)]
+pub(crate) struct ShownRig {
+    name: Option<String>,
+    root: Option<Entity>,
+    /// Its file while it loads; the rig spawns once it has.
+    loading: Option<Handle<Gltf>>,
+}
 
 #[derive(Component)]
 pub(crate) struct CameraRig {
     pub name: String,
     clip: Option<Handle<AnimationClip>>,
-    /// Keeps the file's assets alive for as long as the rig exists.
+    /// Keeps the file's assets alive for as long as the rig exists, and no
+    /// longer.
     _file: Handle<Gltf>,
 }
 
@@ -44,31 +52,14 @@ pub(crate) struct Lens(pub Entity);
 #[derive(Component, Default)]
 pub(crate) struct Following(Option<String>);
 
-/// Loads each file whole, as a `Gltf`, rather than just its scene like the
-/// character's files: the rig needs the file's clip too, and a missing
-/// `#Animation0` label would be a load error for every static camera.
-pub(crate) fn load_cameras(
-    mut commands: Commands,
+pub(crate) fn choose_camera(
     suite: Option<Res<ActiveSuite>>,
-    assets: Res<AssetServer>,
     config: Res<SceneConfig>,
     mut state: ResMut<CharacterState>,
 ) {
     let Some(suite) = suite else {
         return;
     };
-    let rigs = suite
-        .cameras
-        .iter()
-        .map(|camera| {
-            let file = assets
-                .load_builder()
-                .with_settings(|s: &mut GltfLoaderSettings| s.load_lights = false)
-                .load(asset_path(&suite, &camera.file));
-            (camera.name.clone(), file)
-        })
-        .collect();
-    commands.insert_resource(PendingRigs(rigs));
     state.camera = match suite.remembered(&config).camera.as_deref() {
         Some(ORBIT_CAMERA) => None,
         remembered => prefer(
@@ -79,44 +70,69 @@ pub(crate) fn load_cameras(
     };
 }
 
-pub(crate) fn spawn_rigs(
+/// Swaps the rig for the one asked for. The file is loaded whole, as a
+/// `Gltf`, rather than just its scene like the character's files: the rig
+/// needs the file's clip too, and a missing `#Animation0` label would be a
+/// load error for every static camera.
+pub(crate) fn switch_rig(
     mut commands: Commands,
-    pending: Option<ResMut<PendingRigs>>,
+    state: Res<CharacterState>,
+    suite: Option<Res<ActiveSuite>>,
+    assets: Res<AssetServer>,
+    mut shown: ResMut<ShownRig>,
+) {
+    if shown.name == state.camera {
+        return;
+    }
+    let Some(suite) = suite else {
+        return;
+    };
+    if let Some(root) = shown.root.take() {
+        commands.entity(root).despawn();
+    }
+    shown.name = state.camera.clone();
+    shown.loading =
+        state.camera.as_ref().and_then(|name| suite.cameras.iter().find(|c| &c.name == name)).map(
+            |camera| {
+                assets
+                    .load_builder()
+                    .with_settings(|s: &mut GltfLoaderSettings| s.load_lights = false)
+                    .load(asset_path(&suite, &camera.file))
+            },
+        );
+}
+
+pub(crate) fn spawn_rig(
+    mut commands: Commands,
+    mut shown: ResMut<ShownRig>,
     assets: Res<AssetServer>,
     gltfs: Res<Assets<Gltf>>,
 ) {
-    let Some(mut pending) = pending else {
+    let (Some(name), Some(file)) = (shown.name.clone(), shown.loading.clone()) else {
         return;
     };
-
-    pending.0.retain(|(name, file)| {
-        if assets.load_state(file.id()).is_failed() {
-            warn!("camera {name:?}: its file failed to load");
-            return false;
-        }
-        let Some(gltf) = gltfs.get(file) else {
-            return true;
-        };
-        let Some(scene) = gltf.default_scene.clone().or_else(|| gltf.scenes.first().cloned())
-        else {
-            warn!("camera {name:?}: its file holds no scene");
-            return false;
-        };
-        commands.spawn((
-            Name::new(format!("Camera rig {name}")),
-            CameraRig {
-                name: name.clone(),
-                clip: gltf.animations.first().cloned(),
-                _file: file.clone(),
-            },
-            WorldAssetRoot(scene),
-        ));
-        false
-    });
-
-    if pending.0.is_empty() {
-        commands.remove_resource::<PendingRigs>();
+    if assets.load_state(file.id()).is_failed() {
+        warn!("camera {name:?}: its file failed to load");
+        shown.loading = None;
+        return;
     }
+    let Some(gltf) = gltfs.get(&file) else {
+        return;
+    };
+    shown.loading = None;
+    let Some(scene) = gltf.default_scene.clone().or_else(|| gltf.scenes.first().cloned()) else {
+        warn!("camera {name:?}: its file holds no scene");
+        return;
+    };
+    let clip = gltf.animations.first().cloned();
+    let root = commands
+        .spawn((
+            Name::new(format!("Camera rig {name}")),
+            CameraRig { name, clip, _file: file },
+            WorldAssetRoot(scene),
+        ))
+        .id();
+    shown.root = Some(root);
 }
 
 /// An observer rather than a system, so the rig's camera is switched off in
@@ -209,7 +225,9 @@ pub(crate) fn follow_selected(
             *transform = lens_global.compute_transform();
             *global = *lens_global;
         }
-        None if following.0.is_some() => {
+        // A rig still loading keeps the last view rather than flashing the
+        // orbit camera for the frames in between.
+        None if wanted.is_none() && following.0.is_some() => {
             *projection = Projection::default();
             update_camera_transform(&mut transform, orbit);
             *global = GlobalTransform::from(*transform);
