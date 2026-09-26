@@ -15,6 +15,7 @@ use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Picks;
+use charpaper_scene::RenderSettings;
 use charpaper_ui::UiState;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,6 +26,7 @@ pub const STATE_FILE: &str = "state.toml";
 #[serde(default)]
 pub struct SavedState {
     pub ui: UiState,
+    pub render: RenderSettings,
     /// Keyed by suite folder name, so each character keeps its own choices.
     pub suites: BTreeMap<String, Picks>,
 }
@@ -79,7 +81,11 @@ impl Plugin for StatePlugin {
         .add_systems(Startup, report_problem)
         .add_systems(
             Last,
-            save.run_if(resource_changed::<CharacterState>.or_eager(resource_changed::<UiState>)),
+            save.run_if(
+                resource_changed::<CharacterState>
+                    .or_eager(resource_changed::<UiState>)
+                    .or_eager(resource_changed::<RenderSettings>),
+            ),
         );
     }
 }
@@ -103,11 +109,13 @@ fn report_problem(mut file: ResMut<StateFile>) {
 fn save(
     mut file: ResMut<StateFile>,
     ui: Res<UiState>,
+    render: Res<RenderSettings>,
     character: Res<CharacterState>,
     suite: Option<Res<ActiveSuite>>,
 ) {
     let mut next = file.saved.clone();
     next.ui = ui.clone();
+    next.render = render.clone();
     if let Some(suite) = suite {
         let now = Picks::from_state(&character);
         let entry = next.suites.entry(suite.folder()).or_default();

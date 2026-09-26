@@ -9,6 +9,7 @@ mod config;
 mod input;
 mod logging;
 mod look_file;
+mod pacing;
 mod plugin;
 mod state;
 
@@ -31,6 +32,7 @@ use charpaper_ui::CustomUiPlugin;
 
 use crate::config::AppConfig;
 use crate::look_file::LookFilePlugin;
+use crate::pacing::PacingPlugin;
 use crate::plugin::WallpaperPlugin;
 use crate::state::STATE_FILE;
 use crate::state::StatePlugin;
@@ -63,6 +65,7 @@ fn main() -> Result<()> {
     let state_path = exe_dir.join(STATE_FILE);
     let loaded = state::load(&state_path);
     config.scene.remembered = loaded.state.suites.clone();
+    config.scene.render = loaded.state.render.clone();
     let characters =
         config.scene.characters_dir.to_str().with_context(|| {
             format!("{} is not valid UTF-8", config.scene.characters_dir.display())
@@ -106,6 +109,7 @@ fn main() -> Result<()> {
                 .set(logging::plugin(args.log_level, args.bevy_log_level)),
         )
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
+        .add_plugins(PacingPlugin)
         .add_plugins(ScenePlugin { config: config.scene.clone() })
         // TODO: Read UI locales into config on startup if available
         .add_plugins(CustomUiPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() })

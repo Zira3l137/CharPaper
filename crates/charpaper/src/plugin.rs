@@ -21,7 +21,7 @@ use crate::input::replay_forwarded_pointer;
 struct WallpaperSettings(WallpaperConfig);
 
 #[derive(Resource)]
-struct BackendResource(Box<dyn WallpaperBackend>);
+pub(crate) struct BackendResource(pub(crate) Box<dyn WallpaperBackend>);
 
 #[derive(Resource, Default)]
 struct AttachState {
