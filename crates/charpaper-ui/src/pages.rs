@@ -9,6 +9,7 @@ use charpaper_scene::ActiveSuite;
 use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
+use charpaper_scene::Expressions;
 use charpaper_scene::SkinObjects;
 
 use crate::StatusText;
@@ -71,6 +72,11 @@ pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
             UiContainer::Section(Section::Animation),
             cycler(locale.get_or("label.animation", "Animation"), Cycler::Animation),
         ),
+        section(
+            locale.get_or("section.expression", "EXPRESSION"),
+            UiContainer::Section(Section::Expression),
+            cycler(locale.get_or("label.expression", "Expression"), Cycler::Expression),
+        ),
     ]
 }
 
@@ -119,6 +125,28 @@ pub(crate) fn style_outfits(
         let worn = state.skin.as_ref() == Some(name);
         paint(&mut base, &mut background, if worn { SELECTED_BG } else { BUTTON_BG });
         *border = BorderColor::all(if worn { ACCENT } else { BORDER });
+    }
+}
+
+/// Shown while the worn skin has expressions: they arrive with its file, so
+/// the section follows each skin change. Neutral is always the first option.
+pub(crate) fn show_expression(
+    state: Res<CharacterState>,
+    expressions: Res<Expressions>,
+    config: Res<UiConfig>,
+    mut sections: Query<(&UiElement, &mut Node)>,
+    mut values: Query<(&CyclerValue, &mut Text)>,
+) {
+    for (element, mut node) in &mut sections {
+        if *element == UiElement::Container(UiContainer::Section(Section::Expression)) {
+            node.display = if expressions.0.is_empty() { Display::None } else { Display::Flex };
+        }
+    }
+    let neutral = config.locale.get_or("expression.neutral", "Neutral");
+    for (value, mut text) in &mut values {
+        if value.0 == Cycler::Expression {
+            text.0 = state.expression().unwrap_or(neutral).to_string();
+        }
     }
 }
 
@@ -253,6 +281,7 @@ pub(crate) fn on_scene_click(
     elements: Query<&UiElement>,
     clips: Option<Res<CharacterClips>>,
     available: Res<AvailableSuites>,
+    expressions: Res<Expressions>,
     mut state: ResMut<CharacterState>,
     mut ui: ResMut<UiState>,
 ) {
@@ -278,6 +307,19 @@ pub(crate) fn on_scene_click(
             let forward = matches!(button, UiButton::Next(_));
             if let Some(next) = step(&options, &state.suite, forward) {
                 state.suite = next;
+            }
+        }
+        UiButton::Previous(Cycler::Expression) | UiButton::Next(Cycler::Expression) => {
+            let Some(skin) = state.skin.clone() else {
+                return;
+            };
+            // Neutral is kept as an empty name; see `CharacterState::expressions`.
+            let options: Vec<String> =
+                std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect();
+            let current = state.expression().unwrap_or_default().to_string();
+            let forward = matches!(button, UiButton::Next(_));
+            if let Some(next) = step(&options, &current, forward) {
+                state.expressions.insert(skin, next);
             }
         }
         UiButton::Previous(Cycler::Animation) | UiButton::Next(Cycler::Animation) => {

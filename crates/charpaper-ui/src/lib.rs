@@ -12,6 +12,7 @@ use charpaper_scene::ActiveSuite;
 use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
+use charpaper_scene::Expressions;
 use charpaper_scene::LookBackup;
 use charpaper_scene::RenderSettings;
 use charpaper_scene::SkinObjects;
@@ -89,6 +90,9 @@ impl Plugin for CustomUiPlugin {
                 ),
                 pages::style_outfits.run_if(resource_changed::<CharacterState>),
                 pages::fill_objects.run_if(resource_changed::<SkinObjects>),
+                pages::show_expression.run_if(
+                    resource_changed::<CharacterState>.or_eager(resource_changed::<Expressions>),
+                ),
                 pages::show_objects.run_if(
                     resource_changed::<UiState>
                         .or_eager(resource_changed::<CharacterState>)
