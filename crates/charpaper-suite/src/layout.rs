@@ -40,7 +40,12 @@ pub const SPECULAR_MAP: &str = "specular.ktx2";
 pub struct Suite {
     pub root: PathBuf,
     pub name: String,
+    /// The file the armature comes from.
     pub model: PathBuf,
+    /// The suite has no model file of its own, so [`Suite::model`] is the
+    /// default skin, whose armature every skin carries anyway. Its meshes are
+    /// the skin's and must not be shown a second time with the armature.
+    pub model_is_skin: bool,
     /// Sorted by path.
     pub animations: Vec<AnimationFile>,
     /// Sorted by name.
@@ -198,11 +203,6 @@ impl Suite {
             None => root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
         };
 
-        let model = match &manifest.character.model {
-            Some(path) => existing(root, path)?,
-            None => sole(root, "", "the suite folder", is_gltf)?.ok_or(SuiteError::NoModel)?,
-        };
-
         let animations = resolve_animations(root, &manifest)?;
         let skins: Vec<Skin> = named_files(root, SKINS_DIR, "skin")?
             .into_iter()
@@ -222,6 +222,20 @@ impl Suite {
                 }
                 first
             }
+        };
+
+        let own_model = match &manifest.character.model {
+            Some(path) => Some(existing(root, path)?),
+            None => sole(root, "", "the suite folder", is_gltf)?,
+        };
+        let skeleton_skin = default_skin.as_ref().and_then(|d| skins.iter().find(|s| &s.name == d));
+        let (model, model_is_skin) = match (own_model, skeleton_skin) {
+            (Some(model), _) => (model, false),
+            (None, Some(skin)) => {
+                debug!("no model file; taking the armature from skin {:?}", skin.name);
+                (skin.file.clone(), true)
+            }
+            (None, None) => return Err(SuiteError::NoModel),
         };
 
         let cameras: Vec<ExportedCamera> = named_files(root, CAMERAS_DIR, "camera")?
@@ -252,6 +266,7 @@ impl Suite {
             root: root.to_path_buf(),
             name,
             model,
+            model_is_skin,
             animations,
             skins,
             default_skin,

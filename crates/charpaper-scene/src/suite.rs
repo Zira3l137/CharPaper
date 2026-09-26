@@ -19,6 +19,7 @@ use bevy::prelude::*;
 use charpaper_suite::Severity;
 use charpaper_suite::Suite;
 
+use crate::ARMATURE_SOURCE;
 use crate::CHARACTERS_SOURCE;
 use crate::CharacterClips;
 use crate::Expressions;
@@ -207,7 +208,7 @@ pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
 pub(crate) const GPU_ONLY: RenderAssetUsages = RenderAssetUsages::RENDER_WORLD;
 
 /// A skin's whole file, as a `Gltf`: its scene and its clips, which are the
-/// skin's expressions. Loaded like [`load_scene`] otherwise.
+/// skin's expressions. Cameras and lights are skipped, as for the armature.
 pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<Gltf> {
     assets
         .load_builder()
@@ -220,23 +221,33 @@ pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Han
         .load(asset_path(suite, file))
 }
 
-/// The model's scene. Scene 0 rather than the
-/// file's default scene, since Bevy has no label for the default one and
-/// Blender always exports the active scene as scene 0.
+/// The armature's scene. Scene 0 rather than the file's default scene, since
+/// Bevy has no label for the default one and Blender always exports the
+/// active scene as scene 0.
 ///
 /// Cameras and lights are skipped. Cameras have their own folder, and all
-/// lighting comes from the environment; a stray lamp exported with a skin
-/// would otherwise light the scene only while that skin is worn.
-pub(crate) fn load_scene(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<WorldAsset> {
+/// lighting comes from the environment. When the armature is borrowed from a
+/// skin, that skin's meshes, materials and clips are skipped too: the skin
+/// itself shows them when worn, and they would otherwise stay in memory while
+/// another skin is.
+pub(crate) fn load_armature(assets: &AssetServer, suite: &Suite) -> Handle<WorldAsset> {
+    let borrowed = suite.model_is_skin;
+    let path = asset_path(suite, &suite.model).with_source(ARMATURE_SOURCE);
     assets
         .load_builder()
-        .with_settings(|s: &mut GltfLoaderSettings| {
+        .with_settings(move |s: &mut GltfLoaderSettings| {
             s.load_cameras = false;
             s.load_lights = false;
-            s.load_meshes = GPU_ONLY;
-            s.load_materials = GPU_ONLY;
+            if borrowed {
+                s.load_meshes = RenderAssetUsages::empty();
+                s.load_materials = RenderAssetUsages::empty();
+                s.load_animations = false;
+            } else {
+                s.load_meshes = GPU_ONLY;
+                s.load_materials = GPU_ONLY;
+            }
         })
-        .load(GltfAssetLabel::Scene(0).from_asset(asset_path(suite, file)))
+        .load(GltfAssetLabel::Scene(0).from_asset(path))
 }
 
 /// `SuiteError` keeps details such as the TOML line and column in its source

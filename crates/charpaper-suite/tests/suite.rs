@@ -458,3 +458,19 @@ fn a_skins_clips_are_its_expressions() {
         "{warnings:#?}"
     );
 }
+
+#[test]
+fn without_a_model_file_the_armature_comes_from_the_default_skin() {
+    let fixture = Fixture::new("no-model", "schema = 1\n[character]\ndefault_skin = \"dress\"");
+    fs::remove_file(fixture.0.join("aki.gltf")).unwrap();
+    let suite = fixture.load().unwrap();
+    assert!(suite.model_is_skin);
+    assert_eq!(suite.model, Path::new("skins/dress.gltf"));
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(!warnings.iter().any(|w| w.contains("shown under every skin")), "{warnings:#?}");
+
+    fs::remove_dir_all(fixture.0.join("skins")).unwrap();
+    fixture.write("suite.toml", "schema = 1");
+    let err = fixture.load().unwrap_err();
+    assert!(err.to_string().contains("no model and no skin"), "{err}");
+}

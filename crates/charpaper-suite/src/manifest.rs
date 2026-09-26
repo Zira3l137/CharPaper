@@ -59,7 +59,9 @@ pub struct Manifest {
 #[serde(deny_unknown_fields)]
 pub struct CharacterSection {
     /// Path to the model (the armature), relative to this file. Only needed
-    /// when more than one .glb/.gltf sits next to this file.
+    /// when more than one .glb/.gltf sits next to this file. Without a model
+    /// file at all, the armature comes from the default skin, since every
+    /// skin carries a copy of it.
     pub model: Option<PathBuf>,
     /// Skin worn at start: a file name in `skins/` without its extension.
     /// Defaults to the first skin in name order.

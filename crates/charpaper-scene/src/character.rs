@@ -18,7 +18,7 @@ use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
 use crate::suite::load_gltf;
-use crate::suite::load_scene;
+use crate::suite::load_armature;
 
 /// What the viewer has picked. Systems react to changes, so writing here is
 /// how the UI will switch things.
@@ -188,7 +188,7 @@ pub(crate) fn spawn_character(
         Name::new("Suite armature"),
         Armature,
         ChildOf(character),
-        WorldAssetRoot(load_scene(&assets, &suite, &suite.model)),
+        WorldAssetRoot(load_armature(&assets, &suite)),
     ));
 
     let picks = suite.remembered(&remembered);

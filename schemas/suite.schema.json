@@ -120,7 +120,7 @@
           ]
         },
         "model": {
-          "description": "Path to the model (the armature), relative to this file. Only needed\nwhen more than one .glb/.gltf sits next to this file.",
+          "description": "Path to the model (the armature), relative to this file. Only needed\nwhen more than one .glb/.gltf sits next to this file. Without a model\nfile at all, the armature comes from the default skin, since every\nskin carries a copy of it.",
           "type": [
             "string",
             "null"

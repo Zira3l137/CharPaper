@@ -39,6 +39,12 @@ pub use suite::AvailableSuites;
 /// `characters://<suite>/<file>`.
 pub const CHARACTERS_SOURCE: &str = "characters";
 
+/// A second asset source over the same folder, used only for the armature.
+/// Bevy keeps one asset per path and ignores the settings of later loads, so
+/// when the armature is borrowed from a skin file it has to be read under a
+/// different path to be read without that skin's meshes.
+pub const ARMATURE_SOURCE: &str = "armature";
+
 pub const BASE_ZOOM_SPEED: f32 = 0.1;
 pub const BASE_PAN_SPEED: f32 = 0.001;
 pub const BASE_SENSITIVITY: f32 = 0.005;

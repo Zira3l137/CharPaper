@@ -114,7 +114,9 @@ pub fn inspect(suite: &Suite) -> Report {
     let bones = model_bones(&model, &suite.model, &mut report);
 
     let meshes = model.doc.nodes().filter(|n| n.mesh().is_some()).count();
-    if meshes == 0 && suite.skins.is_empty() {
+    if suite.model_is_skin {
+        // The meshes belong to the skin the armature was borrowed from.
+    } else if meshes == 0 && suite.skins.is_empty() {
         let message = "nothing to show: the model has no meshes and the suite has no skins";
         report.push(Severity::Error, None, message.to_string());
     } else if meshes > 0 && !suite.skins.is_empty() {

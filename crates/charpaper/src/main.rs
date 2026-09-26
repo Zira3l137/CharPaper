@@ -24,6 +24,7 @@ use bevy::prelude::*;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
 use charpaper_bake::BakeSettings;
+use charpaper_scene::ARMATURE_SOURCE;
 use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
 use charpaper_suite::ORBIT_CAMERA;
@@ -79,6 +80,10 @@ fn main() -> Result<()> {
         // before `DefaultPlugins`; registered later it only logs an error.
         .register_asset_source(
             CHARACTERS_SOURCE,
+            AssetSourceBuilder::platform_default(characters, None),
+        )
+        .register_asset_source(
+            ARMATURE_SOURCE,
             AssetSourceBuilder::platform_default(characters, None),
         )
         .add_plugins(

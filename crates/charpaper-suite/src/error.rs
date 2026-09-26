@@ -29,7 +29,10 @@ pub enum SuiteError {
     #[error("{0:?} does not exist in the suite folder")]
     Missing(PathBuf),
 
-    #[error("no model: put one .glb/.gltf next to suite.toml or set `character.model`")]
+    #[error(
+        "no model and no skin: put one .glb/.gltf next to suite.toml, set `character.model`, \
+         or add a skin to take the armature from"
+    )]
     NoModel,
 
     #[error("{place} holds several candidates ({found}); name one in suite.toml")]
