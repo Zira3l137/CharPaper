@@ -8,6 +8,8 @@
 //! another OS compiles this crate away to nothing instead of failing.
 
 #[cfg(windows)]
+mod activity;
+#[cfg(windows)]
 mod backend;
 #[cfg(windows)]
 mod desktop;

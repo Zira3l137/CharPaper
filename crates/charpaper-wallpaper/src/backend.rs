@@ -14,6 +14,18 @@ pub struct DesktopProbe {
     pub recommended: Option<AttachStrategy>,
 }
 
+/// What else is going on on screen, for pausing the wallpaper while nobody can
+/// see it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct DesktopActivity {
+    /// A game, video or presentation fills the screen.
+    pub fullscreen_app: bool,
+    /// Ordinary windows hide the whole desktop, a maximized one for example.
+    pub covered: bool,
+    /// The machine runs on battery rather than mains power.
+    pub on_battery: bool,
+}
+
 /// What actually happened during an attach.
 #[derive(Debug, Default)]
 pub struct AttachOutcome {
@@ -44,5 +56,11 @@ pub trait WallpaperBackend: Send + Sync + 'static {
     /// also the default, so backends that never swallow input skip this.
     fn forward_input(&mut self) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
         Ok(None)
+    }
+
+    /// Look at what else is on screen. Polled about once a second, so it has
+    /// to be cheap. The default knows nothing, which never pauses anything.
+    fn activity(&mut self) -> DesktopActivity {
+        DesktopActivity::default()
     }
 }

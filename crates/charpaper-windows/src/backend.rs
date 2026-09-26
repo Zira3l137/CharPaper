@@ -5,6 +5,7 @@
 
 use charpaper_wallpaper::AttachOutcome;
 use charpaper_wallpaper::AttachStrategy;
+use charpaper_wallpaper::DesktopActivity;
 use charpaper_wallpaper::DesktopProbe;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
@@ -14,6 +15,7 @@ use charpaper_wallpaper::WallpaperError;
 
 use tracing::debug;
 
+use crate::activity;
 use crate::desktop;
 use crate::pointer::DesktopPointer;
 use crate::sys;
@@ -77,6 +79,10 @@ impl WallpaperBackend for WindowsBackend {
             return Ok(None);
         };
         Ok(Some(Box::new(DesktopPointer::new(hwnd)?)))
+    }
+
+    fn activity(&mut self) -> DesktopActivity {
+        activity::desktop_activity()
     }
 }
 

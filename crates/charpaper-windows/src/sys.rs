@@ -167,6 +167,52 @@ pub const WHEEL_DELTA: i16 = 120;
 /// `GetAncestor` flag: walk parents all the way up to the top-level window.
 pub const GA_ROOT: u32 = 2;
 
+/// A monitor handle, as returned by `MonitorFromWindow`.
+pub type HMonitor = isize;
+
+/// What `GetMonitorInfoW` fills in. `rc_work` is the monitor minus the taskbar
+/// and any docked toolbars.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MonitorInfo {
+    pub cb_size: u32,
+    pub rc_monitor: Rect,
+    pub rc_work: Rect,
+    pub flags: u32,
+}
+
+/// What `GetSystemPowerStatus` fills in.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SystemPowerStatus {
+    /// 0 on battery, 1 on mains power, 255 unknown.
+    pub ac_line_status: u8,
+    pub battery_flag: u8,
+    pub battery_life_percent: u8,
+    pub system_status_flag: u8,
+    pub battery_life_time: u32,
+    pub battery_full_life_time: u32,
+}
+
+pub const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
+pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
+
+/// The window does not appear in the taskbar or Alt+Tab: tooltips, floating
+/// palettes and the like.
+pub const WS_EX_TOOLWINDOW: isize = 0x0000_0080;
+
+/// `DwmGetWindowAttribute` index: is the window cloaked, that is, hidden by the
+/// compositor while still counting as visible? Suspended store apps and
+/// windows on other virtual desktops are.
+pub const DWMWA_CLOAKED: u32 = 14;
+
+/// `SHQueryUserNotificationState` answers that mean something fills the
+/// screen: a fullscreen app, exclusive-fullscreen Direct3D, or Windows'
+/// presentation mode.
+pub const QUNS_BUSY: i32 = 2;
+pub const QUNS_RUNNING_D3D_FULL_SCREEN: i32 = 3;
+pub const QUNS_PRESENTATION_MODE: i32 = 4;
+
 // --- imports ---------------------------------------------------------------
 
 #[link(name = "user32")]
@@ -269,6 +315,26 @@ unsafe extern "system" {
     pub fn GetWindowLongW(hwnd: Hwnd, index: i32) -> i32;
     #[cfg(target_pointer_width = "32")]
     pub fn SetWindowLongW(hwnd: Hwnd, index: i32, value: i32) -> i32;
+
+    pub fn GetForegroundWindow() -> Hwnd;
+    pub fn IsWindowVisible(hwnd: Hwnd) -> Bool;
+    /// Minimized.
+    pub fn IsIconic(hwnd: Hwnd) -> Bool;
+    pub fn MonitorFromWindow(hwnd: Hwnd, flags: u32) -> HMonitor;
+    pub fn MonitorFromPoint(point: Point, flags: u32) -> HMonitor;
+    pub fn GetMonitorInfoW(monitor: HMonitor, info: *mut MonitorInfo) -> Bool;
+}
+
+#[link(name = "shell32")]
+unsafe extern "system" {
+    /// Returns an `HRESULT`; the answer comes out through `state`.
+    pub fn SHQueryUserNotificationState(state: *mut i32) -> i32;
+}
+
+#[link(name = "dwmapi")]
+unsafe extern "system" {
+    /// Returns an `HRESULT`, `0` on success.
+    pub fn DwmGetWindowAttribute(hwnd: Hwnd, attribute: u32, value: *mut u32, size: u32) -> i32;
 }
 
 #[link(name = "kernel32")]
@@ -278,6 +344,7 @@ unsafe extern "system" {
     pub fn GetCurrentThreadId() -> u32;
     /// `null` returns the handle of the running .exe.
     pub fn GetModuleHandleW(name: *const u16) -> HInstance;
+    pub fn GetSystemPowerStatus(status: *mut SystemPowerStatus) -> Bool;
 }
 
 // --- small safe wrappers ---------------------------------------------------
