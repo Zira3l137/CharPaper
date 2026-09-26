@@ -1,23 +1,53 @@
-//! Expressions: the clips stored in a skin's own file.
+//! Which clips of a skin are its expressions.
 //!
-//! Each named clip in a skin's `.glb` is one of that skin's expressions,
-//! named after the clip, which is the Blender action it was exported from.
-//! They key shape keys; the app loops the chosen one on the skin's faces, and
-//! stopping it returns them to the weights they were exported with.
+//! A clip in a skin's file is an expression when it keys shape keys and
+//! nothing else: the app loops the chosen one on that skin, and stopping it
+//! returns the keys to the weights they were exported with. A clip that also
+//! moves bones is a body animation that came along with the skin's export; it
+//! is ignored there, since body animations, correctives included, are played
+//! from `animations/`.
 
+use std::collections::BTreeSet;
 use std::path::Path;
+
+use gltf::Animation;
+use gltf::animation::Property;
 
 use crate::inspect::read_document;
 
 /// The most shape keys Bevy supports on one mesh.
 pub const MAX_SHAPE_KEYS: usize = 256;
 
-/// The expressions in a skin file, in name order. Reads only the file's JSON.
-pub fn expressions(path: &Path) -> Result<Vec<String>, String> {
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SkinClips {
+    /// Expression names, in name order.
+    pub expressions: Vec<String>,
+    /// The mesh objects any expression keys, by name. Expressions own them:
+    /// body animations never key their shape keys.
+    pub expression_meshes: BTreeSet<String>,
+}
+
+/// Reads only the file's JSON.
+pub fn skin_clips(path: &Path) -> Result<SkinClips, String> {
     let doc = read_document(path)?;
-    let mut names: Vec<String> =
-        doc.animations().filter_map(|a| a.name().map(str::to_string)).collect();
-    names.sort();
-    names.dedup();
-    Ok(names)
+    let mut clips = SkinClips::default();
+    for animation in doc.animations().filter(is_expression) {
+        let Some(name) = animation.name() else {
+            continue;
+        };
+        clips.expressions.push(name.to_string());
+        for channel in animation.channels() {
+            let node = channel.target().node();
+            let name =
+                node.name().map_or_else(|| format!("GltfNode{}", node.index()), str::to_string);
+            clips.expression_meshes.insert(name);
+        }
+    }
+    clips.expressions.sort();
+    clips.expressions.dedup();
+    Ok(clips)
+}
+
+pub(crate) fn is_expression(animation: &Animation) -> bool {
+    animation.channels().all(|c| c.target().property() == Property::MorphTargetWeights)
 }

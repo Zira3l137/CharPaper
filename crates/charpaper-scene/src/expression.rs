@@ -9,6 +9,7 @@
 //! stopped clip otherwise leaves the face as it last posed it.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use bevy::mesh::morph::MorphWeights;
@@ -19,15 +20,21 @@ use crate::binding::InstanceReady;
 use crate::character::CharacterState;
 use crate::character::SkinFile;
 use crate::character::SkinRoot;
+use crate::suite::ActiveSuite;
 
 /// The worn skin's expressions, in name order: what the panel's Expression
 /// cycler offers after Neutral. Filled once the skin's file has loaded.
 #[derive(Resource, Default, Debug)]
 pub struct Expressions(pub Vec<String>);
 
-/// The worn skin's clips by name, taken from its file when it loads.
+/// The worn skin's expressions by name, taken from its file when it loads,
+/// and the mesh objects they key. Those meshes belong to the expressions;
+/// every other mesh with shape keys takes correctives from body animations.
 #[derive(Component)]
-pub(crate) struct SkinClips(BTreeMap<String, Handle<AnimationClip>>);
+pub(crate) struct SkinClips {
+    clips: BTreeMap<String, Handle<AnimationClip>>,
+    pub expression_meshes: BTreeSet<String>,
+}
 
 /// Everything needed to play the worn skin's expressions, set up once its
 /// scene has spawned.
@@ -48,10 +55,14 @@ pub(crate) struct ExpressionPlayers {
 pub(crate) fn spawn_skin_scenes(
     mut commands: Commands,
     skins: Query<(Entity, &SkinRoot, &SkinFile), Without<WorldAssetRoot>>,
+    suite: Option<Res<ActiveSuite>>,
     gltfs: Res<Assets<Gltf>>,
     assets: Res<AssetServer>,
     mut expressions: ResMut<Expressions>,
 ) {
+    let Some(suite) = suite else {
+        return;
+    };
     for (entity, skin, file) in &skins {
         if assets.load_state(file.0.id()).is_failed() {
             warn!("skin {:?}: its file failed to load", skin.name);
@@ -67,13 +78,32 @@ pub(crate) fn spawn_skin_scenes(
             commands.entity(entity).remove::<SkinFile>();
             continue;
         };
-        let clips: BTreeMap<String, Handle<AnimationClip>> = gltf
-            .named_animations
+        // Which clips key only shape keys is read from the file itself: Bevy's
+        // clips no longer say what kind of property each curve moves.
+        let file =
+            suite.skins.iter().find(|s| s.name == skin.name).map(|s| suite.absolute(&s.file));
+        let found = match file.map(|f| charpaper_suite::skin_clips(&f)) {
+            Some(Ok(found)) => found,
+            Some(Err(err)) => {
+                warn!("skin {:?}: cannot read its clips: {err}", skin.name);
+                charpaper_suite::SkinClips::default()
+            }
+            None => charpaper_suite::SkinClips::default(),
+        };
+        let clips: BTreeMap<String, Handle<AnimationClip>> = found
+            .expressions
             .iter()
-            .map(|(name, clip)| (name.to_string(), clip.clone()))
+            .filter_map(|name| {
+                Some((name.clone(), gltf.named_animations.get(name.as_str())?.clone()))
+            })
             .collect();
+        let skipped = gltf.named_animations.len() - clips.len();
+        if skipped > 0 {
+            debug!("skin {:?}: {skipped} clip(s) move bones and are not expressions", skin.name);
+        }
         expressions.0 = clips.keys().cloned().collect();
-        commands.entity(entity).insert((WorldAssetRoot(scene), SkinClips(clips)));
+        let clips = SkinClips { clips, expression_meshes: found.expression_meshes };
+        commands.entity(entity).insert((WorldAssetRoot(scene), clips));
     }
 }
 
@@ -87,6 +117,7 @@ pub(crate) fn setup_expressions(
         (With<InstanceReady>, Without<ExpressionPlayers>),
     >,
     children: Query<&Children>,
+    names: Query<&Name>,
     players: Query<(), With<AnimationPlayer>>,
     morphs: Query<&MorphWeights>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
@@ -95,30 +126,35 @@ pub(crate) fn setup_expressions(
         let descendants: Vec<Entity> = children.iter_descendants(root).collect();
         let found: Vec<Entity> =
             descendants.iter().copied().filter(|&e| players.contains(e)).collect();
-        if !clips.0.is_empty() && found.is_empty() {
+        if !clips.clips.is_empty() && found.is_empty() {
             warn!("skin {:?}: its clips animate nothing in its file", skin.name);
         }
 
-        let (graph, indices) = AnimationGraph::from_clips(clips.0.values().cloned());
+        let (graph, indices) = AnimationGraph::from_clips(clips.clips.values().cloned());
         let graph = graphs.add(graph);
         for &player in &found {
             commands
                 .entity(player)
                 .insert((AnimationGraphHandle(graph.clone()), AnimationTransitions::new()));
         }
+        // Only the expressions' own meshes go back to rest on neutral;
+        // correctives belong to the body animation.
+        let owned =
+            |e: Entity| names.get(e).is_ok_and(|n| clips.expression_meshes.contains(n.as_str()));
         let rest = descendants
             .iter()
+            .filter(|&&e| owned(e))
             .filter_map(|&e| morphs.get(e).ok().map(|m| (e, m.weights().to_vec())))
             .collect();
 
         commands.entity(root).insert(ExpressionPlayers {
             players: found,
-            nodes: clips.0.keys().cloned().zip(indices).collect(),
+            nodes: clips.clips.keys().cloned().zip(indices).collect(),
             rest,
             playing: None,
             easing: None,
         });
-        info!("skin {:?}: {} expression(s)", skin.name, clips.0.len());
+        info!("skin {:?}: {} expression(s)", skin.name, clips.clips.len());
     }
 }
 

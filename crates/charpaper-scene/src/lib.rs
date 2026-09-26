@@ -5,6 +5,7 @@ mod binding;
 mod cameras;
 mod character;
 mod config;
+mod correctives;
 mod environment;
 mod expression;
 mod importer;
@@ -127,6 +128,7 @@ impl Plugin for ScenePlugin {
                         )
                             .chain(),
                         (
+                            correctives::bind_correctives,
                             binding::bind_skins,
                             character::list_skin_objects,
                             character::apply_hidden_objects.run_if(

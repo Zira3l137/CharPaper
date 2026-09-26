@@ -437,24 +437,36 @@ fn clip(name: &str, node: u32, path: &str) -> String {
 }
 
 #[test]
-fn a_skins_clips_are_its_expressions() {
+fn a_skins_clips_that_key_only_shape_keys_are_its_expressions() {
     let fixture = Fixture::new("expressions", "schema = 1");
-    let clips = [clip("Smile", 4, "weights"), clip("Angry", 4, "weights")].join(", ");
-    fixture.write("skins/casual.gltf", face(&clips));
+    let clips =
+        [clip("Smile", 4, "weights"), clip("Angry", 4, "weights"), clip("Nod", 3, "rotation")];
+    fixture.write("skins/casual.gltf", face(&clips.join(", ")));
     let suite = fixture.load().unwrap();
 
-    let names = charpaper_suite::expressions(&fixture.0.join("skins/casual.gltf")).unwrap();
-    assert_eq!(names, ["Angry", "Smile"]);
+    let found = charpaper_suite::skin_clips(&fixture.0.join("skins/casual.gltf")).unwrap();
+    assert_eq!(found.expressions, ["Angry", "Smile"]);
+    assert_eq!(found.expression_meshes.into_iter().collect::<Vec<_>>(), ["Face"]);
     let warnings = messages(&suite, Severity::Warning);
     assert!(!warnings.iter().any(|w| w.contains("casual.gltf")), "{warnings:#?}");
+}
 
-    let clips = [clip("Smile", 4, "weights"), clip("Nod", 3, "rotation")].join(", ");
-    fixture.write("skins/casual.gltf", face(&clips));
+#[test]
+fn body_animations_may_key_correctives_but_not_expression_meshes() {
+    let fixture = Fixture::new("correctives", "schema = 1");
+    fixture.write("skins/casual.gltf", face(&clip("Smile", 4, "weights")));
+    fixture.write("skins/dress.gltf", face(""));
+    fixture.write("animations/jump.gltf", face(&clip("Jump", 4, "weights")));
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    let about_jump: Vec<&String> = warnings.iter().filter(|w| w.contains("jump.gltf")).collect();
+    assert_eq!(about_jump.len(), 1, "{warnings:#?}");
+    assert!(about_jump[0].contains("keyed by skin \"casual\"'s expressions"), "{warnings:#?}");
+
+    let stray = face(&clip("Jump", 4, "weights")).replace(r#""name": "Face""#, r#""name": "Cape""#);
+    fixture.write("animations/jump.gltf", stray);
     let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
     assert!(
-        warnings
-            .iter()
-            .any(|w| w.contains("expression \"Nod\" also moves nodes") && w.contains("Head")),
+        warnings.iter().any(|w| w.contains("\"Armature/Cape\", which no skin has")),
         "{warnings:#?}"
     );
 }

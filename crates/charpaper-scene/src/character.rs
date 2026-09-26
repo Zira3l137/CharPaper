@@ -17,8 +17,8 @@ use crate::binding::Bound;
 use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
-use crate::suite::load_gltf;
 use crate::suite::load_armature;
+use crate::suite::load_gltf;
 
 /// What the viewer has picked. Systems react to changes, so writing here is
 /// how the UI will switch things.

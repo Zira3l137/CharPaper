@@ -5,6 +5,8 @@ use std::time::Duration;
 
 use bevy::animation::AnimatedBy;
 use bevy::animation::AnimationTargetId;
+use bevy::asset::RenderAssetUsages;
+use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use charpaper_suite::AnimationFile;
 use charpaper_suite::ClipSet;
@@ -111,9 +113,25 @@ pub(crate) fn load_clips(
     let files = suite
         .animations
         .iter()
-        .map(|file| (assets.load(asset_path(&suite, &file.path)), file.clone()))
+        .map(|file| {
+            let handle = assets
+                .load_builder()
+                .with_settings(clips_only)
+                .load(asset_path(&suite, &file.path));
+            (handle, file.clone())
+        })
         .collect();
     commands.insert_resource(PendingClips(files));
+}
+
+/// An animation file may hold the meshes its correctives key, since glTF
+/// only keys shape keys on a mesh in the same file. Only the clips are
+/// wanted; the meshes the skins show are the skins' own.
+fn clips_only(settings: &mut GltfLoaderSettings) {
+    settings.load_meshes = RenderAssetUsages::empty();
+    settings.load_materials = RenderAssetUsages::empty();
+    settings.load_cameras = false;
+    settings.load_lights = false;
 }
 
 /// Waits for every animation file to load or fail, then puts all their clips
@@ -278,6 +296,6 @@ fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<(String, Handle<AnimationCli
     }
 }
 
-fn kids<'a>(children: &'a Query<&Children>, entity: Entity) -> &'a [Entity] {
+pub(crate) fn kids<'a>(children: &'a Query<&Children>, entity: Entity) -> &'a [Entity] {
     children.get(entity).map(|c| &**c).unwrap_or_default()
 }

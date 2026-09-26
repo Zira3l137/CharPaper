@@ -32,9 +32,12 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use gltf::Document;
+use gltf::animation::Property;
 
 use crate::expressions::MAX_SHAPE_KEYS;
+use crate::expressions::is_expression;
 use crate::layout::ClipSet;
+use crate::layout::Skin;
 use crate::layout::Suite;
 
 /// Past these, a skin's rest pose no longer matches the model's. The limits
@@ -136,12 +139,15 @@ pub fn inspect(suite: &Suite) -> Report {
         report.push(Severity::Warning, Some(&suite.model), message);
     }
 
-    check_animations(suite, &model, &mut report);
-    for skin in &suite.skins {
-        if let Some(gltf) = open(suite, &skin.file, &mut report) {
-            check_skin_file(&skin.file, &gltf, &model, &bones, &mut report);
-            check_skin_expressions(&skin.file, &gltf, &mut report);
-        }
+    let skins: Vec<(&Skin, Gltf)> = suite
+        .skins
+        .iter()
+        .filter_map(|skin| Some((skin, open(suite, &skin.file, &mut report)?)))
+        .collect();
+    check_animations(suite, &model, &skins, &mut report);
+    for (skin, gltf) in &skins {
+        check_skin_file(&skin.file, gltf, &model, &bones, &mut report);
+        check_skin_expressions(&skin.file, gltf, &mut report);
     }
     let camera_files: BTreeSet<&Path> = suite.cameras.iter().map(|c| c.file.as_path()).collect();
     for file in camera_files {
@@ -291,7 +297,7 @@ fn model_bones<'a>(model: &'a Gltf, file: &Path, report: &mut Report) -> HashMap
     bones
 }
 
-fn check_animations(suite: &Suite, model: &Gltf, report: &mut Report) {
+fn check_animations(suite: &Suite, model: &Gltf, skins: &[(&Skin, Gltf)], report: &mut Report) {
     let model_paths: HashSet<&str> = model.paths.values().map(String::as_str).collect();
     let mut clip_names: BTreeMap<String, PathBuf> = BTreeMap::new();
 
@@ -301,11 +307,7 @@ fn check_animations(suite: &Suite, model: &Gltf, report: &mut Report) {
         };
         let path = file.path.as_path();
 
-        if gltf.doc.meshes().len() > 0 {
-            let message = "contains meshes that will be loaded and never shown; \
-                           export animation files with the armature only";
-            report.push(Severity::Warning, Some(path), message.to_string());
-        }
+        check_correctives(path, &gltf, skins, report);
 
         let available: Vec<Option<&str>> = gltf.doc.animations().map(|a| a.name()).collect();
         let mut register = |name: &str, report: &mut Report| {
@@ -363,6 +365,7 @@ fn check_animations(suite: &Suite, model: &Gltf, report: &mut Report) {
             .doc
             .animations()
             .flat_map(|a| a.channels())
+            .filter(|c| c.target().property() != Property::MorphTargetWeights)
             .filter_map(|c| gltf.paths.get(&c.target().node().index()))
             .map(String::as_str)
             .filter(|p| !model_paths.contains(p))
@@ -666,10 +669,90 @@ fn read_cubemap(path: &Path) -> Result<u32, String> {
     }
 }
 
-/// A skin's clips are its expressions: looped while chosen, and meant to key
-/// shape keys only. Anything else one moves is the skin's own copy of the
-/// bones, which binding replaced with the armature's, so it moves nothing
-/// visible, or, for an extra bone, moves it against the body.
+/// Body animations may key the shape keys of skin meshes (correctives, such
+/// as a skirt following the legs). Those meshes must be exported with the
+/// animation, since glTF keys shape keys only on a mesh in the same file; the
+/// app never loads them there. Each keyed mesh has to exist at the same place
+/// in some skin, with the same number of shape keys, and must not belong to
+/// that skin's expressions.
+fn check_correctives(path: &Path, gltf: &Gltf, skins: &[(&Skin, Gltf)], report: &mut Report) {
+    let path = Some(path);
+    let keyed: BTreeSet<usize> = gltf
+        .doc
+        .animations()
+        .flat_map(|a| a.channels())
+        .filter(|c| c.target().property() == Property::MorphTargetWeights)
+        .map(|c| c.target().node().index())
+        .collect();
+
+    let unused: Vec<&str> = gltf
+        .doc
+        .nodes()
+        .filter(|n| n.mesh().is_some() && !keyed.contains(&n.index()))
+        .map(|n| gltf.names[n.index()].as_str())
+        .collect();
+    if !unused.is_empty() {
+        let message = format!(
+            "{} mesh(es) have no shape keys any clip keys, so they only take up space; export \
+             the armature and just the meshes the animations key: {}",
+            unused.len(),
+            examples(&unused)
+        );
+        report.push(Severity::Warning, path, message);
+    }
+
+    for node in keyed {
+        let (Some(at), name) = (gltf.paths.get(&node), gltf.names[node].as_str()) else {
+            continue;
+        };
+        let keys = shape_keys(gltf, node);
+        let mut found = false;
+        for (skin, skin_gltf) in skins {
+            let Some((&twin, _)) = skin_gltf.paths.iter().find(|(_, p)| *p == at) else {
+                continue;
+            };
+            found = true;
+            let theirs = shape_keys(skin_gltf, twin);
+            if theirs != keys {
+                let message = format!(
+                    "mesh {name:?} has {keys} shape key(s) here but {theirs} in skin {:?}; \
+                     they must be the same keys in the same order",
+                    skin.name
+                );
+                report.push(Severity::Warning, path, message);
+            }
+            let owned = skin_gltf
+                .doc
+                .animations()
+                .filter(is_expression)
+                .flat_map(|a| a.channels())
+                .any(|c| c.target().node().index() == twin);
+            if owned {
+                let message = format!(
+                    "mesh {name:?} is keyed by skin {:?}'s expressions, which own its shape \
+                     keys there; this file's keys on it are ignored with that skin",
+                    skin.name
+                );
+                report.push(Severity::Warning, path, message);
+            }
+        }
+        if !found {
+            let message = format!(
+                "keys the shape keys of {at:?}, which no skin has at that place, so they move \
+                 nothing"
+            );
+            report.push(Severity::Warning, path, message);
+        }
+    }
+}
+
+fn shape_keys(gltf: &Gltf, node: usize) -> usize {
+    let node = gltf.doc.nodes().nth(node);
+    node.and_then(|n| n.mesh())
+        .map_or(0, |m| m.primitives().map(|p| p.morph_targets().len()).max().unwrap_or(0))
+}
+
+/// A skin's clips that key only shape keys are its expressions.
 fn check_skin_expressions(path: &Path, skin: &Gltf, report: &mut Report) {
     let path = Some(path);
     for mesh in skin.doc.meshes() {
@@ -683,26 +766,13 @@ fn check_skin_expressions(path: &Path, skin: &Gltf, report: &mut Report) {
         }
     }
 
-    for animation in skin.doc.animations() {
-        let Some(name) = animation.name() else {
+    // Clips that move bones are body animations exported along with the
+    // skin; skipping them is the rule, not a mistake worth a finding.
+    for animation in skin.doc.animations().filter(is_expression) {
+        if animation.name().is_none() {
             let message = format!(
                 "clip #{} has no name, so it cannot be offered as an expression",
                 animation.index()
-            );
-            report.push(Severity::Warning, path, message);
-            continue;
-        };
-        let moved: BTreeSet<&str> = animation
-            .channels()
-            .filter(|c| c.target().property() != gltf::animation::Property::MorphTargetWeights)
-            .map(|c| skin.names[c.target().node().index()].as_str())
-            .collect();
-        if !moved.is_empty() {
-            let moved: Vec<&str> = moved.into_iter().collect();
-            let message = format!(
-                "expression {name:?} also moves nodes rather than only shape keys, which does \
-                 nothing useful on a bound skin: {}",
-                examples(&moved)
             );
             report.push(Severity::Warning, path, message);
         }
