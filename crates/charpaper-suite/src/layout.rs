@@ -5,15 +5,18 @@
 //! form an asset source wants later.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
+use gltf::Document;
 use tracing::debug;
 
 use crate::error::SuiteError;
+use crate::inspect::read_document;
 use crate::manifest::Camera;
 use crate::manifest::EnvironmentEntry;
 use crate::manifest::MANIFEST_FILE;
@@ -93,10 +96,19 @@ pub struct Skin {
 }
 
 /// A camera made in Blender, along with at most one clip moving it.
+///
+/// A file in `cameras/` holding one camera gives one entry, named after the
+/// file. A file holding several gives one entry per camera, named after the
+/// camera object, each playing the clip that moves it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExportedCamera {
     pub name: String,
     pub file: PathBuf,
+    /// The camera object's name, when its file holds several.
+    pub node: Option<String>,
+    /// The clip that moves it, when its file holds several cameras. With one
+    /// camera, the file's only clip.
+    pub clip: Option<String>,
 }
 
 /// What surrounds the character: `environment/<name>.glb`, a folder
@@ -238,10 +250,7 @@ impl Suite {
             (None, None) => return Err(SuiteError::NoModel),
         };
 
-        let cameras: Vec<ExportedCamera> = named_files(root, CAMERAS_DIR, "camera")?
-            .into_iter()
-            .map(|(name, file)| ExportedCamera { name, file })
-            .collect();
+        let cameras = resolve_cameras(root)?;
         if cameras.iter().any(|c| c.name == ORBIT_CAMERA) {
             return Err(SuiteError::ReservedName { kind: "camera", name: ORBIT_CAMERA.into() });
         }
@@ -319,6 +328,58 @@ fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationF
 
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
+}
+
+fn resolve_cameras(root: &Path) -> Result<Vec<ExportedCamera>, SuiteError> {
+    let mut cameras: Vec<ExportedCamera> = Vec::new();
+    for (name, file) in named_files(root, CAMERAS_DIR, "camera")? {
+        // An unreadable file stays one camera here; `inspect` says what is
+        // wrong with it.
+        let found = read_document(&root.join(&file)).map(|d| camera_nodes(&d)).unwrap_or_default();
+        if found.len() <= 1 {
+            cameras.push(ExportedCamera { name, file, node: None, clip: None });
+            continue;
+        }
+        for (node, clip) in found {
+            let camera =
+                ExportedCamera { name: node.clone(), file: file.clone(), node: Some(node), clip };
+            cameras.push(camera);
+        }
+    }
+
+    cameras.sort_by(|a, b| a.name.cmp(&b.name));
+    if let Some(pair) = cameras.windows(2).find(|pair| pair[0].name == pair[1].name) {
+        return Err(SuiteError::DuplicateCamera {
+            name: pair[0].name.clone(),
+            files: format!("{}, {}", pair[0].file.display(), pair[1].file.display()),
+        });
+    }
+    Ok(cameras)
+}
+
+/// Each camera object's name, and the first clip that moves it or anything it
+/// hangs from.
+fn camera_nodes(doc: &Document) -> Vec<(String, Option<String>)> {
+    let mut parents = vec![None; doc.nodes().len()];
+    for node in doc.nodes() {
+        for child in node.children() {
+            parents[child.index()] = Some(node.index());
+        }
+    }
+    doc.nodes()
+        .filter(|node| node.camera().is_some())
+        .map(|node| {
+            let carriers: HashSet<usize> =
+                std::iter::successors(Some(node.index()), |&i| parents[i]).collect();
+            let clip = doc
+                .animations()
+                .find(|a| a.channels().any(|c| carriers.contains(&c.target().node().index())))
+                .and_then(|a| a.name().map(str::to_string));
+            let name =
+                node.name().map_or_else(|| format!("GltfNode{}", node.index()), str::to_string);
+            (name, clip)
+        })
+        .collect()
 }
 
 /// A folder counts only when it holds a map or a panorama, or shares its name

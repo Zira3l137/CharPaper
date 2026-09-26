@@ -1,4 +1,5 @@
-//! Cameras exported from Blender, one per file in `cameras/`.
+//! Cameras exported from Blender, from the files in `cameras/`: one camera per
+//! file, or several, each with the clip that moves it.
 //!
 //! One lens, many tripods. The app keeps a single real camera: the one that
 //! carries the post-processing, the ambient light and the wallpaper's window.
@@ -13,6 +14,7 @@
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
+use charpaper_suite::ExportedCamera;
 use charpaper_suite::ORBIT_CAMERA;
 
 use crate::OrbitCamera;
@@ -30,12 +32,14 @@ pub(crate) struct ShownRig {
     pub name: Option<String>,
     pub root: Option<Entity>,
     /// Its file while it loads; the rig spawns once it has.
-    pub loading: Option<Handle<Gltf>>,
+    pub loading: Option<(Handle<Gltf>, ExportedCamera)>,
 }
 
 #[derive(Component)]
 pub(crate) struct CameraRig {
     pub name: String,
+    /// The camera object to look through, when its file holds several.
+    node: Option<String>,
     clip: Option<Handle<AnimationClip>>,
     /// Keeps the file's assets alive for as long as the rig exists, and no
     /// longer.
@@ -94,10 +98,11 @@ pub(crate) fn switch_rig(
     shown.loading =
         state.camera.as_ref().and_then(|name| suite.cameras.iter().find(|c| &c.name == name)).map(
             |camera| {
-                assets
+                let file = assets
                     .load_builder()
                     .with_settings(|s: &mut GltfLoaderSettings| s.load_lights = false)
-                    .load(asset_path(&suite, &camera.file))
+                    .load(asset_path(&suite, &camera.file));
+                (file, camera.clone())
             },
         );
 }
@@ -108,7 +113,7 @@ pub(crate) fn spawn_rig(
     assets: Res<AssetServer>,
     gltfs: Res<Assets<Gltf>>,
 ) {
-    let (Some(name), Some(file)) = (shown.name.clone(), shown.loading.clone()) else {
+    let (Some(name), Some((file, camera))) = (shown.name.clone(), shown.loading.clone()) else {
         return;
     };
     if assets.load_state(file.id()).is_failed() {
@@ -124,11 +129,14 @@ pub(crate) fn spawn_rig(
         warn!("camera {name:?}: its file holds no scene");
         return;
     };
-    let clip = gltf.animations.first().cloned();
+    let clip = match &camera.clip {
+        Some(clip) => gltf.named_animations.get(clip.as_str()).cloned(),
+        None => gltf.animations.first().cloned(),
+    };
     let root = commands
         .spawn((
             Name::new(format!("Camera rig {name}")),
-            CameraRig { name, clip, _file: file },
+            CameraRig { name, node: camera.node, clip, _file: file },
             WorldAssetRoot(scene),
         ))
         .id();
@@ -142,6 +150,7 @@ pub(crate) fn on_rig_ready(
     ready: On<WorldInstanceReady>,
     rigs: Query<&CameraRig>,
     children: Query<&Children>,
+    names: Query<&Name>,
     mut cameras: Query<&mut Camera>,
     mut players: Query<&mut AnimationPlayer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
@@ -159,30 +168,40 @@ pub(crate) fn on_rig_ready(
         }
     }
 
-    let Some(&lens) = lenses.first() else {
-        warn!("camera {:?}: its file holds no camera", rig.name);
+    let lens = match &rig.node {
+        Some(node) => {
+            lenses.iter().copied().find(|&l| names.get(l).is_ok_and(|n| n.as_str() == node))
+        }
+        None => lenses.first().copied(),
+    };
+    let Some(lens) = lens else {
+        warn!("camera {:?}: its file holds no such camera", rig.name);
         return;
     };
-    if lenses.len() > 1 {
-        warn!("camera {:?}: its file holds {} cameras; using the first", rig.name, lenses.len());
-    }
     commands.entity(ready.entity).insert(Lens(lens));
 
     // Unlike the character's, a rig's clip moves nodes of its own file, so
-    // Bevy's loader has already marked them and put a player on their root.
-    // Only the graph is missing.
+    // Bevy's loader has already marked them and put a player on each root.
+    // Only the graph is missing. With several cameras in the file there can
+    // be several roots; every player gets the clip, and only the one owning
+    // the nodes it moves does anything with it.
     let Some(clip) = &rig.clip else {
         info!("camera {:?} ready, static", rig.name);
         return;
     };
-    let Some(root) = children.iter_descendants(ready.entity).find(|&e| players.contains(e)) else {
+    let roots: Vec<Entity> =
+        children.iter_descendants(ready.entity).filter(|&e| players.contains(e)).collect();
+    if roots.is_empty() {
         warn!("camera {:?}: its clip animates nothing, so it stays static", rig.name);
         return;
-    };
+    }
     let (graph, nodes) = AnimationGraph::from_clips([clip.clone()]);
-    commands.entity(root).insert(AnimationGraphHandle(graphs.add(graph)));
-    if let Ok(mut player) = players.get_mut(root) {
-        player.play(nodes[0]).repeat();
+    let graph = graphs.add(graph);
+    for root in roots {
+        commands.entity(root).insert(AnimationGraphHandle(graph.clone()));
+        if let Ok(mut player) = players.get_mut(root) {
+            player.play(nodes[0]).repeat();
+        }
     }
     info!("camera {:?} ready, looping its clip", rig.name);
 }

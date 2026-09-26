@@ -474,3 +474,49 @@ fn without_a_model_file_the_armature_comes_from_the_default_skin() {
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("no model and no skin"), "{err}");
 }
+
+/// Two cameras, each on its own dolly, each with its own clip.
+fn camera_pair() -> String {
+    format!(
+        r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0, 2]}}],
+        "nodes": [
+            {{"name": "DollyA", "children": [1]}},
+            {{"name": "Front", "camera": 0}},
+            {{"name": "DollyB", "children": [3]}},
+            {{"name": "Side", "camera": 0}}
+        ],
+        "cameras": [{{"type": "perspective", "perspective": {{"yfov": 0.6, "znear": 0.1}}}}],
+        "animations": [
+            {{"name": "SideSway",
+              "channels": [{{"sampler": 0, "target": {{"node": 2, "path": "translation"}}}}],
+              "samplers": [{{"input": 1, "output": 3}}]}},
+            {{"name": "FrontPush",
+              "channels": [{{"sampler": 0, "target": {{"node": 1, "path": "translation"}}}}],
+              "samplers": [{{"input": 1, "output": 3}}]}}
+        ],
+        {ACCESSORS}}}"#
+    )
+}
+
+#[test]
+fn a_camera_file_may_hold_several_cameras_each_with_its_clip() {
+    let fixture = Fixture::new("camera-pair", "schema = 1");
+    fixture.write("cameras/pair.gltf", &camera_pair());
+    let suite = fixture.load().unwrap();
+
+    let names: Vec<&str> = suite.cameras.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["Front", "Side", "closeup", "wide"]);
+    let front = &suite.cameras[0];
+    assert_eq!(front.file, Path::new("cameras/pair.gltf"));
+    assert_eq!(front.node.as_deref(), Some("Front"));
+    assert_eq!(front.clip.as_deref(), Some("FrontPush"));
+    assert_eq!(suite.cameras[1].clip.as_deref(), Some("SideSway"));
+    assert_eq!(suite.cameras[2].node, None);
+
+    let findings = messages(&suite, Severity::Error);
+    assert!(!findings.iter().any(|f| f.contains("pair.gltf")), "{findings:#?}");
+
+    fixture.write("cameras/Front.gltf", &camera(&[]));
+    let err = fixture.load().unwrap_err();
+    assert!(err.to_string().contains("camera \"Front\" is named twice"), "{err}");
+}

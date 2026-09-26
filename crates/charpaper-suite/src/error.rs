@@ -41,6 +41,9 @@ pub enum SuiteError {
     #[error("{kind} {name:?} exists as both a .glb and a .gltf")]
     DuplicateName { kind: &'static str, name: String },
 
+    #[error("camera {name:?} is named twice ({files}); camera names must be unique")]
+    DuplicateCamera { name: String, files: String },
+
     #[error("{kind} {name:?} uses a reserved name; rename its file")]
     ReservedName { kind: &'static str, name: String },
 
