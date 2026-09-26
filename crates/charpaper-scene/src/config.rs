@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use bevy::prelude::Resource;
 use charpaper_bake::BakeSettings;
 
+use crate::RenderSettings;
+
 use crate::Picks;
 
 /// Derives `Resource` so the systems can read it with `Res<SceneConfig>`.
@@ -45,6 +47,9 @@ pub struct SceneConfig {
 
     /// How environment maps are baked from a panorama when they are missing.
     pub bake: BakeSettings,
+
+    /// Resolution, anti-aliasing, frame rate and pausing, as last saved.
+    pub render: RenderSettings,
 }
 
 impl Default for SceneConfig {
@@ -60,6 +65,7 @@ impl Default for SceneConfig {
             animation_crossfade_secs: 0.25,
             remembered: BTreeMap::new(),
             bake: BakeSettings::default(),
+            render: RenderSettings::default(),
         }
     }
 }

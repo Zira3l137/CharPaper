@@ -8,6 +8,7 @@ mod config;
 mod environment;
 mod importer;
 mod look;
+mod render;
 mod stage;
 mod suite;
 
@@ -24,6 +25,10 @@ pub use look::ActiveLook;
 pub use look::LookBackup;
 pub use look::Resolved;
 pub use look::RestoreLook;
+pub use render::AntiAliasing;
+pub use render::FpsLimit;
+pub use render::RENDER_SCALES;
+pub use render::RenderSettings;
 pub use suite::ActiveSuite;
 
 /// Asset source id for [`SceneConfig::characters_dir`], so suite files load as
@@ -77,6 +82,7 @@ impl Plugin for ScenePlugin {
             .init_resource::<environment::ShownEnvironment>()
             .init_resource::<environment::Baking>()
             .init_resource::<LookBackup>()
+            .insert_resource(self.config.render.clone())
             .add_message::<RestoreLook>()
             .add_observer(environment::on_environment_ready)
             .add_systems(
@@ -104,6 +110,8 @@ impl Plugin for ScenePlugin {
                     )
                         .chain(),
                     binding::bind_skins,
+                    render::fit_scene_target,
+                    render::apply_anti_aliasing.run_if(resource_changed::<RenderSettings>),
                     cameras::spawn_rigs,
                     (
                         environment::switch_environment,
