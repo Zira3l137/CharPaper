@@ -16,6 +16,7 @@ use crate::character::Armature;
 use crate::character::CharacterState;
 use crate::character::prefer;
 use crate::suite::ActiveSuite;
+use crate::suite::Remembered;
 use crate::suite::asset_path;
 
 /// Every clip the suite offers, under the name `suite.toml` and the UI use.
@@ -126,7 +127,7 @@ pub(crate) fn build_graph(
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
     suite: Option<Res<ActiveSuite>>,
-    config: Res<SceneConfig>,
+    remembered: Res<Remembered>,
     mut state: ResMut<CharacterState>,
 ) {
     let (Some(pending), Some(suite)) = (pending, suite) else {
@@ -166,7 +167,7 @@ pub(crate) fn build_graph(
     }
 
     state.animation = prefer(
-        suite.remembered(&config).animation,
+        suite.remembered(&remembered).animation,
         |name| clips.contains_key(name),
         suite.default_animation.clone(),
     );

@@ -30,6 +30,7 @@ use crate::character::CharacterState;
 use crate::character::prefer;
 use crate::suite::ActiveSuite;
 use crate::suite::GPU_ONLY;
+use crate::suite::Remembered;
 use crate::suite::asset_path;
 
 /// The environment on screen, as opposed to [`CharacterState::environment`],
@@ -54,7 +55,7 @@ pub(crate) struct AwaitingScene;
 /// Bakes running, by environment name. The result is only an error message:
 /// on success the maps are simply looked for again on disk.
 #[derive(Resource, Default)]
-pub(crate) struct Baking(HashMap<String, Task<Result<(), String>>>);
+pub(crate) struct Baking(pub HashMap<String, Task<Result<(), String>>>);
 
 /// The scene has spawned, so its lights exist and can take the look's
 /// shadow setting.
@@ -63,14 +64,14 @@ pub(crate) struct EnvironmentReady;
 
 pub(crate) fn choose_environment(
     suite: Option<Res<ActiveSuite>>,
-    config: Res<SceneConfig>,
+    remembered: Res<Remembered>,
     mut state: ResMut<CharacterState>,
 ) {
     let Some(suite) = suite else {
         return;
     };
     state.environment = prefer(
-        suite.remembered(&config).environment,
+        suite.remembered(&remembered).environment,
         |name| suite.environments.iter().any(|e| e.name == name),
         suite.default_environment.clone(),
     );

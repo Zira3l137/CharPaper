@@ -16,10 +16,10 @@ use bevy::world_serialization::WorldInstanceReady;
 use charpaper_suite::ORBIT_CAMERA;
 
 use crate::OrbitCamera;
-use crate::SceneConfig;
 use crate::character::CharacterState;
 use crate::character::prefer;
 use crate::suite::ActiveSuite;
+use crate::suite::Remembered;
 use crate::suite::asset_path;
 use crate::update_camera_transform;
 
@@ -27,10 +27,10 @@ use crate::update_camera_transform;
 /// for. Only that one rig is loaded; the others are not in memory at all.
 #[derive(Resource, Default)]
 pub(crate) struct ShownRig {
-    name: Option<String>,
-    root: Option<Entity>,
+    pub name: Option<String>,
+    pub root: Option<Entity>,
     /// Its file while it loads; the rig spawns once it has.
-    loading: Option<Handle<Gltf>>,
+    pub loading: Option<Handle<Gltf>>,
 }
 
 #[derive(Component)]
@@ -54,13 +54,13 @@ pub(crate) struct Following(Option<String>);
 
 pub(crate) fn choose_camera(
     suite: Option<Res<ActiveSuite>>,
-    config: Res<SceneConfig>,
+    remembered: Res<Remembered>,
     mut state: ResMut<CharacterState>,
 ) {
     let Some(suite) = suite else {
         return;
     };
-    state.camera = match suite.remembered(&config).camera.as_deref() {
+    state.camera = match suite.remembered(&remembered).camera.as_deref() {
         Some(ORBIT_CAMERA) => None,
         remembered => prefer(
             remembered.map(str::to_string),

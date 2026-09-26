@@ -9,15 +9,18 @@ use charpaper_suite::ORBIT_CAMERA;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::SceneConfig;
 use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
+use crate::suite::Remembered;
 use crate::suite::load_scene;
 
 /// What the viewer has picked. Systems react to changes, so writing here is
 /// how the UI will switch things.
 #[derive(Resource, Default, Debug)]
 pub struct CharacterState {
+    /// A suite by folder name, from [`crate::AvailableSuites`]. Changing it
+    /// swaps everything else in this state for that suite's.
+    pub suite: Option<String>,
     /// `None` shows no skin at all: just the bare armature, which is invisible.
     pub skin: Option<String>,
     /// A name from [`crate::CharacterClips`]. `None` stops the animation and
@@ -52,6 +55,17 @@ pub struct Picks {
 }
 
 impl Picks {
+    /// Takes every choice `newer` has. One it lacks keeps the older value:
+    /// the scene fills choices in over its first frames, the animation last,
+    /// and an unset one then must not erase what was remembered.
+    pub fn merge(&mut self, newer: Picks) {
+        let keep = |new: Option<String>, old: &mut Option<String>| *old = new.or(old.take());
+        keep(newer.skin, &mut self.skin);
+        keep(newer.animation, &mut self.animation);
+        keep(newer.camera, &mut self.camera);
+        keep(newer.environment, &mut self.environment);
+    }
+
     pub fn from_state(state: &CharacterState) -> Self {
         Self {
             skin: state.skin.clone(),
@@ -103,7 +117,7 @@ pub(crate) fn spawn_character(
     mut commands: Commands,
     suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
-    config: Res<SceneConfig>,
+    remembered: Res<Remembered>,
     mut state: ResMut<CharacterState>,
 ) {
     let Some(suite) = suite else {
@@ -127,7 +141,7 @@ pub(crate) fn spawn_character(
     ));
 
     state.skin = prefer(
-        suite.remembered(&config).skin,
+        suite.remembered(&remembered).skin,
         |skin| suite.skins.iter().any(|s| s.name == skin),
         suite.default_skin.clone(),
     );

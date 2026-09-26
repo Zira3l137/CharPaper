@@ -117,15 +117,7 @@ fn save(
     next.ui = ui.clone();
     next.render = render.clone();
     if let Some(suite) = suite {
-        let now = Picks::from_state(&character);
-        let entry = next.suites.entry(suite.folder()).or_default();
-        // The scene fills these in over the first few frames, the animation
-        // last, once its files load. Until then an unset value must keep the
-        // remembered one rather than erase it.
-        entry.skin = now.skin.or(entry.skin.take());
-        entry.animation = now.animation.or(entry.animation.take());
-        entry.camera = now.camera.or(entry.camera.take());
-        entry.environment = now.environment.or(entry.environment.take());
+        next.suites.entry(suite.folder()).or_default().merge(Picks::from_state(&character));
     }
     if next == file.saved {
         return;

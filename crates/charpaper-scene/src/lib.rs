@@ -30,6 +30,7 @@ pub use render::FpsLimit;
 pub use render::RENDER_SCALES;
 pub use render::RenderSettings;
 pub use suite::ActiveSuite;
+pub use suite::AvailableSuites;
 
 /// Asset source id for [`SceneConfig::characters_dir`], so suite files load as
 /// `characters://<suite>/<file>`.
@@ -76,6 +77,9 @@ impl Plugin for ScenePlugin {
             .add_observer(binding::mark_ready)
             .add_observer(cameras::on_rig_ready)
             .init_resource::<CharacterState>()
+            .init_resource::<AvailableSuites>()
+            .init_resource::<suite::LoadedSuite>()
+            .insert_resource(suite::Remembered(self.config.remembered.clone()))
             .init_resource::<character::ShownSkin>()
             .init_resource::<cameras::ShownRig>()
             // No built-in lighting: the environment's own lights and maps are
@@ -87,43 +91,45 @@ impl Plugin for ScenePlugin {
             .insert_resource(self.config.render.clone())
             .add_message::<RestoreLook>()
             .add_observer(environment::on_environment_ready)
-            .add_systems(
-                Startup,
-                (
-                    suite::select_suite,
-                    (
-                        character::spawn_character,
-                        animation::load_clips,
-                        cameras::choose_camera,
-                        environment::choose_environment,
-                        stage::spawn_stage,
-                    ),
-                )
-                    .chain(),
-            )
+            .add_systems(Startup, (suite::discover_suites, stage::spawn_stage))
             .add_systems(
                 Update,
                 (
                     (
-                        animation::make_armature_animatable,
-                        animation::build_graph,
-                        animation::finish_once,
-                        animation::play_selected,
+                        suite::switch_suite,
+                        (
+                            character::spawn_character,
+                            animation::load_clips,
+                            cameras::choose_camera,
+                            environment::choose_environment,
+                            stage::reset_view,
+                        )
+                            .run_if(resource_added::<ActiveSuite>),
                     )
                         .chain(),
-                    binding::bind_skins,
-                    render::fit_scene_target,
-                    render::apply_anti_aliasing.run_if(resource_changed::<RenderSettings>),
-                    (cameras::switch_rig, cameras::spawn_rig).chain(),
                     (
-                        environment::switch_environment,
-                        environment::finish_bakes,
-                        environment::spawn_environment_scenes,
-                        look::apply_look.run_if(look::look_needs_applying),
-                    )
-                        .chain(),
-                    character::switch_skin,
-                ),
+                        (
+                            animation::make_armature_animatable,
+                            animation::build_graph,
+                            animation::finish_once,
+                            animation::play_selected,
+                        )
+                            .chain(),
+                        binding::bind_skins,
+                        render::fit_scene_target,
+                        render::apply_anti_aliasing.run_if(resource_changed::<RenderSettings>),
+                        (cameras::switch_rig, cameras::spawn_rig).chain(),
+                        (
+                            environment::switch_environment,
+                            environment::finish_bakes,
+                            environment::spawn_environment_scenes,
+                            look::apply_look.run_if(look::look_needs_applying),
+                        )
+                            .chain(),
+                        character::switch_skin,
+                    ),
+                )
+                    .chain(),
             )
             // After propagation so the rig's animated transform is final for
             // this frame, and before frusta are built from the camera's.
