@@ -20,6 +20,7 @@ use bevy::transform::TransformSystems;
 pub use character::Character;
 pub use character::CharacterState;
 pub use character::Picks;
+pub use character::SkinObjects;
 pub use config::SceneConfig;
 pub use look::ActiveLook;
 pub use look::LookBackup;
@@ -81,6 +82,7 @@ impl Plugin for ScenePlugin {
             .init_resource::<suite::LoadedSuite>()
             .insert_resource(suite::Remembered(self.config.remembered.clone()))
             .init_resource::<character::ShownSkin>()
+            .init_resource::<SkinObjects>()
             .init_resource::<cameras::ShownRig>()
             // No built-in lighting: the environment's own lights and maps are
             // all that light the character.
@@ -115,7 +117,15 @@ impl Plugin for ScenePlugin {
                             animation::play_selected,
                         )
                             .chain(),
-                        binding::bind_skins,
+                        (
+                            binding::bind_skins,
+                            character::list_skin_objects,
+                            character::apply_hidden_objects.run_if(
+                                resource_changed::<CharacterState>
+                                    .or_eager(resource_changed::<SkinObjects>),
+                            ),
+                        )
+                            .chain(),
                         render::fit_scene_target,
                         render::apply_anti_aliasing.run_if(resource_changed::<RenderSettings>),
                         (cameras::switch_rig, cameras::spawn_rig).chain(),

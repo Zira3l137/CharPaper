@@ -4,11 +4,15 @@
 //! and frees the last, which costs a moment of loading per switch and saves
 //! holding every outfit's meshes and textures at once.
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
 use bevy::prelude::*;
 use charpaper_suite::ORBIT_CAMERA;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::binding::Bound;
 use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
@@ -32,6 +36,8 @@ pub struct CharacterState {
     /// An environment by name. `None` shows none, which leaves the character
     /// unlit.
     pub environment: Option<String>,
+    /// Per skin, the mesh objects in it the viewer has switched off.
+    pub hidden: BTreeMap<String, BTreeSet<String>>,
 }
 
 /// The viewer's choices for one suite, as kept between runs.
@@ -52,6 +58,10 @@ pub struct Picks {
     pub camera: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
+    /// Per skin, the mesh objects switched off. A skin whose objects are all
+    /// on again keeps an empty entry, so merging overwrites the old one.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub hidden: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl Picks {
@@ -64,6 +74,7 @@ impl Picks {
         keep(newer.animation, &mut self.animation);
         keep(newer.camera, &mut self.camera);
         keep(newer.environment, &mut self.environment);
+        self.hidden.extend(newer.hidden);
     }
 
     pub fn from_state(state: &CharacterState) -> Self {
@@ -72,6 +83,7 @@ impl Picks {
             animation: state.animation.clone(),
             camera: Some(state.camera.clone().unwrap_or_else(|| ORBIT_CAMERA.to_string())),
             environment: state.environment.clone(),
+            hidden: state.hidden.clone(),
         }
     }
 }
@@ -91,6 +103,21 @@ pub(crate) fn prefer(
         None => default,
     }
 }
+
+/// The mesh objects of the worn skin, by name, in name order: what the
+/// panel's advanced outfit list offers to switch off. Filled once the skin
+/// has spawned, emptied when it goes.
+#[derive(Resource, Default, Debug)]
+pub struct SkinObjects(pub(crate) Vec<(String, Entity)>);
+
+impl SkinObjects {
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.0.iter().map(|(name, _)| name.as_str())
+    }
+}
+
+#[derive(Component)]
+pub(crate) struct ObjectsListed;
 
 /// The skin on screen, as opposed to [`CharacterState::skin`], the one asked
 /// for.
@@ -140,8 +167,10 @@ pub(crate) fn spawn_character(
         WorldAssetRoot(load_scene(&assets, &suite, &suite.model)),
     ));
 
+    let picks = suite.remembered(&remembered);
+    state.hidden = picks.hidden;
     state.skin = prefer(
-        suite.remembered(&remembered).skin,
+        picks.skin,
         |skin| suite.skins.iter().any(|s| s.name == skin),
         suite.default_skin.clone(),
     );
@@ -157,6 +186,7 @@ pub(crate) fn switch_skin(
     suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
     mut shown: ResMut<ShownSkin>,
+    mut objects: ResMut<SkinObjects>,
     character: Query<Entity, With<Character>>,
     parts: Query<(Entity, &SkinPart)>,
 ) {
@@ -174,6 +204,7 @@ pub(crate) fn switch_skin(
         commands.entity(old).despawn();
     }
     shown.name = state.skin.clone();
+    objects.0.clear();
 
     let Some(skin) =
         state.skin.as_ref().and_then(|name| suite.skins.iter().find(|s| &s.name == name))
@@ -189,4 +220,47 @@ pub(crate) fn switch_skin(
         ))
         .id();
     shown.root = Some(root);
+}
+
+/// A mesh object is a glTF node with mesh primitives below it: what Blender
+/// calls an object. Looked for below the skin's root and below the pieces
+/// binding moved onto the armature, so a hat parented to a bone is listed too.
+pub(crate) fn list_skin_objects(
+    mut commands: Commands,
+    skins: Query<Entity, (With<SkinRoot>, With<Bound>, Without<ObjectsListed>)>,
+    parts: Query<(Entity, &SkinPart)>,
+    children: Query<&Children>,
+    names: Query<&Name>,
+    meshes: Query<(), With<Mesh3d>>,
+    mut objects: ResMut<SkinObjects>,
+) {
+    for root in &skins {
+        let branches = std::iter::once(root)
+            .chain(parts.iter().filter(|(_, part)| part.0 == root).map(|(entity, _)| entity));
+        let mut found: Vec<(String, Entity)> = branches
+            .flat_map(|branch| std::iter::once(branch).chain(children.iter_descendants(branch)))
+            .filter(|&e| children.get(e).is_ok_and(|c| (**c).iter().any(|&c| meshes.contains(c))))
+            .filter_map(|e| names.get(e).ok().map(|name| (name.to_string(), e)))
+            .collect();
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        found.dedup_by(|a, b| a.0 == b.0);
+        objects.0 = found;
+        commands.entity(root).insert(ObjectsListed);
+    }
+}
+
+pub(crate) fn apply_hidden_objects(
+    state: Res<CharacterState>,
+    objects: Res<SkinObjects>,
+    mut visibility: Query<&mut Visibility>,
+) {
+    let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
+    for (name, entity) in &objects.0 {
+        if let Ok(mut visibility) = visibility.get_mut(*entity) {
+            visibility.set_if_neq(match hidden.is_some_and(|h| h.contains(name)) {
+                true => Visibility::Hidden,
+                false => Visibility::Inherited,
+            });
+        }
+    }
 }

@@ -29,6 +29,7 @@ use crate::cameras::ShownRig;
 use crate::character::Character;
 use crate::character::CharacterState;
 use crate::character::ShownSkin;
+use crate::character::SkinObjects;
 use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
 use crate::look::ActiveLook;
@@ -159,6 +160,7 @@ pub(crate) struct Teardown<'w, 's> {
     rig: ResMut<'w, ShownRig>,
     environment: ResMut<'w, ShownEnvironment>,
     baking: ResMut<'w, Baking>,
+    objects: ResMut<'w, SkinObjects>,
 }
 
 impl Teardown<'_, '_> {
@@ -180,6 +182,7 @@ impl Teardown<'_, '_> {
         *self.rig = default();
         *self.environment = default();
         self.baking.0.clear();
+        self.objects.0.clear();
         commands.remove_resource::<ActiveSuite>();
         commands.remove_resource::<ActiveLook>();
         commands.remove_resource::<CharacterClips>();
