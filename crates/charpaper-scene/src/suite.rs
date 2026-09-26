@@ -197,10 +197,10 @@ pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
 }
 
 /// Meshes and textures are kept on the GPU only: once uploaded, Bevy drops
-/// the copy in RAM, often the larger half of a model's footprint. Nothing here
-/// reads them back. Two consequences: a mesh without a CPU copy gets no
-/// bounding box, so it is never culled (harmless for one character on
-/// screen), and skinned meshes keep the joint bounds the loader computed.
+/// the copy in RAM, often the larger half of a model's footprint. Bevy keeps
+/// each mesh's bounding box when it drops the copy, so culling still works.
+/// The mesh's shape key names go with the copy, though; expressions read them
+/// from the file instead (`charpaper_suite::shape_keys`).
 pub(crate) const GPU_ONLY: RenderAssetUsages = RenderAssetUsages::RENDER_WORLD;
 
 /// A character file's scene: the model or a skin. Scene 0 rather than the
