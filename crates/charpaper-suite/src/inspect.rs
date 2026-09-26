@@ -343,9 +343,10 @@ fn check_animations(suite: &Suite, model: &Gltf, report: &mut Report) {
                                 describe_clips(&available)
                             ),
                             None => format!(
-                                "animation {:?}: the file holds {} clips, so `clip` must name one",
+                                "animation {:?}: the file holds {} clips, so `clip` must name one (found: {})",
                                 binding.name,
-                                available.len()
+                                available.len(),
+                                describe_clips(&available)
                             ),
                         };
                         report.push(Severity::Error, Some(path), message);
