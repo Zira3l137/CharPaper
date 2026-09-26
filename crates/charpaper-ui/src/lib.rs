@@ -14,6 +14,7 @@ use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::LookBackup;
 use charpaper_scene::RenderSettings;
+use charpaper_scene::SkinObjects;
 pub use config::UiConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -59,6 +60,8 @@ impl Tab {
 pub struct UiState {
     pub is_menu_closed: bool,
     pub tab: Tab,
+    /// Whether the outfit section lists the worn skin's objects.
+    pub advanced_outfit: bool,
 }
 
 /// The line under the title in the panel's header: the suite's name.
@@ -85,6 +88,12 @@ impl Plugin for CustomUiPlugin {
                         .or_eager(resource_changed::<AvailableSuites>),
                 ),
                 pages::style_outfits.run_if(resource_changed::<CharacterState>),
+                pages::fill_objects.run_if(resource_changed::<SkinObjects>),
+                pages::show_objects.run_if(
+                    resource_changed::<UiState>
+                        .or_eager(resource_changed::<CharacterState>)
+                        .or_eager(resource_changed::<SkinObjects>),
+                ),
                 // Eager, so `resource_added` runs every frame and its idea of
                 // "since last time" stays current; short-circuited behind a
                 // change on the same frame, it would report the clips as new

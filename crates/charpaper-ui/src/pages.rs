@@ -9,8 +9,11 @@ use charpaper_scene::ActiveSuite;
 use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
+use charpaper_scene::SkinObjects;
 
 use crate::StatusText;
+use crate::UiConfig;
+use crate::UiState;
 use crate::config::UiLocale;
 use crate::helpers::BaseBackground;
 use crate::helpers::Cycler;
@@ -35,15 +38,32 @@ pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
             locale.get_or("section.outfit", "OUTFIT"),
             UiContainer::Section(Section::Outfit),
             (
-                Node {
-                    display: Display::Grid,
-                    grid_template_columns: vec![RepeatedGridTrack::flex(3, 1.0)],
-                    row_gap: Val::Px(8.0),
-                    column_gap: Val::Px(8.0),
-                    ..default()
-                },
+                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
                 Pickable::IGNORE,
-                UiElement::Container(UiContainer::OutfitGrid),
+                children![
+                    (
+                        Node {
+                            display: Display::Grid,
+                            grid_template_columns: vec![RepeatedGridTrack::flex(3, 1.0)],
+                            row_gap: Val::Px(8.0),
+                            column_gap: Val::Px(8.0),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                        UiElement::Container(UiContainer::OutfitGrid),
+                    ),
+                    cycler(locale.get_or("label.advanced", "Advanced"), Cycler::Advanced),
+                    (
+                        Node {
+                            display: Display::None,
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(4.0),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                        UiElement::Container(UiContainer::ObjectList),
+                    ),
+                ],
             ),
         ),
         section(
@@ -123,6 +143,90 @@ pub(crate) fn show_animation(
     }
 }
 
+/// One row per mesh object of the worn skin, rebuilt whenever the worn skin's
+/// objects change: after it spawns, and emptied when it goes.
+pub(crate) fn fill_objects(
+    mut commands: Commands,
+    objects: Res<SkinObjects>,
+    lists: Query<(Entity, &UiElement)>,
+) {
+    let Some((list, _)) =
+        lists.iter().find(|(_, e)| **e == UiElement::Container(UiContainer::ObjectList))
+    else {
+        return;
+    };
+    commands.entity(list).despawn_children().with_children(|rows| {
+        for name in objects.names() {
+            rows.spawn((
+                Node {
+                    align_items: AlignItems::Center,
+                    column_gap: Val::Px(12.0),
+                    height: Val::Px(32.0),
+                    ..default()
+                },
+                Pickable::IGNORE,
+                children![
+                    (
+                        Node { flex_grow: 1.0, ..default() },
+                        Pickable::IGNORE,
+                        children![label(name, BODY_SIZE, TEXT_LABEL)],
+                    ),
+                    button("-")
+                        .width(Val::Px(56.0))
+                        .build_with(UiElement::Button(UiButton::Object(name.to_string()))),
+                ],
+            ));
+        }
+    });
+}
+
+/// The object list only makes sense with two or more objects: switching off
+/// a skin's only object is switching off the skin.
+pub(crate) fn show_objects(
+    ui: Res<UiState>,
+    state: Res<CharacterState>,
+    objects: Res<SkinObjects>,
+    config: Res<UiConfig>,
+    mut nodes: Query<(&UiElement, &mut Node)>,
+    buttons: Query<(&UiElement, &Children)>,
+    mut texts: Query<&mut Text>,
+    values: Query<(Entity, &CyclerValue)>,
+) {
+    let locale = &config.locale;
+    let on_off = |on: bool| {
+        if on { locale.get_or("value.on", "On") } else { locale.get_or("value.off", "Off") }
+    };
+    let several = objects.names().count() > 1;
+    for (element, mut node) in &mut nodes {
+        let shown = match element {
+            UiElement::Container(UiContainer::Row(Cycler::Advanced)) => several,
+            UiElement::Container(UiContainer::ObjectList) => several && ui.advanced_outfit,
+            _ => continue,
+        };
+        node.display = if shown { Display::Flex } else { Display::None };
+    }
+
+    let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
+    for (element, children) in &buttons {
+        let UiElement::Button(UiButton::Object(name)) = element else {
+            continue;
+        };
+        let shown = !hidden.is_some_and(|h| h.contains(name));
+        for &child in &**children {
+            if let Ok(mut text) = texts.get_mut(child) {
+                text.0 = on_off(shown).into();
+            }
+        }
+    }
+    for (entity, value) in &values {
+        if value.0 == Cycler::Advanced {
+            if let Ok(mut text) = texts.get_mut(entity) {
+                text.0 = on_off(ui.advanced_outfit).into();
+            }
+        }
+    }
+}
+
 /// The suite cycler only shows with two or more suites to pick from.
 pub(crate) fn show_suite(
     state: Res<CharacterState>,
@@ -150,12 +254,25 @@ pub(crate) fn on_scene_click(
     clips: Option<Res<CharacterClips>>,
     available: Res<AvailableSuites>,
     mut state: ResMut<CharacterState>,
+    mut ui: ResMut<UiState>,
 ) {
     let Ok(UiElement::Button(button)) = elements.get(event.entity) else {
         return;
     };
     match button {
         UiButton::Skin(name) => state.skin = Some(name.clone()),
+        UiButton::Object(name) => {
+            let Some(skin) = state.skin.clone() else {
+                return;
+            };
+            let hidden = state.hidden.entry(skin).or_default();
+            if !hidden.remove(name) {
+                hidden.insert(name.clone());
+            }
+        }
+        UiButton::Previous(Cycler::Advanced) | UiButton::Next(Cycler::Advanced) => {
+            ui.advanced_outfit ^= true;
+        }
         UiButton::Previous(Cycler::Suite) | UiButton::Next(Cycler::Suite) => {
             let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
             let forward = matches!(button, UiButton::Next(_));

@@ -304,6 +304,8 @@ pub enum UiContainer {
     Page(Tab),
     Section(Section),
     OutfitGrid,
+    /// The advanced outfit list: one row per mesh object of the worn skin.
+    ObjectList,
     /// The row a cycler sits in, so single rows can be hidden.
     Row(Cycler),
 }
@@ -327,6 +329,7 @@ pub enum Section {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cycler {
     Suite,
+    Advanced,
     Animation,
     Camera,
     Environment,
@@ -354,6 +357,8 @@ pub enum UiButton {
     Exit,
     Tab(Tab),
     Skin(String),
+    /// Switches one mesh object of the worn skin on or off.
+    Object(String),
     Previous(Cycler),
     Next(Cycler),
     RestoreLook,
