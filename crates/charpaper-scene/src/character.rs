@@ -1,9 +1,8 @@
-//! Spawns the active suite's character: the armature, and every skin with only
-//! the chosen one visible.
+//! Spawns the active suite's character: the armature, and the one skin worn.
 //!
-//! All skins are spawned up front and hidden, so switching is instant. The
-//! cost is memory for skins nobody is looking at. Hidden meshes are skipped by
-//! the renderer, so they do not cost frame time.
+//! Only the worn skin is in memory. Switching loads the next one from disk
+//! and frees the last, which costs a moment of loading per switch and saves
+//! holding every outfit's meshes and textures at once.
 
 use bevy::prelude::*;
 use charpaper_suite::ORBIT_CAMERA;
@@ -79,6 +78,14 @@ pub(crate) fn prefer(
     }
 }
 
+/// The skin on screen, as opposed to [`CharacterState::skin`], the one asked
+/// for.
+#[derive(Resource, Default)]
+pub(crate) struct ShownSkin {
+    pub name: Option<String>,
+    pub root: Option<Entity>,
+}
+
 /// Parent of everything spawned from the suite, so replacing the suite is one
 /// despawn.
 #[derive(Component)]
@@ -119,16 +126,6 @@ pub(crate) fn spawn_character(
         WorldAssetRoot(load_scene(&assets, &suite, &suite.model)),
     ));
 
-    for skin in &suite.skins {
-        commands.spawn((
-            Name::new(format!("Skin {}", skin.name)),
-            SkinRoot { name: skin.name.clone() },
-            ChildOf(character),
-            Visibility::Hidden,
-            WorldAssetRoot(load_scene(&assets, &suite, &skin.file)),
-        ));
-    }
-
     state.skin = prefer(
         suite.remembered(&config).skin,
         |skin| suite.skins.iter().any(|s| s.name == skin),
@@ -136,27 +133,46 @@ pub(crate) fn spawn_character(
     );
 }
 
-pub(crate) fn show_selected_skin(
+/// Replaces the skin on screen with the one asked for. The old one is
+/// despawned, which drops the last handles to its meshes and textures, so
+/// they leave memory; the new one loads from disk. Pieces the old skin moved
+/// onto the armature are not below its root any more and go separately.
+pub(crate) fn switch_skin(
+    mut commands: Commands,
     state: Res<CharacterState>,
-    mut skins: Query<(Entity, &SkinRoot, &mut Visibility)>,
-    mut parts: Query<(&SkinPart, &mut Visibility), Without<SkinRoot>>,
+    suite: Option<Res<ActiveSuite>>,
+    assets: Res<AssetServer>,
+    mut shown: ResMut<ShownSkin>,
+    character: Query<Entity, With<Character>>,
+    parts: Query<(Entity, &SkinPart)>,
 ) {
-    let mut selected = None;
-    for (entity, skin, mut visibility) in &mut skins {
-        let shown = state.skin.as_deref() == Some(skin.name.as_str());
-        if shown {
-            selected = Some(entity);
-        }
-        visibility.set_if_neq(visibility_for(shown));
+    if shown.name == state.skin {
+        return;
     }
-    for (part, mut visibility) in &mut parts {
-        visibility.set_if_neq(visibility_for(Some(part.0) == selected));
-    }
-}
+    let (Some(suite), Ok(character)) = (suite, character.single()) else {
+        return;
+    };
 
-pub(crate) fn visibility_for(shown: bool) -> Visibility {
-    match shown {
-        true => Visibility::Inherited,
-        false => Visibility::Hidden,
+    if let Some(old) = shown.root.take() {
+        for (part, _) in parts.iter().filter(|(_, part)| part.0 == old) {
+            commands.entity(part).despawn();
+        }
+        commands.entity(old).despawn();
     }
+    shown.name = state.skin.clone();
+
+    let Some(skin) =
+        state.skin.as_ref().and_then(|name| suite.skins.iter().find(|s| &s.name == name))
+    else {
+        return;
+    };
+    let root = commands
+        .spawn((
+            Name::new(format!("Skin {}", skin.name)),
+            SkinRoot { name: skin.name.clone() },
+            ChildOf(character),
+            WorldAssetRoot(load_scene(&assets, &suite, &skin.file)),
+        ))
+        .id();
+    shown.root = Some(root);
 }

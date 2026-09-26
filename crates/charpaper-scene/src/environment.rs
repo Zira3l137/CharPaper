@@ -29,6 +29,7 @@ use crate::SceneConfig;
 use crate::character::CharacterState;
 use crate::character::prefer;
 use crate::suite::ActiveSuite;
+use crate::suite::GPU_ONLY;
 use crate::suite::asset_path;
 
 /// The environment on screen, as opposed to [`CharacterState::environment`],
@@ -115,7 +116,11 @@ pub(crate) fn switch_environment(
         // Its lights are the point: they are all the lighting there is.
         let file = assets
             .load_builder()
-            .with_settings(|s: &mut GltfLoaderSettings| s.load_cameras = false)
+            .with_settings(|s: &mut GltfLoaderSettings| {
+                s.load_cameras = false;
+                s.load_meshes = GPU_ONLY;
+                s.load_materials = GPU_ONLY;
+            })
             .load(asset_path(&suite, scene));
         let root = commands
             .spawn((

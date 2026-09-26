@@ -20,9 +20,7 @@ use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 
 use crate::character::Armature;
-use crate::character::CharacterState;
 use crate::character::SkinRoot;
-use crate::character::visibility_for;
 
 #[derive(Component)]
 pub(crate) struct InstanceReady;
@@ -30,8 +28,8 @@ pub(crate) struct InstanceReady;
 #[derive(Component)]
 pub(crate) struct Bound;
 
-/// A branch moved out of a skin's hierarchy. It no longer inherits the skin
-/// root's visibility, so it points back at its skin to be hidden with it.
+/// A branch moved out of a skin's hierarchy. It is no longer below the skin's
+/// root, so it points back at its skin to be despawned along with it.
 #[derive(Component)]
 pub(crate) struct SkinPart(pub Entity);
 
@@ -56,7 +54,6 @@ pub(crate) fn bind_skins(
     names: Query<&Name>,
     meshes: Query<(), With<Mesh3d>>,
     mut skinned: Query<&mut SkinnedMesh>,
-    state: Res<CharacterState>,
 ) {
     let Ok(armature) = armature.single() else {
         return;
@@ -105,9 +102,8 @@ pub(crate) fn bind_skins(
             }
         }
 
-        let visibility = visibility_for(state.skin.as_deref() == Some(skin.name.as_str()));
         for (&branch, &bone) in &branches {
-            commands.entity(branch).insert((ChildOf(bone), SkinPart(skin_root), visibility));
+            commands.entity(branch).insert((ChildOf(bone), SkinPart(skin_root)));
         }
         commands.entity(skin_root).insert(Bound);
 

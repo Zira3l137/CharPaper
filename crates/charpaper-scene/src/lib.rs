@@ -76,6 +76,7 @@ impl Plugin for ScenePlugin {
             .add_observer(binding::mark_ready)
             .add_observer(cameras::on_rig_ready)
             .init_resource::<CharacterState>()
+            .init_resource::<character::ShownSkin>()
             // No built-in lighting: the environment's own lights and maps are
             // all that light the character.
             .insert_resource(GlobalAmbientLight::NONE)
@@ -120,7 +121,7 @@ impl Plugin for ScenePlugin {
                         look::apply_look.run_if(look::look_needs_applying),
                     )
                         .chain(),
-                    character::show_selected_skin.run_if(resource_changed::<CharacterState>),
+                    character::switch_skin,
                 ),
             )
             // After propagation so the rig's animated transform is final for

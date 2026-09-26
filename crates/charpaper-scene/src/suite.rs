@@ -9,6 +9,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use bevy::asset::AssetPath;
+use bevy::asset::RenderAssetUsages;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use charpaper_suite::Severity;
@@ -70,6 +71,13 @@ pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
     AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE)
 }
 
+/// Meshes and textures are kept on the GPU only: once uploaded, Bevy drops
+/// the copy in RAM, often the larger half of a model's footprint. Nothing here
+/// reads them back. Two consequences: a mesh without a CPU copy gets no
+/// bounding box, so it is never culled (harmless for one character on
+/// screen), and skinned meshes keep the joint bounds the loader computed.
+pub(crate) const GPU_ONLY: RenderAssetUsages = RenderAssetUsages::RENDER_WORLD;
+
 /// A character file's scene: the model or a skin. Scene 0 rather than the
 /// file's default scene, since Bevy has no label for the default one and
 /// Blender always exports the active scene as scene 0.
@@ -83,6 +91,8 @@ pub(crate) fn load_scene(assets: &AssetServer, suite: &Suite, file: &Path) -> Ha
         .with_settings(|s: &mut GltfLoaderSettings| {
             s.load_cameras = false;
             s.load_lights = false;
+            s.load_meshes = GPU_ONLY;
+            s.load_materials = GPU_ONLY;
         })
         .load(GltfAssetLabel::Scene(0).from_asset(asset_path(suite, file)))
 }
