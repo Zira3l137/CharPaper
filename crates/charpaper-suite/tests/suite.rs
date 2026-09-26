@@ -407,3 +407,54 @@ fn a_panorama_makes_an_environment_whose_maps_are_baked_later() {
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("several panoramas"), "{err}");
 }
+
+/// A skin with a face mesh carrying shape keys, and clips keying them.
+fn face(clips: &str) -> String {
+    format!(
+        r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0]}}],
+        "nodes": [
+            {{"name": "Armature", "children": [1, 4]}},
+            {{"name": "Hips", "children": [2]}},
+            {{"name": "Spine", "children": [3], "translation": [0, 0.5, 0]}},
+            {{"name": "Head"}},
+            {{"name": "Face", "mesh": 0, "skin": 0}}
+        ],
+        "skins": [{{"joints": [1, 2, 3]}}],
+        "meshes": [{{"primitives": [{{"attributes": {{"POSITION": 0}},
+            "targets": [{{"POSITION": 0}}, {{"POSITION": 0}}]}}],
+            "extras": {{"targetNames": ["mouth_corner_up", "brows_up"]}}}}],
+        "animations": [{clips}],
+        {ACCESSORS}}}"#
+    )
+}
+
+fn clip(name: &str, node: u32, path: &str) -> String {
+    format!(
+        r#"{{"name": "{name}",
+            "channels": [{{"sampler": 0, "target": {{"node": {node}, "path": "{path}"}}}}],
+            "samplers": [{{"input": 1, "output": 1}}]}}"#
+    )
+}
+
+#[test]
+fn a_skins_clips_are_its_expressions() {
+    let fixture = Fixture::new("expressions", "schema = 1");
+    let clips = [clip("Smile", 4, "weights"), clip("Angry", 4, "weights")].join(", ");
+    fixture.write("skins/casual.gltf", face(&clips));
+    let suite = fixture.load().unwrap();
+
+    let names = charpaper_suite::expressions(&fixture.0.join("skins/casual.gltf")).unwrap();
+    assert_eq!(names, ["Angry", "Smile"]);
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(!warnings.iter().any(|w| w.contains("casual.gltf")), "{warnings:#?}");
+
+    let clips = [clip("Smile", 4, "weights"), clip("Nod", 3, "rotation")].join(", ");
+    fixture.write("skins/casual.gltf", face(&clips));
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("expression \"Nod\" also moves nodes") && w.contains("Head")),
+        "{warnings:#?}"
+    );
+}

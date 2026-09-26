@@ -33,6 +33,7 @@ use std::path::PathBuf;
 
 use gltf::Document;
 
+use crate::expressions::MAX_SHAPE_KEYS;
 use crate::layout::ClipSet;
 use crate::layout::Suite;
 
@@ -137,6 +138,7 @@ pub fn inspect(suite: &Suite) -> Report {
     for skin in &suite.skins {
         if let Some(gltf) = open(suite, &skin.file, &mut report) {
             check_skin_file(&skin.file, &gltf, &model, &bones, &mut report);
+            check_skin_expressions(&skin.file, &gltf, &mut report);
         }
     }
     for camera in &suite.cameras {
@@ -179,7 +181,7 @@ fn open(suite: &Suite, file: &Path, report: &mut Report) -> Option<Gltf> {
     }
 }
 
-fn read_document(path: &Path) -> Result<Document, String> {
+pub(crate) fn read_document(path: &Path) -> Result<Document, String> {
     let json = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("glb")) {
         read_glb_json(path)?
     } else {
@@ -635,6 +637,49 @@ fn read_cubemap(path: &Path) -> Result<u32, String> {
             "uses supercompression scheme {scheme}, which this build cannot decode; re-encode \
              with Zstandard or no supercompression"
         )),
+    }
+}
+
+/// A skin's clips are its expressions: looped while chosen, and meant to key
+/// shape keys only. Anything else one moves is the skin's own copy of the
+/// bones, which binding replaced with the armature's, so it moves nothing
+/// visible, or, for an extra bone, moves it against the body.
+fn check_skin_expressions(path: &Path, skin: &Gltf, report: &mut Report) {
+    let path = Some(path);
+    for mesh in skin.doc.meshes() {
+        let keys = mesh.primitives().map(|p| p.morph_targets().len()).max().unwrap_or(0);
+        if keys > MAX_SHAPE_KEYS {
+            let name = mesh.name().unwrap_or("unnamed");
+            let message = format!(
+                "mesh {name:?} has {keys} shape keys; Bevy supports at most {MAX_SHAPE_KEYS}"
+            );
+            report.push(Severity::Error, path, message);
+        }
+    }
+
+    for animation in skin.doc.animations() {
+        let Some(name) = animation.name() else {
+            let message = format!(
+                "clip #{} has no name, so it cannot be offered as an expression",
+                animation.index()
+            );
+            report.push(Severity::Warning, path, message);
+            continue;
+        };
+        let moved: BTreeSet<&str> = animation
+            .channels()
+            .filter(|c| c.target().property() != gltf::animation::Property::MorphTargetWeights)
+            .map(|c| skin.names[c.target().node().index()].as_str())
+            .collect();
+        if !moved.is_empty() {
+            let moved: Vec<&str> = moved.into_iter().collect();
+            let message = format!(
+                "expression {name:?} also moves nodes rather than only shape keys, which does \
+                 nothing useful on a bound skin: {}",
+                examples(&moved)
+            );
+            report.push(Severity::Warning, path, message);
+        }
     }
 }
 

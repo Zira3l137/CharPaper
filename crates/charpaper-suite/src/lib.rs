@@ -29,6 +29,7 @@
 
 mod edit;
 mod error;
+mod expressions;
 mod inspect;
 mod layout;
 mod manifest;
@@ -38,6 +39,8 @@ pub use edit::has_backup;
 pub use edit::restore_look;
 pub use edit::save_look;
 pub use error::SuiteError;
+pub use expressions::MAX_SHAPE_KEYS;
+pub use expressions::expressions;
 pub use inspect::Finding;
 pub use inspect::Report;
 pub use inspect::Severity;
