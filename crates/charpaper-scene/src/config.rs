@@ -50,6 +50,10 @@ pub struct SceneConfig {
 
     /// Resolution, anti-aliasing, frame rate and pausing, as last saved.
     pub render: RenderSettings,
+
+    /// How long switching expressions blends the old into the new, and how
+    /// long going back to neutral takes, in seconds. 0 switches instantly.
+    pub expression_fade_secs: f32,
 }
 
 impl Default for SceneConfig {
@@ -66,6 +70,7 @@ impl Default for SceneConfig {
             remembered: BTreeMap::new(),
             bake: BakeSettings::default(),
             render: RenderSettings::default(),
+            expression_fade_secs: 0.3,
         }
     }
 }

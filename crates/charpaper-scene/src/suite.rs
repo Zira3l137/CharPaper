@@ -21,6 +21,7 @@ use charpaper_suite::Suite;
 
 use crate::CHARACTERS_SOURCE;
 use crate::CharacterClips;
+use crate::Expressions;
 use crate::OrbitCamera;
 use crate::Picks;
 use crate::SceneConfig;
@@ -161,6 +162,7 @@ pub(crate) struct Teardown<'w, 's> {
     environment: ResMut<'w, ShownEnvironment>,
     baking: ResMut<'w, Baking>,
     objects: ResMut<'w, SkinObjects>,
+    expressions: ResMut<'w, Expressions>,
 }
 
 impl Teardown<'_, '_> {
@@ -183,6 +185,7 @@ impl Teardown<'_, '_> {
         *self.environment = default();
         self.baking.0.clear();
         self.objects.0.clear();
+        self.expressions.0.clear();
         commands.remove_resource::<ActiveSuite>();
         commands.remove_resource::<ActiveLook>();
         commands.remove_resource::<CharacterClips>();
@@ -203,7 +206,21 @@ pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
 /// from the file instead (`charpaper_suite::shape_keys`).
 pub(crate) const GPU_ONLY: RenderAssetUsages = RenderAssetUsages::RENDER_WORLD;
 
-/// A character file's scene: the model or a skin. Scene 0 rather than the
+/// A skin's whole file, as a `Gltf`: its scene and its clips, which are the
+/// skin's expressions. Loaded like [`load_scene`] otherwise.
+pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<Gltf> {
+    assets
+        .load_builder()
+        .with_settings(|s: &mut GltfLoaderSettings| {
+            s.load_cameras = false;
+            s.load_lights = false;
+            s.load_meshes = GPU_ONLY;
+            s.load_materials = GPU_ONLY;
+        })
+        .load(asset_path(suite, file))
+}
+
+/// The model's scene. Scene 0 rather than the
 /// file's default scene, since Bevy has no label for the default one and
 /// Blender always exports the active scene as scene 0.
 ///

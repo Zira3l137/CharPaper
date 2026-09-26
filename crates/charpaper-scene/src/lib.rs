@@ -6,6 +6,7 @@ mod cameras;
 mod character;
 mod config;
 mod environment;
+mod expression;
 mod importer;
 mod look;
 mod render;
@@ -22,6 +23,7 @@ pub use character::CharacterState;
 pub use character::Picks;
 pub use character::SkinObjects;
 pub use config::SceneConfig;
+pub use expression::Expressions;
 pub use look::ActiveLook;
 pub use look::LookBackup;
 pub use look::Resolved;
@@ -83,6 +85,7 @@ impl Plugin for ScenePlugin {
             .insert_resource(suite::Remembered(self.config.remembered.clone()))
             .init_resource::<character::ShownSkin>()
             .init_resource::<SkinObjects>()
+            .init_resource::<Expressions>()
             .init_resource::<cameras::ShownRig>()
             // No built-in lighting: the environment's own lights and maps are
             // all that light the character.
@@ -136,7 +139,8 @@ impl Plugin for ScenePlugin {
                             look::apply_look.run_if(look::look_needs_applying),
                         )
                             .chain(),
-                        character::switch_skin,
+                        (character::switch_skin, expression::spawn_skin_scenes).chain(),
+                        (expression::setup_expressions, expression::play_expression).chain(),
                     ),
                 )
                     .chain(),

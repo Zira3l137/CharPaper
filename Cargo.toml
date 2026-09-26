@@ -37,6 +37,9 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "bevy_camera",
     "bevy_light",
     "bevy_mesh",
+    # Shape keys, and clips that key them. Without it the glTF loader drops
+    # every shape key.
+    "morph_animation",
     "bevy_material",
     "bevy_shader",
     "bevy_image",

@@ -12,10 +12,12 @@ use charpaper_suite::ORBIT_CAMERA;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Expressions;
 use crate::binding::Bound;
 use crate::binding::SkinPart;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
+use crate::suite::load_gltf;
 use crate::suite::load_scene;
 
 /// What the viewer has picked. Systems react to changes, so writing here is
@@ -38,6 +40,18 @@ pub struct CharacterState {
     pub environment: Option<String>,
     /// Per skin, the mesh objects in it the viewer has switched off.
     pub hidden: BTreeMap<String, BTreeSet<String>>,
+    /// Per skin, the expression it plays, from [`crate::Expressions`]. An empty
+    /// name, or no entry, is neutral; neutral is kept as an empty name so a
+    /// merge still overwrites an older pick.
+    pub expressions: BTreeMap<String, String>,
+}
+
+impl CharacterState {
+    /// The worn skin's expression, `None` for neutral.
+    pub fn expression(&self) -> Option<&str> {
+        let skin = self.skin.as_ref()?;
+        self.expressions.get(skin).map(String::as_str).filter(|e| !e.is_empty())
+    }
 }
 
 /// The viewer's choices for one suite, as kept between runs.
@@ -62,6 +76,9 @@ pub struct Picks {
     /// on again keeps an empty entry, so merging overwrites the old one.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub hidden: BTreeMap<String, BTreeSet<String>>,
+    /// Per skin, its expression; empty for neutral.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub expressions: BTreeMap<String, String>,
 }
 
 impl Picks {
@@ -75,6 +92,7 @@ impl Picks {
         keep(newer.camera, &mut self.camera);
         keep(newer.environment, &mut self.environment);
         self.hidden.extend(newer.hidden);
+        self.expressions.extend(newer.expressions);
     }
 
     pub fn from_state(state: &CharacterState) -> Self {
@@ -84,6 +102,7 @@ impl Picks {
             camera: Some(state.camera.clone().unwrap_or_else(|| ORBIT_CAMERA.to_string())),
             environment: state.environment.clone(),
             hidden: state.hidden.clone(),
+            expressions: state.expressions.clone(),
         }
     }
 }
@@ -135,6 +154,11 @@ pub struct Character;
 #[derive(Component)]
 pub(crate) struct Armature;
 
+/// Keeps the worn skin's file, and so its meshes, textures and expression
+/// clips, in memory for as long as the skin is worn, and no longer.
+#[derive(Component)]
+pub(crate) struct SkinFile(pub Handle<Gltf>);
+
 #[derive(Component)]
 pub(crate) struct SkinRoot {
     pub name: String,
@@ -169,6 +193,7 @@ pub(crate) fn spawn_character(
 
     let picks = suite.remembered(&remembered);
     state.hidden = picks.hidden;
+    state.expressions = picks.expressions;
     state.skin = prefer(
         picks.skin,
         |skin| suite.skins.iter().any(|s| s.name == skin),
@@ -187,6 +212,7 @@ pub(crate) fn switch_skin(
     assets: Res<AssetServer>,
     mut shown: ResMut<ShownSkin>,
     mut objects: ResMut<SkinObjects>,
+    mut expressions: ResMut<Expressions>,
     character: Query<Entity, With<Character>>,
     parts: Query<(Entity, &SkinPart)>,
 ) {
@@ -205,18 +231,23 @@ pub(crate) fn switch_skin(
     }
     shown.name = state.skin.clone();
     objects.0.clear();
+    expressions.0.clear();
 
     let Some(skin) =
         state.skin.as_ref().and_then(|name| suite.skins.iter().find(|s| &s.name == name))
     else {
         return;
     };
+    // The whole file rather than just its scene: its clips are the skin's
+    // expressions. The scene is spawned once the file has loaded.
     let root = commands
         .spawn((
             Name::new(format!("Skin {}", skin.name)),
             SkinRoot { name: skin.name.clone() },
+            SkinFile(load_gltf(&assets, &suite, &skin.file)),
             ChildOf(character),
-            WorldAssetRoot(load_scene(&assets, &suite, &skin.file)),
+            Transform::default(),
+            Visibility::default(),
         ))
         .id();
     shown.root = Some(root);
