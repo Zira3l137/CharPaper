@@ -227,14 +227,14 @@ pub(crate) fn switch_skin(
 /// binding moved onto the armature, so a hat parented to a bone is listed too.
 pub(crate) fn list_skin_objects(
     mut commands: Commands,
-    skins: Query<Entity, (With<SkinRoot>, With<Bound>, Without<ObjectsListed>)>,
+    skins: Query<(Entity, &SkinRoot), (With<Bound>, Without<ObjectsListed>)>,
     parts: Query<(Entity, &SkinPart)>,
     children: Query<&Children>,
     names: Query<&Name>,
     meshes: Query<(), With<Mesh3d>>,
     mut objects: ResMut<SkinObjects>,
 ) {
-    for root in &skins {
+    for (root, skin) in &skins {
         let branches = std::iter::once(root)
             .chain(parts.iter().filter(|(_, part)| part.0 == root).map(|(entity, _)| entity));
         let mut found: Vec<(String, Entity)> = branches
@@ -244,6 +244,8 @@ pub(crate) fn list_skin_objects(
             .collect();
         found.sort_by(|a, b| a.0.cmp(&b.0));
         found.dedup_by(|a, b| a.0 == b.0);
+        let names: Vec<&str> = found.iter().map(|(name, _)| name.as_str()).collect();
+        info!("skin {:?}: {} mesh object(s) {names:?}", skin.name, found.len());
         objects.0 = found;
         commands.entity(root).insert(ObjectsListed);
     }
