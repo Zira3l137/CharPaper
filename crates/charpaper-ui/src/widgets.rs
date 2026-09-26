@@ -54,13 +54,23 @@ pub(crate) fn glyph_button(glyph: &str, action: UiButton) -> impl Bundle {
 /// A titled group of controls on a page. Starts hidden: a section only shows
 /// once there is something to put in it.
 pub(crate) fn section(title: &str, marker: UiContainer, content: impl Bundle) -> impl Bundle {
+    section_with(Display::None, title, marker, content)
+}
+
+/// A section that shows from the start, for settings that exist whatever
+/// the suite holds.
+pub(crate) fn open_section(title: &str, marker: UiContainer, content: impl Bundle) -> impl Bundle {
+    section_with(Display::Flex, title, marker, content)
+}
+
+fn section_with(
+    display: Display,
+    title: &str,
+    marker: UiContainer,
+    content: impl Bundle,
+) -> impl Bundle {
     (
-        Node {
-            display: Display::None,
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(8.0),
-            ..default()
-        },
+        Node { display, flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
         UiElement::Container(marker),
         Pickable::IGNORE,
         children![label(title, SMALL_SIZE, TEXT_DIM), content],

@@ -159,7 +159,7 @@ pub(crate) fn show_scene_values(
             Cycler::Exposure => format!("{:+.1} EV", resolved.exposure),
             Cycler::Bloom if resolved.bloom <= 0.0 => on_off(locale, false).into(),
             Cycler::Bloom => format!("{:.2}", resolved.bloom),
-            Cycler::Animation => continue,
+            _ => continue,
         };
     }
 }
@@ -202,12 +202,16 @@ pub(crate) fn on_scene_tab_click(
                 state.environment = next;
             }
         }
-        Cycler::Animation => {}
-        look_cycler => {
+        Cycler::Brightness
+        | Cycler::Shadows
+        | Cycler::Tonemapping
+        | Cycler::Exposure
+        | Cycler::Bloom => {
             if let Some(mut look) = look {
-                edit_look(&mut look, state.environment.as_deref(), look_cycler, forward);
+                edit_look(&mut look, state.environment.as_deref(), cycler, forward);
             }
         }
+        _ => {}
     }
 }
 
@@ -245,7 +249,7 @@ fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, f
                 look.environments.entry(name.into()).or_default().shadows = Some(!resolved.shadows);
             }
         }
-        Cycler::Animation | Cycler::Camera | Cycler::Environment => {}
+        _ => {}
     }
 }
 

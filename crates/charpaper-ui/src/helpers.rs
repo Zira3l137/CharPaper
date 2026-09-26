@@ -317,6 +317,9 @@ pub enum Section {
     Camera,
     Environment,
     Image,
+    FrameRate,
+    Quality,
+    Pause,
 }
 
 /// The values stepped through with `<` and `>`.
@@ -330,6 +333,12 @@ pub enum Cycler {
     Tonemapping,
     Exposure,
     Bloom,
+    FpsLimit,
+    RenderScale,
+    AntiAliasing,
+    PauseFullscreen,
+    PauseCovered,
+    PauseBattery,
 }
 
 /// The text showing a cycler's current value.

@@ -1,6 +1,7 @@
 mod config;
 mod helpers;
 mod pages;
+mod render_tab;
 mod scene_tab;
 mod theme;
 mod widgets;
@@ -11,6 +12,7 @@ use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::LookBackup;
+use charpaper_scene::RenderSettings;
 pub use config::UiConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -37,6 +39,7 @@ pub enum Tab {
     #[default]
     Character,
     Scene,
+    Render,
 }
 
 impl Tab {
@@ -44,6 +47,7 @@ impl Tab {
         match self {
             Tab::Character => locale.get_or("tab.character", "Character"),
             Tab::Scene => locale.get_or("tab.scene", "Scene"),
+            Tab::Render => locale.get_or("tab.render", "Render"),
         }
     }
 }
@@ -95,12 +99,14 @@ impl Plugin for CustomUiPlugin {
                         .or_eager(resource_exists_and_changed::<ActiveLook>),
                 ),
                 scene_tab::show_restore.run_if(resource_changed::<LookBackup>),
+                render_tab::show_render_values.run_if(resource_changed::<RenderSettings>),
             )
                 .chain(),
         );
         app.add_observer(on_button_click);
         app.add_observer(pages::on_scene_click);
         app.add_observer(scene_tab::on_scene_tab_click);
+        app.add_observer(render_tab::on_render_click);
     }
 }
 
@@ -214,6 +220,11 @@ pub fn spawn_ui(mut commands: Commands, config: Res<UiConfig>, state: Res<UiStat
                             pages::character_page(locale),
                         ));
                         content.spawn(page(Tab::Scene, state.tab, scene_tab::scene_page(locale)));
+                        content.spawn(page(
+                            Tab::Render,
+                            state.tab,
+                            render_tab::render_page(locale),
+                        ));
                     });
                 panel.spawn(footer(locale));
             })
@@ -257,15 +268,14 @@ fn header() -> impl Bundle {
 /// A flex row rather than the design's grid, so a tab can be hidden without
 /// leaving an empty column behind.
 ///
-/// Every tab but the first starts hidden and the bar with them, until a page
-/// has something to show. A bar with a single tab would only take up room.
+/// The Scene tab starts hidden until a suite gives it something to show.
 fn tab_bar(locale: &UiLocale) -> impl Bundle {
     let tab = |tab: Tab| {
         button(tab.title(locale))
             .edit_node(|n| {
                 n.flex_grow = 1.0;
                 n.flex_basis = Val::ZERO;
-                if tab != Tab::default() {
+                if tab == Tab::Scene {
                     n.display = Display::None;
                 }
             })
@@ -273,7 +283,6 @@ fn tab_bar(locale: &UiLocale) -> impl Bundle {
     };
     (
         Node {
-            display: Display::None,
             flex_shrink: 0.0,
             column_gap: Val::Px(4.0),
             padding: UiRect::axes(Val::Px(16.0), Val::Px(12.0)),
@@ -283,7 +292,7 @@ fn tab_bar(locale: &UiLocale) -> impl Bundle {
         BorderColor::all(BORDER),
         Pickable::IGNORE,
         UiElement::Container(UiContainer::TabBar),
-        children![tab(Tab::Character), tab(Tab::Scene)],
+        children![tab(Tab::Character), tab(Tab::Scene), tab(Tab::Render)],
     )
 }
 
