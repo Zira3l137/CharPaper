@@ -65,6 +65,9 @@ fn main() -> Result<()> {
     let state_path = exe_dir.join(STATE_FILE);
     let loaded = state::load(&state_path);
     config.scene.remembered = loaded.state.suites.clone();
+    if config.scene.suite.is_none() {
+        config.scene.suite = loaded.state.suite.clone();
+    }
     config.scene.render = loaded.state.render.clone();
     let characters =
         config.scene.characters_dir.to_str().with_context(|| {

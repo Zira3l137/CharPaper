@@ -6,6 +6,7 @@
 
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
+use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 
@@ -25,6 +26,11 @@ use crate::widgets::*;
 
 pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
     children![
+        section(
+            locale.get_or("section.suite", "CHARACTER"),
+            UiContainer::Section(Section::Suite),
+            cycler(locale.get_or("label.suite", "Character"), Cycler::Suite),
+        ),
         section(
             locale.get_or("section.outfit", "OUTFIT"),
             UiContainer::Section(Section::Outfit),
@@ -48,7 +54,8 @@ pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
     ]
 }
 
-/// Skins are known as soon as the suite is, so their tiles are made once.
+/// Skins are known as soon as the suite is, so their tiles are made once per
+/// suite, replacing the last suite's.
 pub(crate) fn fill_outfits(
     mut commands: Commands,
     suite: Res<ActiveSuite>,
@@ -58,17 +65,14 @@ pub(crate) fn fill_outfits(
     for mut text in &mut status {
         text.0 = suite.name.clone();
     }
-    if suite.skins.is_empty() {
-        return;
-    }
 
     for (entity, element, mut node) in containers {
         match element {
             UiElement::Container(UiContainer::Section(Section::Outfit)) => {
-                node.display = Display::Flex;
+                node.display = if suite.skins.is_empty() { Display::None } else { Display::Flex };
             }
             UiElement::Container(UiContainer::OutfitGrid) => {
-                commands.entity(entity).with_children(|grid| {
+                commands.entity(entity).despawn_children().with_children(|grid| {
                     for skin in &suite.skins {
                         grid.spawn(
                             button(&skin.name)
@@ -119,12 +123,32 @@ pub(crate) fn show_animation(
     }
 }
 
+/// The suite cycler only shows with two or more suites to pick from.
+pub(crate) fn show_suite(
+    state: Res<CharacterState>,
+    available: Res<AvailableSuites>,
+    mut sections: Query<(&UiElement, &mut Node)>,
+    mut values: Query<(&CyclerValue, &mut Text)>,
+) {
+    for (element, mut node) in &mut sections {
+        if *element == UiElement::Container(UiContainer::Section(Section::Suite)) {
+            node.display = if available.0.len() > 1 { Display::Flex } else { Display::None };
+        }
+    }
+    for (value, mut text) in &mut values {
+        if value.0 == Cycler::Suite {
+            text.0 = state.suite.clone().unwrap_or_else(|| "-".into());
+        }
+    }
+}
+
 /// Handles the clicks that change the scene. The panel's own buttons (tabs,
 /// collapse, quit) stay in `on_button_click`.
 pub(crate) fn on_scene_click(
     event: On<Pointer<Click>>,
     elements: Query<&UiElement>,
     clips: Option<Res<CharacterClips>>,
+    available: Res<AvailableSuites>,
     mut state: ResMut<CharacterState>,
 ) {
     let Ok(UiElement::Button(button)) = elements.get(event.entity) else {
@@ -132,6 +156,13 @@ pub(crate) fn on_scene_click(
     };
     match button {
         UiButton::Skin(name) => state.skin = Some(name.clone()),
+        UiButton::Previous(Cycler::Suite) | UiButton::Next(Cycler::Suite) => {
+            let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
+            let forward = matches!(button, UiButton::Next(_));
+            if let Some(next) = step(&options, &state.suite, forward) {
+                state.suite = next;
+            }
+        }
         UiButton::Previous(Cycler::Animation) | UiButton::Next(Cycler::Animation) => {
             let Some(clips) = clips else {
                 return;

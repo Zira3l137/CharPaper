@@ -25,6 +25,9 @@ pub const STATE_FILE: &str = "state.toml";
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(default)]
 pub struct SavedState {
+    /// The suite shown last, by folder name; `--suite` still wins.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suite: Option<String>,
     pub ui: UiState,
     pub render: RenderSettings,
     /// Keyed by suite folder name, so each character keeps its own choices.
@@ -116,6 +119,9 @@ fn save(
     let mut next = file.saved.clone();
     next.ui = ui.clone();
     next.render = render.clone();
+    if character.suite.is_some() {
+        next.suite = character.suite.clone();
+    }
     if let Some(suite) = suite {
         next.suites.entry(suite.folder()).or_default().merge(Picks::from_state(&character));
     }

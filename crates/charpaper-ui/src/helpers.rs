@@ -312,6 +312,7 @@ pub enum UiContainer {
 /// something in it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
+    Suite,
     Outfit,
     Animation,
     Camera,
@@ -325,6 +326,7 @@ pub enum Section {
 /// The values stepped through with `<` and `>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cycler {
+    Suite,
     Animation,
     Camera,
     Environment,

@@ -9,6 +9,7 @@ mod widgets;
 use bevy::prelude::*;
 use charpaper_scene::ActiveLook;
 use charpaper_scene::ActiveSuite;
+use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::LookBackup;
@@ -79,6 +80,10 @@ impl Plugin for CustomUiPlugin {
             Update,
             (
                 pages::fill_outfits.run_if(resource_added::<ActiveSuite>),
+                pages::show_suite.run_if(
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_changed::<AvailableSuites>),
+                ),
                 pages::style_outfits.run_if(resource_changed::<CharacterState>),
                 // Eager, so `resource_added` runs every frame and its idea of
                 // "since last time" stays current; short-circuited behind a
