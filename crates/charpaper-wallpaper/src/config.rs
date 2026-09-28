@@ -1,74 +1,41 @@
-//! Settings that describe *how* to attach, independent of any platform.
-
 use clap::ValueEnum;
 
-/// How we want the window glued to the desktop.
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AttachStrategy {
-    /// Look at the machine and pick the right one. Almost always correct.
+    /// Pick the right one for this machine.
     Auto,
-
-    /// Windows 10 / older Windows 11: parent to the top-level `WorkerW` window
-    /// that sits behind the icon layer.
+    /// Windows 10 and older Windows 11: inside the top-level WorkerW behind the icons.
     #[value(name = "classic")]
     ClassicWorkerW,
-
-    /// Newer Windows 11 ("raised desktop"): there is no top-level `WorkerW`.
-    /// Become a layered child of `Progman`, z-ordered below the icons.
+    /// Newer Windows 11: a layered child of Progman, below the icons.
     #[value(name = "raised")]
     RaisedDesktopChild,
-
-    /// Last resort: parent straight to `Progman`. Draws over the icons, which
-    /// is wrong, but proves the pipeline works.
+    /// Last resort: straight into Progman. Draws over the icons.
     #[value(name = "progman")]
     ProgmanDirect,
-
     /// Don't attach at all.
     None,
 }
 
-/// Whether our window gets the `WS_EX_LAYERED` extended style.
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayeredMode {
-    /// Add it only when the chosen strategy needs it (raised-desktop path).
+    /// Only when the strategy needs it.
     Auto,
     Always,
     Never,
 }
 
-/// No `Resource` derive: that would drag Bevy in. The plugin wraps it.
 #[derive(Clone, Debug)]
 pub struct WallpaperConfig {
-    /// Master switch. `false` means "just be a normal window".
     pub enabled: bool,
-
-    /// Do everything except the calls that actually modify a window. The log
-    /// still tells you exactly what *would* have happened.
     pub dry_run: bool,
-
-    /// Print the desktop window tree once at startup.
     pub dump_window_tree: bool,
-
     pub strategy: AttachStrategy,
-
-    /// Ask the shell to create the background `WorkerW` window before we look
-    /// for it (the famous undocumented `0x052C` message).
     pub spawn_worker_w: bool,
-
     pub layered: LayeredMode,
-
-    /// Reveal the window once attach finishes. Pair with
-    /// `WindowConfig::start_hidden` to avoid a flash of a floating window.
     pub show_window_after_attach: bool,
-
-    /// Replay the mouse input the desktop keeps from us once attached.
     pub forward_input: bool,
-
-    /// The window handle does not exist on frame 0, and the shell sometimes
-    /// needs a moment after login. Retry this many times before giving up.
     pub max_attempts: u32,
-
-    /// Frames to wait between attempts. 30 frames is roughly half a second.
     pub frames_between_attempts: u32,
 }
 

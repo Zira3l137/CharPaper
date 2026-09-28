@@ -1,10 +1,3 @@
-//! The viewer's choices, kept in `state.toml` next to the executable between
-//! runs.
-//!
-//! Saved whenever they change rather than on exit. A wallpaper usually ends
-//! with a logoff, a shutdown or a killed process, and none of those runs
-//! Bevy's exit path, so an on-exit save would almost never happen.
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
@@ -25,17 +18,14 @@ pub const STATE_FILE: &str = "state.toml";
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(default)]
 pub struct SavedState {
-    /// The suite shown last, by folder name; `--suite` still wins.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suite: Option<String>,
     pub ui: UiState,
     pub render: RenderSettings,
-    /// Keyed by suite folder name, so each character keeps its own choices.
     pub suites: BTreeMap<String, Picks>,
 }
 
-/// What reading the file produced. Problems are kept for later because this
-/// runs before Bevy's logger exists.
+// Problems are returned, not logged, because this runs before Bevy's logger exists.
 pub struct Loaded {
     pub state: SavedState,
     pub problem: Option<String>,
@@ -53,8 +43,7 @@ pub fn load(path: &Path) -> Loaded {
     match toml::from_str(&text) {
         Ok(state) => Loaded { state, problem: None },
         Err(err) => {
-            // Moved aside rather than overwritten by the next save, in case
-            // it was edited by hand and only needs fixing.
+            // Moved aside rather than overwritten, in case it was edited by hand.
             let aside = path.with_extension("toml.bad");
             let moved = fs::rename(path, &aside).is_ok();
             let fate = if moved {
@@ -67,6 +56,8 @@ pub fn load(path: &Path) -> Loaded {
     }
 }
 
+// Saved on every change rather than on exit: a logoff, shutdown or killed process never
+// runs Bevy's exit path.
 pub struct StatePlugin {
     pub path: PathBuf,
     pub saved: SavedState,
@@ -96,10 +87,8 @@ impl Plugin for StatePlugin {
 #[derive(Resource)]
 struct StateFile {
     path: PathBuf,
-    /// What the file holds now, including suites other than the active one.
     saved: SavedState,
     problem: Option<String>,
-    /// Warn about a failing write once, not on every click.
     write_failed: bool,
 }
 
@@ -143,8 +132,7 @@ fn save(
     file.saved = next;
 }
 
-/// Written to a temporary file and renamed over the real one, so a process
-/// killed mid-write leaves the old file intact rather than a truncated one.
+// Written to a temporary file and renamed, so a crash mid-write can't truncate it.
 fn write(path: &Path, state: &SavedState) -> anyhow::Result<()> {
     let text = toml::to_string_pretty(state)?;
     let temporary = path.with_extension("toml.tmp");

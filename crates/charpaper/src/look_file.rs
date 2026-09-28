@@ -1,10 +1,3 @@
-//! Keeps `suite.toml` in step with the look the viewer edits in the settings
-//! panel, and puts the author's version back on request.
-//!
-//! Only settings the manifest has a key for live here. Everything else the
-//! viewer picks is app state and goes to `state.toml` instead, so each setting
-//! has exactly one home.
-
 use bevy::prelude::*;
 use charpaper_scene::ActiveLook;
 use charpaper_scene::ActiveSuite;
@@ -27,8 +20,6 @@ fn find_backup(suite: Res<ActiveSuite>, mut backup: ResMut<LookBackup>) {
     backup.exists = charpaper_suite::has_backup(&suite.root);
 }
 
-/// Also runs when the look first appears and after a restore. Both match the
-/// file already, so `save_look` finds nothing to write and makes no backup.
 fn save(suite: Option<Res<ActiveSuite>>, look: Res<ActiveLook>, mut backup: ResMut<LookBackup>) {
     let Some(suite) = suite else {
         return;
@@ -59,8 +50,7 @@ fn restore(
         warn!("cannot restore the suite's settings: {err}");
         return;
     }
-    // The author's file may set values the edited one did not, so the whole
-    // look is read again rather than patched.
+    // The author's file may set values the edited one didn't, so reload the whole look.
     match Suite::load(&suite.root) {
         Ok(fresh) => {
             **look = fresh.look();

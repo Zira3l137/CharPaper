@@ -1,5 +1,3 @@
-//! Finding the desktop's background layer and gluing our window into it.
-
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::LayeredMode;
 use charpaper_wallpaper::WallpaperConfig;
@@ -14,27 +12,15 @@ use crate::sys::Hwnd;
 
 const WORKER_W_REQUEST_TIMEOUT_MS: u32 = 1000;
 
-/// The shell windows that are related to desktop rendering, plus which layout this machine uses.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ShellWindows {
     pub progman: Hwnd,
-
-    /// The icon host. `0` if we could not find it.
     pub defview: Hwnd,
-
-    /// The wallpaper painter. `0` if absent.
     pub worker_w: Hwnd,
-
-    /// True when `Progman` has `WS_EX_NOREDIRECTIONBITMAP`, i.e. the newer
-    /// raised-desktop layout.
     pub raised_desktop: bool,
-
-    /// In the classic layout, the top-level window that owns `defview`.
-    pub defview_host: Hwnd,
 }
 
 impl ShellWindows {
-    /// What `AttachStrategy::Auto` should resolve to for this machine.
     pub fn recommended_strategy(&self) -> AttachStrategy {
         if self.progman == 0 {
             AttachStrategy::None
@@ -48,14 +34,8 @@ impl ShellWindows {
     }
 }
 
-/// Ask Explorer to create the background `WorkerW`.
-///
-/// `0x052C` is undocumented. Two parameter combinations are known to work, and
-/// which one a build responds to varies, so we send both. If the window already
-/// exists the message is a no-op, which makes sending it twice harmless.
-///
-/// The `wparam = 0xD, lparam = 0x1` form is the one current Windows 11 builds
-/// respond to; the `0, 0` form is the classic Windows 7/10 incantation.
+// 0x052C is undocumented. Windows builds differ in which parameters they answer, so both
+// known forms are sent. It does nothing when the WorkerW already exists.
 pub fn request_worker_w(progman: Hwnd) {
     const ATTEMPTS: [(usize, isize); 2] = [(0xD, 0x1), (0x0, 0x0)];
 
@@ -68,7 +48,7 @@ pub fn request_worker_w(progman: Hwnd) {
                 wparam,
                 lparam,
                 sys::SMTO_NORMAL,
-                // A wedged Explorer must not freeze us.
+                // A timeout, so a hung Explorer can't hang us too.
                 WORKER_W_REQUEST_TIMEOUT_MS,
                 &mut result,
             )
@@ -80,7 +60,6 @@ pub fn request_worker_w(progman: Hwnd) {
     }
 }
 
-/// Walk the window tree and work out what we are dealing with. Read-only.
 pub fn find_shell_windows() -> ShellWindows {
     let mut found = ShellWindows::default();
 
@@ -101,15 +80,11 @@ pub fn find_shell_windows() -> ShellWindows {
         }
     );
 
-    // Classic layout: a top-level window hosting SHELLDLL_DefView. Last match
-    // wins; multi-monitor setups have produced more than one candidate.
     for top in sys::top_level_windows() {
         let defview = sys::find_window_ex(top, 0, "SHELLDLL_DefView");
         if defview != 0 {
             found.defview = defview;
-            found.defview_host = top;
-            // Passing 0 as the parent makes FindWindowExW search top-level
-            // windows, where `after` means "resume from this one in z-order".
+            // With no parent this searches top-level windows, starting after `top` in z-order.
             let candidate = sys::find_window_ex(0, top, "WorkerW");
             if candidate != 0 {
                 found.worker_w = candidate;
@@ -124,16 +99,13 @@ pub fn find_shell_windows() -> ShellWindows {
         }
     }
 
-    // Raised-desktop layout: both live inside Progman.
     if found.raised_desktop {
         let child_defview = sys::find_window_ex(found.progman, 0, "SHELLDLL_DefView");
         let child_worker = sys::find_window_ex(found.progman, 0, "WorkerW");
         if child_defview != 0 {
             found.defview = child_defview;
-            found.defview_host = found.progman;
         }
-        // Overwrite: in this layout a top-level result, if any, is not the
-        // window that paints our wallpaper.
+        // In this layout a top-level WorkerW is not the one behind the icons.
         found.worker_w = child_worker;
         debug!(
             "Progman children: SHELLDLL_DefView = {child_defview:#x}, WorkerW = {child_worker:#x}"
@@ -147,7 +119,6 @@ pub fn find_shell_windows() -> ShellWindows {
     found
 }
 
-/// Attach `hwnd` to the desktop background layer.
 pub fn attach(
     hwnd: Hwnd,
     config: &WallpaperConfig,
@@ -190,11 +161,6 @@ pub fn attach(
     }
 }
 
-// ---------------------------------------------------------------------------
-// The three attach paths
-// ---------------------------------------------------------------------------
-
-/// Attaches to the classic layout's `WorkerW` window (legacy case)
 fn attach_classic(
     hwnd: Hwnd,
     shell: &ShellWindows,
@@ -210,9 +176,6 @@ fn attach_classic(
     Ok(())
 }
 
-/// Attaches to the progman itself effectively rendering on top of the desktop icons.
-/// Fallback, if this runs it means none of the other attach methods succeeded essentially meaning
-/// the desktop is not supported or the window manager is not compatible.
 fn attach_progman(
     hwnd: Hwnd,
     shell: &ShellWindows,
@@ -226,11 +189,6 @@ fn attach_progman(
     Ok(())
 }
 
-/// The newer Windows 11 path.
-///
-/// Order matters here. The styles must be applied *before* `SetParent`;
-/// applying `WS_EX_LAYERED` afterwards is known to silently fail for some
-/// engines (Lively hit this with Godot).
 fn attach_raised(
     hwnd: Hwnd,
     shell: &ShellWindows,
@@ -240,6 +198,7 @@ fn attach_raised(
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
     }
 
+    // Styles must be set before SetParent. WS_EX_LAYERED added afterwards can silently fail.
     let style = sys::get_window_long_ptr(hwnd, sys::GWL_STYLE);
     sys::set_window_long_ptr(hwnd, sys::GWL_STYLE, style | sys::WS_CHILD);
     debug!("added WS_CHILD (style {style:#x} -> {:#x})", style | sys::WS_CHILD);
@@ -254,14 +213,8 @@ fn attach_raised(
     Ok(())
 }
 
-/// Sets the window attributes to layered + fully opaque based on the config.
 fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig) {
-    let want_layered = match config.layered {
-        LayeredMode::Always => true,
-        LayeredMode::Never => false,
-        LayeredMode::Auto => true, // the raised path is the case that needs it
-    };
-    if want_layered {
+    if config.layered != LayeredMode::Never {
         let ex = sys::get_window_long_ptr(hwnd, sys::GWL_EXSTYLE);
         if ex & sys::WS_EX_LAYERED == 0 {
             sys::set_window_long_ptr(hwnd, sys::GWL_EXSTYLE, ex | sys::WS_EX_LAYERED);
@@ -273,7 +226,6 @@ fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig) {
     }
 }
 
-/// Moves `hwnd` behind the icon layer, if possible.
 fn ensure_window_behind_icon_layer(hwnd: Hwnd, shell: &ShellWindows) {
     if shell.defview != 0 {
         let ok = unsafe {
@@ -297,8 +249,7 @@ fn ensure_worker_w_at_bottom(shell: &ShellWindows) {
     if shell.worker_w == 0 {
         return;
     }
-    // `EnumChildWindows` visits in z-order, front to back, so the last handle
-    // it reports is the bottom-most descendant.
+    // EnumChildWindows goes front to back, so the last window is the bottom-most one.
     let last = sys::child_windows(shell.progman).last().copied().unwrap_or(0);
     if last == shell.worker_w {
         return;
@@ -317,13 +268,9 @@ fn ensure_worker_w_at_bottom(shell: &ShellWindows) {
     debug!("pushed WorkerW to the bottom of the z-order (ok={})", ok != 0);
 }
 
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
 fn set_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
-    // SetParent returns the *previous* parent. Zero means either failure or
-    // "it had no parent", so we clear the error code and check it explicitly.
+    // SetParent returns the old parent, and 0 means both "failed" and "had none".
+    // Only the error code tells them apart.
     unsafe { sys::SetLastError(0) };
     let previous = unsafe { sys::SetParent(hwnd, parent) };
     let code = sys::last_error();
@@ -334,18 +281,8 @@ fn set_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
     Ok(())
 }
 
-/// Resize our window to cover the whole parent.
-///
-/// After `SetParent`, our coordinates are relative to the parent's client area,
-/// so `(0, 0)` is the parent's top-left corner rather than the screen's. The
-/// desktop parent spans the entire virtual screen, which is why filling it
-/// covers every monitor at once. Per-monitor placement is a later milestone;
-/// it needs `MapWindowPoints` to translate screen coordinates into this
-/// parent's space, because a secondary monitor above or left of the primary
-/// gives you negative screen coordinates.
 fn fill_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
-    // `ok_or_else` rather than `ok_or`: the closure must not read the thread's
-    // last-error code until we know the call actually failed.
+    // After SetParent our position is relative to the parent, which spans every monitor.
     let rect = sys::window_rect(parent)
         .ok_or_else(|| WallpaperError::native("GetWindowRect(parent)", sys::last_error()))?;
 
@@ -359,14 +296,6 @@ fn fill_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Diagnostics
-// ---------------------------------------------------------------------------
-
-/// A readable dump of the desktop-related parts of the window tree.
-///
-/// This is the thing to run and paste somewhere when the attach misbehaves on a
-/// machine you cannot reproduce on. It only reads.
 pub fn dump_window_tree() -> Vec<String> {
     let mut out = vec!["--- desktop window tree ---".to_string()];
 
@@ -387,9 +316,8 @@ pub fn dump_window_tree() -> Vec<String> {
             sys::get_window_long_ptr(top, sys::GWL_EXSTYLE),
         ));
 
-        // EnumChildWindows walks all descendants, not just direct children, so
-        // we cap the output to keep this readable.
         for (i, child) in sys::child_windows(top).into_iter().enumerate() {
+            // This lists all descendants, not just children, so cap it.
             if i >= 12 {
                 out.push("      ... (truncated)".to_string());
                 break;

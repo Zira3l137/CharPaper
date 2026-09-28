@@ -1,6 +1,3 @@
-//! Colours and sizes from the settings design (the "CharPaper Settings Menu"
-//! canvas), so every widget draws from the same few values.
-
 use bevy::prelude::*;
 
 pub(crate) const PANEL_BG: Color = Color::srgba_u8(18, 20, 26, 240);

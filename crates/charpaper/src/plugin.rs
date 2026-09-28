@@ -1,5 +1,3 @@
-//! Wires a [`WallpaperBackend`] into the Bevy app.
-
 use bevy::ecs::system::NonSendMarker;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
@@ -15,8 +13,7 @@ use crate::backend::create_backend;
 use crate::input::PointerSourceResource;
 use crate::input::replay_forwarded_pointer;
 
-/// `WallpaperConfig` cannot derive `Resource` without pulling Bevy into a
-/// Bevy-free crate. `Deref` means systems still read it as if it had.
+// WallpaperConfig lives in a Bevy-free crate, so it can't derive Resource itself.
 #[derive(Resource, Deref)]
 struct WallpaperSettings(WallpaperConfig);
 
@@ -41,8 +38,7 @@ impl Plugin for WallpaperPlugin {
             .init_resource::<AttachState>()
             .add_systems(Startup, probe_desktop)
             .add_systems(Update, attach_window)
-            // winit writes its input before `First` even starts. Running at the
-            // front of `First` lets picking read ours in the same frame, too.
+            // winit writes its input before First, so picking still sees ours this frame.
             .add_systems(
                 First,
                 replay_forwarded_pointer
@@ -52,9 +48,7 @@ impl Plugin for WallpaperPlugin {
     }
 }
 
-/// `NonSendMarker` pins the system to the main thread. Bevy spreads systems
-/// across a thread pool by default, and a window handle belongs to the thread
-/// that created it.
+// NonSendMarker keeps a system on the main thread, which owns the window.
 fn probe_desktop(
     _main_thread: NonSendMarker,
     mut backend: ResMut<BackendResource>,
@@ -72,11 +66,8 @@ fn probe_desktop(
     }
 }
 
-/// Runs every frame until it succeeds (or runs out of attempts).
-///
-/// Not `Startup`: `RawHandleWrapper` is added when winit creates the real
-/// window, and commands apply at end of schedule, so it is absent on frame
-/// zero. Retrying also covers Explorer still booting right after login.
+// Retried every few frames: the window handle doesn't exist on the first frame, and
+// Explorer may still be starting up right after login.
 fn attach_window(
     _main_thread: NonSendMarker,
     mut commands: Commands,
@@ -98,8 +89,7 @@ fn attach_window(
     let handle = handles.single().ok().map(RawHandleWrapper::get_window_handle);
     let step = decide(&mut backend.0, &config, handle);
 
-    // Set on failure too: an invisible process with no way to close it is a
-    // worse outcome than an ugly floating window.
+    // Shown on failure too: an invisible process with no way to close it is worse.
     let mut reveal = false;
 
     match step {
@@ -134,12 +124,8 @@ fn attach_window(
     }
 }
 
-/// Split out so the system never holds a mutable `Query` and a backend borrow
-/// at once.
 enum Step {
-    /// Not ready (or failed); try again next time.
     Wait(String),
-    /// Stop trying, with a line to log.
     Done { message: String, input: Option<Box<dyn PointerSource>> },
 }
 
@@ -172,14 +158,11 @@ fn decide(
             let message = format!("attached to desktop using {how}");
             Step::Done { message, input: start_forwarding(backend, config) }
         }
-        // `{:#}` walks the source chain, so a failed Win32 call logs
-        // "SetParent failed: The parameter is incorrect." not just the former.
         Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
     }
 }
 
-/// A failure here is logged and ignored: a wallpaper that renders but cannot
-/// be clicked is still better than no wallpaper.
+// A failure is only logged: a wallpaper that can't be clicked beats no wallpaper.
 fn start_forwarding(
     backend: &mut Box<dyn WallpaperBackend>,
     config: &WallpaperConfig,

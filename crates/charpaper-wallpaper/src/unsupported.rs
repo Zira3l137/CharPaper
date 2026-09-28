@@ -1,13 +1,3 @@
-//! Backend used on every OS we haven't implemented yet.
-//!
-//! It does nothing and says so. The app still runs, you just get an ordinary
-//! window instead of a wallpaper. This is what keeps `cargo check` honest on a
-//! non-Windows machine.
-//!
-//! To add Linux support later: add a `charpaper-linux` crate that implements the
-//! same trait, and extend the `#[cfg]` dispatch in `charpaper/src/backend.rs`.
-//! Nothing else changes.
-
 use raw_window_handle::RawWindowHandle;
 
 use crate::backend::AttachOutcome;

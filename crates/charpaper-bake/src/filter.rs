@@ -1,5 +1,3 @@
-//! The two blurs: GGX for the specular map, cosine-weighted for the diffuse.
-
 use std::f32::consts::PI;
 use std::f32::consts::TAU;
 
@@ -8,9 +6,7 @@ use crate::cube::CubeLevel;
 use crate::panorama::Panorama;
 use crate::panorama::Rgb;
 
-/// One level per halving down to 1×1. Level `i` of `n` holds the reflection a
-/// surface of perceptual roughness `i / (n - 1)` sees, which is how Bevy picks
-/// the level to read for a material.
+// Level i of n is what perceptual roughness i / (n - 1) sees; that's how Bevy picks one.
 pub(crate) fn specular(source: &Panorama, size: u32, samples: u32) -> Vec<CubeLevel> {
     let count = size.max(1).ilog2() + 1;
     (0..count)
@@ -25,13 +21,9 @@ pub(crate) fn specular(source: &Panorama, size: u32, samples: u32) -> Vec<CubeLe
         .collect()
 }
 
-/// The GGX-weighted average of the light around `normal`, assuming the viewer
-/// looks straight down it, as prefiltered environment maps do (Karis 2013).
-///
-/// Each sample reads the panorama blurred to cover about the solid angle the
-/// sample stands for ("filtered importance sampling", Křivánek & Colbert
-/// 2008); reading it sharp would need thousands of samples to not speckle
-/// where a small bright light, like the sun, lands in the lobe.
+// GGX prefiltering with the viewer along the normal (Karis 2013). Each sample reads the
+// panorama blurred to its share of the lobe (filtered importance sampling, Křivánek &
+// Colbert 2008), which keeps a small bright sun from speckling.
 fn prefilter(source: &Panorama, normal: [f32; 3], alpha: f32, samples: u32) -> Rgb {
     let (tangent, bitangent) = basis(normal);
     let alpha2 = alpha * alpha;
@@ -56,7 +48,7 @@ fn prefilter(source: &Panorama, normal: [f32; 3], alpha: f32, samples: u32) -> R
             continue;
         }
 
-        // With view along the normal, the pdf of `light` is D(h) / 4.
+        // With the view along the normal, the pdf of `light` is D(h) / 4.
         let d = alpha2 / (PI * (n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0).powi(2));
         let covered = 1.0 / (samples as f32 * d / 4.0);
         let lod = 0.5 * (covered / texel).log2() + 1.0;
@@ -70,16 +62,8 @@ fn prefilter(source: &Panorama, normal: [f32; 3], alpha: f32, samples: u32) -> R
     sum.map(|s| if weight > 0.0 { s / weight } else { 0.0 })
 }
 
-/// The light a matte surface facing each direction receives, divided by π so
-/// a white surface shows it as is (the Lambertian map the glTF IBL Sampler
-/// makes).
-///
-/// Summed exactly over a 128×64 copy of the panorama rather than through
-/// spherical harmonics, the usual shortcut: nine harmonics cannot hold a sun,
-/// and ring with it, lighting the side facing away from the sun several
-/// times brighter than it should be. The copy is small enough that summing it
-/// for every texel of a 32-pixel cube still takes well under a second, and
-/// shrinking it by averaging keeps the sun's full energy.
+// Summed directly over a 128×64 copy rather than through spherical harmonics, which can't
+// hold a sun and ring around it. Divided by π so a white surface shows the light as is.
 pub(crate) fn diffuse(source: &Panorama, size: u32) -> Vec<CubeLevel> {
     let texels: Vec<_> = source.texels(64).collect();
     vec![cube::render(size.max(1), |normal| {
@@ -96,8 +80,6 @@ pub(crate) fn diffuse(source: &Panorama, size: u32) -> Vec<CubeLevel> {
     })]
 }
 
-/// Evenly spread points in the unit square; far smoother than random ones for
-/// the same count.
 fn hammersley(i: u32, n: u32) -> (f32, f32) {
     (i as f32 / n as f32, i.reverse_bits() as f32 / 4_294_967_296.0)
 }

@@ -1,9 +1,3 @@
-//! The Character tab, and how clicking on it changes the scene.
-//!
-//! The scene owns the truth in [`CharacterState`]: clicks write to it, and the
-//! widgets restyle themselves from it. Nothing here keeps a copy, so a change
-//! made elsewhere (a config reload, later a hotkey) shows up here too.
-
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::AvailableSuites;
@@ -80,8 +74,6 @@ pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
     ]
 }
 
-/// Skins are known as soon as the suite is, so their tiles are made once per
-/// suite, replacing the last suite's.
 pub(crate) fn fill_outfits(
     mut commands: Commands,
     suite: Res<ActiveSuite>,
@@ -128,8 +120,6 @@ pub(crate) fn style_outfits(
     }
 }
 
-/// Shown while the worn skin has expressions: they arrive with its file, so
-/// the section follows each skin change. Neutral is always the first option.
 pub(crate) fn show_expression(
     state: Res<CharacterState>,
     expressions: Res<Expressions>,
@@ -150,8 +140,6 @@ pub(crate) fn show_expression(
     }
 }
 
-/// Clips arrive a moment after the suite, once their files have loaded, so
-/// the section appears then rather than at startup.
 pub(crate) fn show_animation(
     state: Res<CharacterState>,
     clips: Option<Res<CharacterClips>>,
@@ -171,8 +159,6 @@ pub(crate) fn show_animation(
     }
 }
 
-/// One row per mesh object of the worn skin, rebuilt whenever the worn skin's
-/// objects change: after it spawns, and emptied when it goes.
 pub(crate) fn fill_objects(
     mut commands: Commands,
     objects: Res<SkinObjects>,
@@ -208,8 +194,7 @@ pub(crate) fn fill_objects(
     });
 }
 
-/// The object list only makes sense with two or more objects: switching off
-/// a skin's only object is switching off the skin.
+// Only with two or more objects: switching off a skin's only object is switching off the skin.
 pub(crate) fn show_objects(
     ui: Res<UiState>,
     state: Res<CharacterState>,
@@ -255,7 +240,6 @@ pub(crate) fn show_objects(
     }
 }
 
-/// The suite cycler only shows with two or more suites to pick from.
 pub(crate) fn show_suite(
     state: Res<CharacterState>,
     available: Res<AvailableSuites>,
@@ -274,8 +258,6 @@ pub(crate) fn show_suite(
     }
 }
 
-/// Handles the clicks that change the scene. The panel's own buttons (tabs,
-/// collapse, quit) stay in `on_button_click`.
 pub(crate) fn on_scene_click(
     event: On<Pointer<Click>>,
     elements: Query<&UiElement>,
@@ -313,7 +295,7 @@ pub(crate) fn on_scene_click(
             let Some(skin) = state.skin.clone() else {
                 return;
             };
-            // Neutral is kept as an empty name; see `CharacterState::expressions`.
+            // Neutral is an empty name; see CharacterState::expressions.
             let options: Vec<String> =
                 std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect();
             let current = state.expression().unwrap_or_default().to_string();
@@ -336,8 +318,7 @@ pub(crate) fn on_scene_click(
     }
 }
 
-/// The option before or after `current`, wrapping around. An unknown or unset
-/// `current` steps to the first option.
+// Wraps around. An unknown current value steps to the first option.
 pub(crate) fn step<T: PartialEq + Clone>(options: &[T], current: &T, forward: bool) -> Option<T> {
     let len = options.len();
     if len == 0 {

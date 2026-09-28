@@ -1,7 +1,3 @@
-//! Writes cubemaps as KTX2 in RGB9E5: three 9-bit mantissas sharing one 5-bit
-//! exponent, 4 bytes a texel. HDR values up to 65408 survive, at a quarter of
-//! the size of four half floats, and Bevy samples it natively.
-
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -9,15 +5,16 @@ use std::path::Path;
 use crate::cube::CubeLevel;
 use crate::panorama::Rgb;
 
+// RGB9E5: three 9-bit mantissas sharing a 5-bit exponent. 4 bytes a texel, HDR up to
+// 65408, and Bevy samples it natively.
+
 const IDENTIFIER: [u8; 12] =
     [0xAB, b'K', b'T', b'X', b' ', b'2', b'0', 0xBB, b'\r', b'\n', 0x1A, b'\n'];
 const VK_FORMAT_E5B9G9R9_UFLOAT_PACK32: u32 = 123;
 const HEADER_LENGTH: usize = 80;
 const LEVEL_INDEX_ENTRY: usize = 24;
 
-/// `levels` from the largest down. Written to a temporary file and renamed
-/// into place, so a bake killed half way leaves no truncated map behind for
-/// the next start to mistake for a finished one.
+// Via a temporary file, so a killed bake leaves no truncated map to mistake for a finished one.
 pub(crate) fn write(path: &Path, levels: &[CubeLevel]) -> io::Result<()> {
     let bytes = encode(levels);
     let temporary = path.with_extension("ktx2.tmp");
@@ -31,8 +28,7 @@ pub(crate) fn encode(levels: &[CubeLevel]) -> Vec<u8> {
     let dfd_offset = HEADER_LENGTH + LEVEL_INDEX_ENTRY * levels.len();
     let data_start = (dfd_offset + dfd.len()).next_multiple_of(4);
 
-    // The format stores levels smallest first, while the index lists them
-    // largest first.
+    // Levels are stored smallest first but indexed largest first.
     let mut offsets = vec![0u64; levels.len()];
     let mut data = Vec::new();
     for (index, level) in levels.iter().enumerate().rev() {
@@ -62,10 +58,7 @@ pub(crate) fn encode(levels: &[CubeLevel]) -> Vec<u8> {
     out
 }
 
-/// The smallest valid descriptor: one basic block, linear RGB, 4 bytes a
-/// texel, and no per-channel samples. Bevy reads the format from the header's
-/// `vkFormat` and only falls back to this block when that is unset, but the
-/// format requires one to be present.
+// Bevy reads the format from vkFormat, but KTX2 requires this block anyway.
 fn data_format_descriptor() -> Vec<u8> {
     const BLOCK_SIZE: u32 = 24;
     const RGBSDA: u8 = 1;
@@ -81,7 +74,7 @@ fn data_format_descriptor() -> Vec<u8> {
     out
 }
 
-/// The packing from the `EXT_texture_shared_exponent` specification.
+// From the EXT_texture_shared_exponent specification.
 pub(crate) fn pack_rgb9e5(color: Rgb) -> u32 {
     const MANTISSA_BITS: i32 = 9;
     const BIAS: i32 = 15;
@@ -120,9 +113,8 @@ mod tests {
             let back = unpack_rgb9e5(pack_rgb9e5(color));
             let brightest = color.iter().cloned().fold(0.0f32, f32::max);
             for k in 0..3 {
-                // Channels share the brightest one's exponent, so their error
-                // is relative to it, not to themselves.
                 assert!(
+                    // Channels share the brightest one's exponent, so their error is relative to it.
                     (back[k] - color[k]).abs() <= brightest / 256.0 + 1e-6,
                     "{color:?} -> {back:?}"
                 );

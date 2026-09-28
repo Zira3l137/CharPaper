@@ -3,10 +3,7 @@ name = "charpaper-suite"
 version.workspace = true
 edition.workspace = true
 
-# Bevy-free on purpose: the suite format is plain data, so it builds in
-# seconds, is unit-testable, and powers `--check-suite` without starting the
-# engine. `gltf` is the same parser `bevy_gltf` uses, so in the full build it is
-# compiled once and shared.
+# Bevy-free on purpose.
 [dependencies]
 gltf.workspace = true
 schemars.workspace = true

@@ -1,10 +1,3 @@
-//! The Scene tab: which camera looks at the character, which environment
-//! surrounds it, and how the picture is finished.
-//!
-//! The look controls edit the scene's `ActiveLook`, which the app writes into
-//! the suite's `suite.toml`. Environment settings go to the environment on
-//! screen, so each one keeps its own brightness, shadows and exposure.
-
 use bevy::prelude::*;
 use charpaper_scene::ActiveLook;
 use charpaper_scene::ActiveSuite;
@@ -27,8 +20,7 @@ use crate::helpers::UiNode;
 use crate::pages::step;
 use crate::widgets::*;
 
-/// Brightness steps in cd/m², from a dim room to a bright sky, spaced so each
-/// step looks about as big as the last.
+// cd/m², spaced so each step looks about as big as the last.
 const BRIGHTNESS_STOPS: [f32; 15] = [
     50.0, 100.0, 200.0, 300.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0, 3000.0, 5000.0, 8000.0,
     12000.0, 20000.0, 30000.0,
@@ -78,7 +70,6 @@ fn rows(content: impl Bundle) -> impl Bundle {
     )
 }
 
-/// With a suite there is always something here: at least the image section.
 pub(crate) fn show_scene_tab(suite: Res<ActiveSuite>, nodes: Query<(&UiElement, &mut Node)>) {
     for (element, mut node) in nodes {
         let shown = match element {
@@ -97,10 +88,7 @@ pub(crate) fn show_scene_tab(suite: Res<ActiveSuite>, nodes: Query<(&UiElement, 
     }
 }
 
-/// Each environment row only shows when it would do something for the
-/// environment on screen: brightness needs a sky or reflections to scale,
-/// shadows need a scene with lights. A cycler over one environment has
-/// nothing to pick.
+// A row only shows when it would do something for the environment on screen.
 pub(crate) fn show_rows(
     suite: Option<Res<ActiveSuite>>,
     state: Res<CharacterState>,
@@ -187,7 +175,7 @@ pub(crate) fn on_scene_tab_click(
 
     match cycler {
         Cycler::Camera => {
-            // `None` is the orbit camera, which every suite has.
+            // None is the orbit camera, which every suite has.
             let options: Vec<Option<String>> = std::iter::once(None)
                 .chain(suite.cameras.iter().map(|c| Some(c.name.clone())))
                 .collect();
@@ -215,9 +203,8 @@ pub(crate) fn on_scene_tab_click(
     }
 }
 
-/// Environment settings are kept per environment, so they are only edited
-/// while one is shown. Exposure is the exception: without an environment it
-/// falls back to the suite-wide value, so that is the one it edits.
+// Environment settings are kept per environment, so they only change while one shows.
+// Exposure falls back to the suite-wide value without one.
 fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, forward: bool) {
     let resolved = Resolved::new(look, environment);
     let sign = if forward { 1.0 } else { -1.0 };
@@ -253,9 +240,7 @@ fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, f
     }
 }
 
-/// The next stop past `current` in `forward` direction, stopping at the ends.
-/// A value between stops, such as one typed into `suite.toml`, moves to the
-/// neighbouring stop rather than by a fixed amount.
+// A value between stops, like one typed into suite.toml, moves to the next stop.
 fn step_stops(stops: &[f32], current: f32, forward: bool) -> f32 {
     let next = if forward {
         stops.iter().copied().find(|&s| s > current * 1.001)
@@ -265,7 +250,7 @@ fn step_stops(stops: &[f32], current: f32, forward: bool) -> f32 {
     next.unwrap_or(current)
 }
 
-/// Keeps repeated steps from drifting into values like `0.15000001`.
+// Keeps repeated steps from drifting into values like 0.15000001.
 fn round(value: f32, per_unit: f32) -> f32 {
     (value * per_unit).round() / per_unit
 }

@@ -1,9 +1,6 @@
-//! Platform-neutral wallpaper abstractions.
-//!
-//! This crate deliberately depends on nothing but `raw-window-handle`. It is
-//! the seam between the engine half of the project and the operating-system
-//! half: backends implement [`WallpaperBackend`] without knowing Bevy exists,
-//! and the Bevy plugin drives them without knowing what an `HWND` is.
+// No Bevy here. This crate is the seam between the engine and the OS backends: backends
+// implement WallpaperBackend without knowing Bevy exists, and the app drives them without
+// knowing what an HWND is.
 
 mod backend;
 mod config;
@@ -22,7 +19,5 @@ pub use error::WallpaperError;
 pub use input::PointerButton;
 pub use input::PointerEvent;
 pub use input::PointerSource;
-// Re-exported so downstream crates match on the same `RawWindowHandle` type we
-// do without having to declare the dependency themselves.
 pub use raw_window_handle::RawWindowHandle;
 pub use unsupported::UnsupportedBackend;

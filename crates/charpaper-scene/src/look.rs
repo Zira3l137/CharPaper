@@ -1,10 +1,3 @@
-//! Applies the [`Look`], the settings the viewer can change while the app
-//! runs, to the camera and the environment's lights.
-//!
-//! Everything is recomputed from the look whenever it or the environment
-//! changes, so an edit from the settings panel shows up the same frame and
-//! there is no second copy of any value to fall out of step.
-
 use bevy::camera::Exposure;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::EnvironmentMapLight;
@@ -24,31 +17,23 @@ pub const DEFAULT_BLOOM: f32 = 0.0;
 pub const DEFAULT_BRIGHTNESS: f32 = 1000.0;
 pub const DEFAULT_SHADOWS: bool = true;
 
-/// The look in effect. Starts as the suite's; the settings panel edits it and
-/// the app writes the edits back into `suite.toml`.
 #[derive(Resource, Deref, DerefMut, Clone, Debug, Default)]
 pub struct ActiveLook(pub Look);
 
-/// Whether `suite.toml` has been edited since the suite's author wrote it,
-/// that is, whether there is anything for "Restore defaults" to restore. Kept
-/// up to date by the app, which owns the file.
 #[derive(Resource, Default, Debug)]
 pub struct LookBackup {
     pub exists: bool,
 }
 
-/// Asks the app to put the author's `suite.toml` back and reload the look.
 #[derive(Message, Debug)]
 pub struct RestoreLook;
 
-/// The values in effect for one environment, defaults filled in.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Resolved {
     pub tonemapping: SuiteTonemapping,
     pub bloom: f32,
     pub brightness: f32,
     pub shadows: bool,
-    /// The environment's own exposure, or the suite-wide one without it.
     pub exposure: f32,
 }
 
@@ -80,12 +65,10 @@ pub(crate) fn apply_look(
     let resolved = Resolved::new(&look, shown.name.as_deref());
 
     if let Ok((entity, skybox, environment_light)) = camera.single_mut() {
-        // Bevy's exposure is in EV100, where a higher value means a darker
-        // image; the look's is compensation, where higher means brighter.
+        // A higher EV100 is darker; a higher look exposure is brighter.
         let ev100 = Exposure::EV100_BLENDER - resolved.exposure;
         commands.entity(entity).insert((to_bevy(resolved.tonemapping), Exposure { ev100 }));
-        // Only present when asked for: it brings an HDR target and extra
-        // passes a wallpaper running all day should not pay for by default.
+        // Only when asked for: bloom costs an HDR target and extra passes, all day long.
         if resolved.bloom > 0.0 {
             commands.entity(entity).insert(Bloom { intensity: resolved.bloom, ..Bloom::NATURAL });
         } else {
@@ -99,8 +82,7 @@ pub(crate) fn apply_look(
         }
     }
 
-    // glTF cannot say whether a light casts shadows, and Bevy's loader leaves
-    // them off, so the look decides for every light in the environment.
+    // glTF can't say whether a light casts shadows, so the look decides for all of them.
     let Some(root) = shown.root else {
         return;
     };
@@ -123,8 +105,6 @@ pub(crate) fn apply_look(
     }
 }
 
-/// Runs `apply_look` when the look changes, when another environment is
-/// picked, and when the picked one's scene has spawned its lights.
 pub(crate) fn look_needs_applying(
     look: Option<Res<ActiveLook>>,
     shown: Res<ShownEnvironment>,

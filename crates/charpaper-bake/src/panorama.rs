@@ -1,5 +1,3 @@
-//! The source panorama, and looking up the light arriving from a direction.
-
 use std::f32::consts::PI;
 use std::f32::consts::TAU;
 use std::path::Path;
@@ -8,10 +6,9 @@ use crate::BakeError;
 
 pub(crate) type Rgb = [f32; 3];
 
-/// An equirectangular panorama, plus copies halved again and again down to a
-/// few pixels. A lookup meant to cover a wide cone reads a small copy: one
-/// pixel there already holds the average of many, which is what spares the
-/// specular filter from needing thousands of samples.
+// Plus copies halved again and again. A lookup covering a wide cone reads a small copy,
+// where one pixel already averages many, which spares the specular filter thousands of
+// samples.
 pub(crate) struct Panorama {
     levels: Vec<Level>,
 }
@@ -46,22 +43,17 @@ impl Panorama {
         Self { levels }
     }
 
-    /// Solid angle one full-size pixel covers at the equator, in steradians.
     pub fn texel_solid_angle(&self) -> f32 {
         let top = &self.levels[0];
         (TAU / top.width as f32) * (PI / top.height as f32)
     }
 
-    /// The light from `dir` at a detail matching a cube face of `face_size`,
-    /// so a huge panorama folded onto a small cube does not shimmer.
+    // Detail matched to a cube face of `face_size`, so a huge panorama on a small cube doesn't shimmer.
     pub fn sharp(&self, dir: [f32; 3], face_size: u32) -> Rgb {
-        // A face spans a quarter of the panorama's width.
         let ratio = self.levels[0].width as f32 / (4.0 * face_size as f32);
         self.sample(dir, ratio.max(1.0).log2())
     }
 
-    /// The light from `dir`, blurred to `lod` halvings, blending between the
-    /// two nearest copies.
     pub fn sample(&self, dir: [f32; 3], lod: f32) -> Rgb {
         let lod = lod.clamp(0.0, (self.levels.len() - 1) as f32);
         let low = lod.floor() as usize;
@@ -73,8 +65,6 @@ impl Panorama {
         [0, 1, 2].map(|i| a[i] + (b[i] - a[i]) * t)
     }
 
-    /// Every pixel of a small copy with the direction it faces and the solid
-    /// angle it covers, for summing the whole sphere.
     pub fn texels(&self, max_height: usize) -> impl Iterator<Item = ([f32; 3], f32, Rgb)> + '_ {
         let level = self
             .levels
@@ -109,8 +99,7 @@ impl Level {
         Level { width, height, pixels }
     }
 
-    /// Wraps around horizontally, where the panorama's edges meet, and clamps
-    /// at the poles.
+    // Wraps around horizontally, clamps at the poles.
     fn bilinear(&self, u: f32, v: f32) -> Rgb {
         let x = u * self.width as f32 - 0.5;
         let y = (v * self.height as f32 - 0.5).clamp(0.0, (self.height - 1) as f32);
@@ -130,15 +119,9 @@ impl Level {
 }
 
 // Two conventions meet here, and a mistake in either mirrors or turns the sky.
-//
-// Directions are in Bevy's world: Y up, and as the glTF exporter maps Blender,
-// Bevy (x, y, z) is Blender (x, -z, y).
-//
-// The panorama is laid out as Blender's Environment Texture reads it: the
-// image's centre faces Blender's +X, turning towards -Y as it goes right, with
-// the top row straight up. That is Cycles' `direction_to_equirectangular`.
-
-/// Where `dir` lands in the panorama, as `(u, v)` with `v` from the top.
+// Directions are Bevy's, Y up: Bevy (x, y, z) is Blender (x, -z, y), as the glTF exporter
+// maps it. The panorama is laid out as Blender's Environment Texture reads it: its centre
+// faces Blender's +X, turning towards -Y going right, with the top row straight up.
 pub(crate) fn equirect([x, y, z]: [f32; 3]) -> (f32, f32) {
     let (bx, by, bz) = (x, -z, y);
     let length = (bx * bx + by * by + bz * bz).sqrt().max(f32::MIN_POSITIVE);
@@ -147,8 +130,6 @@ pub(crate) fn equirect([x, y, z]: [f32; 3]) -> (f32, f32) {
     (u, v)
 }
 
-/// The direction the panorama's point `(u, v)` faces; the inverse of
-/// [`equirect`].
 pub(crate) fn direction(u: f32, v: f32) -> [f32; 3] {
     let azimuth = TAU * (0.5 - u);
     let latitude = PI * (0.5 - v);

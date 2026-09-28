@@ -1,10 +1,3 @@
-//! Which character suite is shown, and swapping it for another while the app
-//! runs.
-//!
-//! Reading a suite never touches its glTF files, so it happens synchronously
-//! on the frame the suite is picked. A missing or broken suite is logged, not
-//! fatal: a wallpaper with nothing on it beats one that never starts.
-
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
@@ -36,16 +29,11 @@ use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
 use crate::look::ActiveLook;
 
-/// The suite being shown. Absent when no suite could be loaded.
-///
-/// A newtype because `Suite` lives in a Bevy-free crate and cannot derive
-/// `Resource` itself.
+// A newtype because Suite lives in a Bevy-free crate.
 #[derive(Resource, Deref)]
 pub struct ActiveSuite(pub Suite);
 
 impl ActiveSuite {
-    /// The suite's folder name: how `--suite` names it, and how its
-    /// remembered choices are keyed.
     pub fn folder(&self) -> String {
         self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
     }
@@ -55,19 +43,14 @@ impl ActiveSuite {
     }
 }
 
-/// Every suite in the characters folder, by folder name, in name order.
 #[derive(Resource, Default, Debug)]
 pub struct AvailableSuites(pub Vec<String>);
 
-/// The viewer's choices per suite while the app runs: loaded from the saved
-/// state at startup, and updated whenever the viewer leaves a suite, so
-/// coming back to it picks up where they left off.
+// Choices per suite, updated on leaving one, so coming back picks up where it was left.
 #[derive(Resource, Default)]
 pub(crate) struct Remembered(pub BTreeMap<String, Picks>);
 
-/// The suite whose loading has been attempted, as opposed to
-/// [`CharacterState::suite`], the one asked for. Set even when loading
-/// failed, so a broken suite is tried once rather than every frame.
+// Set even when loading failed, so a broken suite is tried once, not every frame.
 #[derive(Resource, Default)]
 pub(crate) struct LoadedSuite(Option<String>);
 
@@ -102,10 +85,6 @@ pub(crate) fn discover_suites(
     }
 }
 
-/// Swaps the whole suite: everything the old one spawned or loaded goes, which
-/// frees it, and the new one is read from disk. The systems that fill a suite
-/// in (the character, its clips, camera and environment) then run because
-/// [`ActiveSuite`] has been added anew.
 pub(crate) fn switch_suite(
     mut commands: Commands,
     config: Res<SceneConfig>,
@@ -152,8 +131,6 @@ pub(crate) fn switch_suite(
     commands.insert_resource(ActiveSuite(suite));
 }
 
-/// Everything a suite leaves behind, gathered so [`switch_suite`] stays
-/// readable.
 #[derive(SystemParam)]
 pub(crate) struct Teardown<'w, 's> {
     characters: Query<'w, 's, Entity, With<Character>>,
@@ -167,10 +144,6 @@ pub(crate) struct Teardown<'w, 's> {
 }
 
 impl Teardown<'_, '_> {
-    /// Despawning the character takes the armature, the skin and the pieces
-    /// the skin moved onto the armature with it. Dropping the pending bakes
-    /// cancels them. Removing the resources drops the last handles to the
-    /// clips and anything else the suite loaded.
     fn run(&mut self, commands: &mut Commands) {
         for entity in &self.characters {
             commands.entity(entity).despawn();
@@ -194,21 +167,15 @@ impl Teardown<'_, '_> {
     }
 }
 
-/// `characters://<suite folder>/<file>`, for a path relative to the suite.
 pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
     let folder = suite.root.file_name().unwrap_or_default();
     AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE)
 }
 
-/// Meshes and textures are kept on the GPU only: once uploaded, Bevy drops
-/// the copy in RAM, often the larger half of a model's footprint. Bevy keeps
-/// each mesh's bounding box when it drops the copy, so culling still works.
-/// The mesh's shape key names go with the copy, though; expressions read them
-/// from the file instead (`charpaper_suite::shape_keys`).
+// Once uploaded, Bevy drops the RAM copy of meshes and textures. Bounding boxes survive
+// but shape key names don't; expressions read those from the file instead.
 pub(crate) const GPU_ONLY: RenderAssetUsages = RenderAssetUsages::RENDER_WORLD;
 
-/// A skin's whole file, as a `Gltf`: its scene and its clips, which are the
-/// skin's expressions. Cameras and lights are skipped, as for the armature.
 pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<Gltf> {
     assets
         .load_builder()
@@ -221,15 +188,9 @@ pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Han
         .load(asset_path(suite, file))
 }
 
-/// The armature's scene. Scene 0 rather than the file's default scene, since
-/// Bevy has no label for the default one and Blender always exports the
-/// active scene as scene 0.
-///
-/// Cameras and lights are skipped. Cameras have their own folder, and all
-/// lighting comes from the environment. When the armature is borrowed from a
-/// skin, that skin's meshes, materials and clips are skipped too: the skin
-/// itself shows them when worn, and they would otherwise stay in memory while
-/// another skin is.
+// Scene 0, not the default scene: Bevy has no label for the default one, and Blender
+// exports the active scene as scene 0. An armature borrowed from a skin skips that skin's
+// meshes, materials and clips, which the skin shows itself when worn.
 pub(crate) fn load_armature(assets: &AssetServer, suite: &Suite) -> Handle<WorldAsset> {
     let borrowed = suite.model_is_skin;
     let path = asset_path(suite, &suite.model).with_source(ARMATURE_SOURCE);
@@ -250,8 +211,7 @@ pub(crate) fn load_armature(assets: &AssetServer, suite: &Suite) -> Handle<World
         .load(GltfAssetLabel::Scene(0).from_asset(path))
 }
 
-/// `SuiteError` keeps details such as the TOML line and column in its source
-/// chain, which `Display` alone would drop.
+// Display alone drops details like the TOML line and column.
 fn chain(err: &dyn Error) -> String {
     let mut text = err.to_string();
     let mut source = err.source();

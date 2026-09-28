@@ -1,6 +1,3 @@
-//! The few widgets the settings panel is built from, following the design's
-//! widget kit. Each returns a bundle to spawn, so pages read as a tree.
-
 use bevy::prelude::*;
 
 use crate::helpers::Background;
@@ -16,13 +13,11 @@ use crate::helpers::WithBackground;
 use crate::helpers::WithText;
 use crate::theme::*;
 
-/// A plain text node. Ignored by picking so a click on a label reaches the
-/// button under it, and hover feedback does not flicker between the two.
+// Ignored by picking, so a click on the text reaches the button under it.
 pub(crate) fn label(text: impl Into<String>, size: FontSize, color: Color) -> impl Bundle {
     (Text::new(text), TextFont { font_size: size, ..default() }, TextColor(color), Pickable::IGNORE)
 }
 
-/// The shared look of every clickable box: outlined, rounded, text centred.
 fn control(text: &str, size: FontSize) -> ButtonBuilder {
     ButtonBuilder::default()
         .text(text)
@@ -37,13 +32,10 @@ fn control(text: &str, size: FontSize) -> ButtonBuilder {
         .align_items(AlignItems::Center)
 }
 
-/// A text button, sized to its label. Left unbuilt so a caller can restyle it
-/// (the Quit button's colours, a tab's width) before `build_with`.
 pub(crate) fn button(text: &str) -> ButtonBuilder {
     control(text, CONTROL_SIZE).edit_node(|n| n.padding = UiRect::horizontal(Val::Px(14.0)))
 }
 
-/// A square button holding one character, such as `<` or `>`.
 pub(crate) fn glyph_button(glyph: &str, action: UiButton) -> impl Bundle {
     control(glyph, GLYPH_SIZE)
         .width(CONTROL_HEIGHT)
@@ -51,14 +43,11 @@ pub(crate) fn glyph_button(glyph: &str, action: UiButton) -> impl Bundle {
         .build_with(UiElement::Button(action))
 }
 
-/// A titled group of controls on a page. Starts hidden: a section only shows
-/// once there is something to put in it.
+// Hidden until something fills it.
 pub(crate) fn section(title: &str, marker: UiContainer, content: impl Bundle) -> impl Bundle {
     section_with(Display::None, title, marker, content)
 }
 
-/// A section that shows from the start, for settings that exist whatever
-/// the suite holds.
 pub(crate) fn open_section(title: &str, marker: UiContainer, content: impl Bundle) -> impl Bundle {
     section_with(Display::Flex, title, marker, content)
 }
@@ -77,9 +66,6 @@ fn section_with(
     )
 }
 
-/// A label on the left and a value stepped through with `<` and `>`. The
-/// value text carries a [`CyclerValue`] so a system can rewrite it when the
-/// state behind it changes.
 pub(crate) fn cycler(title: impl Into<String>, cycler: Cycler) -> impl Bundle {
     (
         Node {
@@ -123,8 +109,7 @@ pub(crate) fn cycler(title: impl Into<String>, cycler: Cycler) -> impl Bundle {
     )
 }
 
-/// Changes a button's resting fill. Hover feedback brightens from
-/// [`BaseBackground`], so both have to change together.
+// Hover feedback brightens from BaseBackground, so both change together.
 pub(crate) fn paint(base: &mut BaseBackground, background: &mut BackgroundColor, fill: Color) {
     base.0 = Background::Color(fill);
     background.0 = fill;

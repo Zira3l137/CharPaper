@@ -1,15 +1,6 @@
-//! Bakes an environment's reflection maps from the panorama its author
-//! lit the scene with in Blender: an equirectangular `.hdr` or `.exr`.
-//!
-//! Three cubemaps come out, written next to the panorama as KTX2:
-//! - `skybox.ktx2`: the panorama folded onto a cube, sharp.
-//! - `specular.ktx2`: the same cube as a chain of blur levels, one per
-//!   roughness, for shiny reflections.
-//! - `diffuse.ktx2`: a tiny cube of the light arriving from each broad
-//!   direction, for matte surfaces.
-//!
-//! Only missing maps are baked; existing ones are never touched. To bake a map
-//! again, delete it.
+// Bakes an environment's skybox, specular and diffuse cubemaps from the equirectangular
+// .hdr or .exr panorama its author lit the scene with in Blender. Bevy-free, like
+// charpaper-suite, so it builds fast and runs from the CLI without the engine.
 
 mod cube;
 mod filter;
@@ -28,22 +19,12 @@ use tracing::info;
 
 use crate::panorama::Panorama;
 
-/// How big and how carefully the maps are baked. The defaults balance a sharp
-/// sky against file size: RGB9E5 takes 4 bytes a texel, so the skybox is
-/// `6 × size² × 4` bytes, 25 MB at 1024.
+// RGB9E5 takes 4 bytes a texel, so a skybox is 6 × size² × 4 bytes: 25 MB at 1024.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BakeSettings {
-    /// Face size of the skybox, in pixels.
     pub skybox_size: u32,
-    /// Face size of the specular map's sharpest level. Each level halves it,
-    /// down to 1×1.
     pub specular_size: u32,
-    /// Samples per texel for each blurred specular level. More is smoother and
-    /// slower; each sample reads a pre-shrunk copy of the panorama sized to
-    /// its spread, so even a few dozen show no speckle.
     pub specular_samples: u32,
-    /// Face size of the diffuse map. It is nearly featureless by nature, so
-    /// larger buys nothing.
     pub diffuse_size: u32,
 }
 
@@ -94,14 +75,11 @@ pub enum BakeError {
     },
 }
 
-/// The maps not yet in `folder`, in the order [`bake`] writes them.
+// Existing maps are never touched. To bake one again, delete it.
 pub fn missing(folder: &Path) -> Vec<Map> {
     Map::ALL.into_iter().filter(|map| !folder.join(map.file_name()).is_file()).collect()
 }
 
-/// Bakes whichever maps are missing from `folder` out of `panorama`, and
-/// returns the files written: none if nothing was missing, in which case the
-/// panorama is not even read.
 pub fn bake(
     panorama: &Path,
     folder: &Path,

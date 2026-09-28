@@ -1,26 +1,16 @@
-//! `suite.toml`, exactly as written.
-//!
-//! Every `Option` means "this suite has no opinion". Keeping that distinct
-//! from a concrete value is what lets engine defaults, suite values and the
-//! user's own overrides stack on top of each other later.
-//!
-//! `deny_unknown_fields` everywhere: these files are written by hand, and a
-//! misspelt key silently doing nothing is worse than a load error.
-//!
-//! Doc comments here double as the descriptions editors show on hover through
-//! the generated JSON Schema, so they are written for the suite's author.
-//! Notes meant for us stay in `//` comments.
-
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+// Doc comments in this file become the hover text of the generated JSON Schema, so they
+// are written for suite authors. `deny_unknown_fields` everywhere: a misspelt key that
+// silently does nothing is worse than an error.
+
 pub const MANIFEST_FILE: &str = "suite.toml";
 
-/// Bumped only for changes old files cannot be read under. Adding an optional
-/// key does not need a bump.
+// Bumped only for changes old files can't be read under, not for new optional keys.
 pub const SCHEMA_VERSION: u32 = 1;
 
 /// A CharPaper character suite: the `suite.toml` at the root of the suite's
@@ -132,7 +122,7 @@ pub struct Post {
     pub bloom: Option<f32>,
 }
 
-// Mirrors Bevy's `Tonemapping` so this crate does not need Bevy.
+// Mirrors Bevy's Tonemapping so this crate doesn't need Bevy.
 /// How bright colors are squeezed into what the screen can show.
 #[derive(Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

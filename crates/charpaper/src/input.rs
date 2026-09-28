@@ -1,15 +1,3 @@
-//! Replays forwarded pointer input as if winit had delivered it.
-//!
-//! Writing the same messages `bevy_winit` writes means everything downstream
-//! (`ButtonInput<MouseButton>`, picking, UI observers) works unchanged.
-//!
-//! One thing it deliberately does not do is touch `Window::cursor_position`.
-//! `bevy_winit` treats a change to that field as a request to *move the OS
-//! cursor*, so updating it from here would drag the real mouse around. As a
-//! result `Window::cursor_position()` stays `None` and the legacy `Interaction`
-//! component, which reads it, never changes. Use picking events, or read the
-//! `PointerLocation` of the mouse pointer entity, instead.
-
 use bevy::ecs::system::SystemParam;
 use bevy::input::ButtonState;
 use bevy::input::mouse::MouseButtonInput;
@@ -27,8 +15,7 @@ use charpaper_wallpaper::PointerButton;
 use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
 
-/// `SyncCell` supplies the `Sync` a `Resource` needs, which `PointerSource`
-/// does not promise; it only ever hands out `&mut`, so no lock is involved.
+// SyncCell adds the Sync a Resource needs without a lock; PointerSource is only Send.
 #[derive(Resource)]
 pub struct PointerSourceResource(SyncCell<Box<dyn PointerSource>>);
 
@@ -38,8 +25,8 @@ impl PointerSourceResource {
     }
 }
 
-/// Picking reads the combined `WindowEvent` stream, while `ButtonInput` and
-/// most user code read the individual messages. winit writes both, so we do.
+// Picking reads WindowEvent, most other code reads the separate messages. winit writes
+// both, so we do too.
 #[derive(SystemParam)]
 pub struct WindowInputWriters<'w> {
     all: MessageWriter<'w, WindowEvent>,
@@ -50,6 +37,10 @@ pub struct WindowInputWriters<'w> {
     wheel: MessageWriter<'w, MouseWheel>,
 }
 
+// Replays forwarded input as if winit had delivered it.
+//
+// Window::cursor_position is never touched: bevy_winit takes a change to it as a request
+// to move the real cursor. So it stays None here; use picking events instead.
 pub fn replay_forwarded_pointer(
     mut source: ResMut<PointerSourceResource>,
     windows: Query<(Entity, &Window), With<PrimaryWindow>>,
@@ -57,7 +48,7 @@ pub fn replay_forwarded_pointer(
     mut pending: Local<Vec<PointerEvent>>,
     mut last_position: Local<Option<Vec2>>,
 ) {
-    // Drained even without a window, so the backend's queue cannot back up.
+    // Drained even without a window, so the backend's queue can't back up.
     source.0.get().drain(&mut pending);
     let Ok((window, settings)) = windows.single() else {
         pending.clear();

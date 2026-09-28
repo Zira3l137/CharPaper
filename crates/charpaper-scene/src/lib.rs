@@ -1,5 +1,3 @@
-//! The thing we actually draw.
-
 mod animation;
 mod binding;
 mod cameras;
@@ -35,28 +33,25 @@ pub use render::RenderSettings;
 pub use suite::ActiveSuite;
 pub use suite::AvailableSuites;
 
-/// Asset source id for [`SceneConfig::characters_dir`], so suite files load as
-/// `characters://<suite>/<file>`.
 pub const CHARACTERS_SOURCE: &str = "characters";
 
-/// A second asset source over the same folder, used only for the armature.
-/// Bevy keeps one asset per path and ignores the settings of later loads, so
-/// when the armature is borrowed from a skin file it has to be read under a
-/// different path to be read without that skin's meshes.
+// A second source over the same folder, only for the armature. Bevy keeps one asset per
+// path and ignores the settings of later loads, so an armature borrowed from a skin file is
+// read under another path to leave that skin's meshes out.
 pub const ARMATURE_SOURCE: &str = "armature";
 
 const BASE_ZOOM_SPEED: f32 = 0.1;
 const BASE_PAN_SPEED: f32 = 0.001;
 const BASE_SENSITIVITY: f32 = 0.005;
-/// Just short of straight up or down (~88°), where the orbit would flip over.
+// Just short of straight up or down, where the orbit would flip over.
 const PITCH_LIMIT: f32 = 1.54;
 
 #[derive(Component)]
 pub(crate) struct OrbitCamera {
-    focus: Vec3, // the point being orbited
+    focus: Vec3,
     radius: f32,
-    yaw: f32,   // horizontal angle
-    pitch: f32, // vertical angle
+    yaw: f32,
+    pitch: f32,
 }
 
 pub struct ScenePlugin {
@@ -82,8 +77,7 @@ impl Plugin for ScenePlugin {
             .init_resource::<SkinObjects>()
             .init_resource::<Expressions>()
             .init_resource::<cameras::ShownRig>()
-            // No built-in lighting: the environment's own lights and maps are
-            // all that light the character.
+            // No built-in lighting: only what the environment ships lights the character.
             .insert_resource(GlobalAmbientLight::NONE)
             .init_resource::<environment::ShownEnvironment>()
             .init_resource::<environment::Baking>()
@@ -141,8 +135,8 @@ impl Plugin for ScenePlugin {
                 )
                     .chain(),
             )
-            // After propagation so the rig's animated transform is final for
-            // this frame, and before frusta are built from the camera's.
+            // After propagation, so the rig's animated transform is final, and before frusta
+            // are built from the camera's.
             .add_systems(
                 PostUpdate,
                 cameras::follow_selected

@@ -1,8 +1,3 @@
-//! The Windows implementation of `WallpaperBackend`.
-//!
-//! Thin on purpose: it translates between the platform-neutral trait and the
-//! Win32 work in `desktop.rs`.
-
 use charpaper_wallpaper::AttachOutcome;
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::DesktopActivity;
@@ -22,8 +17,6 @@ use crate::sys;
 
 #[derive(Default)]
 pub struct WindowsBackend {
-    /// Only set once the window really is inside the desktop. Also what a
-    /// future `detach` (or a re-attach after Explorer restarts) will need.
     attached_hwnd: Option<sys::Hwnd>,
 }
 
@@ -59,7 +52,6 @@ impl WallpaperBackend for WindowsBackend {
         handle: RawWindowHandle,
         config: &WallpaperConfig,
     ) -> Result<AttachOutcome, WallpaperError> {
-        // On Windows the payload is an `HWND` stored as a `NonZeroIsize`.
         let RawWindowHandle::Win32(win32) = handle else {
             return Err(WallpaperError::WrongHandleKind);
         };
@@ -86,7 +78,6 @@ impl WallpaperBackend for WindowsBackend {
     }
 }
 
-/// Used by `--inspect`: a full read-only report, printed before Bevy starts.
 pub fn inspect_report() -> Vec<String> {
     let shell = desktop::find_shell_windows();
     let mut out = vec![format!("recommended strategy: {:?}", shell.recommended_strategy())];

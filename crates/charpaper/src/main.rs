@@ -1,8 +1,3 @@
-//! Entry point.
-//!
-//! `ScenePlugin` never asks what OS it is on and `WallpaperPlugin` never asks
-//! what is being drawn; that separation is the cross-platform strategy.
-
 mod backend;
 mod cli;
 mod config;
@@ -38,14 +33,12 @@ use crate::plugin::WallpaperPlugin;
 use crate::state::STATE_FILE;
 use crate::state::StatePlugin;
 
-/// Folder next to the executable that holds one sub-folder per suite.
 const CHARACTERS_DIR: &str = "characters";
 
 fn main() -> Result<()> {
     let args = cli::parse();
     let mut config = AppConfig::from_cli(&args);
 
-    // Handled before Bevy exists: no window, no GPU, read-only.
     if config.inspect_and_exit {
         for line in backend::inspect_report() {
             println!("{line}");
@@ -76,8 +69,7 @@ fn main() -> Result<()> {
         })?;
 
     let exit = App::new()
-        // Sources are built when `AssetPlugin` is added, so this has to come
-        // before `DefaultPlugins`; registered later it only logs an error.
+        // Must come before DefaultPlugins, which builds the asset sources.
         .register_asset_source(
             CHARACTERS_SOURCE,
             AssetSourceBuilder::platform_default(characters, None),
@@ -98,15 +90,10 @@ fn main() -> Result<()> {
 
                         decorations: config.window.decorations,
                         resizable: false,
-
-                        // WallpaperPlugin reveals it once attach settles, so there is
-                        // no flash of a floating window mid-reparent.
+                        // The wallpaper plugin shows it once attached, so no floating window flashes by.
                         visible: !config.window.start_hidden,
-
                         skip_taskbar: config.window.skip_taskbar,
-
-                        // Not topmost: the desktop layer is below everything, and
-                        // asking for topmost fights the reparenting.
+                        // Not topmost: that fights the reparenting.
                         window_level: WindowLevel::Normal,
 
                         ..default()
@@ -118,7 +105,6 @@ fn main() -> Result<()> {
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
         .add_plugins(PacingPlugin)
         .add_plugins(ScenePlugin { config: config.scene.clone() })
-        // TODO: Read UI locales into config on startup if available
         .add_plugins(CustomUiPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() })
         .add_plugins(LookFilePlugin)
         .add_plugins(StatePlugin { path: state_path, saved: loaded.state, problem: loaded.problem })
@@ -130,16 +116,12 @@ fn main() -> Result<()> {
     }
 }
 
-/// Where the app keeps everything it reads and writes: suites in
-/// `characters/`, choices in `state.toml`. Under `cargo run` that is
-/// `target/<profile>/`.
+// Under `cargo run` this is `target/<profile>/`.
 fn exe_dir() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("cannot locate the executable")?;
     Ok(exe.parent().context("the executable has no parent folder")?.to_path_buf())
 }
 
-/// Handled before Bevy exists, like `--inspect`, so it prints straight to
-/// stdout rather than through the log.
 fn check_suite(path: &Path) -> Result<()> {
     let suite =
         Suite::load(path).with_context(|| format!("cannot load suite at {}", path.display()))?;
@@ -165,7 +147,6 @@ fn check_suite(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Handled before Bevy exists, like `--check-suite`.
 fn bake_environments(path: &Path, settings: &BakeSettings, dry_run: bool) -> Result<()> {
     let suite =
         Suite::load(path).with_context(|| format!("cannot load suite at {}", path.display()))?;

@@ -80,7 +80,6 @@ pub trait WithBackground: UiNode {
     fn bg_gradient_mut(&mut self) -> &mut Option<Gradient>;
     fn border_color_mut(&mut self) -> &mut Color;
 
-    /// Only visible together with a non-zero [`UiNode::border`] width.
     fn border_color(mut self, color: Color) -> Self {
         *self.border_color_mut() = color;
         self
@@ -286,7 +285,6 @@ impl ButtonReactiveExt for EntityCommands<'_> {
         self.observe(feedback::<Over>(HOVER_DELTA))
             .observe(feedback::<Out>(IDLE_DELTA))
             .observe(feedback::<Press>(PRESS_DELTA))
-            // Cursor is still over the button on release.
             .observe(feedback::<Release>(HOVER_DELTA))
     }
 }
@@ -304,14 +302,10 @@ pub enum UiContainer {
     Page(Tab),
     Section(Section),
     OutfitGrid,
-    /// The advanced outfit list: one row per mesh object of the worn skin.
     ObjectList,
-    /// The row a cycler sits in, so single rows can be hidden.
     Row(Cycler),
 }
 
-/// The groups of controls on the pages, so each can be shown once it has
-/// something in it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
     Suite,
@@ -326,7 +320,6 @@ pub enum Section {
     Pause,
 }
 
-/// The values stepped through with `<` and `>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cycler {
     Suite,
@@ -348,7 +341,6 @@ pub enum Cycler {
     PauseBattery,
 }
 
-/// The text showing a cycler's current value.
 #[derive(Component)]
 pub struct CyclerValue(pub Cycler);
 
@@ -359,7 +351,6 @@ pub enum UiButton {
     Exit,
     Tab(Tab),
     Skin(String),
-    /// Switches one mesh object of the worn skin on or off.
     Object(String),
     Previous(Cycler),
     Next(Cycler),

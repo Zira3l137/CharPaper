@@ -1,15 +1,6 @@
-//! Cameras exported from Blender, from the files in `cameras/`: one camera per
-//! file, or several, each with the clip that moves it.
-//!
-//! One lens, many tripods. The app keeps a single real camera: the one that
-//! carries the post-processing, the ambient light and the wallpaper's window.
-//! Each exported camera is loaded as a rig whose own `Camera` is switched off
-//! the moment it spawns, so it never renders. It only carries a transform,
-//! animated or not, and a projection for the real camera to copy.
-//!
-//! Only the rig being looked through is loaded. Its clip loops on its own
-//! clock from the moment it spawns, so switching back to a camera starts its
-//! clip from the beginning.
+// One real camera does all the rendering. Each exported camera is loaded as a rig whose
+// own Camera is switched off; the real camera copies the rig's transform and projection.
+// Only the rig in use is loaded.
 
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
@@ -25,34 +16,24 @@ use crate::suite::Remembered;
 use crate::suite::asset_path;
 use crate::update_camera_transform;
 
-/// The rig in use, as opposed to [`CharacterState::camera`], the one asked
-/// for. Only that one rig is loaded; the others are not in memory at all.
 #[derive(Resource, Default)]
 pub(crate) struct ShownRig {
     pub name: Option<String>,
     pub root: Option<Entity>,
-    /// Its file while it loads; the rig spawns once it has.
     pub loading: Option<(Handle<Gltf>, ExportedCamera)>,
 }
 
 #[derive(Component)]
 pub(crate) struct CameraRig {
     pub name: String,
-    /// The camera object to look through, when its file holds several.
     node: Option<String>,
     clip: Option<Handle<AnimationClip>>,
-    /// Keeps the file's assets alive for as long as the rig exists, and no
-    /// longer.
     _file: Handle<Gltf>,
 }
 
-/// The switched-off camera inside a rig.
 #[derive(Component)]
 pub(crate) struct Lens(pub Entity);
 
-/// On the real camera: which rig it is currently copying, `None` for the orbit
-/// camera. Kept apart from [`CharacterState::camera`] so a switch can be told
-/// from an ordinary frame, and so a rig still loading reads as "not yet".
 #[derive(Component, Default)]
 pub(crate) struct Following(Option<String>);
 
@@ -74,10 +55,8 @@ pub(crate) fn choose_camera(
     };
 }
 
-/// Swaps the rig for the one asked for. The file is loaded whole, as a
-/// `Gltf`, rather than just its scene like the character's files: the rig
-/// needs the file's clip too, and a missing `#Animation0` label would be a
-/// load error for every static camera.
+// Loaded as a whole Gltf for its clip: asking for a missing #Animation0 label would fail
+// every static camera.
 pub(crate) fn switch_rig(
     mut commands: Commands,
     state: Res<CharacterState>,
@@ -143,9 +122,8 @@ pub(crate) fn spawn_rig(
     shown.root = Some(root);
 }
 
-/// An observer rather than a system, so the rig's camera is switched off in
-/// the same frame it spawns. A system would run a frame later and let that
-/// camera render one frame over the real one.
+// An observer, so the rig's camera is off in the frame it spawns. A system would run a
+// frame later and let it render once over the real one.
 pub(crate) fn on_rig_ready(
     ready: On<WorldInstanceReady>,
     rigs: Query<&CameraRig>,
@@ -180,11 +158,6 @@ pub(crate) fn on_rig_ready(
     };
     commands.entity(ready.entity).insert(Lens(lens));
 
-    // Unlike the character's, a rig's clip moves nodes of its own file, so
-    // Bevy's loader has already marked them and put a player on each root.
-    // Only the graph is missing. With several cameras in the file there can
-    // be several roots; every player gets the clip, and only the one owning
-    // the nodes it moves does anything with it.
     let Some(clip) = &rig.clip else {
         info!("camera {:?} ready, static", rig.name);
         return;
@@ -206,13 +179,8 @@ pub(crate) fn on_rig_ready(
     info!("camera {:?} ready, looping its clip", rig.name);
 }
 
-/// Moves the real camera onto the selected rig's lens every frame. Both
-/// `Transform` and `GlobalTransform` are written: propagation has already run
-/// this frame, so writing only `Transform` would show last frame's position.
-///
-/// The projection is copied only on a switch. It never animates (Blender can
-/// export animated focal length only through an extension Bevy cannot load),
-/// and assigning it makes Bevy fit its aspect ratio to the window again.
+// GlobalTransform is written too, because propagation already ran this frame. The
+// projection is copied only on a switch: assigning it makes Bevy refit the aspect ratio.
 pub(crate) fn follow_selected(
     state: Res<CharacterState>,
     rigs: Query<(&CameraRig, &Lens)>,
@@ -244,8 +212,7 @@ pub(crate) fn follow_selected(
             *transform = lens_global.compute_transform();
             *global = *lens_global;
         }
-        // A rig still loading keeps the last view rather than flashing the
-        // orbit camera for the frames in between.
+        // A rig still loading keeps the last view instead of flashing the orbit camera.
         None if wanted.is_none() && following.0.is_some() => {
             *projection = Projection::default();
             update_camera_transform(&mut transform, orbit);

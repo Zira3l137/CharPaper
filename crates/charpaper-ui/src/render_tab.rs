@@ -1,7 +1,3 @@
-//! The Render tab: how often and how finely the scene is drawn, and when to
-//! stop drawing it. Edits `RenderSettings`, which the app saves with the rest
-//! of its state and applies at once.
-
 use bevy::prelude::*;
 use charpaper_scene::AntiAliasing;
 use charpaper_scene::FpsLimit;

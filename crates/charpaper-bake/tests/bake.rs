@@ -10,8 +10,6 @@ use image::Rgb32FImage;
 const SETTINGS: BakeSettings =
     BakeSettings { skybox_size: 16, specular_size: 8, specular_samples: 16, diffuse_size: 4 };
 
-/// A bright sky over dark ground, with a small very bright sun low in the sky
-/// towards Blender's +X, which is the image's centre column.
 fn panorama(folder: &PathBuf) -> PathBuf {
     let (width, height) = (128, 64);
     let image = Rgb32FImage::from_fn(width, height, |x, y| {
@@ -84,7 +82,6 @@ fn bakes_the_three_maps_the_right_way_up() {
 
     let skybox = read(&folder.join("skybox.ktx2"));
     assert_eq!((skybox.size, skybox.faces, skybox.levels.len()), (16, 6, 1));
-    // Faces are +X, -X, +Y, -Y, +Z, -Z.
     assert!(mean(face(&skybox, 0, 2)) > 1.5, "up should be sky");
     assert!(mean(face(&skybox, 0, 3)) < 0.2, "down should be ground");
     let brightest = (0..6).max_by(|&a, &b| {
@@ -99,8 +96,6 @@ fn bakes_the_three_maps_the_right_way_up() {
 
     let diffuse = read(&folder.join("diffuse.ktx2"));
     assert_eq!((diffuse.size, diffuse.levels.len()), (4, 1));
-    // Face averages include texels tilted up to 45° off the axis, so down
-    // still catches some sky: the gap is clear, not total.
     let [px, _, up, down, ..] = [0, 1, 2, 3, 4, 5].map(|f| mean(face(&diffuse, 0, f)));
     assert!(up > down * 3.0, "up {up}, down {down}");
     assert!(px > up, "+X {px}, up {up}");

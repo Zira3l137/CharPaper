@@ -34,8 +34,7 @@ use crate::helpers::WithText;
 use crate::theme::*;
 use crate::widgets::*;
 
-/// The panel's pages. Only pages with something working behind them exist;
-/// the others from the design are added as their features land.
+// Only tabs with something working behind them exist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Tab {
@@ -55,17 +54,14 @@ impl Tab {
     }
 }
 
-/// Saved between runs by the app, so the panel reopens as it was left.
 #[derive(Resource, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
     pub is_menu_closed: bool,
     pub tab: Tab,
-    /// Whether the outfit section lists the worn skin's objects.
     pub advanced_outfit: bool,
 }
 
-/// The line under the title in the panel's header: the suite's name.
 #[derive(Component)]
 pub(crate) struct StatusText;
 
@@ -98,16 +94,13 @@ impl Plugin for CustomUiPlugin {
                         .or_eager(resource_changed::<CharacterState>)
                         .or_eager(resource_changed::<SkinObjects>),
                 ),
-                // Eager, so `resource_added` runs every frame and its idea of
-                // "since last time" stays current; short-circuited behind a
-                // change on the same frame, it would report the clips as new
-                // once more on the next.
+                // or_eager keeps resource_added evaluated every frame. Skipped on a frame with a
+                // change, it would report the clips as new once more on the next one.
                 pages::show_animation.run_if(
                     resource_changed::<CharacterState>.or_eager(resource_added::<CharacterClips>),
                 ),
                 scene_tab::show_scene_tab.run_if(resource_added::<ActiveSuite>),
-                // The suite changes when an environment's maps finish baking,
-                // which can make its Brightness row relevant.
+                // Baking new maps changes the suite, which can make the Brightness row relevant.
                 scene_tab::show_rows.run_if(
                     resource_changed::<CharacterState>
                         .or_eager(resource_exists_and_changed::<ActiveSuite>),
@@ -283,16 +276,13 @@ fn header() -> impl Bundle {
     )
 }
 
-/// A flex row rather than the design's grid, so a tab can be hidden without
-/// leaving an empty column behind.
-///
-/// The Scene tab starts hidden until a suite gives it something to show.
 fn tab_bar(locale: &UiLocale) -> impl Bundle {
     let tab = |tab: Tab| {
         button(tab.title(locale))
             .edit_node(|n| {
                 n.flex_grow = 1.0;
                 n.flex_basis = Val::ZERO;
+                // Hidden until a suite gives it something to show.
                 if tab == Tab::Scene {
                     n.display = Display::None;
                 }

@@ -1,18 +1,3 @@
-//! A global low-level mouse hook, running on a thread of its own.
-//!
-//! Windows calls a low-level hook *on the thread that installed it*, from
-//! inside that thread's message loop, and waits for it before the event moves
-//! on to any application. Two consequences shape this file:
-//!
-//! * The installing thread must pump messages for as long as the hook lives.
-//!   Bevy's main thread does pump them, but only between frames; a long frame
-//!   would stall the mouse for the whole session. So the hook gets a dedicated
-//!   thread that does nothing but pump.
-//! * The callback must be quick and must never block. If it overruns
-//!   `LowLevelHooksTimeout` (a few hundred milliseconds), Windows unhooks it
-//!   silently. It therefore only copies the event into a bounded queue and
-//!   returns; all interpretation happens on the reading side.
-
 use std::cell::RefCell;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
@@ -23,24 +8,23 @@ use tracing::warn;
 
 use crate::sys;
 
-/// Several seconds of a 1000 Hz mouse. If the reader stalls for longer than
-/// that, new events are dropped rather than blocking the callback.
 const QUEUE_CAPACITY: usize = 4096;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RawMouseEvent {
-    /// `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, ...
     pub message: u32,
     pub screen: sys::Point,
     pub mouse_data: u32,
 }
 
 thread_local! {
-    // The callback receives no user pointer, but it always runs on the hook
-    // thread, so a thread-local is how it finds the queue.
+    // The callback gets no user data, but it always runs on the hook thread.
     static SINK: RefCell<Option<mpsc::SyncSender<RawMouseEvent>>> = const { RefCell::new(None) };
 }
 
+// Windows calls a mouse hook on the thread that installed it, and only while that thread
+// waits for messages. It also quietly removes a hook that answers too slowly. So the hook
+// gets a thread of its own that does nothing but wait, and the callback only queues events.
 pub struct MouseHook {
     thread_id: u32,
     thread: Option<JoinHandle<()>>,
@@ -83,7 +67,7 @@ impl MouseHook {
 
 impl Drop for MouseHook {
     fn drop(&mut self) {
-        // Makes GetMessageW return 0 on the hook thread, which unhooks and exits.
+        // Makes GetMessageW return 0 on the hook thread, which then unhooks and exits.
         unsafe { sys::PostThreadMessageW(self.thread_id, sys::WM_QUIT, 0, 0) };
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
@@ -94,9 +78,8 @@ impl Drop for MouseHook {
 fn run(sink: mpsc::SyncSender<RawMouseEvent>, ready: mpsc::Sender<Result<u32, u32>>) {
     let mut msg = sys::Msg::default();
 
-    // A thread gets a message queue on its first message call, not when it
-    // starts. Create it now so the WM_QUIT from `Drop` has somewhere to land
-    // even if the owner is dropped immediately.
+    // A thread only gets a message queue on its first message call. Create it now so a
+    // quick WM_QUIT from Drop has somewhere to land.
     unsafe { sys::PeekMessageW(&mut msg, 0, sys::WM_USER, sys::WM_USER, sys::PM_NOREMOVE) };
 
     SINK.set(Some(sink));
@@ -111,8 +94,7 @@ fn run(sink: mpsc::SyncSender<RawMouseEvent>, ready: mpsc::Sender<Result<u32, u3
     let _ = ready.send(Ok(unsafe { sys::GetCurrentThreadId() }));
     debug!("low-level mouse hook installed");
 
-    // Nothing is ever posted here except WM_QUIT; the loop exists because the
-    // hook callback is dispatched from inside GetMessageW.
+    // The hook callback is delivered from inside GetMessageW; nothing else is posted here.
     loop {
         match unsafe { sys::GetMessageW(&mut msg, 0, 0, 0) } {
             0 => break,
@@ -135,20 +117,19 @@ unsafe extern "system" fn hook_proc(
     lparam: sys::LParam,
 ) -> sys::LResult {
     if code == sys::HC_ACTION {
-        // SAFETY: for WH_MOUSE_LL with HC_ACTION, `lparam` points at an
-        // MSLLHOOKSTRUCT that stays valid for the duration of this call.
+        // SAFETY: for WH_MOUSE_LL with HC_ACTION, lparam points at a valid MSLLHOOKSTRUCT.
         let info = unsafe { &*(lparam as *const sys::MsLlHookStruct) };
         let event =
             RawMouseEvent { message: wparam as u32, screen: info.pt, mouse_data: info.mouse_data };
 
         SINK.with_borrow(|sink| {
             if let Some(sink) = sink {
+                // Never block here. A full queue drops the event instead.
                 let _ = sink.try_send(event);
             }
         });
     }
 
-    // Always pass the event on unchanged. Returning non-zero instead would
-    // swallow it, and the user's mouse would stop working everywhere.
+    // Always pass the event on. Returning non-zero would swallow it for the whole system.
     unsafe { sys::CallNextHookEx(0, code, wparam, lparam) }
 }

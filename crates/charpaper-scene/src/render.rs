@@ -1,12 +1,3 @@
-//! How the scene is rendered: the settings for it, and the two-camera setup a
-//! render scale needs.
-//!
-//! The 3D camera draws into an image instead of straight into the window, and
-//! a second camera shows that image full-screen with the settings panel on
-//! top. So the scene can render at half resolution and be stretched while the
-//! panel stays at full resolution and sharp. At 100% the detour costs one
-//! full-screen copy per frame.
-
 use bevy::camera::RenderTarget;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::prelude::*;
@@ -18,14 +9,10 @@ use serde::Serialize;
 
 use crate::OrbitCamera;
 
-/// Saved between runs by the app. How often the app renders, and when it
-/// pauses, is also here: the app's frame pacing reads it.
 #[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RenderSettings {
     pub fps_limit: FpsLimit,
-    /// Percent of the window's resolution the scene renders at: one of
-    /// [`RENDER_SCALES`]; anything else is read as the nearest.
     pub render_scale: u32,
     pub anti_aliasing: AntiAliasing,
     pub pause_when_fullscreen: bool,
@@ -63,7 +50,6 @@ pub enum FpsLimit {
     Fps30,
     #[serde(rename = "60")]
     Fps60,
-    /// As fast as the display refreshes.
     #[serde(rename = "max")]
     Max,
 }
@@ -82,9 +68,7 @@ impl FpsLimit {
     }
 }
 
-/// Only the sample counts every GPU supports. 2× and 8× depend on the GPU and
-/// the texture format, and asking for an unsupported one is a crash at the
-/// first frame rather than an error the app could recover from.
+// Only sample counts every GPU supports. An unsupported one crashes on the first frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AntiAliasing {
@@ -105,12 +89,11 @@ impl AntiAliasing {
     }
 }
 
-/// The image the 3D camera draws into.
 #[derive(Resource)]
 pub(crate) struct SceneTarget(Handle<Image>);
 
-/// Creates the scene's image and the camera that shows it, and returns the
-/// components that point the 3D camera at it.
+// The 3D camera draws into an image, and a second camera shows that image full-screen
+// under the UI. So the scene can render at a lower resolution while the UI stays sharp.
 pub(crate) fn scene_target(
     commands: &mut Commands,
     images: &mut Assets<Image>,
@@ -122,8 +105,6 @@ pub(crate) fn scene_target(
         images.add(Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None));
     commands.insert_resource(SceneTarget(image.clone()));
 
-    // Draws last, straight to the window. The settings panel uses it too,
-    // which is what keeps the panel at full resolution.
     commands.spawn((
         Name::new("Display camera"),
         Camera2d,
@@ -141,16 +122,13 @@ pub(crate) fn scene_target(
             ..default()
         },
         ImageNode::new(image.clone()),
-        // Beneath every other UI root, including the settings panel's.
         GlobalZIndex(i32::MIN),
     ));
 
     (RenderTarget::from(image), settings.anti_aliasing.msaa())
 }
 
-/// Keeps the image matching the window and the render scale. Resizing the
-/// image asset is enough: Bevy re-creates the GPU texture behind the same
-/// handle, and the camera fits its aspect ratio to the new size.
+// Resizing the image is enough: Bevy recreates the GPU texture behind the same handle.
 pub(crate) fn fit_scene_target(
     settings: Res<RenderSettings>,
     target: Option<Res<SceneTarget>>,

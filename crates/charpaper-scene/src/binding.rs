@@ -1,17 +1,7 @@
-//! Moves each skin onto the armature once both have spawned.
-//!
-//! Every glTF file brings its own copy of the bones, and only the armature's
-//! copy will ever be animated. So once a skin has spawned:
-//! - its skinned meshes are re-pointed at the armature's bones of the same
-//!   name, which `--check-suite` has already verified share a rest pose;
-//! - whatever else must follow the body is re-parented from the skin's copy of
-//!   a bone onto the armature's. That covers rigid meshes parented to a bone
-//!   (a hat on `Head`) and extra bones the armature lacks (a ponytail chain),
-//!   which then ride along unanimated.
-//!
-//! The skin's own bone copies stay where they are. Nothing points at them any
-//! more and they hold nothing visible, while despawning them would take along
-//! any branch not yet moved.
+// Every glTF file brings its own copy of the bones, and only the armature's copy is
+// animated. So each skin's meshes are re-pointed at the armature's bones by name, and
+// anything else hanging from a bone (a hat on Head, an extra ponytail chain) is moved
+// onto the armature's copy of that bone.
 
 use std::collections::HashMap;
 
@@ -28,13 +18,9 @@ pub(crate) struct InstanceReady;
 #[derive(Component)]
 pub(crate) struct Bound;
 
-/// A branch moved out of a skin's hierarchy. It is no longer below the skin's
-/// root, so it points back at its skin to be despawned along with it.
 #[derive(Component)]
 pub(crate) struct SkinPart(pub Entity);
 
-/// The armature and skins spawn asynchronously and in any order, so readiness
-/// is recorded here and [`bind_skins`] acts once both sides have it.
 pub(crate) fn mark_ready(
     ready: On<WorldInstanceReady>,
     roots: Query<(), Or<(With<Armature>, With<SkinRoot>)>>,
@@ -88,9 +74,8 @@ pub(crate) fn bind_skins(
                     }
                 }
             } else if meshes.contains(entity) {
-                // Bevy spawns each primitive as a child of its glTF node, so
-                // the search starts above the node: a mesh object named after
-                // a bone ("Head") must not match that bone itself.
+                // Each primitive spawns under its glTF node, so search from above the node: a mesh
+                // object named after a bone must not match that bone.
                 let Ok(node) = parents.get(entity).map(ChildOf::parent) else {
                     continue;
                 };
@@ -115,10 +100,8 @@ pub(crate) fn bind_skins(
     }
 }
 
-/// Walks up from `start` to the nearest ancestor whose name the armature also
-/// has. Returns the entity hanging directly below that ancestor, which is the
-/// branch to move, and the armature's copy of the ancestor, its new parent.
-/// Moving the whole branch keeps every transform along the way intact.
+// The entity just below the nearest ancestor the armature also has, and the armature's
+// copy of that ancestor. Moving the whole branch keeps every transform along the way.
 fn branch_point(
     start: Entity,
     skin_root: Entity,

@@ -1,10 +1,3 @@
-//! Command-line surface.
-//!
-//! `clap` owns parsing, validation, `--help` and `--version`. Every flag here
-//! is an *override*: the fields are `Option<T>` or `bool` so that
-//! `AppConfig::default()` in `config.rs` stays the single source of truth for
-//! defaults, rather than having them written down twice.
-
 use std::path::PathBuf;
 
 use charpaper_wallpaper::AttachStrategy;

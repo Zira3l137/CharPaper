@@ -3,8 +3,6 @@ name = "charpaper-scene"
 version.workspace = true
 edition.workspace = true
 
-# The one crate that is expected to change constantly. It knows nothing about
-# wallpapers or operating systems, so editing it never invalidates them.
 [dependencies]
 bevy.workspace = true
 charpaper-bake.workspace = true

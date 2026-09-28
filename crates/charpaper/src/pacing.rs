@@ -1,11 +1,3 @@
-//! How often the app updates and renders: the frame-rate limit, and pausing
-//! while nobody can see the wallpaper.
-//!
-//! Both go through winit's update mode rather than skipping work inside a
-//! frame. In reactive mode winit sleeps until the wait runs out or a window
-//! event arrives, so between frames the app uses no CPU and the GPU has
-//! nothing to draw.
-
 use std::time::Duration;
 
 use bevy::ecs::system::NonSendMarker;
@@ -16,13 +8,9 @@ use charpaper_scene::RenderSettings;
 
 use crate::plugin::BackendResource;
 
-/// How often a paused app still wakes: often enough to resume within a second
-/// of the desktop showing again, rarely enough to cost nothing.
 const PAUSED_WAKE: Duration = Duration::from_secs(1);
-/// How often the backend is asked what else is on screen.
 const ACTIVITY_POLL: Duration = Duration::from_secs(1);
 
-/// Why rendering is paused, if it is.
 #[derive(Resource, Default, Debug, PartialEq, Eq)]
 pub struct Paused(pub Option<&'static str>);
 
@@ -43,7 +31,6 @@ impl Plugin for PacingPlugin {
     }
 }
 
-/// On the main thread, like everything else that talks to the backend.
 fn poll_activity(
     _main_thread: NonSendMarker,
     time: Res<Time<Real>>,
@@ -77,7 +64,8 @@ fn poll_activity(
     }
 }
 
-/// The wallpaper's window never has focus, so both modes get the same value.
+// In reactive mode winit sleeps until the wait runs out or an event arrives, so between
+// frames nothing runs and the GPU draws nothing.
 fn apply_update_mode(
     settings: Res<RenderSettings>,
     paused: Res<Paused>,

@@ -7,12 +7,8 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-# `default` is four umbrellas (2d, 3d, ui, audio) covering audio decoding,
-# glTF, text, UI, gizmos, picking, scenes, gamepads, clipboard and font
-# discovery. A cube on the desktop needs a window, a renderer and PBR.
-#
-# tonemapping_luts is not optional: Camera3d defaults to TonyMcMapface, whose
-# LUT is a ktx2 asset -- hence ktx2 and zstd_rust with it.
+# Only what the app uses. tonemapping_luts is required: Camera3d's default tonemapper
+# reads its LUT from a ktx2 asset, hence ktx2 and zstd_rust with it.
 bevy = { version = "0.19.1", default-features = false, features = [
     "std",
     "async_executor",
@@ -37,8 +33,7 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "bevy_camera",
     "bevy_light",
     "bevy_mesh",
-    # Shape keys, and clips that key them. Without it the glTF loader drops
-    # every shape key.
+    # Without it the glTF loader drops every shape key.
     "morph_animation",
     "bevy_material",
     "bevy_shader",
@@ -46,8 +41,7 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "bevy_color",
     "bevy_animation",
     "bevy_gltf",
-    # Without it the glTF loader skips animations entirely: no clips, and no
-    # `Gltf::animations` / `named_animations` fields to find them by.
+    # Without it the glTF loader skips animations entirely.
     "gltf_animation",
     "png",
     "tga",
@@ -72,13 +66,11 @@ thiserror = { version = "2.0", default-features = false, features = ["std"] }
 
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
 toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse", "display"] }
-# The version `bevy_image` already builds, plus the two HDR formats Blender
-# saves environment maps in.
+# The version bevy_image builds, plus the two HDR formats Blender saves.
 image = { version = "0.25", default-features = false, features = ["hdr", "exr"] }
-# The version `bevy_macro_utils` already builds, plus writing.
+# The version bevy_macro_utils builds, plus writing.
 toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
-# Same major version and a subset of the features `bevy_gltf` enables, so the
-# full build compiles it only once.
+# A subset of what bevy_gltf enables, so the full build compiles it once.
 gltf = { version = "1.4", default-features = false, features = ["names", "KHR_lights_punctual"] }
 schemars = { version = "1.2", default-features = false, features = ["std", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
@@ -99,8 +91,7 @@ opt-level = 1
 opt-level = 3
 debug = false
 
-# Baking an environment's maps is a few seconds of arithmetic when optimised
-# and a minute when not, so it is optimised in development builds too.
+# Baking takes seconds optimised and a minute unoptimised.
 [profile.dev.package.charpaper-bake]
 opt-level = 3
 

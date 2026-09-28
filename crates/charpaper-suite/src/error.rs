@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-/// Anything that stops a folder from being a usable suite at all. Problems a
-/// suite can survive are [`crate::Finding`]s instead.
 #[derive(Debug, Error)]
 pub enum SuiteError {
     #[error("cannot read {path}")]

@@ -1,14 +1,6 @@
-//! The environment around the character, one at a time: loaded when picked
-//! and unloaded when left.
-//!
-//! An environment is also everything that lights the character. Its `.glb`
-//! brings the scene and its lights, and its maps become the camera's skybox
-//! and reflections. Environments can be whole rooms, so unlike skins only the
-//! one on screen is kept in memory.
-//!
-//! Maps missing next to a panorama are baked the first time the environment
-//! is shown, on a background thread: it appears straight away with its scene
-//! and whatever maps exist, and gains the rest a few seconds later.
+// An environment is everything that lights the character: its .glb brings a scene with
+// lights, its maps become the camera's sky and reflections. Maps missing next to a
+// panorama are baked in the background the first time it shows, and appear when done.
 
 use std::collections::HashMap;
 
@@ -33,12 +25,9 @@ use crate::suite::GPU_ONLY;
 use crate::suite::Remembered;
 use crate::suite::asset_path;
 
-/// The environment on screen, as opposed to [`CharacterState::environment`],
-/// the one asked for.
 #[derive(Resource, Default)]
 pub(crate) struct ShownEnvironment {
     pub name: Option<String>,
-    /// `None` for a sky-only environment, which has no scene.
     pub root: Option<Entity>,
 }
 
@@ -48,17 +37,12 @@ pub(crate) struct EnvironmentRoot {
     clips: Vec<Handle<AnimationClip>>,
 }
 
-/// The file is still loading; the scene is spawned once it arrives.
 #[derive(Component)]
 pub(crate) struct AwaitingScene;
 
-/// Bakes running, by environment name. The result is only an error message:
-/// on success the maps are simply looked for again on disk.
 #[derive(Resource, Default)]
 pub(crate) struct Baking(pub HashMap<String, Task<Result<(), String>>>);
 
-/// The scene has spawned, so its lights exist and can take the look's
-/// shadow setting.
 #[derive(Component)]
 pub(crate) struct EnvironmentReady;
 
@@ -113,8 +97,6 @@ pub(crate) fn switch_environment(
         start_bake(&mut baking, &suite, environment, &config);
     }
     if let Some(scene) = &environment.scene {
-        // Loaded whole, like a camera rig, because its clips are needed too.
-        // Its lights are the point: they are all the lighting there is.
         let file = assets
             .load_builder()
             .with_settings(|s: &mut GltfLoaderSettings| {
@@ -137,9 +119,7 @@ pub(crate) fn switch_environment(
     info!("environment {:?}", environment.name);
 }
 
-/// Gives the camera the environment's sky and reflections, whichever exist.
-/// Brightness is left at zero; `apply_look` sets it straight after, as it
-/// does whenever the look changes.
+// Brightness starts at 0; apply_look sets it right after.
 fn attach_maps(
     commands: &mut Commands,
     camera: Entity,
@@ -179,8 +159,6 @@ fn start_bake(baking: &mut Baking, suite: &Suite, environment: &Environment, con
     baking.0.insert(environment.name.clone(), task);
 }
 
-/// Picks up finished bakes: the environment learns about its new maps, and if
-/// it is the one on screen, the camera gets them at once.
 pub(crate) fn finish_bakes(
     mut commands: Commands,
     mut baking: ResMut<Baking>,
@@ -216,7 +194,6 @@ pub(crate) fn finish_bakes(
             if let Ok(camera) = camera.single() {
                 let environment = environment.clone();
                 attach_maps(&mut commands, camera, &assets, &suite, &environment);
-                // So `apply_look` runs and gives the new maps their brightness.
                 shown.set_changed();
             }
         }
@@ -249,9 +226,7 @@ pub(crate) fn spawn_environment_scenes(
     }
 }
 
-/// Loops every clip in the file. Bevy's loader has already put a player on
-/// the root of each animated hierarchy; giving every player every clip is
-/// safe, since a clip only moves the nodes that player drives.
+// Every player gets every clip. A clip only moves the nodes its own player drives.
 pub(crate) fn on_environment_ready(
     ready: On<WorldInstanceReady>,
     roots: Query<&EnvironmentRoot>,

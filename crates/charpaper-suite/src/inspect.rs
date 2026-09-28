@@ -1,26 +1,3 @@
-//! Opens the suite's glTF files and checks that the pieces fit together.
-//!
-//! Only each file's JSON is read, never its binary chunk: the JSON describes
-//! the whole node tree, and models run to tens of megabytes of vertex data we
-//! have no use for here.
-//!
-//! The checks mirror how the scene will use the files:
-//! - Animation curves find their bone by the chain of node names from the
-//!   scene root down, so an animation file must repeat the model's hierarchy
-//!   exactly, armature object name included.
-//! - Skins are re-pointed at the model's bones by bone name, so their names
-//!   must match and their rest poses must agree. The hierarchy above the bones
-//!   does not matter for skins.
-//! - The model is only the armature. Any mesh in it would stay visible under
-//!   every skin, which is almost never what the artist meant.
-//! - A camera file is one camera and at most one clip. The clip only needs to
-//!   make sense inside its own file: it moves the camera or the empties the
-//!   camera hangs from, never the character.
-//! - An environment is lit only by what it ships: the lights in its scene and
-//!   its reflection maps. With neither, the character renders black in it.
-//!   Its scene is loaded without cameras, and its maps must be KTX2 cubemaps
-//!   this build of the app can decode.
-
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -40,9 +17,7 @@ use crate::layout::ClipSet;
 use crate::layout::Skin;
 use crate::layout::Suite;
 
-/// Past these, a skin's rest pose no longer matches the model's. The limits
-/// are loose enough to absorb exporter float noise and tight enough that a
-/// real mismatch is visible on screen long before it reaches them.
+// Loose enough for exporter float noise, tight enough to catch a mismatch you would see.
 const REST_TRANSLATION_EPSILON: f32 = 1e-3;
 const REST_ROTATION_DOT_EPSILON: f32 = 1e-6;
 const REST_SCALE_EPSILON: f32 = 1e-3;
@@ -58,7 +33,6 @@ pub enum Severity {
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub severity: Severity,
-    /// Relative to the suite root; `None` for the suite as a whole.
     pub file: Option<PathBuf>,
     pub message: String,
 }
@@ -116,13 +90,12 @@ pub fn inspect(suite: &Suite) -> Report {
     };
     let bones = model_bones(&model, &suite.model, &mut report);
 
+    // A borrowed armature's meshes are its skin's own.
     let meshes = model.doc.nodes().filter(|n| n.mesh().is_some()).count();
-    if suite.model_is_skin {
-        // The meshes belong to the skin the armature was borrowed from.
-    } else if meshes == 0 && suite.skins.is_empty() {
+    if !suite.model_is_skin && meshes == 0 && suite.skins.is_empty() {
         let message = "nothing to show: the model has no meshes and the suite has no skins";
         report.push(Severity::Error, None, message.to_string());
-    } else if meshes > 0 && !suite.skins.is_empty() {
+    } else if !suite.model_is_skin && meshes > 0 && !suite.skins.is_empty() {
         let message = format!(
             "{meshes} mesh(es) are shown under every skin; move them into the skins that \
              should own them"
@@ -164,13 +137,11 @@ pub fn inspect(suite: &Suite) -> Report {
 
 struct Gltf {
     doc: Document,
-    /// Per node index, the name Bevy will give the node's entity.
+    // Per node, the name Bevy gives its entity.
     names: Vec<String>,
     parents: Vec<Option<usize>>,
-    /// Per node index, its local transform as (translation, rotation, scale).
     rest: Vec<Decomposed>,
-    /// Per node index, the `/`-joined name chain from its scene root. Nodes
-    /// outside the scene Bevy spawns have none.
+    // Per node, its `/`-joined name chain from the scene root. None outside the spawned scene.
     paths: HashMap<usize, String>,
 }
 
@@ -190,6 +161,7 @@ fn open(suite: &Suite, file: &Path, report: &mut Report) -> Option<Gltf> {
     }
 }
 
+// Reads only the JSON, never the binary chunk: that is where the megabytes are.
 pub(crate) fn read_document(path: &Path) -> Result<Document, String> {
     let json = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("glb")) {
         read_glb_json(path)?
@@ -197,10 +169,8 @@ pub(crate) fn read_document(path: &Path) -> Result<Document, String> {
         std::fs::read(path).map_err(|e| e.to_string())?
     };
     let root = gltf::json::Root::from_slice(&json).map_err(|e| {
-        // The `gltf` crate, and so Bevy, cannot parse this extension at all:
-        // its channels have no target node. The raw parse error ("missing
-        // field `node`") would not tell the artist which export setting to
-        // change, so name the extension instead.
+        // Bevy can't load this extension at all, and the raw parse error wouldn't tell the artist
+        // which export setting to change.
         let pointer = b"KHR_animation_pointer";
         match json.windows(pointer.len()).any(|w| w == pointer) {
             true => "animates properties through KHR_animation_pointer (e.g. focal length), \
@@ -213,9 +183,7 @@ pub(crate) fn read_document(path: &Path) -> Result<Document, String> {
     Document::from_json(root).map_err(|e| e.to_string())
 }
 
-/// A .glb is a 12-byte header, then a JSON chunk that the spec requires to
-/// come first, then (usually) one binary chunk. Each chunk starts with its
-/// byte length and a type tag, all little-endian `u32`s.
+// A .glb is a 12-byte header, then the JSON chunk, then usually one binary chunk.
 fn read_glb_json(path: &Path) -> Result<Vec<u8>, String> {
     const MAGIC: &[u8; 4] = b"glTF";
     const JSON_CHUNK: u32 = 0x4E4F_534A;
@@ -271,12 +239,8 @@ fn index(doc: Document) -> Gltf {
     Gltf { doc, names, parents, rest, paths }
 }
 
-/// Node name to node index, for every node in the model that holds no mesh.
-///
-/// Every such node counts as a bone rather than only the joints of the file's
-/// glTF skins: a glTF skin exists to bind a mesh, so an armature exported on
-/// its own usually has none. Mesh nodes are left out so a mesh named after a
-/// bone ("Head") does not look like a duplicate bone.
+// Every node without a mesh counts as a bone, not only glTF skin joints: an armature
+// exported on its own usually has no glTF skin.
 fn model_bones<'a>(model: &'a Gltf, file: &Path, report: &mut Report) -> HashMap<&'a str, usize> {
     let mut bones = HashMap::new();
     let mut duplicates = BTreeSet::new();
@@ -486,9 +450,6 @@ fn check_skin_file(
     }
 }
 
-/// A camera file holds one camera or several. With one, the file's only clip
-/// moves it; with several, each plays the first clip that moves it or what it
-/// hangs from, so every camera should have exactly one.
 fn check_camera_file(path: &Path, gltf: &Gltf, report: &mut Report) {
     let path = Some(path);
     let cameras: Vec<usize> =
@@ -610,7 +571,6 @@ fn check_environments(suite: &Suite, report: &mut Report) {
             }
         }
 
-        // With a panorama, whatever is missing is baked from it on first load.
         let baked_later = environment.panorama.is_some();
         if let (Some(path), None) | (None, Some(path)) =
             (&environment.diffuse, &environment.specular)
@@ -632,12 +592,7 @@ fn check_environments(suite: &Suite, report: &mut Report) {
     }
 }
 
-/// Reads only the fixed KTX2 header, a 12-byte identifier followed by nine
-/// little-endian `u32`s, and returns the number of mip levels.
-///
-/// Which supercompression schemes are accepted mirrors the Bevy features the
-/// workspace enables (`ktx2` and `zstd_rust`); enabling more there means
-/// accepting more here.
+// The accepted compression schemes mirror the Bevy features the workspace enables.
 fn read_cubemap(path: &Path) -> Result<u32, String> {
     const IDENTIFIER: [u8; 12] =
         [0xAB, b'K', b'T', b'X', b' ', b'2', b'0', 0xBB, b'\r', b'\n', 0x1A, b'\n'];
@@ -669,12 +624,8 @@ fn read_cubemap(path: &Path) -> Result<u32, String> {
     }
 }
 
-/// Body animations may key the shape keys of skin meshes (correctives, such
-/// as a skirt following the legs). Those meshes must be exported with the
-/// animation, since glTF keys shape keys only on a mesh in the same file; the
-/// app never loads them there. Each keyed mesh has to exist at the same place
-/// in some skin, with the same number of shape keys, and must not belong to
-/// that skin's expressions.
+// glTF keys shape keys only on a mesh in the same file, so an animation file carries the
+// meshes its correctives key. The app never loads them from there.
 fn check_correctives(path: &Path, gltf: &Gltf, skins: &[(&Skin, Gltf)], report: &mut Report) {
     let path = Some(path);
     let keyed: BTreeSet<usize> = gltf
@@ -752,7 +703,6 @@ fn shape_keys(gltf: &Gltf, node: usize) -> usize {
         .map_or(0, |m| m.primitives().map(|p| p.morph_targets().len()).max().unwrap_or(0))
 }
 
-/// A skin's clips that key only shape keys are its expressions.
 fn check_skin_expressions(path: &Path, skin: &Gltf, report: &mut Report) {
     let path = Some(path);
     for mesh in skin.doc.meshes() {
@@ -766,8 +716,6 @@ fn check_skin_expressions(path: &Path, skin: &Gltf, report: &mut Report) {
         }
     }
 
-    // Clips that move bones are body animations exported along with the
-    // skin; skipping them is the rule, not a mistake worth a finding.
     for animation in skin.doc.animations().filter(is_expression) {
         if animation.name().is_none() {
             let message = format!(
@@ -784,7 +732,7 @@ type Decomposed = ([f32; 3], [f32; 4], [f32; 3]);
 fn same_rest((t1, r1, s1): Decomposed, (t2, r2, s2): Decomposed) -> bool {
     let close =
         |a: [f32; 3], b: [f32; 3], eps: f32| a.iter().zip(b).all(|(x, y)| (x - y).abs() <= eps);
-    // q and -q are the same rotation, hence the absolute value.
+    // q and -q are the same rotation.
     let dot: f32 = r1.iter().zip(r2).map(|(a, b)| a * b).sum();
     close(t1, t2, REST_TRANSLATION_EPSILON)
         && close(s1, s2, REST_SCALE_EPSILON)

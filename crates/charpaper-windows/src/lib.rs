@@ -1,12 +1,4 @@
-//! Windows backend for the desktop wallpaper.
-//!
-//! Depends on `charpaper-wallpaper` and nothing else -- no Bevy, and no `windows`
-//! crate either. This is the most stable code in the project, and isolating it
-//! means editing the scene or upgrading the engine never rebuilds it.
-//!
-//! Everything is gated on `cfg(windows)` so `cargo check --workspace` on
-//! another OS compiles this crate away to nothing instead of failing.
-
+// Compiles to nothing on other systems, so the workspace still builds there.
 #[cfg(windows)]
 mod activity;
 #[cfg(windows)]

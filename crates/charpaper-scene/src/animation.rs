@@ -1,5 +1,3 @@
-//! Plays the suite's clips on the armature.
-
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -21,8 +19,6 @@ use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
 use crate::suite::asset_path;
 
-/// Every clip the suite offers, under the name `suite.toml` and the UI use.
-/// Present once the animation files have loaded.
 #[derive(Resource, Default)]
 pub struct CharacterClips {
     clips: BTreeMap<String, Clip>,
@@ -44,27 +40,22 @@ impl CharacterClips {
     }
 }
 
-/// What the armature is actually playing, as opposed to what
-/// [`CharacterState::animation`] asks for.
 #[derive(Component, Default)]
 pub(crate) struct Playing(Option<String>);
 
-/// Animation files still loading. Removed once the graph is built.
 #[derive(Resource)]
 pub(crate) struct PendingClips(Vec<(Handle<Gltf>, AnimationFile)>);
 
 #[derive(Component)]
 pub(crate) struct Animatable;
 
-/// Bevy's glTF loader only marks a node as an animation target when a clip in
-/// the same file moves it, and the model holds no clips. So the armature is
-/// marked here by the loader's own rule: a node's id is the hash of the names
-/// from its top-level node down to itself. Clips from other files were baked
-/// with ids made the same way, which is why their names must match exactly.
-///
-/// The player lives on the armature's root entity rather than on a glTF node.
-/// Ids only encode names, so the player can sit anywhere, and one player then
-/// covers a model with several top-level nodes.
+// Bevy only marks nodes as animation targets when a clip in the same file moves them, and
+// the armature's file has no clips. So they are marked here the way the loader would: a
+// node's id hashes the names from its top-level node down to it. That is why animation
+// files must repeat those names exactly.
+//
+// The player sits on the armature's root entity, so one player covers several top-level
+// nodes.
 pub(crate) fn make_armature_animatable(
     mut commands: Commands,
     armature: Query<Entity, (With<Armature>, With<InstanceReady>, Without<Animatable>)>,
@@ -75,7 +66,6 @@ pub(crate) fn make_armature_animatable(
         return;
     };
 
-    // armature root -> glTF scene root(s) -> top-level nodes
     let mut pending: Vec<(Entity, Vec<&str>)> = Vec::new();
     for &scene_root in kids(&children, armature) {
         pending.extend(kids(&children, scene_root).iter().map(|&node| (node, Vec::new())));
@@ -124,9 +114,7 @@ pub(crate) fn load_clips(
     commands.insert_resource(PendingClips(files));
 }
 
-/// An animation file may hold the meshes its correctives key, since glTF
-/// only keys shape keys on a mesh in the same file. Only the clips are
-/// wanted; the meshes the skins show are the skins' own.
+// An animation file may carry the meshes its correctives key; only its clips are wanted.
 fn clips_only(settings: &mut GltfLoaderSettings) {
     settings.load_meshes = RenderAssetUsages::empty();
     settings.load_materials = RenderAssetUsages::empty();
@@ -134,9 +122,6 @@ fn clips_only(settings: &mut GltfLoaderSettings) {
     settings.load_lights = false;
 }
 
-/// Waits for every animation file to load or fail, then puts all their clips
-/// side by side in one graph. A plain list is enough: the transitions
-/// component does the blending when switching, and nothing plays layered yet.
 pub(crate) fn build_graph(
     mut commands: Commands,
     pending: Option<Res<PendingClips>>,
@@ -194,8 +179,6 @@ pub(crate) fn build_graph(
     commands.remove_resource::<PendingClips>();
 }
 
-/// A `once` clip hands back to the default animation when it ends. When the
-/// default is itself `once`, it plays through and holds its last frame.
 pub(crate) fn finish_once(
     mut state: ResMut<CharacterState>,
     clips: Option<Res<CharacterClips>>,
@@ -219,8 +202,7 @@ pub(crate) fn finish_once(
     }
 }
 
-/// Runs every frame rather than on change: a request can arrive before the
-/// graph exists, and comparing two names is cheaper than tracking that.
+// Runs every frame, since a request can arrive before the graph exists.
 pub(crate) fn play_selected(
     state: Res<CharacterState>,
     clips: Option<Res<CharacterClips>>,
@@ -254,9 +236,8 @@ pub(crate) fn play_selected(
             active.repeat();
         }
         PlayMode::Once => {}
-        // Speed 0 rather than pausing: `AnimationTransitions` never fades out
-        // a paused animation, so a paused pose would keep full weight under
-        // every animation played after it.
+        // Speed 0 rather than paused: AnimationTransitions never fades out a paused animation,
+        // so its pose would keep full weight under everything played after it.
         PlayMode::Pose => {
             active.set_speed(0.0);
         }

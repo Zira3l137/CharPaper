@@ -1,40 +1,25 @@
-//! Application-level settings.
-//!
-//! Each domain crate owns and defaults its own settings; this type just
-//! composes them and adds the handful that belong to the application itself.
-
 use charpaper_scene::SceneConfig;
 use charpaper_ui::UiConfig;
 use charpaper_wallpaper::WallpaperConfig;
 
 use crate::cli::Cli;
 
-/// Everything the app needs to start up.
 #[derive(Clone, Debug, Default)]
 pub struct AppConfig {
     pub window: WindowConfig,
     pub scene: SceneConfig,
     pub wallpaper: WallpaperConfig,
     pub ui: UiConfig,
-
-    /// `--inspect`: print a report about the desktop window layout and exit
-    /// immediately, without ever opening a window. Completely read-only.
     pub inspect_and_exit: bool,
 }
 
-/// Settings for the OS window Bevy creates for us.
 #[derive(Clone, Debug)]
 pub struct WindowConfig {
     pub title: String,
-
     pub width: u32,
     pub height: u32,
-
-    /// Revealed by `WallpaperPlugin` once attach settles.
     pub start_hidden: bool,
-
     pub decorations: bool,
-
     pub skip_taskbar: bool,
 }
 
@@ -52,7 +37,6 @@ impl Default for WindowConfig {
 }
 
 impl AppConfig {
-    /// Apply command-line overrides on top of the defaults.
     pub fn from_cli(cli: &Cli) -> Self {
         let mut cfg = Self { inspect_and_exit: cli.inspect, ..Self::default() };
 
@@ -75,8 +59,7 @@ impl AppConfig {
             cfg.wallpaper.layered = layered;
         }
 
-        // A dry run never reparents, so a hidden borderless window would
-        // stay invisible.
+        // A dry run never reparents, so a hidden borderless window would stay invisible.
         if cli.dry_run {
             cfg.wallpaper.dry_run = true;
             cfg.wallpaper.dump_window_tree = true;

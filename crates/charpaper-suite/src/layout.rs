@@ -1,9 +1,3 @@
-//! Turns a folder plus its manifest into a [`Suite`]: every path checked and
-//! every blank the folder layout can fill, filled.
-//!
-//! Paths in a [`Suite`] stay relative to [`Suite::root`], because that is the
-//! form an asset source wants later.
-
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fs;
@@ -29,12 +23,9 @@ const ANIMATIONS_DIR: &str = "animations";
 const SKINS_DIR: &str = "skins";
 const CAMERAS_DIR: &str = "cameras";
 
-/// The camera the app always has, which the user drags around the character.
-/// An exported camera cannot take this name.
 pub const ORBIT_CAMERA: &str = "orbit";
 const ENVIRONMENT_DIR: &str = "environment";
 
-/// The pre-baked maps an environment's folder may hold, by exact file name.
 pub const SKYBOX_MAP: &str = "skybox.ktx2";
 pub const DIFFUSE_MAP: &str = "diffuse.ktx2";
 pub const SPECULAR_MAP: &str = "specular.ktx2";
@@ -43,23 +34,16 @@ pub const SPECULAR_MAP: &str = "specular.ktx2";
 pub struct Suite {
     pub root: PathBuf,
     pub name: String,
-    /// The file the armature comes from.
     pub model: PathBuf,
-    /// The suite has no model file of its own, so [`Suite::model`] is the
-    /// default skin, whose armature every skin carries anyway. Its meshes are
-    /// the skin's and must not be shown a second time with the armature.
+    // No model file of its own, so `model` is the default skin's file, whose meshes are that
+    // skin's and must not show twice.
     pub model_is_skin: bool,
-    /// Sorted by path.
     pub animations: Vec<AnimationFile>,
-    /// Sorted by name.
     pub skins: Vec<Skin>,
     pub default_skin: Option<String>,
     pub default_animation: Option<String>,
-    /// Sorted by name.
     pub cameras: Vec<ExportedCamera>,
-    /// `None` is the orbit camera.
     pub default_camera: Option<String>,
-    /// Sorted by name.
     pub environments: Vec<Environment>,
     pub default_environment: Option<String>,
     pub post: Post,
@@ -72,12 +56,9 @@ pub struct AnimationFile {
     pub clips: ClipSet,
 }
 
-/// A file is either taken whole or described entry by entry; never both. Once
-/// the manifest mentions a file, only the clips it lists are used, which is
-/// how you hide helper clips that happen to live in the same file.
+// Once suite.toml mentions a file, only the clips it lists are used.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipSet {
-    /// Every named clip, under its own name, looping.
     All,
     Listed(Vec<ClipBinding>),
 }
@@ -95,37 +76,19 @@ pub struct Skin {
     pub file: PathBuf,
 }
 
-/// A camera made in Blender, along with at most one clip moving it.
-///
-/// A file in `cameras/` holding one camera gives one entry, named after the
-/// file. A file holding several gives one entry per camera, named after the
-/// camera object, each playing the clip that moves it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExportedCamera {
     pub name: String,
     pub file: PathBuf,
-    /// The camera object's name, when its file holds several.
     pub node: Option<String>,
-    /// The clip that moves it, when its file holds several cameras. With one
-    /// camera, the file's only clip.
     pub clip: Option<String>,
 }
 
-/// What surrounds the character: `environment/<name>.glb`, a folder
-/// `environment/<name>/` of maps, or both. A folder alone is a sky-only
-/// environment.
-///
-/// The folder may hold a panorama instead of, or as well as, the maps: an
-/// equirectangular `.hdr` or `.exr`, as Blender's World uses. Whichever maps
-/// are missing are baked from it, once, and kept next to it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Environment {
     pub name: String,
     pub scene: Option<PathBuf>,
-    /// The panorama the maps are baked from.
     pub panorama: Option<PathBuf>,
-    /// Without its own, the specular map doubles as the skybox: its sharpest
-    /// level is the unblurred surroundings.
     pub skybox: Option<PathBuf>,
     pub diffuse: Option<PathBuf>,
     pub specular: Option<PathBuf>,
@@ -133,12 +96,10 @@ pub struct Environment {
 }
 
 impl Environment {
-    /// Where its maps and panorama live, relative to the suite.
     pub fn folder(&self) -> PathBuf {
         Path::new(ENVIRONMENT_DIR).join(&self.name)
     }
 
-    /// Looks for the maps on disk again, for after they have been baked.
     pub fn find_maps(&mut self, root: &Path) {
         let folder = self.folder();
         let map = |file: &str| {
@@ -149,13 +110,11 @@ impl Environment {
             (map(SKYBOX_MAP), map(DIFFUSE_MAP), map(SPECULAR_MAP));
     }
 
-    /// Whether some maps are missing that the panorama can bake.
     pub fn needs_baking(&self) -> bool {
         self.panorama.is_some()
             && (self.skybox.is_none() || self.diffuse.is_none() || self.specular.is_none())
     }
 
-    /// Reflections need both maps; either alone is ignored.
     pub fn reflections(&self) -> Option<(&Path, &Path)> {
         Some((self.diffuse.as_deref()?, self.specular.as_deref()?))
     }
@@ -165,13 +124,9 @@ impl Environment {
     }
 }
 
-/// The settings the viewer can adjust while the app runs: everything in the
-/// manifest that changes how the scene looks rather than what is in it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Look {
     pub post: Post,
-    /// Keyed by environment name. An environment without an entry uses the
-    /// defaults.
     pub environments: BTreeMap<String, EnvironmentEntry>,
 }
 
@@ -294,10 +249,7 @@ impl Suite {
     }
 }
 
-/// Folders directly inside `dir` that contain a `suite.toml`, sorted.
-///
-/// Whether each one actually loads is left to [`Suite::load`], so one broken
-/// suite cannot hide the others from a picker.
+// Whether each one loads is left to Suite::load, so one broken suite can't hide the others.
 pub fn discover(dir: impl AsRef<Path>) -> Result<Vec<PathBuf>, SuiteError> {
     let dir = dir.as_ref();
     let mut found: Vec<PathBuf> =
@@ -333,8 +285,7 @@ fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationF
 fn resolve_cameras(root: &Path) -> Result<Vec<ExportedCamera>, SuiteError> {
     let mut cameras: Vec<ExportedCamera> = Vec::new();
     for (name, file) in named_files(root, CAMERAS_DIR, "camera")? {
-        // An unreadable file stays one camera here; `inspect` says what is
-        // wrong with it.
+        // An unreadable file stays one camera here; `inspect` reports what is wrong with it.
         let found = read_document(&root.join(&file)).map(|d| camera_nodes(&d)).unwrap_or_default();
         if found.len() <= 1 {
             cameras.push(ExportedCamera { name, file, node: None, clip: None });
@@ -357,8 +308,6 @@ fn resolve_cameras(root: &Path) -> Result<Vec<ExportedCamera>, SuiteError> {
     Ok(cameras)
 }
 
-/// Each camera object's name, and the first clip that moves it or anything it
-/// hangs from.
 fn camera_nodes(doc: &Document) -> Vec<(String, Option<String>)> {
     let mut parents = vec![None; doc.nodes().len()];
     for node in doc.nodes() {
@@ -382,9 +331,8 @@ fn camera_nodes(doc: &Document) -> Vec<(String, Option<String>)> {
         .collect()
 }
 
-/// A folder counts only when it holds a map or a panorama, or shares its name
-/// with a scene file. A `.gltf` scene's own textures folder is none of those,
-/// and would otherwise show up as an empty environment.
+// A folder only counts if it holds a map or a panorama, or shares a scene file's name. A
+// .gltf's own texture folder is neither.
 fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environment>, SuiteError> {
     let mut found: BTreeMap<String, Environment> =
         named_files(root, ENVIRONMENT_DIR, "environment")?
@@ -437,9 +385,6 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
     Ok(found.into_values().collect())
 }
 
-/// Every .glb/.gltf directly in `dir`, named after its file and sorted by
-/// name. Sub-folders are left alone, so a `.gltf` can keep its `.bin` and
-/// textures in one.
 fn named_files(
     root: &Path,
     dir: &str,
@@ -457,8 +402,7 @@ fn named_files(
     Ok(found.into_iter().collect())
 }
 
-/// Rejects anything that could reach outside the suite folder. The asset
-/// server would refuse it too, but only at runtime and with a vaguer message.
+// Rejects anything that could reach outside the suite folder.
 fn relative(path: &Path) -> Result<PathBuf, SuiteError> {
     let mut clean = PathBuf::new();
     for component in path.components() {
@@ -495,8 +439,7 @@ fn sole(
     }
 }
 
-/// Files directly inside `root/dir`, relative to `root`, sorted. A missing
-/// folder is simply empty: every sub-folder of a suite is optional.
+// A missing folder is just empty: every sub-folder of a suite is optional.
 fn files_in(root: &Path, dir: &str) -> Result<Vec<PathBuf>, SuiteError> {
     let mut files: Vec<PathBuf> = read_dir(&root.join(dir))?
         .into_iter()

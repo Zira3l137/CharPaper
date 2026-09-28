@@ -1,9 +1,3 @@
-//! Spawns the active suite's character: the armature, and the one skin worn.
-//!
-//! Only the worn skin is in memory. Switching loads the next one from disk
-//! and frees the last, which costs a moment of loading per switch and saves
-//! holding every outfit's meshes and textures at once.
-
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -20,45 +14,28 @@ use crate::suite::Remembered;
 use crate::suite::load_armature;
 use crate::suite::load_gltf;
 
-/// What the viewer has picked. Systems react to changes, so writing here is
-/// how the UI will switch things.
+// What the viewer asked for. Systems compare it with what is shown and catch up, so
+// writing here is how the UI switches things.
 #[derive(Resource, Default, Debug)]
 pub struct CharacterState {
-    /// A suite by folder name, from [`crate::AvailableSuites`]. Changing it
-    /// swaps everything else in this state for that suite's.
     pub suite: Option<String>,
-    /// `None` shows no skin at all: just the bare armature, which is invisible.
     pub skin: Option<String>,
-    /// A name from [`crate::CharacterClips`]. `None` stops the animation and
-    /// leaves the character in whatever pose it was in.
     pub animation: Option<String>,
-    /// A camera from `cameras/`, by file name. `None` is the orbit camera,
-    /// which the mouse only moves while it is the one in use.
+    // None is the orbit camera.
     pub camera: Option<String>,
-    /// An environment by name. `None` shows none, which leaves the character
-    /// unlit.
     pub environment: Option<String>,
-    /// Per skin, the mesh objects in it the viewer has switched off.
     pub hidden: BTreeMap<String, BTreeSet<String>>,
-    /// Per skin, the expression it plays, from [`crate::Expressions`]. An empty
-    /// name, or no entry, is neutral; neutral is kept as an empty name so a
-    /// merge still overwrites an older pick.
+    // Per skin. Neutral is an empty name, so a merge still overwrites an older pick.
     pub expressions: BTreeMap<String, String>,
 }
 
 impl CharacterState {
-    /// The worn skin's expression, `None` for neutral.
     pub fn expression(&self) -> Option<&str> {
         let skin = self.skin.as_ref()?;
         self.expressions.get(skin).map(String::as_str).filter(|e| !e.is_empty())
     }
 }
 
-/// The viewer's choices for one suite, as kept between runs.
-///
-/// Each is a preference only. One the suite no longer offers, such as a
-/// renamed skin or a deleted camera, is ignored in favour of the suite's
-/// default rather than leaving the character bare.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Picks {
@@ -66,25 +43,20 @@ pub struct Picks {
     pub skin: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub animation: Option<String>,
-    /// [`ORBIT_CAMERA`] for the orbit camera. Unlike in [`CharacterState`],
-    /// `None` here means "no preference", not "orbit".
+    // ORBIT_CAMERA for the orbit camera. Unlike in CharacterState, None means "no preference".
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
-    /// Per skin, the mesh objects switched off. A skin whose objects are all
-    /// on again keeps an empty entry, so merging overwrites the old one.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub hidden: BTreeMap<String, BTreeSet<String>>,
-    /// Per skin, its expression; empty for neutral.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub expressions: BTreeMap<String, String>,
 }
 
 impl Picks {
-    /// Takes every choice `newer` has. One it lacks keeps the older value:
-    /// the scene fills choices in over its first frames, the animation last,
-    /// and an unset one then must not erase what was remembered.
+    // An unset choice keeps the older value: the scene fills choices in over several
+    // frames, and a gap must not erase what was remembered.
     pub fn merge(&mut self, newer: Picks) {
         let keep = |new: Option<String>, old: &mut Option<String>| *old = new.or(old.take());
         keep(newer.skin, &mut self.skin);
@@ -107,7 +79,6 @@ impl Picks {
     }
 }
 
-/// A remembered choice if `offered` still accepts it, otherwise `default`.
 pub(crate) fn prefer(
     remembered: Option<String>,
     offered: impl Fn(&str) -> bool,
@@ -123,9 +94,6 @@ pub(crate) fn prefer(
     }
 }
 
-/// The mesh objects of the worn skin, by name, in name order: what the
-/// panel's advanced outfit list offers to switch off. Filled once the skin
-/// has spawned, emptied when it goes.
 #[derive(Resource, Default, Debug)]
 pub struct SkinObjects(pub(crate) Vec<(String, Entity)>);
 
@@ -138,24 +106,18 @@ impl SkinObjects {
 #[derive(Component)]
 pub(crate) struct ObjectsListed;
 
-/// The skin on screen, as opposed to [`CharacterState::skin`], the one asked
-/// for.
 #[derive(Resource, Default)]
 pub(crate) struct ShownSkin {
     pub name: Option<String>,
     pub root: Option<Entity>,
 }
 
-/// Parent of everything spawned from the suite, so replacing the suite is one
-/// despawn.
 #[derive(Component)]
 pub struct Character;
 
 #[derive(Component)]
 pub(crate) struct Armature;
 
-/// Keeps the worn skin's file, and so its meshes, textures and expression
-/// clips, in memory for as long as the skin is worn, and no longer.
 #[derive(Component)]
 pub(crate) struct SkinFile(pub Handle<Gltf>);
 
@@ -201,10 +163,8 @@ pub(crate) fn spawn_character(
     );
 }
 
-/// Replaces the skin on screen with the one asked for. The old one is
-/// despawned, which drops the last handles to its meshes and textures, so
-/// they leave memory; the new one loads from disk. Pieces the old skin moved
-/// onto the armature are not below its root any more and go separately.
+// Despawning the old skin drops the last handles to its assets, which frees them. Pieces it
+// moved onto the armature are no longer under its root, so they go separately.
 pub(crate) fn switch_skin(
     mut commands: Commands,
     state: Res<CharacterState>,
@@ -238,8 +198,6 @@ pub(crate) fn switch_skin(
     else {
         return;
     };
-    // The whole file rather than just its scene: its clips are the skin's
-    // expressions. The scene is spawned once the file has loaded.
     let root = commands
         .spawn((
             Name::new(format!("Skin {}", skin.name)),
@@ -253,9 +211,7 @@ pub(crate) fn switch_skin(
     shown.root = Some(root);
 }
 
-/// A mesh object is a glTF node with mesh primitives below it: what Blender
-/// calls an object. Looked for below the skin's root and below the pieces
-/// binding moved onto the armature, so a hat parented to a bone is listed too.
+// A mesh object is a node with mesh primitives below it: what Blender calls an object.
 pub(crate) fn list_skin_objects(
     mut commands: Commands,
     skins: Query<(Entity, &SkinRoot), (With<Bound>, Without<ObjectsListed>)>,

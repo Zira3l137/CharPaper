@@ -8,8 +8,6 @@ use charpaper_suite::Suite;
 use charpaper_suite::SuiteError;
 use charpaper_suite::inspect;
 
-// Never read: inspection only looks at the JSON, but validation wants every
-// accessor to point somewhere.
 const ACCESSORS: &str = r#""buffers": [{"uri": "unused.bin", "byteLength": 64}],
 "bufferViews": [{"buffer": 0, "byteLength": 64}],
 "accessors": [
@@ -67,7 +65,6 @@ fn outfit(spine_y: f32) -> String {
     )
 }
 
-/// A camera under a rig empty, with one clip per name moving the rig.
 fn camera(clips: &[&str]) -> String {
     let animations: Vec<String> = clips
         .iter()
@@ -94,7 +91,6 @@ fn camera(clips: &[&str]) -> String {
     )
 }
 
-/// Just the fixed KTX2 header; inspection never reads further.
 fn ktx2(faces: u32, levels: u32, supercompression: u32) -> Vec<u8> {
     let mut bytes = vec![0xAB, b'K', b'T', b'X', b' ', b'2', b'0', 0xBB, b'\r', b'\n', 0x1A, b'\n'];
     for word in [0, 1, 64, 64, 0, 0, faces, levels, supercompression] {
@@ -103,7 +99,6 @@ fn ktx2(faces: u32, levels: u32, supercompression: u32) -> Vec<u8> {
     bytes
 }
 
-/// A scene holding one directional light and nothing else.
 fn lit_scene() -> String {
     r#"{"asset": {"version": "2.0"}, "scenes": [{"nodes": [0]}],
         "extensionsUsed": ["KHR_lights_punctual"],
@@ -408,7 +403,6 @@ fn a_panorama_makes_an_environment_whose_maps_are_baked_later() {
     assert!(err.to_string().contains("several panoramas"), "{err}");
 }
 
-/// A skin with a face mesh carrying shape keys, and clips keying them.
 fn face(clips: &str) -> String {
     format!(
         r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0]}}],
@@ -487,7 +481,6 @@ fn without_a_model_file_the_armature_comes_from_the_default_skin() {
     assert!(err.to_string().contains("no model and no skin"), "{err}");
 }
 
-/// Two cameras, each on its own dolly, each with its own clip.
 fn camera_pair() -> String {
     format!(
         r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0, 2]}}],

@@ -1,9 +1,3 @@
-//! Decides which hooked mouse events belong to our window, and translates them.
-//!
-//! The hook sees every mouse event in the session. What we pass on is only
-//! what the desktop would have taken from us: events over the shell's windows,
-//! plus everything that belongs to a drag which started there.
-
 use charpaper_wallpaper::PointerButton;
 use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
@@ -16,12 +10,9 @@ use crate::sys::Hwnd;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Target {
-    /// The shell has it, so we never will. Forward.
     Desktop,
-    /// Our window really is under the cursor (`ProgmanDirect`, for one), so
-    /// winit already delivers these. Forwarding would double them up.
+    // Our window really is under the cursor, so winit already delivers these.
     OwnWindow,
-    /// Some other application's window.
     Elsewhere,
 }
 
@@ -29,10 +20,9 @@ pub struct DesktopPointer {
     hook: MouseHook,
     window: Hwnd,
     inside: bool,
-    /// Bit per [`PointerButton`] we forwarded a press for.
+    // One bit per PointerButton pressed over the desktop.
     held: u8,
-    /// `GetClassNameW` on every event of a 1000 Hz mouse adds up, and the root
-    /// window only changes when the cursor crosses into another application.
+    // Asking for a class name on every event adds up on a 1000 Hz mouse.
     last_root: Option<(Hwnd, bool)>,
 }
 
@@ -42,10 +32,8 @@ impl DesktopPointer {
     }
 
     fn translate(&mut self, raw: RawMouseEvent, out: &mut Vec<PointerEvent>) {
-        // Mirrors the mouse capture every native window gets on button press:
-        // until the last button is released, the drag belongs to whoever saw
-        // the press. Without it a release over another window never reaches
-        // Bevy and the button stays down forever.
+        // Like native mouse capture: a drag belongs to whoever saw the press until every button
+        // is up. Otherwise a release over another window never reaches Bevy.
         let target = if self.held != 0 { Target::Desktop } else { self.target_at(raw.screen) };
 
         if target != Target::Desktop {
@@ -59,9 +47,8 @@ impl DesktopPointer {
         }
 
         let moved = self.moved_to(raw.screen);
+        // A click can be the first event we see, e.g. when a window closes under a still cursor.
         if !self.inside {
-            // Not every entry starts with a move: a window closing under a
-            // still cursor turns the next click into the first event we see.
             self.inside = true;
             out.push(PointerEvent::Entered);
             out.push(moved);
@@ -75,8 +62,7 @@ impl DesktopPointer {
             sys::WM_MOUSEWHEEL => {
                 out.push(PointerEvent::Wheel { x: 0.0, y: wheel_notches(raw.mouse_data) })
             }
-            // Negated to match winit, which flips Windows' horizontal sign to
-            // agree with every other platform.
+            // Negated to match winit's sign convention.
             sys::WM_MOUSEHWHEEL => {
                 out.push(PointerEvent::Wheel { x: -wheel_notches(raw.mouse_data), y: 0.0 })
             }
@@ -100,16 +86,12 @@ impl DesktopPointer {
         } else if self.held & bit != 0 {
             self.held &= !bit;
         } else {
-            // Pressed somewhere else, released over the desktop. That press
-            // was never ours, so neither is the release.
+            // Pressed somewhere else, released here: not ours.
             return;
         }
         out.push(PointerEvent::Button { button, pressed });
     }
 
-    /// Evaluated when Bevy drains the queue, up to a frame after the event
-    /// happened. A window that appears or vanishes within that frame can be
-    /// misjudged for one event.
     fn target_at(&mut self, screen: sys::Point) -> Target {
         let hit = sys::window_from_point(screen);
         if hit == 0 {
@@ -119,9 +101,8 @@ impl DesktopPointer {
             return Target::OwnWindow;
         }
 
-        // In both desktop layouts the icon view is a descendant of `Progman`
-        // or of a top-level `WorkerW`, so the root's class is enough to tell
-        // the desktop apart from everything stacked above it.
+        // The icon view always lives under Progman or a top-level WorkerW, so the root's class
+        // is enough to tell the desktop apart.
         let root = sys::root_ancestor(hit);
         let is_shell = match self.last_root {
             Some((cached, is_shell)) if cached == root => is_shell,
@@ -173,7 +154,6 @@ fn high_word(value: u32) -> u16 {
     (value >> 16) as u16
 }
 
-/// The high word is a signed delta in multiples of `WHEEL_DELTA`.
 fn wheel_notches(mouse_data: u32) -> f32 {
     high_word(mouse_data) as i16 as f32 / sys::WHEEL_DELTA as f32
 }
