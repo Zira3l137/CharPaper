@@ -24,7 +24,7 @@ use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
 use charpaper_suite::ORBIT_CAMERA;
 use charpaper_suite::Suite;
-use charpaper_ui::CustomUiPlugin;
+use charpaper_ui::SettingsPanelPlugin;
 
 use crate::config::AppConfig;
 use crate::look_file::LookFilePlugin;
@@ -105,7 +105,7 @@ fn main() -> Result<()> {
         .add_plugins(WallpaperPlugin { config: config.wallpaper.clone() })
         .add_plugins(PacingPlugin)
         .add_plugins(ScenePlugin { config: config.scene.clone() })
-        .add_plugins(CustomUiPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() })
+        .add_plugins(SettingsPanelPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() })
         .add_plugins(LookFilePlugin)
         .add_plugins(StatePlugin { path: state_path, saved: loaded.state, problem: loaded.problem })
         .run();

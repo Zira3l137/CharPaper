@@ -6,32 +6,62 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
 use charpaper_scene::SkinObjects;
 
-use crate::StatusText;
 use crate::UiConfig;
 use crate::UiState;
-use crate::config::UiLocale;
-use crate::helpers::BaseBackground;
-use crate::helpers::Cycler;
-use crate::helpers::CyclerValue;
-use crate::helpers::Section;
-use crate::helpers::UiButton;
-use crate::helpers::UiContainer;
-use crate::helpers::UiElement;
-use crate::helpers::UiNode;
-use crate::helpers::WithText;
+use crate::elements::Cycler;
+use crate::elements::CyclerValue;
+use crate::elements::Section;
+use crate::elements::UiButton;
+use crate::elements::UiContainer;
+use crate::locale::UiLocale;
 use crate::theme::*;
 use crate::widgets::*;
 
-pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
+// Which suite, skin, animation and expression. Clicks write to CharacterState and the
+// widgets restyle themselves from it, so nothing here keeps a copy.
+pub(crate) struct CharacterTabPlugin;
+
+impl Plugin for CharacterTabPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(on_click).add_systems(
+            Update,
+            (
+                fill_outfits.run_if(resource_added::<ActiveSuite>),
+                show_suite.run_if(
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_changed::<AvailableSuites>),
+                ),
+                style_outfits.run_if(resource_changed::<CharacterState>),
+                fill_objects.run_if(resource_changed::<SkinObjects>),
+                show_expression.run_if(
+                    resource_changed::<CharacterState>.or_eager(resource_changed::<Expressions>),
+                ),
+                show_objects.run_if(
+                    resource_changed::<UiState>
+                        .or_eager(resource_changed::<CharacterState>)
+                        .or_eager(resource_changed::<SkinObjects>),
+                ),
+                // or_eager keeps resource_added evaluated every frame. Skipped on a frame with a
+                // change, it would report the clips as new once more on the next one.
+                show_animation.run_if(
+                    resource_changed::<CharacterState>.or_eager(resource_added::<CharacterClips>),
+                ),
+            )
+                .chain(),
+        );
+    }
+}
+
+pub(crate) fn page(locale: &UiLocale) -> impl Bundle {
     children![
         section(
             locale.get_or("section.suite", "CHARACTER"),
-            UiContainer::Section(Section::Suite),
+            Section::Suite,
             cycler(locale.get_or("label.suite", "Character"), Cycler::Suite),
         ),
         section(
             locale.get_or("section.outfit", "OUTFIT"),
-            UiContainer::Section(Section::Outfit),
+            Section::Outfit,
             (
                 Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
                 Pickable::IGNORE,
@@ -45,7 +75,7 @@ pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
                             ..default()
                         },
                         Pickable::IGNORE,
-                        UiElement::Container(UiContainer::OutfitGrid),
+                        UiContainer::OutfitGrid,
                     ),
                     cycler(locale.get_or("label.advanced", "Advanced"), Cycler::Advanced),
                     (
@@ -56,47 +86,41 @@ pub(crate) fn character_page(locale: &UiLocale) -> impl Bundle {
                             ..default()
                         },
                         Pickable::IGNORE,
-                        UiElement::Container(UiContainer::ObjectList),
+                        UiContainer::ObjectList,
                     ),
                 ],
             ),
         ),
         section(
             locale.get_or("section.animation", "ANIMATION"),
-            UiContainer::Section(Section::Animation),
+            Section::Animation,
             cycler(locale.get_or("label.animation", "Animation"), Cycler::Animation),
         ),
         section(
             locale.get_or("section.expression", "EXPRESSION"),
-            UiContainer::Section(Section::Expression),
+            Section::Expression,
             cycler(locale.get_or("label.expression", "Expression"), Cycler::Expression),
         ),
     ]
 }
 
-pub(crate) fn fill_outfits(
+// One tile per skin, rebuilt for each suite.
+fn fill_outfits(
     mut commands: Commands,
     suite: Res<ActiveSuite>,
-    containers: Query<(Entity, &UiElement, &mut Node)>,
-    mut status: Query<&mut Text, With<StatusText>>,
+    containers: Query<(Entity, &UiContainer, &mut Node)>,
 ) {
-    for mut text in &mut status {
-        text.0 = suite.name.clone();
-    }
-
-    for (entity, element, mut node) in containers {
-        match element {
-            UiElement::Container(UiContainer::Section(Section::Outfit)) => {
-                node.display = if suite.skins.is_empty() { Display::None } else { Display::Flex };
-            }
-            UiElement::Container(UiContainer::OutfitGrid) => {
+    for (entity, container, mut node) in containers {
+        match container {
+            UiContainer::Section(Section::Outfit) => node.display = display(!suite.skins.is_empty()),
+            UiContainer::OutfitGrid => {
                 commands.entity(entity).despawn_children().with_children(|grid| {
                     for skin in &suite.skins {
                         grid.spawn(
                             button(&skin.name)
                                 .font_size(SMALL_SIZE)
-                                .edit_node(|n| n.height = Val::Px(40.0))
-                                .build_with(UiElement::Button(UiButton::Skin(skin.name.clone()))),
+                                .node(|n| n.height = Val::Px(40.0))
+                                .build(UiButton::Skin(skin.name.clone())),
                         );
                     }
                 });
@@ -106,12 +130,12 @@ pub(crate) fn fill_outfits(
     }
 }
 
-pub(crate) fn style_outfits(
+fn style_outfits(
     state: Res<CharacterState>,
-    tiles: Query<(&UiElement, &mut BaseBackground, &mut BackgroundColor, &mut BorderColor)>,
+    tiles: Query<(&UiButton, &mut BaseBackground, &mut BackgroundColor, &mut BorderColor)>,
 ) {
-    for (element, mut base, mut background, mut border) in tiles {
-        let UiElement::Button(UiButton::Skin(name)) = element else {
+    for (button, mut base, mut background, mut border) in tiles {
+        let UiButton::Skin(name) = button else {
             continue;
         };
         let worn = state.skin.as_ref() == Some(name);
@@ -120,53 +144,50 @@ pub(crate) fn style_outfits(
     }
 }
 
-pub(crate) fn show_expression(
+// Only with two or more suites to pick from.
+fn show_suite(
+    state: Res<CharacterState>,
+    available: Res<AvailableSuites>,
+    mut sections: Query<(&UiContainer, &mut Node)>,
+    mut values: Query<(&CyclerValue, &mut Text)>,
+) {
+    show_container(&mut sections, UiContainer::Section(Section::Suite), available.0.len() > 1);
+    set_value(&mut values, Cycler::Suite, state.suite.as_deref().unwrap_or("-"));
+}
+
+// Expressions arrive with the worn skin's file, so this follows every skin change.
+fn show_expression(
     state: Res<CharacterState>,
     expressions: Res<Expressions>,
     config: Res<UiConfig>,
-    mut sections: Query<(&UiElement, &mut Node)>,
+    mut sections: Query<(&UiContainer, &mut Node)>,
     mut values: Query<(&CyclerValue, &mut Text)>,
 ) {
-    for (element, mut node) in &mut sections {
-        if *element == UiElement::Container(UiContainer::Section(Section::Expression)) {
-            node.display = if expressions.0.is_empty() { Display::None } else { Display::Flex };
-        }
-    }
+    let shown = !expressions.0.is_empty();
+    show_container(&mut sections, UiContainer::Section(Section::Expression), shown);
     let neutral = config.locale.get_or("expression.neutral", "Neutral");
-    for (value, mut text) in &mut values {
-        if value.0 == Cycler::Expression {
-            text.0 = state.expression().unwrap_or(neutral).to_string();
-        }
-    }
+    set_value(&mut values, Cycler::Expression, state.expression().unwrap_or(neutral));
 }
 
-pub(crate) fn show_animation(
+// Clips arrive a moment after the suite, once their files have loaded.
+fn show_animation(
     state: Res<CharacterState>,
     clips: Option<Res<CharacterClips>>,
-    mut sections: Query<(&UiElement, &mut Node)>,
+    mut sections: Query<(&UiContainer, &mut Node)>,
     mut values: Query<(&CyclerValue, &mut Text)>,
 ) {
     let any = clips.is_some_and(|clips| clips.names().next().is_some());
-    for (element, mut node) in &mut sections {
-        if *element == UiElement::Container(UiContainer::Section(Section::Animation)) {
-            node.display = if any { Display::Flex } else { Display::None };
-        }
-    }
-    for (value, mut text) in &mut values {
-        if value.0 == Cycler::Animation {
-            text.0 = state.animation.clone().unwrap_or_else(|| "-".into());
-        }
-    }
+    show_container(&mut sections, UiContainer::Section(Section::Animation), any);
+    set_value(&mut values, Cycler::Animation, state.animation.as_deref().unwrap_or("-"));
 }
 
-pub(crate) fn fill_objects(
+// One row per mesh object of the worn skin.
+fn fill_objects(
     mut commands: Commands,
     objects: Res<SkinObjects>,
-    lists: Query<(Entity, &UiElement)>,
+    containers: Query<(Entity, &UiContainer)>,
 ) {
-    let Some((list, _)) =
-        lists.iter().find(|(_, e)| **e == UiElement::Container(UiContainer::ObjectList))
-    else {
+    let Some((list, _)) = containers.iter().find(|(_, c)| **c == UiContainer::ObjectList) else {
         return;
     };
     commands.entity(list).despawn_children().with_children(|rows| {
@@ -186,8 +207,8 @@ pub(crate) fn fill_objects(
                         children![label(name, BODY_SIZE, TEXT_LABEL)],
                     ),
                     button("-")
-                        .width(Val::Px(56.0))
-                        .build_with(UiElement::Button(UiButton::Object(name.to_string()))),
+                        .node(|n| n.width = Val::Px(56.0))
+                        .build(UiButton::Object(name.to_string())),
                 ],
             ));
         }
@@ -195,79 +216,52 @@ pub(crate) fn fill_objects(
 }
 
 // Only with two or more objects: switching off a skin's only object is switching off the skin.
-pub(crate) fn show_objects(
+fn show_objects(
     ui: Res<UiState>,
     state: Res<CharacterState>,
     objects: Res<SkinObjects>,
     config: Res<UiConfig>,
-    mut nodes: Query<(&UiElement, &mut Node)>,
-    buttons: Query<(&UiElement, &Children)>,
+    mut nodes: Query<(&UiContainer, &mut Node)>,
+    buttons: Query<(&UiButton, &Children)>,
     mut texts: Query<&mut Text>,
     values: Query<(Entity, &CyclerValue)>,
 ) {
     let locale = &config.locale;
-    let on_off = |on: bool| {
-        if on { locale.get_or("value.on", "On") } else { locale.get_or("value.off", "Off") }
-    };
     let several = objects.names().count() > 1;
-    for (element, mut node) in &mut nodes {
-        let shown = match element {
-            UiElement::Container(UiContainer::Row(Cycler::Advanced)) => several,
-            UiElement::Container(UiContainer::ObjectList) => several && ui.advanced_outfit,
-            _ => continue,
-        };
-        node.display = if shown { Display::Flex } else { Display::None };
-    }
+    show_container(&mut nodes, UiContainer::Row(Cycler::Advanced), several);
+    show_container(&mut nodes, UiContainer::ObjectList, several && ui.advanced_outfit);
 
     let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
-    for (element, children) in &buttons {
-        let UiElement::Button(UiButton::Object(name)) = element else {
+    for (button, children) in &buttons {
+        let UiButton::Object(name) = button else {
             continue;
         };
         let shown = !hidden.is_some_and(|h| h.contains(name));
         for &child in &**children {
             if let Ok(mut text) = texts.get_mut(child) {
-                text.0 = on_off(shown).into();
+                text.0 = on_off(locale, shown).into();
             }
         }
     }
     for (entity, value) in &values {
         if value.0 == Cycler::Advanced {
             if let Ok(mut text) = texts.get_mut(entity) {
-                text.0 = on_off(ui.advanced_outfit).into();
+                text.0 = on_off(locale, ui.advanced_outfit).into();
             }
         }
     }
 }
 
-pub(crate) fn show_suite(
-    state: Res<CharacterState>,
-    available: Res<AvailableSuites>,
-    mut sections: Query<(&UiElement, &mut Node)>,
-    mut values: Query<(&CyclerValue, &mut Text)>,
-) {
-    for (element, mut node) in &mut sections {
-        if *element == UiElement::Container(UiContainer::Section(Section::Suite)) {
-            node.display = if available.0.len() > 1 { Display::Flex } else { Display::None };
-        }
-    }
-    for (value, mut text) in &mut values {
-        if value.0 == Cycler::Suite {
-            text.0 = state.suite.clone().unwrap_or_else(|| "-".into());
-        }
-    }
-}
-
-pub(crate) fn on_scene_click(
+fn on_click(
     event: On<Pointer<Click>>,
-    elements: Query<&UiElement>,
+    buttons: Query<&UiButton>,
     clips: Option<Res<CharacterClips>>,
     available: Res<AvailableSuites>,
     expressions: Res<Expressions>,
     mut state: ResMut<CharacterState>,
     mut ui: ResMut<UiState>,
 ) {
-    let Ok(UiElement::Button(button)) = elements.get(event.entity) else {
+    let Ok(button) = buttons.get(event.entity) else {
         return;
     };
     match button {
@@ -281,17 +275,21 @@ pub(crate) fn on_scene_click(
                 hidden.insert(name.clone());
             }
         }
-        UiButton::Previous(Cycler::Advanced) | UiButton::Next(Cycler::Advanced) => {
-            ui.advanced_outfit ^= true;
-        }
-        UiButton::Previous(Cycler::Suite) | UiButton::Next(Cycler::Suite) => {
+        _ => {}
+    }
+
+    let Some((cycler, forward)) = button.step() else {
+        return;
+    };
+    match cycler {
+        Cycler::Advanced => ui.advanced_outfit ^= true,
+        Cycler::Suite => {
             let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
-            let forward = matches!(button, UiButton::Next(_));
             if let Some(next) = step(&options, &state.suite, forward) {
                 state.suite = next;
             }
         }
-        UiButton::Previous(Cycler::Expression) | UiButton::Next(Cycler::Expression) => {
+        Cycler::Expression => {
             let Some(skin) = state.skin.clone() else {
                 return;
             };
@@ -299,35 +297,19 @@ pub(crate) fn on_scene_click(
             let options: Vec<String> =
                 std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect();
             let current = state.expression().unwrap_or_default().to_string();
-            let forward = matches!(button, UiButton::Next(_));
             if let Some(next) = step(&options, &current, forward) {
                 state.expressions.insert(skin, next);
             }
         }
-        UiButton::Previous(Cycler::Animation) | UiButton::Next(Cycler::Animation) => {
+        Cycler::Animation => {
             let Some(clips) = clips else {
                 return;
             };
             let options: Vec<Option<String>> = clips.names().map(|n| Some(n.to_string())).collect();
-            let forward = matches!(button, UiButton::Next(_));
             if let Some(next) = step(&options, &state.animation, forward) {
                 state.animation = next;
             }
         }
         _ => {}
     }
-}
-
-// Wraps around. An unknown current value steps to the first option.
-pub(crate) fn step<T: PartialEq + Clone>(options: &[T], current: &T, forward: bool) -> Option<T> {
-    let len = options.len();
-    if len == 0 {
-        return None;
-    }
-    let index = match options.iter().position(|o| o == current) {
-        Some(i) if forward => (i + 1) % len,
-        Some(i) => (i + len - 1) % len,
-        None => 0,
-    };
-    Some(options[index].clone())
 }

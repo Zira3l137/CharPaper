@@ -9,15 +9,12 @@ use charpaper_suite::Tonemapping;
 
 use crate::Tab;
 use crate::UiConfig;
-use crate::config::UiLocale;
-use crate::helpers::Cycler;
-use crate::helpers::CyclerValue;
-use crate::helpers::Section;
-use crate::helpers::UiButton;
-use crate::helpers::UiContainer;
-use crate::helpers::UiElement;
-use crate::helpers::UiNode;
-use crate::pages::step;
+use crate::elements::Cycler;
+use crate::elements::CyclerValue;
+use crate::elements::Section;
+use crate::elements::UiButton;
+use crate::elements::UiContainer;
+use crate::locale::UiLocale;
 use crate::widgets::*;
 
 // cd/m², spaced so each step looks about as big as the last.
@@ -30,69 +27,82 @@ const EXPOSURE_LIMIT: f32 = 10.0;
 const BLOOM_STEP: f32 = 0.05;
 const BLOOM_LIMIT: f32 = 1.0;
 
-pub(crate) fn scene_page(locale: &UiLocale) -> impl Bundle {
-    let text = |key: &str, english: &'static str| locale.get_or(key, english).to_string();
+// Which camera and environment, and how the picture is finished. Look edits go to
+// ActiveLook, which the app writes back into the suite's suite.toml.
+pub(crate) struct SceneTabPlugin;
+
+impl Plugin for SceneTabPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(on_click).add_systems(
+            Update,
+            (
+                show_tab.run_if(resource_added::<ActiveSuite>),
+                // Baking new maps changes the suite, which can make the Brightness row relevant.
+                show_rows.run_if(
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_exists_and_changed::<ActiveSuite>),
+                ),
+                show_values.run_if(
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_exists_and_changed::<ActiveLook>),
+                ),
+                show_restore.run_if(resource_changed::<LookBackup>),
+            )
+                .chain(),
+        );
+    }
+}
+
+pub(crate) fn page(locale: &UiLocale) -> impl Bundle {
     children![
         section(
             locale.get_or("section.camera", "CAMERA"),
-            UiContainer::Section(Section::Camera),
-            cycler(text("label.camera", "Camera"), Cycler::Camera),
+            Section::Camera,
+            cycler(locale.get_or("label.camera", "Camera"), Cycler::Camera),
         ),
         section(
             locale.get_or("section.environment", "ENVIRONMENT"),
-            UiContainer::Section(Section::Environment),
+            Section::Environment,
             rows(children![
-                cycler(text("label.environment", "Environment"), Cycler::Environment),
-                cycler(text("label.brightness", "Brightness"), Cycler::Brightness),
-                cycler(text("label.shadows", "Shadows"), Cycler::Shadows),
+                cycler(locale.get_or("label.environment", "Environment"), Cycler::Environment),
+                cycler(locale.get_or("label.brightness", "Brightness"), Cycler::Brightness),
+                cycler(locale.get_or("label.shadows", "Shadows"), Cycler::Shadows),
             ]),
         ),
         section(
             locale.get_or("section.image", "IMAGE"),
-            UiContainer::Section(Section::Image),
+            Section::Image,
             rows(children![
-                cycler(text("label.tonemapping", "Tonemapping"), Cycler::Tonemapping),
-                cycler(text("label.exposure", "Exposure"), Cycler::Exposure),
-                cycler(text("label.bloom", "Bloom"), Cycler::Bloom),
+                cycler(locale.get_or("label.tonemapping", "Tonemapping"), Cycler::Tonemapping),
+                cycler(locale.get_or("label.exposure", "Exposure"), Cycler::Exposure),
+                cycler(locale.get_or("label.bloom", "Bloom"), Cycler::Bloom),
             ]),
         ),
         button(locale.get_or("restore_look", "Restore defaults"))
-            .edit_node(|n| n.display = Display::None)
-            .build_with(UiElement::Button(UiButton::RestoreLook)),
+            .node(|n| n.display = Display::None)
+            .build(UiButton::RestoreLook),
     ]
 }
 
-fn rows(content: impl Bundle) -> impl Bundle {
-    (
-        Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default() },
-        Pickable::IGNORE,
-        content,
-    )
-}
-
-pub(crate) fn show_scene_tab(suite: Res<ActiveSuite>, nodes: Query<(&UiElement, &mut Node)>) {
-    for (element, mut node) in nodes {
+// With a suite there is always something here: at least the image section.
+fn show_tab(suite: Res<ActiveSuite>, nodes: Query<(&mut Node, AnyOf<(&UiContainer, &UiButton)>)>) {
+    for (mut node, element) in nodes {
         let shown = match element {
-            UiElement::Container(UiContainer::Section(Section::Camera)) => {
-                !suite.cameras.is_empty()
-            }
-            UiElement::Container(UiContainer::Section(Section::Environment)) => {
-                !suite.environments.is_empty()
-            }
-            UiElement::Container(UiContainer::Section(Section::Image))
-            | UiElement::Container(UiContainer::TabBar)
-            | UiElement::Button(UiButton::Tab(Tab::Scene)) => true,
+            (Some(UiContainer::Section(Section::Camera)), _) => !suite.cameras.is_empty(),
+            (Some(UiContainer::Section(Section::Environment)), _) => !suite.environments.is_empty(),
+            (Some(UiContainer::Section(Section::Image)), _)
+            | (_, Some(UiButton::Tab(Tab::Scene))) => true,
             _ => continue,
         };
-        node.display = if shown { Display::Flex } else { Display::None };
+        node.display = display(shown);
     }
 }
 
 // A row only shows when it would do something for the environment on screen.
-pub(crate) fn show_rows(
+fn show_rows(
     suite: Option<Res<ActiveSuite>>,
     state: Res<CharacterState>,
-    nodes: Query<(&UiElement, &mut Node)>,
+    mut nodes: Query<(&UiContainer, &mut Node)>,
 ) {
     let Some(suite) = suite else {
         return;
@@ -104,28 +114,21 @@ pub(crate) fn show_rows(
     let lit = environment.is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
     let scene = environment.is_some_and(|e| e.scene.is_some());
 
-    for (element, mut node) in nodes {
-        let shown = match element {
-            UiElement::Container(UiContainer::Row(Cycler::Environment)) => {
-                suite.environments.len() > 1
-            }
-            UiElement::Container(UiContainer::Row(Cycler::Brightness)) => lit,
-            UiElement::Container(UiContainer::Row(Cycler::Shadows)) => scene,
-            _ => continue,
-        };
-        node.display = if shown { Display::Flex } else { Display::None };
-    }
+    let several = suite.environments.len() > 1;
+    show_container(&mut nodes, UiContainer::Row(Cycler::Environment), several);
+    show_container(&mut nodes, UiContainer::Row(Cycler::Brightness), lit);
+    show_container(&mut nodes, UiContainer::Row(Cycler::Shadows), scene);
 }
 
-pub(crate) fn show_restore(backup: Res<LookBackup>, nodes: Query<(&UiElement, &mut Node)>) {
-    for (element, mut node) in nodes {
-        if *element == UiElement::Button(UiButton::RestoreLook) {
-            node.display = if backup.exists { Display::Flex } else { Display::None };
+fn show_restore(backup: Res<LookBackup>, buttons: Query<(&UiButton, &mut Node)>) {
+    for (button, mut node) in buttons {
+        if *button == UiButton::RestoreLook {
+            node.display = display(backup.exists);
         }
     }
 }
 
-pub(crate) fn show_scene_values(
+fn show_values(
     state: Res<CharacterState>,
     look: Option<Res<ActiveLook>>,
     config: Res<UiConfig>,
@@ -152,25 +155,23 @@ pub(crate) fn show_scene_values(
     }
 }
 
-pub(crate) fn on_scene_tab_click(
+fn on_click(
     event: On<Pointer<Click>>,
-    elements: Query<&UiElement>,
+    buttons: Query<&UiButton>,
     suite: Option<Res<ActiveSuite>>,
     look: Option<ResMut<ActiveLook>>,
     mut state: ResMut<CharacterState>,
     mut restore: MessageWriter<RestoreLook>,
 ) {
-    let (Ok(UiElement::Button(button)), Some(suite)) = (elements.get(event.entity), suite) else {
+    let (Ok(button), Some(suite)) = (buttons.get(event.entity), suite) else {
         return;
     };
-    let (cycler, forward) = match button {
-        UiButton::Previous(cycler) => (*cycler, false),
-        UiButton::Next(cycler) => (*cycler, true),
-        UiButton::RestoreLook => {
-            restore.write(RestoreLook);
-            return;
-        }
-        _ => return,
+    if *button == UiButton::RestoreLook {
+        restore.write(RestoreLook);
+        return;
+    }
+    let Some((cycler, forward)) = button.step() else {
+        return;
     };
 
     match cycler {
@@ -253,10 +254,6 @@ fn step_stops(stops: &[f32], current: f32, forward: bool) -> f32 {
 // Keeps repeated steps from drifting into values like 0.15000001.
 fn round(value: f32, per_unit: f32) -> f32 {
     (value * per_unit).round() / per_unit
-}
-
-fn on_off(locale: &UiLocale, on: bool) -> &str {
-    if on { locale.get_or("value.on", "On") } else { locale.get_or("value.off", "Off") }
 }
 
 fn tonemapping_name(tonemapping: Tonemapping) -> &'static str {
