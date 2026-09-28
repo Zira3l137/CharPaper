@@ -1,6 +1,7 @@
 // Bevy-free: suites are plain data, so this builds fast, is easy to test, and powers
 // `--check-suite` without starting the engine.
 
+mod document;
 mod edit;
 mod error;
 mod expressions;

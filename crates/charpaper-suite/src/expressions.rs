@@ -4,7 +4,7 @@ use std::path::Path;
 use gltf::Animation;
 use gltf::animation::Property;
 
-use crate::inspect::read_document;
+use crate::document::read_document;
 
 pub const MAX_SHAPE_KEYS: usize = 256;
 

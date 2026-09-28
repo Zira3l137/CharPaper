@@ -10,7 +10,7 @@ use gltf::Document;
 use tracing::debug;
 
 use crate::error::SuiteError;
-use crate::inspect::read_document;
+use crate::document::read_document;
 use crate::manifest::Camera;
 use crate::manifest::EnvironmentEntry;
 use crate::manifest::MANIFEST_FILE;
