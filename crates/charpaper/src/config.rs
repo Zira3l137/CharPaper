@@ -3,14 +3,15 @@ use charpaper_ui::UiConfig;
 use charpaper_wallpaper::WallpaperConfig;
 
 use crate::cli::Cli;
+use crate::logging::LogLevels;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct AppConfig {
     pub window: WindowConfig,
     pub scene: SceneConfig,
     pub wallpaper: WallpaperConfig,
     pub ui: UiConfig,
-    pub inspect_and_exit: bool,
+    pub log: LogLevels,
 }
 
 #[derive(Clone, Debug)]
@@ -38,7 +39,13 @@ impl Default for WindowConfig {
 
 impl AppConfig {
     pub fn from_cli(cli: &Cli) -> Self {
-        let mut cfg = Self { inspect_and_exit: cli.inspect, ..Self::default() };
+        let mut cfg = Self {
+            window: WindowConfig::default(),
+            scene: SceneConfig::default(),
+            wallpaper: WallpaperConfig::default(),
+            ui: UiConfig::default(),
+            log: LogLevels { ours: cli.log_level, engine: cli.bevy_log_level },
+        };
 
         cfg.wallpaper.dump_window_tree = cli.tree;
         cfg.scene.suite = cli.suite.clone();

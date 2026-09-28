@@ -26,6 +26,7 @@ pub struct SavedState {
 }
 
 // Problems are returned, not logged, because this runs before Bevy's logger exists.
+#[derive(Clone)]
 pub struct Loaded {
     pub state: SavedState,
     pub problem: Option<String>,
@@ -60,16 +61,15 @@ pub fn load(path: &Path) -> Loaded {
 // runs Bevy's exit path.
 pub struct StatePlugin {
     pub path: PathBuf,
-    pub saved: SavedState,
-    pub problem: Option<String>,
+    pub loaded: Loaded,
 }
 
 impl Plugin for StatePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(StateFile {
             path: self.path.clone(),
-            saved: self.saved.clone(),
-            problem: self.problem.clone(),
+            saved: self.loaded.state.clone(),
+            problem: self.loaded.problem.clone(),
             write_failed: false,
         })
         .add_systems(Startup, report_problem)

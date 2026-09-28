@@ -1,5 +1,4 @@
 use bevy::ecs::system::NonSendMarker;
-use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::window::RawHandleWrapper;
@@ -9,16 +8,9 @@ use charpaper_wallpaper::RawWindowHandle;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 
-use crate::backend::create_backend;
-use crate::input::PointerSourceResource;
-use crate::input::replay_forwarded_pointer;
-
-// WallpaperConfig lives in a Bevy-free crate, so it can't derive Resource itself.
-#[derive(Resource, Deref)]
-struct WallpaperSettings(WallpaperConfig);
-
-#[derive(Resource)]
-pub(crate) struct BackendResource(pub(crate) Box<dyn WallpaperBackend>);
+use crate::wallpaper::Backend;
+use crate::wallpaper::WallpaperSettings;
+use crate::wallpaper::input::PointerSourceResource;
 
 #[derive(Resource, Default)]
 struct AttachState {
@@ -27,31 +19,20 @@ struct AttachState {
     countdown: u32,
 }
 
-pub struct WallpaperPlugin {
-    pub config: WallpaperConfig,
-}
+pub(crate) struct AttachPlugin;
 
-impl Plugin for WallpaperPlugin {
+impl Plugin for AttachPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(WallpaperSettings(self.config.clone()))
-            .insert_resource(BackendResource(create_backend()))
-            .init_resource::<AttachState>()
+        app.init_resource::<AttachState>()
             .add_systems(Startup, probe_desktop)
-            .add_systems(Update, attach_window)
-            // winit writes its input before First, so picking still sees ours this frame.
-            .add_systems(
-                First,
-                replay_forwarded_pointer
-                    .run_if(resource_exists::<PointerSourceResource>)
-                    .before(PickingSystems::Input),
-            );
+            .add_systems(Update, attach_window);
     }
 }
 
 // NonSendMarker keeps a system on the main thread, which owns the window.
 fn probe_desktop(
     _main_thread: NonSendMarker,
-    mut backend: ResMut<BackendResource>,
+    mut backend: ResMut<Backend>,
     config: Res<WallpaperSettings>,
 ) {
     info!("wallpaper backend: {}", backend.0.name());
@@ -71,7 +52,7 @@ fn probe_desktop(
 fn attach_window(
     _main_thread: NonSendMarker,
     mut commands: Commands,
-    mut backend: ResMut<BackendResource>,
+    mut backend: ResMut<Backend>,
     config: Res<WallpaperSettings>,
     mut state: ResMut<AttachState>,
     handles: Query<&RawHandleWrapper, With<PrimaryWindow>>,

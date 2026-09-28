@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::LayeredMode;
 use clap::Parser;
-use clap::ValueEnum;
+
+use crate::logging::LogLevel;
 
 #[derive(Parser, Debug)]
 #[command(name = "charpaper", version, about = "A Bevy live desktop wallpaper")]
@@ -81,29 +82,6 @@ pub struct Cli {
     /// Log level for Bevy, wgpu and everything else.
     #[arg(long, value_enum, default_value = "warn")]
     pub bevy_log_level: LogLevel,
-}
-
-#[derive(ValueEnum, Clone, Copy, Debug)]
-pub enum LogLevel {
-    Off,
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
-}
-
-impl LogLevel {
-    pub fn as_directive(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Error => "error",
-            Self::Warn => "warn",
-            Self::Info => "info",
-            Self::Debug => "debug",
-            Self::Trace => "trace",
-        }
-    }
 }
 
 pub fn parse() -> Cli {

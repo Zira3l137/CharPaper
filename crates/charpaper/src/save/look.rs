@@ -5,6 +5,8 @@ use charpaper_scene::LookBackup;
 use charpaper_scene::RestoreLook;
 use charpaper_suite::Suite;
 
+// Look edits live in the suite's own suite.toml; everything else the viewer picks goes to
+// state.toml, so each setting has exactly one home.
 pub struct LookFilePlugin;
 
 impl Plugin for LookFilePlugin {

@@ -4,6 +4,7 @@ use bevy::input::mouse::MouseButtonInput;
 use bevy::input::mouse::MouseScrollUnit;
 use bevy::input::mouse::MouseWheel;
 use bevy::input::touch::TouchPhase;
+use bevy::picking::PickingSystems;
 use bevy::platform::cell::SyncCell;
 use bevy::prelude::*;
 use bevy::window::CursorEntered;
@@ -14,6 +15,20 @@ use bevy::window::WindowEvent;
 use charpaper_wallpaper::PointerButton;
 use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
+
+pub(crate) struct InputPlugin;
+
+impl Plugin for InputPlugin {
+    fn build(&self, app: &mut App) {
+        // winit writes its input before First, so picking still sees ours this frame.
+        app.add_systems(
+            First,
+            replay_forwarded_pointer
+                .run_if(resource_exists::<PointerSourceResource>)
+                .before(PickingSystems::Input),
+        );
+    }
+}
 
 // SyncCell adds the Sync a Resource needs without a lock; PointerSource is only Send.
 #[derive(Resource)]
@@ -28,7 +43,7 @@ impl PointerSourceResource {
 // Picking reads WindowEvent, most other code reads the separate messages. winit writes
 // both, so we do too.
 #[derive(SystemParam)]
-pub struct WindowInputWriters<'w> {
+struct WindowInputWriters<'w> {
     all: MessageWriter<'w, WindowEvent>,
     entered: MessageWriter<'w, CursorEntered>,
     left: MessageWriter<'w, CursorLeft>,
@@ -41,7 +56,7 @@ pub struct WindowInputWriters<'w> {
 //
 // Window::cursor_position is never touched: bevy_winit takes a change to it as a request
 // to move the real cursor. So it stays None here; use picking events instead.
-pub fn replay_forwarded_pointer(
+fn replay_forwarded_pointer(
     mut source: ResMut<PointerSourceResource>,
     windows: Query<(Entity, &Window), With<PrimaryWindow>>,
     mut writers: WindowInputWriters,

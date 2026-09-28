@@ -6,7 +6,7 @@ use bevy::winit::UpdateMode;
 use bevy::winit::WinitSettings;
 use charpaper_scene::RenderSettings;
 
-use crate::plugin::BackendResource;
+use crate::wallpaper::Backend;
 
 const PAUSED_WAKE: Duration = Duration::from_secs(1);
 const ACTIVITY_POLL: Duration = Duration::from_secs(1);
@@ -14,7 +14,7 @@ const ACTIVITY_POLL: Duration = Duration::from_secs(1);
 #[derive(Resource, Default, Debug, PartialEq, Eq)]
 pub struct Paused(pub Option<&'static str>);
 
-pub struct PacingPlugin;
+pub(crate) struct PacingPlugin;
 
 impl Plugin for PacingPlugin {
     fn build(&self, app: &mut App) {
@@ -35,7 +35,7 @@ fn poll_activity(
     _main_thread: NonSendMarker,
     time: Res<Time<Real>>,
     mut since: Local<Duration>,
-    mut backend: ResMut<BackendResource>,
+    mut backend: ResMut<Backend>,
     settings: Res<RenderSettings>,
     mut paused: ResMut<Paused>,
 ) {
