@@ -5,8 +5,13 @@
 //! the clips move nodes of that same file, so expressions never touch the
 //! armature's player and the body animation plays on regardless. Switching
 //! crossfades between clips; going back to neutral stops the clip and eases
-//! every animated shape key back to the weight it was exported with, since a
-//! stopped clip otherwise leaves the face as it last posed it.
+//! the expression meshes' shape keys back to 0, since a stopped clip
+//! otherwise leaves the face as it last posed it.
+//!
+//! Neutral is always every such key at 0, the Basis shape, and never the
+//! weights the file was exported with: Blender writes those from whatever the
+//! shape keys showed at export time, which with the expressions stacked in
+//! the NLA is the top track's pose.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -42,8 +47,8 @@ pub(crate) struct SkinClips {
 pub(crate) struct ExpressionPlayers {
     players: Vec<Entity>,
     nodes: BTreeMap<String, AnimationNodeIndex>,
-    /// Every entity with shape keys, and the weights it was exported with.
-    rest: Vec<(Entity, Vec<f32>)>,
+    /// The meshes whose shape keys the expressions own.
+    faces: Vec<Entity>,
     playing: Option<String>,
     /// While easing back to neutral: the weights it started from, and how far
     /// it has got.
@@ -119,7 +124,7 @@ pub(crate) fn setup_expressions(
     children: Query<&Children>,
     names: Query<&Name>,
     players: Query<(), With<AnimationPlayer>>,
-    morphs: Query<&MorphWeights>,
+    mut morphs: Query<&mut MorphWeights>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
     for (root, skin, clips) in &skins {
@@ -137,20 +142,23 @@ pub(crate) fn setup_expressions(
                 .entity(player)
                 .insert((AnimationGraphHandle(graph.clone()), AnimationTransitions::new()));
         }
-        // Only the expressions' own meshes go back to rest on neutral;
-        // correctives belong to the body animation.
+        // Only the expressions' own meshes are neutral at 0; correctives
+        // belong to the body animation. They start there, so the skin is
+        // neutral from its first frame whatever the file's defaults say.
         let owned =
             |e: Entity| names.get(e).is_ok_and(|n| clips.expression_meshes.contains(n.as_str()));
-        let rest = descendants
-            .iter()
-            .filter(|&&e| owned(e))
-            .filter_map(|&e| morphs.get(e).ok().map(|m| (e, m.weights().to_vec())))
-            .collect();
+        let faces: Vec<Entity> =
+            descendants.iter().copied().filter(|&e| owned(e) && morphs.contains(e)).collect();
+        for &face in &faces {
+            if let Ok(mut morph) = morphs.get_mut(face) {
+                morph.weights_mut().fill(0.0);
+            }
+        }
 
         commands.entity(root).insert(ExpressionPlayers {
             players: found,
             nodes: clips.clips.keys().cloned().zip(indices).collect(),
-            rest,
+            faces,
             playing: None,
             easing: None,
         });
@@ -189,11 +197,9 @@ pub(crate) fn play_expression(
                         }
                     }
                     let from = skin
-                        .rest
+                        .faces
                         .iter()
-                        .map(|(e, rest)| {
-                            morphs.get(*e).map_or(rest.clone(), |m| m.weights().to_vec())
-                        })
+                        .map(|&e| morphs.get(e).map(|m| m.weights().to_vec()).unwrap_or_default())
                         .collect();
                     skin.easing = Some((from, Duration::ZERO));
                 }
@@ -211,11 +217,10 @@ pub(crate) fn play_expression(
         } else {
             (elapsed.as_secs_f32() / fade.as_secs_f32()).min(1.0)
         };
-        for ((entity, rest), start) in skin.rest.iter().zip(from.iter()) {
+        for (entity, start) in skin.faces.iter().zip(from.iter()) {
             if let Ok(mut morph) = morphs.get_mut(*entity) {
-                for ((weight, &end), &begin) in morph.weights_mut().iter_mut().zip(rest).zip(start)
-                {
-                    *weight = begin + (end - begin) * t;
+                for (weight, &begin) in morph.weights_mut().iter_mut().zip(start) {
+                    *weight = begin * (1.0 - t);
                 }
             }
         }

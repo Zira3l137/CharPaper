@@ -2,10 +2,9 @@
 //!
 //! A clip in a skin's file is an expression when it keys shape keys and
 //! nothing else: the app loops the chosen one on that skin, and stopping it
-//! returns the keys to the weights they were exported with. A clip that also
-//! moves bones is a body animation that came along with the skin's export; it
-//! is ignored there, since body animations, correctives included, are played
-//! from `animations/`.
+//! returns the keys to 0. A clip that also moves bones is a body animation
+//! that came along with the skin's export; it is ignored there, since body
+//! animations, correctives included, are played from `animations/`.
 
 use std::collections::BTreeSet;
 use std::path::Path;
