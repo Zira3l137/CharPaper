@@ -238,9 +238,6 @@ unsafe extern "system" {
     /// Same, but for the children of one window.
     pub fn EnumChildWindows(parent: Hwnd, callback: EnumWindowsProc, lparam: LParam) -> Bool;
 
-    /// The root of the whole window tree.
-    pub fn GetDesktopWindow() -> Hwnd;
-
     /// Send a message and give up after `timeout_ms` if the target hangs. We
     /// use the timeout variant because `Progman` belongs to Explorer, and a
     /// plain `SendMessage` to a wedged Explorer would hang us forever.

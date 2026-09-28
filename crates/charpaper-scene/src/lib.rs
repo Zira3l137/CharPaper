@@ -8,7 +8,6 @@ mod config;
 mod correctives;
 mod environment;
 mod expression;
-mod importer;
 mod look;
 mod render;
 mod stage;
@@ -46,9 +45,9 @@ pub const CHARACTERS_SOURCE: &str = "characters";
 /// different path to be read without that skin's meshes.
 pub const ARMATURE_SOURCE: &str = "armature";
 
-pub const BASE_ZOOM_SPEED: f32 = 0.1;
-pub const BASE_PAN_SPEED: f32 = 0.001;
-pub const BASE_SENSITIVITY: f32 = 0.005;
+const BASE_ZOOM_SPEED: f32 = 0.1;
+const BASE_PAN_SPEED: f32 = 0.001;
+const BASE_SENSITIVITY: f32 = 0.005;
 /// Just short of straight up or down (~88°), where the orbit would flip over.
 const PITCH_LIMIT: f32 = 1.54;
 
@@ -58,17 +57,6 @@ pub(crate) struct OrbitCamera {
     radius: f32,
     yaw: f32,   // horizontal angle
     pitch: f32, // vertical angle
-}
-
-impl Default for OrbitCamera {
-    fn default() -> Self {
-        Self {
-            focus: Vec3::ZERO,
-            radius: 2.0,
-            yaw: 0.0,
-            pitch: 0.0, // slight downward tilt to start
-        }
-    }
 }
 
 pub struct ScenePlugin {

@@ -13,8 +13,9 @@ use crate::cli::LogLevel;
 
 /// `EnvFilter` matches the crate name as the compiler spells it, hence the
 /// underscores.
-const OUR_CRATES: [&str; 6] = [
+const OUR_CRATES: [&str; 7] = [
     "charpaper",
+    "charpaper_bake",
     "charpaper_scene",
     "charpaper_suite",
     "charpaper_ui",
@@ -23,10 +24,9 @@ const OUR_CRATES: [&str; 6] = [
 ];
 
 pub fn plugin(ours: LogLevel, engine: LogLevel) -> LogPlugin {
-    let mut filter = format!("{},{}", engine.as_directive(), DEFAULT_FILTER);
-    for krate in OUR_CRATES {
-        filter.push_str(&format!("{krate}={},", ours.as_directive()));
-    }
+    let ours = ours.as_directive();
+    let mut filter = format!("{},{DEFAULT_FILTER}", engine.as_directive());
+    filter.extend(OUR_CRATES.map(|krate| format!("{krate}={ours},")));
 
     // `LogPlugin::level` only becomes the leading bare directive of `filter`,
     // which the bare directive we write above then supersedes. TRACE here just

@@ -88,7 +88,6 @@ fn main() -> Result<()> {
         )
         .add_plugins(
             DefaultPlugins
-                .set(AssetPlugin { file_path: String::from("../../assets"), ..default() })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: config.window.title.clone(),
