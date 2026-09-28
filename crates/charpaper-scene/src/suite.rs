@@ -1,33 +1,41 @@
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::path::Path;
 
-use bevy::asset::AssetPath;
-use bevy::asset::RenderAssetUsages;
 use bevy::ecs::system::SystemParam;
-use bevy::gltf::GltfLoaderSettings;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::Skybox;
 use bevy::prelude::*;
 use charpaper_suite::Severity;
 use charpaper_suite::Suite;
 
-use crate::ARMATURE_SOURCE;
-use crate::CHARACTERS_SOURCE;
-use crate::CharacterClips;
-use crate::Expressions;
-use crate::OrbitCamera;
-use crate::Picks;
-use crate::SceneConfig;
-use crate::animation::PendingClips;
-use crate::cameras::ShownRig;
+use crate::SceneSet;
+use crate::camera::SceneCamera;
+use crate::camera::ShownRig;
 use crate::character::Character;
-use crate::character::CharacterState;
+use crate::character::CharacterClips;
+use crate::character::Expressions;
+use crate::character::PendingClips;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
+use crate::config::SceneConfig;
 use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
 use crate::look::ActiveLook;
+use crate::state::CharacterState;
+use crate::state::Picks;
+
+// Which suite is shown, and swapping it while the app runs. A missing or broken suite is
+// logged, not fatal: a wallpaper with nothing on it beats one that never starts.
+pub(crate) struct SuitePlugin;
+
+impl Plugin for SuitePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<AvailableSuites>()
+            .init_resource::<LoadedSuite>()
+            .add_systems(Startup, discover_suites)
+            .add_systems(Update, switch_suite.in_set(SceneSet::Switch));
+    }
+}
 
 // A newtype because Suite lives in a Bevy-free crate.
 #[derive(Resource, Deref)]
@@ -134,7 +142,7 @@ pub(crate) fn switch_suite(
 #[derive(SystemParam)]
 pub(crate) struct Teardown<'w, 's> {
     characters: Query<'w, 's, Entity, With<Character>>,
-    camera: Query<'w, 's, Entity, With<OrbitCamera>>,
+    camera: Query<'w, 's, Entity, With<SceneCamera>>,
     skin: ResMut<'w, ShownSkin>,
     rig: ResMut<'w, ShownRig>,
     environment: ResMut<'w, ShownEnvironment>,
@@ -167,49 +175,6 @@ impl Teardown<'_, '_> {
     }
 }
 
-pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
-    let folder = suite.root.file_name().unwrap_or_default();
-    AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE)
-}
-
-// Once uploaded, Bevy drops the RAM copy of meshes and textures. Bounding boxes survive
-// but shape key names don't; expressions read those from the file instead.
-pub(crate) const GPU_ONLY: RenderAssetUsages = RenderAssetUsages::RENDER_WORLD;
-
-pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<Gltf> {
-    assets
-        .load_builder()
-        .with_settings(|s: &mut GltfLoaderSettings| {
-            s.load_cameras = false;
-            s.load_lights = false;
-            s.load_meshes = GPU_ONLY;
-            s.load_materials = GPU_ONLY;
-        })
-        .load(asset_path(suite, file))
-}
-
-// Scene 0, not the default scene: Bevy has no label for the default one, and Blender
-// exports the active scene as scene 0. An armature borrowed from a skin skips that skin's
-// meshes, materials and clips, which the skin shows itself when worn.
-pub(crate) fn load_armature(assets: &AssetServer, suite: &Suite) -> Handle<WorldAsset> {
-    let borrowed = suite.model_is_skin;
-    let path = asset_path(suite, &suite.model).with_source(ARMATURE_SOURCE);
-    assets
-        .load_builder()
-        .with_settings(move |s: &mut GltfLoaderSettings| {
-            s.load_cameras = false;
-            s.load_lights = false;
-            if borrowed {
-                s.load_meshes = RenderAssetUsages::empty();
-                s.load_materials = RenderAssetUsages::empty();
-                s.load_animations = false;
-            } else {
-                s.load_meshes = GPU_ONLY;
-                s.load_materials = GPU_ONLY;
-            }
-        })
-        .load(GltfAssetLabel::Scene(0).from_asset(path))
-}
 
 // Display alone drops details like the TOML line and column.
 fn chain(err: &dyn Error) -> String {

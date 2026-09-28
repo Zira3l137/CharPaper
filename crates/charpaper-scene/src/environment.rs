@@ -16,14 +16,32 @@ use bevy::world_serialization::WorldInstanceReady;
 use charpaper_suite::Environment;
 use charpaper_suite::Suite;
 
-use crate::OrbitCamera;
-use crate::SceneConfig;
-use crate::character::CharacterState;
-use crate::character::prefer;
+use crate::SceneSet;
+use crate::assets::GPU_ONLY;
+use crate::assets::asset_path;
+use crate::camera::SceneCamera;
+use crate::config::SceneConfig;
+use crate::state::CharacterState;
+use crate::state::prefer;
 use crate::suite::ActiveSuite;
-use crate::suite::GPU_ONLY;
 use crate::suite::Remembered;
-use crate::suite::asset_path;
+
+pub(crate) struct EnvironmentPlugin;
+
+impl Plugin for EnvironmentPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ShownEnvironment>()
+            .init_resource::<Baking>()
+            .add_observer(on_environment_ready)
+            .add_systems(Update, choose_environment.in_set(SceneSet::Fill))
+            .add_systems(
+                Update,
+                (switch_environment, finish_bakes, spawn_environment_scenes)
+                    .chain()
+                    .in_set(SceneSet::Run),
+            );
+    }
+}
 
 #[derive(Resource, Default)]
 pub(crate) struct ShownEnvironment {
@@ -69,7 +87,7 @@ pub(crate) fn switch_environment(
     assets: Res<AssetServer>,
     mut shown: ResMut<ShownEnvironment>,
     mut baking: ResMut<Baking>,
-    camera: Query<Entity, With<OrbitCamera>>,
+    camera: Query<Entity, With<SceneCamera>>,
 ) {
     if shown.name == state.environment {
         return;
@@ -165,7 +183,7 @@ pub(crate) fn finish_bakes(
     suite: Option<ResMut<ActiveSuite>>,
     assets: Res<AssetServer>,
     mut shown: ResMut<ShownEnvironment>,
-    camera: Query<Entity, With<OrbitCamera>>,
+    camera: Query<Entity, With<SceneCamera>>,
 ) {
     let Some(mut suite) = suite else {
         return;

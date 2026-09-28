@@ -7,11 +7,11 @@ use bevy::animation::AnimationTargetId;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 
-use crate::animation::kids;
-use crate::binding::InstanceReady;
 use crate::character::Armature;
-use crate::character::SkinRoot;
-use crate::expression::SkinClips;
+use crate::character::animation::kids;
+use crate::character::binding::InstanceReady;
+use crate::character::expression::SkinClips;
+use crate::character::skin::SkinRoot;
 
 #[derive(Component)]
 pub(crate) struct CorrectivesBound;

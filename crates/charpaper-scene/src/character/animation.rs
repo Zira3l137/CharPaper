@@ -10,14 +10,14 @@ use charpaper_suite::AnimationFile;
 use charpaper_suite::ClipSet;
 use charpaper_suite::PlayMode;
 
-use crate::SceneConfig;
-use crate::binding::InstanceReady;
+use crate::assets::asset_path;
 use crate::character::Armature;
-use crate::character::CharacterState;
-use crate::character::prefer;
+use crate::character::binding::InstanceReady;
+use crate::config::SceneConfig;
+use crate::state::CharacterState;
+use crate::state::prefer;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
-use crate::suite::asset_path;
 
 #[derive(Resource, Default)]
 pub struct CharacterClips {

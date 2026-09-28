@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 
 use crate::character::Armature;
-use crate::character::SkinRoot;
+use crate::character::skin::SkinRoot;
 
 #[derive(Component)]
 pub(crate) struct InstanceReady;

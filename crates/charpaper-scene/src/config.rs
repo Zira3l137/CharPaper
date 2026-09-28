@@ -4,9 +4,8 @@ use std::path::PathBuf;
 use bevy::prelude::Resource;
 use charpaper_bake::BakeSettings;
 
-use crate::RenderSettings;
-
-use crate::Picks;
+use crate::render::RenderSettings;
+use crate::state::Picks;
 
 #[derive(Resource, Clone, Debug)]
 pub struct SceneConfig {

@@ -8,13 +8,13 @@ use bevy::world_serialization::WorldInstanceReady;
 use charpaper_suite::ExportedCamera;
 use charpaper_suite::ORBIT_CAMERA;
 
-use crate::OrbitCamera;
-use crate::character::CharacterState;
-use crate::character::prefer;
+use crate::assets::asset_path;
+use crate::camera::orbit::OrbitCamera;
+use crate::camera::orbit::update_camera_transform;
+use crate::state::CharacterState;
+use crate::state::prefer;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
-use crate::suite::asset_path;
-use crate::update_camera_transform;
 
 #[derive(Resource, Default)]
 pub(crate) struct ShownRig {

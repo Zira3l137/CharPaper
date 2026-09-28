@@ -7,9 +7,27 @@ use bevy::prelude::*;
 use charpaper_suite::Look;
 use charpaper_suite::Tonemapping as SuiteTonemapping;
 
-use crate::OrbitCamera;
+use crate::SceneSet;
+use crate::camera::SceneCamera;
 use crate::environment::EnvironmentReady;
 use crate::environment::ShownEnvironment;
+use crate::environment::spawn_environment_scenes;
+
+// Applies the look, the settings the viewer can change while the app runs, to the camera
+// and the environment's lights. Recomputed whole on every change, so no value is kept twice.
+pub(crate) struct LookPlugin;
+
+impl Plugin for LookPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<LookBackup>().add_message::<RestoreLook>().add_systems(
+            Update,
+            apply_look
+                .run_if(look_needs_applying)
+                .in_set(SceneSet::Run)
+                .after(spawn_environment_scenes),
+        );
+    }
+}
 
 pub const DEFAULT_TONEMAPPING: SuiteTonemapping = SuiteTonemapping::TonyMcMapface;
 pub const DEFAULT_EXPOSURE: f32 = 0.0;
@@ -56,7 +74,7 @@ pub(crate) fn apply_look(
     shown: Res<ShownEnvironment>,
     mut camera: Query<
         (Entity, Option<&mut Skybox>, Option<&mut EnvironmentMapLight>),
-        With<OrbitCamera>,
+        With<SceneCamera>,
     >,
     children: Query<&Children>,
     mut lights: Query<AnyOf<(&mut DirectionalLight, &mut PointLight, &mut SpotLight)>>,

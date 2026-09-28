@@ -7,8 +7,22 @@ use bevy::window::PrimaryWindow;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::OrbitCamera;
+use crate::SceneSet;
+use crate::camera::SceneCamera;
 
+pub(crate) struct RenderPlugin;
+
+impl Plugin for RenderPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            (fit_scene_target, apply_anti_aliasing.run_if(resource_changed::<RenderSettings>))
+                .in_set(SceneSet::Run),
+        );
+    }
+}
+
+// Saved between runs by the app, whose frame pacing reads the fps and pause settings.
 #[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RenderSettings {
@@ -151,7 +165,7 @@ pub(crate) fn fit_scene_target(
 pub(crate) fn apply_anti_aliasing(
     mut commands: Commands,
     settings: Res<RenderSettings>,
-    camera: Query<Entity, With<OrbitCamera>>,
+    camera: Query<Entity, With<SceneCamera>>,
 ) {
     for camera in &camera {
         commands.entity(camera).insert(settings.anti_aliasing.msaa());

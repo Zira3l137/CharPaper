@@ -5,11 +5,11 @@ use std::time::Duration;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 
-use crate::SceneConfig;
-use crate::binding::InstanceReady;
-use crate::character::CharacterState;
-use crate::character::SkinFile;
-use crate::character::SkinRoot;
+use crate::character::binding::InstanceReady;
+use crate::character::skin::SkinFile;
+use crate::character::skin::SkinRoot;
+use crate::config::SceneConfig;
+use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
 
 #[derive(Resource, Default, Debug)]
