@@ -42,6 +42,9 @@ pub struct Manifest {
     pub post: Post,
     #[serde(default)]
     pub camera: Camera,
+    /// Makes the character look towards the mouse cursor. Without this
+    /// section she never does.
+    pub gaze: Option<Gaze>,
 }
 
 /// The character itself.
@@ -72,6 +75,85 @@ pub struct ClipEntry {
     pub clip: Option<String>,
     #[serde(default)]
     pub mode: PlayMode,
+    /// Whether the character may look towards the cursor while this plays.
+    /// Defaults to true. Turn it off where she has to look somewhere on
+    /// purpose, like a dance or a sleeping pose.
+    pub gaze: Option<bool>,
+}
+
+/// Looking towards the mouse cursor. The eyes turn first; the head and neck
+/// take over what the eyes cannot reach. Every turn is added on top of the
+/// animation playing, and angles are measured from where it has her look.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Gaze {
+    /// The eye bones, usually two.
+    pub eyes: Vec<String>,
+    /// The head bone. Without it, only the neck and eyes turn.
+    pub head: Option<String>,
+    /// The neck bone. Without it, the head takes all of what the eyes cannot
+    /// reach.
+    pub neck: Option<String>,
+    /// How far the eyes turn sideways, in degrees. Defaults to 30.
+    pub eye_yaw_deg: Option<f32>,
+    /// How far the eyes turn up or down, in degrees. Defaults to 20.
+    pub eye_pitch_deg: Option<f32>,
+    /// How far the head turns sideways, in degrees. Defaults to 50.
+    pub head_yaw_deg: Option<f32>,
+    /// How far the head turns up or down, in degrees. Defaults to 25.
+    pub head_pitch_deg: Option<f32>,
+    /// How far the neck turns sideways, in degrees. Defaults to 25.
+    pub neck_yaw_deg: Option<f32>,
+    /// How far the neck turns up or down, in degrees. Defaults to 15.
+    pub neck_pitch_deg: Option<f32>,
+    /// With both a head and a neck: the head's share of what the eyes cannot
+    /// reach, from 0 to 1. The neck takes the rest. Defaults to 0.7.
+    pub head_share: Option<f32>,
+    /// Shape keys that follow the eyes, such as eyelids. Each is set in
+    /// proportion to how far the eyes turn that way, reaching 1 at the eyes'
+    /// limit. Any may be left out, and a skin without one ignores it.
+    #[serde(default)]
+    pub shape_keys: GazeShapeKeys,
+}
+
+impl Gaze {
+    pub fn eye_limits_deg(&self) -> [f32; 2] {
+        [self.eye_yaw_deg.unwrap_or(30.0), self.eye_pitch_deg.unwrap_or(20.0)]
+    }
+
+    pub fn head_limits_deg(&self) -> [f32; 2] {
+        [self.head_yaw_deg.unwrap_or(50.0), self.head_pitch_deg.unwrap_or(25.0)]
+    }
+
+    pub fn neck_limits_deg(&self) -> [f32; 2] {
+        [self.neck_yaw_deg.unwrap_or(25.0), self.neck_pitch_deg.unwrap_or(15.0)]
+    }
+
+    pub fn head_share(&self) -> f32 {
+        self.head_share.unwrap_or(0.7).clamp(0.0, 1.0)
+    }
+
+    /// Every bone the section names.
+    pub fn bones(&self) -> impl Iterator<Item = &str> {
+        self.eyes.iter().map(String::as_str).chain(self.head.as_deref()).chain(self.neck.as_deref())
+    }
+}
+
+/// Shape keys set as the eyes turn, by direction. Left and right are the
+/// character's own, as in Blender's `.L` and `.R`.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct GazeShapeKeys {
+    pub left: Option<String>,
+    pub right: Option<String>,
+    pub up: Option<String>,
+    pub down: Option<String>,
+}
+
+impl GazeShapeKeys {
+    pub fn named(&self) -> impl Iterator<Item = &str> {
+        [&self.left, &self.right, &self.up, &self.down].into_iter().flatten().map(String::as_str)
+    }
 }
 
 /// How the animation plays. Defaults to `loop`.

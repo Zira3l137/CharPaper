@@ -9,10 +9,11 @@ use std::path::PathBuf;
 use gltf::Document;
 use tracing::debug;
 
-use crate::error::SuiteError;
 use crate::document::read_document;
+use crate::error::SuiteError;
 use crate::manifest::Camera;
 use crate::manifest::EnvironmentEntry;
+use crate::manifest::Gaze;
 use crate::manifest::MANIFEST_FILE;
 use crate::manifest::Manifest;
 use crate::manifest::PlayMode;
@@ -48,6 +49,7 @@ pub struct Suite {
     pub default_environment: Option<String>,
     pub post: Post,
     pub camera: Camera,
+    pub gaze: Option<Gaze>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +70,7 @@ pub struct ClipBinding {
     pub name: String,
     pub clip: Option<String>,
     pub mode: PlayMode,
+    pub gaze: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -241,6 +244,7 @@ impl Suite {
             default_environment,
             post: manifest.post,
             camera: manifest.camera,
+            gaze: manifest.gaze,
         })
     }
 
@@ -261,8 +265,12 @@ pub fn discover(dir: impl AsRef<Path>) -> Result<Vec<PathBuf>, SuiteError> {
 fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationFile>, SuiteError> {
     let mut listed: BTreeMap<PathBuf, Vec<ClipBinding>> = BTreeMap::new();
     for (name, entry) in &manifest.animations {
-        let binding =
-            ClipBinding { name: name.clone(), clip: entry.clip.clone(), mode: entry.mode };
+        let binding = ClipBinding {
+            name: name.clone(),
+            clip: entry.clip.clone(),
+            mode: entry.mode,
+            gaze: entry.gaze.unwrap_or(true),
+        };
         listed.entry(existing(root, &entry.file)?).or_default().push(binding);
     }
 

@@ -1,6 +1,7 @@
 mod animations;
 mod cameras;
 mod environments;
+mod gaze;
 mod skins;
 mod tree;
 
@@ -13,6 +14,7 @@ use crate::document::read_document;
 use crate::inspect::animations::check_animations;
 use crate::inspect::cameras::check_camera_file;
 use crate::inspect::environments::check_environments;
+use crate::inspect::gaze::check_gaze;
 use crate::inspect::skins::check_skin_expressions;
 use crate::inspect::skins::check_skin_file;
 use crate::inspect::skins::model_bones;
@@ -132,6 +134,9 @@ pub fn inspect(suite: &Suite) -> Report {
     }
 
     check_environments(suite, &mut report);
+    if let Some(gaze) = &suite.gaze {
+        check_gaze(gaze, &suite.model, &bones, &skins, &mut report);
+    }
 
     report.findings.sort_by(|a, b| b.severity.cmp(&a.severity));
     report

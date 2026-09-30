@@ -8,6 +8,7 @@ mod expressions;
 mod inspect;
 mod layout;
 mod manifest;
+mod shape_keys;
 
 pub use edit::BACKUP_FILE;
 pub use edit::has_backup;
@@ -36,12 +37,16 @@ pub use layout::Suite;
 pub use layout::discover;
 pub use manifest::Camera;
 pub use manifest::EnvironmentEntry;
+pub use manifest::Gaze;
+pub use manifest::GazeShapeKeys;
 pub use manifest::MANIFEST_FILE;
 pub use manifest::Manifest;
 pub use manifest::PlayMode;
 pub use manifest::Post;
 pub use manifest::SCHEMA_VERSION;
 pub use manifest::Tonemapping;
+pub use shape_keys::MeshShapeKeys;
+pub use shape_keys::mesh_shape_keys;
 
 // The repository keeps a copy in schemas/suite.schema.json; a test fails when it goes stale.
 pub fn manifest_schema() -> String {

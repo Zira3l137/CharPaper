@@ -525,3 +525,49 @@ fn a_camera_file_may_hold_several_cameras_each_with_its_clip() {
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("camera \"Front\" is named twice"), "{err}");
 }
+
+#[test]
+fn gaze_names_bones_of_the_armature_and_optional_shape_keys() {
+    let manifest = r#"schema = 1
+[gaze]
+eyes = ["Head"]
+neck = "Spine"
+[gaze.shape_keys]
+up = "brows_up"
+"#;
+    let fixture = Fixture::new("gaze", manifest);
+    fixture.write("skins/casual.gltf", face(""));
+    let suite = fixture.load().unwrap();
+    let gaze = suite.gaze.as_ref().unwrap();
+    assert_eq!(gaze.bones().collect::<Vec<_>>(), ["Head", "Spine"]);
+    assert_eq!(gaze.eye_limits_deg(), [30.0, 20.0]);
+    let about_gaze = |suite: &charpaper_suite::Suite| -> Vec<String> {
+        charpaper_suite::inspect(suite)
+            .findings
+            .into_iter()
+            .map(|f| f.message)
+            .filter(|m| m.starts_with("gaze"))
+            .collect()
+    };
+    assert!(about_gaze(&suite).is_empty(), "{:#?}", about_gaze(&suite));
+
+    let keys = charpaper_suite::mesh_shape_keys(&fixture.0.join("skins/casual.gltf")).unwrap();
+    assert_eq!(keys[0].node, "Face");
+    assert_eq!(keys[0].keys, ["mouth_corner_up", "brows_up"]);
+
+    let broken = manifest.replace(r#"["Head"]"#, r#"["Eye.L"]"#).replace("brows_up", "Lid_Up");
+    fixture.write("suite.toml", broken);
+    let suite = fixture.load().unwrap();
+    let errors = messages(&suite, Severity::Error);
+    assert!(errors.iter().any(|e| e.contains("\"Eye.L\" is not a bone")), "{errors:#?}");
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("\"Lid_Up\"")), "{warnings:#?}");
+}
+
+#[test]
+fn an_animation_may_opt_out_of_gaze() {
+    let manifest = "schema = 1\n[animations.idle]\nfile = \"animations/idle.gltf\"\ngaze = false";
+    let suite = Fixture::new("gaze-opt-out", manifest).load().unwrap();
+    let ClipSet::Listed(bindings) = &suite.animations[0].clips else { panic!("listed") };
+    assert!(!bindings[0].gaze);
+}

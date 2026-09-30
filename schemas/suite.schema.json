@@ -27,6 +27,17 @@
         "$ref": "#/$defs/EnvironmentEntry"
       }
     },
+    "gaze": {
+      "description": "Makes the character look towards the mouse cursor. Without this\nsection she never does.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Gaze"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "name": {
       "description": "Name shown in the app. Defaults to the folder name.",
       "type": [
@@ -144,6 +155,13 @@
           "description": "Path to the file holding the clip, relative to this file.",
           "type": "string"
         },
+        "gaze": {
+          "description": "Whether the character may look towards the cursor while this plays.\nDefaults to true. Turn it off where she has to look somewhere on\npurpose, like a dance or a sleeping pose.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "mode": {
           "$ref": "#/$defs/PlayMode"
         }
@@ -189,6 +207,128 @@
       "properties": {
         "default": {
           "description": "Environment shown at start. Defaults to the first in name order.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Gaze": {
+      "description": "Looking towards the mouse cursor. The eyes turn first; the head and neck\ntake over what the eyes cannot reach. Every turn is added on top of the\nanimation playing, and angles are measured from where it has her look.",
+      "type": "object",
+      "properties": {
+        "eye_pitch_deg": {
+          "description": "How far the eyes turn up or down, in degrees. Defaults to 20.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "eye_yaw_deg": {
+          "description": "How far the eyes turn sideways, in degrees. Defaults to 30.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "eyes": {
+          "description": "The eye bones, usually two.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "head": {
+          "description": "The head bone. Without it, only the neck and eyes turn.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_pitch_deg": {
+          "description": "How far the head turns up or down, in degrees. Defaults to 25.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "head_share": {
+          "description": "With both a head and a neck: the head's share of what the eyes cannot\nreach, from 0 to 1. The neck takes the rest. Defaults to 0.7.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "head_yaw_deg": {
+          "description": "How far the head turns sideways, in degrees. Defaults to 50.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "neck": {
+          "description": "The neck bone. Without it, the head takes all of what the eyes cannot\nreach.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "neck_pitch_deg": {
+          "description": "How far the neck turns up or down, in degrees. Defaults to 15.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "neck_yaw_deg": {
+          "description": "How far the neck turns sideways, in degrees. Defaults to 25.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "shape_keys": {
+          "description": "Shape keys that follow the eyes, such as eyelids. Each is set in\nproportion to how far the eyes turn that way, reaching 1 at the eyes'\nlimit. Any may be left out, and a skin without one ignores it.",
+          "$ref": "#/$defs/GazeShapeKeys"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "eyes"
+      ]
+    },
+    "GazeShapeKeys": {
+      "description": "Shape keys set as the eyes turn, by direction. Left and right are the\ncharacter's own, as in Blender's `.L` and `.R`.",
+      "type": "object",
+      "properties": {
+        "down": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "left": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "right": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "up": {
           "type": [
             "string",
             "null"
