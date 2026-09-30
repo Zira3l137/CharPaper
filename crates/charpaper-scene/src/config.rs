@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use bevy::prelude::Resource;
 use charpaper_bake::BakeSettings;
 
+use crate::gaze::GazeSettings;
+use crate::gaze::GazeTuning;
 use crate::render::RenderSettings;
 use crate::state::Picks;
 
@@ -17,6 +19,8 @@ pub struct SceneConfig {
     pub bake: BakeSettings,
     pub render: RenderSettings,
     pub expression_fade_secs: f32,
+    pub gaze: GazeSettings,
+    pub gaze_tuning: GazeTuning,
 }
 
 impl Default for SceneConfig {
@@ -30,6 +34,8 @@ impl Default for SceneConfig {
             bake: BakeSettings::default(),
             render: RenderSettings::default(),
             expression_fade_secs: 0.3,
+            gaze: GazeSettings::default(),
+            gaze_tuning: GazeTuning::default(),
         }
     }
 }

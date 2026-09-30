@@ -3,6 +3,7 @@ mod camera;
 mod character;
 mod config;
 mod environment;
+mod gaze;
 mod look;
 mod render;
 mod state;
@@ -18,6 +19,9 @@ pub use character::CharacterClips;
 pub use character::Expressions;
 pub use character::SkinObjects;
 pub use config::SceneConfig;
+pub use gaze::CursorPosition;
+pub use gaze::GazeSettings;
+pub use gaze::GazeTuning;
 pub use look::ActiveLook;
 pub use look::LookBackup;
 pub use look::Resolved;
@@ -51,6 +55,7 @@ impl Plugin for ScenePlugin {
 
         app.insert_resource(config.clone())
             .insert_resource(config.render.clone())
+            .insert_resource(config.gaze.clone())
             .insert_resource(suite::Remembered(config.remembered.clone()))
             .insert_resource(ClearColor(Color::srgb(r, g, b)))
             // No built-in lighting: only what the environment ships lights the character.
@@ -65,6 +70,7 @@ impl Plugin for ScenePlugin {
                 environment::EnvironmentPlugin,
                 look::LookPlugin,
                 render::RenderPlugin,
+                gaze::GazePlugin,
             ));
     }
 }

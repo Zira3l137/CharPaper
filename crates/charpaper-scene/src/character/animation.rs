@@ -28,6 +28,7 @@ pub struct CharacterClips {
 pub(crate) struct Clip {
     pub node: AnimationNodeIndex,
     pub mode: PlayMode,
+    pub gaze: bool,
 }
 
 impl CharacterClips {
@@ -154,9 +155,9 @@ pub(crate) fn build_graph(
             warn!("skipping the clips in {}: it failed to load", file.path.display());
             continue;
         };
-        for (name, clip, mode) in select(gltf, file) {
+        for (name, clip, mode, gaze) in select(gltf, file) {
             let node = graph.add_clip(clip, 1.0, graph.root);
-            if clips.insert(name.clone(), Clip { node, mode }).is_some() {
+            if clips.insert(name.clone(), Clip { node, mode, gaze }).is_some() {
                 warn!("animation {name:?} is defined twice; the later one wins");
             }
         }
@@ -245,13 +246,16 @@ pub(crate) fn play_selected(
     debug!("playing {name:?} ({:?})", clip.mode);
 }
 
-fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<(String, Handle<AnimationClip>, PlayMode)> {
+// Name, clip, how it plays, and whether gaze may follow the cursor during it.
+type Selected = (String, Handle<AnimationClip>, PlayMode, bool);
+
+fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<Selected> {
     match &file.clips {
         ClipSet::All => {
             let mut all: Vec<_> = gltf
                 .named_animations
                 .iter()
-                .map(|(name, clip)| (name.to_string(), clip.clone(), PlayMode::Loop))
+                .map(|(name, clip)| (name.to_string(), clip.clone(), PlayMode::Loop, true))
                 .collect();
             all.sort_by(|a, b| a.0.cmp(&b.0));
             all
@@ -271,7 +275,7 @@ fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<(String, Handle<AnimationCli
                         file.path.display()
                     );
                 }
-                clip.map(|clip| (binding.name.clone(), clip, binding.mode))
+                clip.map(|clip| (binding.name.clone(), clip, binding.mode, binding.gaze))
             })
             .collect(),
     }
