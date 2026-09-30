@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
@@ -20,7 +21,7 @@ const DOMAIN: &str = "charpaper_ui";
 const FILE: &str = "charpaper_ui.ftl";
 const ENGLISH_TEXT: &[u8] = include_bytes!("../i18n/en-US/charpaper_ui.ftl");
 
-#[derive(Clone, Debug, Default)]
+#[derive(Resource, Clone, Debug, Default)]
 pub struct UiConfig {
     pub locales_dir: PathBuf,
     // A tag such as `de-DE`. None follows the system's languages.
@@ -28,7 +29,57 @@ pub struct UiConfig {
 }
 
 #[derive(Resource, Deref)]
-pub struct Locale(FluentLanguageLoader);
+pub struct Locale {
+    #[deref]
+    loader: FluentLanguageLoader,
+    // What was asked for, which the panel compares with the viewer's choice.
+    requested: Option<String>,
+}
+
+// A language on offer: its tag, and its name as its own file writes it.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Language {
+    pub tag: String,
+    pub name: String,
+}
+
+// English, then every translation in the folder, by tag. Read once at startup.
+#[derive(Resource, Debug)]
+pub(crate) struct Languages(pub Vec<Language>);
+
+impl Languages {
+    pub(crate) fn find(dir: &Path) -> Self {
+        let english = Language {
+            tag: ENGLISH.to_string(),
+            name: name_in(&String::from_utf8_lossy(ENGLISH_TEXT)).unwrap_or("English".into()),
+        };
+        let mut found: Vec<Language> = fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let tag = entry.file_name().to_string_lossy().into_owned();
+                let text = fs::read_to_string(entry.path().join(FILE)).ok()?;
+                let name = name_in(&text).unwrap_or_else(|| tag.clone());
+                (tag != ENGLISH).then_some(Language { tag, name })
+            })
+            .collect();
+        found.sort_by(|a, b| a.tag.cmp(&b.tag));
+        Self(std::iter::once(english).chain(found).collect())
+    }
+
+    pub(crate) fn name(&self, tag: &str) -> Option<&str> {
+        self.0.iter().find(|l| l.tag == tag).map(|l| l.name.as_str())
+    }
+}
+
+// Read straight from the text, since only the chosen language is ever loaded.
+fn name_in(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let value = line.strip_prefix("language-name")?.trim_start().strip_prefix('=')?;
+        Some(value.trim().to_string())
+    })
+}
 
 // How a fixed label gets its text. A function, not a closure capturing anything, so `fl!`
 // inside it still checks the message name against English while compiling, and the text can
@@ -63,20 +114,20 @@ impl Locale {
         // text shows as boxes. It must be set again after every load.
         loader.set_use_isolating(false);
 
-        let locale = Self(loader);
+        let locale = Self { loader, requested: config.language.clone() };
         locale.report_gaps();
         locale
     }
 
     // For translators: which of English's strings their file lacks.
     fn report_gaps(&self) {
-        let current = self.0.current_language();
+        let current = self.loader.current_language();
         let english: LanguageIdentifier = ENGLISH.parse().expect("a valid tag");
         if current == english {
             return;
         }
         let names = |language: &LanguageIdentifier| -> BTreeSet<String> {
-            self.0.with_message_iter(language, |messages| {
+            self.loader.with_message_iter(language, |messages| {
                 messages.map(|m| m.id.name.to_string()).collect()
             })
         };
@@ -92,6 +143,21 @@ impl Locale {
             );
         }
     }
+}
+
+// Loading takes a few milliseconds, so it happens right here; replacing the resource is what
+// makes every label and value show the new language.
+pub(crate) fn switch_language(
+    mut commands: Commands,
+    ui: Res<crate::UiState>,
+    config: Res<UiConfig>,
+    locale: Res<Locale>,
+) {
+    if ui.language == locale.requested {
+        return;
+    }
+    let config = UiConfig { language: ui.language.clone(), ..config.clone() };
+    commands.insert_resource(Locale::load(&config));
 }
 
 pub(crate) fn relabel(locale: Res<Locale>, labels: Query<(Ref<Localized>, &mut Text)>) {

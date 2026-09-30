@@ -3,11 +3,15 @@
 # such as `de-DE` or `ru-RU`, and translate the text after each `=`. Keep the names before
 # it as they are. A string left out shows in English.
 
+# How the language is named in the panel's language list: in the language itself.
+language-name = English
+
 ## Panel
 
 tab-character = Character
 tab-scene = Scene
 tab-render = Render
+tab-system = System
 quit = Quit
 
 ## Character tab
@@ -51,6 +55,13 @@ label-pause-fullscreen = App fullscreen
 label-pause-covered = Desktop covered
 label-pause-battery = On battery
 value-max = Max
+
+## System tab
+
+section-interface = INTERFACE
+label-language = Language
+# The choice that follows the system's languages instead of naming one.
+language-system = System
 
 ## Values shown in controls
 

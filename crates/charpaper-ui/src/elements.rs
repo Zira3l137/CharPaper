@@ -27,6 +27,7 @@ pub(crate) enum Section {
     FrameRate,
     Quality,
     Pause,
+    Interface,
 }
 
 // The values stepped through with `<` and `>`.
@@ -50,6 +51,7 @@ pub(crate) enum Cycler {
     PauseFullscreen,
     PauseCovered,
     PauseBattery,
+    Language,
 }
 
 // What a button does when clicked.

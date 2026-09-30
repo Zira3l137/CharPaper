@@ -46,6 +46,7 @@ fn spawn_panel(mut commands: Commands, ui: Res<UiState>) {
                             content.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
                             content.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
                             content.spawn(page(Tab::Render, ui.tab, tabs::render::page()));
+                            content.spawn(page(Tab::System, ui.tab, tabs::system::page()));
                         });
                     panel.spawn(footer());
                 })
@@ -159,7 +160,7 @@ fn tab_bar() -> impl Bundle {
         },
         BorderColor::all(BORDER),
         Pickable::IGNORE,
-        children![tab(Tab::Character), tab(Tab::Scene), tab(Tab::Render)],
+        children![tab(Tab::Character), tab(Tab::Scene), tab(Tab::Render), tab(Tab::System)],
     )
 }
 

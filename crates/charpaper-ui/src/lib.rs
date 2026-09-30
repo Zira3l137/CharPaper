@@ -23,6 +23,7 @@ pub enum Tab {
     Character,
     Scene,
     Render,
+    System,
 }
 
 impl Tab {
@@ -31,6 +32,7 @@ impl Tab {
             Tab::Character => |l| fl!(l, "tab-character"),
             Tab::Scene => |l| fl!(l, "tab-scene"),
             Tab::Render => |l| fl!(l, "tab-render"),
+            Tab::System => |l| fl!(l, "tab-system"),
         }
     }
 }
@@ -56,14 +58,23 @@ pub struct SettingsPanelPlugin {
 
 impl Plugin for SettingsPanelPlugin {
     fn build(&self, app: &mut App) {
+        // Whatever started the app in a language, a flag included, becomes the one chosen.
+        let state = UiState { language: self.config.language.clone(), ..self.state.clone() };
         app.insert_resource(locale::Locale::load(&self.config))
-            .insert_resource(self.state.clone())
-            .add_systems(Update, locale::relabel)
+            .insert_resource(locale::Languages::find(&self.config.locales_dir))
+            .insert_resource(self.config.clone())
+            .insert_resource(state)
+            .add_systems(
+                Update,
+                (locale::switch_language.run_if(resource_changed::<UiState>), locale::relabel)
+                    .chain(),
+            )
             .add_plugins((
                 panel::PanelPlugin,
                 tabs::character::CharacterTabPlugin,
                 tabs::scene::SceneTabPlugin,
                 tabs::render::RenderTabPlugin,
+                tabs::system::SystemTabPlugin,
             ));
     }
 }

@@ -38,8 +38,8 @@ pub struct Cli {
     pub suite: Option<String>,
 
     /// The panel's language, as a tag such as `de-DE`, for a translation in
-    /// `locales/` next to the executable. Defaults to the one last chosen,
-    /// then to the system's.
+    /// `locales/` next to the executable. Remembered like a choice made in the
+    /// System tab. Defaults to the one last chosen, then to the system's.
     #[arg(long, value_name = "TAG")]
     pub language: Option<String>,
 
