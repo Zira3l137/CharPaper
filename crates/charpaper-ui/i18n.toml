@@ -1,0 +1,5 @@
+# Read by the `fl!` macro while compiling, to check every message name against English.
+fallback_language = "en-US"
+
+[fluent]
+assets_dir = "i18n"

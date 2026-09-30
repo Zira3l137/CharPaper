@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
 use crate::elements::UiButton;
+use crate::locale::Localized;
+use crate::locale::Tr;
 
 const HOVER: f32 = 0.08;
 const PRESS: f32 = -0.08;
@@ -12,6 +14,7 @@ pub(crate) struct BaseBackground(pub Color);
 pub(crate) struct ButtonBuilder {
     node: Node,
     text: String,
+    translated: Option<Tr>,
     font: TextFont,
     text_color: TextColor,
     fill: Color,
@@ -23,11 +26,16 @@ impl ButtonBuilder {
         Self {
             node: Node::default(),
             text: text.into(),
+            translated: None,
             font: TextFont::default(),
             text_color: TextColor::default(),
             fill: Color::default(),
             border_color: Color::NONE,
         }
+    }
+
+    pub(crate) fn translated(text: Tr) -> Self {
+        Self { translated: Some(text), ..Self::new("") }
     }
 
     pub(crate) fn node(mut self, edit: impl FnOnce(&mut Node)) -> Self {
@@ -63,7 +71,13 @@ impl ButtonBuilder {
             BackgroundColor(self.fill),
             BorderColor::all(self.border_color),
             action,
-            children![(Text::new(self.text), self.font, self.text_color, Pickable::IGNORE)],
+            children![(
+                Text::new(self.text),
+                self.font,
+                self.text_color,
+                Pickable::IGNORE,
+                Localized(self.translated),
+            )],
         )
     }
 }
@@ -83,12 +97,8 @@ impl HoverFeedback for EntityCommands<'_> {
     }
 }
 
-type Feedback<'w, 's> = Query<
-    'w,
-    's,
-    (&'static BaseBackground, &'static mut BackgroundColor),
-    With<UiButton>,
->;
+type Feedback<'w, 's> =
+    Query<'w, 's, (&'static BaseBackground, &'static mut BackgroundColor), With<UiButton>>;
 
 fn brighten<E>(delta: f32) -> impl Fn(On<Pointer<E>>, Feedback)
 where

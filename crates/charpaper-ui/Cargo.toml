@@ -7,4 +7,6 @@ edition.workspace = true
 bevy.workspace = true
 charpaper-scene.workspace = true
 charpaper-suite.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
 serde.workspace = true

@@ -6,11 +6,14 @@ mod theme;
 mod widgets;
 
 use bevy::prelude::*;
+use i18n_embed_fl::fl;
 use serde::Deserialize;
 use serde::Serialize;
 
+pub use locale::Locale;
 pub use locale::UiConfig;
-pub use locale::UiLocale;
+
+use crate::locale::Tr;
 
 // Only tabs with something working behind them exist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -23,11 +26,11 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub(crate) fn title(self, locale: &UiLocale) -> &str {
+    pub(crate) fn title(self) -> Tr {
         match self {
-            Tab::Character => locale.get_or("tab.character", "Character"),
-            Tab::Scene => locale.get_or("tab.scene", "Scene"),
-            Tab::Render => locale.get_or("tab.render", "Render"),
+            Tab::Character => |l| fl!(l, "tab-character"),
+            Tab::Scene => |l| fl!(l, "tab-scene"),
+            Tab::Render => |l| fl!(l, "tab-render"),
         }
     }
 }
@@ -39,6 +42,9 @@ pub struct UiState {
     pub is_menu_closed: bool,
     pub tab: Tab,
     pub advanced_outfit: bool,
+    // A tag such as `de-DE`, for a translation in `locales/`. None follows the system.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 // The collapsible settings panel on the desktop. The frame and every tab register their
@@ -50,11 +56,14 @@ pub struct SettingsPanelPlugin {
 
 impl Plugin for SettingsPanelPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(self.config.clone()).insert_resource(self.state.clone()).add_plugins((
-            panel::PanelPlugin,
-            tabs::character::CharacterTabPlugin,
-            tabs::scene::SceneTabPlugin,
-            tabs::render::RenderTabPlugin,
-        ));
+        app.insert_resource(locale::Locale::load(&self.config))
+            .insert_resource(self.state.clone())
+            .add_systems(Update, locale::relabel)
+            .add_plugins((
+                panel::PanelPlugin,
+                tabs::character::CharacterTabPlugin,
+                tabs::scene::SceneTabPlugin,
+                tabs::render::RenderTabPlugin,
+            ));
     }
 }

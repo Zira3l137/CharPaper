@@ -37,6 +37,12 @@ pub struct Cli {
     #[arg(long, value_name = "NAME")]
     pub suite: Option<String>,
 
+    /// The panel's language, as a tag such as `de-DE`, for a translation in
+    /// `locales/` next to the executable. Defaults to the one last chosen,
+    /// then to the system's.
+    #[arg(long, value_name = "TAG")]
+    pub language: Option<String>,
+
     /// Run in an ordinary window and log the full attach plan without touching
     /// any desktop window. With `--bake-environments`, only list what would be
     /// baked.

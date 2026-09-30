@@ -49,6 +49,7 @@ impl AppConfig {
 
         cfg.wallpaper.dump_window_tree = cli.tree;
         cfg.scene.suite = cli.suite.clone();
+        cfg.ui.language = cli.language.clone();
 
         if cli.no_spawn_workerw {
             cfg.wallpaper.spawn_worker_w = false;

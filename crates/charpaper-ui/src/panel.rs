@@ -1,13 +1,12 @@
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
+use i18n_embed_fl::fl;
 
 use crate::Tab;
-use crate::UiConfig;
 use crate::UiState;
 use crate::elements::StatusText;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
-use crate::locale::UiLocale;
 use crate::tabs;
 use crate::theme::*;
 use crate::widgets::*;
@@ -25,15 +24,14 @@ impl Plugin for PanelPlugin {
     }
 }
 
-fn spawn_panel(mut commands: Commands, config: Res<UiConfig>, ui: Res<UiState>) {
-    let locale = &config.locale;
+fn spawn_panel(mut commands: Commands, ui: Res<UiState>) {
     commands.spawn(Node { width: percent(100), height: percent(100), ..default() }).with_children(
         |root| {
             root.spawn(reveal_button(ui.is_menu_closed)).with_hover_feedback();
             root.spawn(main_menu(ui.is_menu_closed))
                 .with_children(|panel| {
                     panel.spawn(header());
-                    panel.spawn(tab_bar(locale));
+                    panel.spawn(tab_bar());
                     panel
                         .spawn((
                             Node {
@@ -45,11 +43,11 @@ fn spawn_panel(mut commands: Commands, config: Res<UiConfig>, ui: Res<UiState>) 
                             Pickable::IGNORE,
                         ))
                         .with_children(|content| {
-                            content.spawn(page(Tab::Character, ui.tab, tabs::character::page(locale)));
-                            content.spawn(page(Tab::Scene, ui.tab, tabs::scene::page(locale)));
-                            content.spawn(page(Tab::Render, ui.tab, tabs::render::page(locale)));
+                            content.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
+                            content.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
+                            content.spawn(page(Tab::Render, ui.tab, tabs::render::page()));
                         });
-                    panel.spawn(footer(locale));
+                    panel.spawn(footer());
                 })
                 .with_hover_feedback();
         },
@@ -138,9 +136,9 @@ fn header() -> impl Bundle {
     )
 }
 
-fn tab_bar(locale: &UiLocale) -> impl Bundle {
+fn tab_bar() -> impl Bundle {
     let tab = |tab: Tab| {
-        button(tab.title(locale))
+        translated_button(tab.title())
             .node(|n| {
                 n.flex_grow = 1.0;
                 n.flex_basis = Val::ZERO;
@@ -179,7 +177,7 @@ fn page(tab: Tab, active: Tab, content: impl Bundle) -> impl Bundle {
     )
 }
 
-fn footer(locale: &UiLocale) -> impl Bundle {
+fn footer() -> impl Bundle {
     (
         Node {
             flex_shrink: 0.0,
@@ -193,7 +191,7 @@ fn footer(locale: &UiLocale) -> impl Bundle {
         Pickable::IGNORE,
         children![
             (Node { flex_grow: 1.0, ..default() }, Pickable::IGNORE),
-            button(locale.get_or("quit", "Quit"))
+            translated_button(|l| fl!(l, "quit"))
                 .text_color(DANGER_TEXT)
                 .border_color(DANGER_BORDER)
                 .build(UiButton::Exit),
@@ -215,7 +213,13 @@ fn show_panel(ui: Res<UiState>, nodes: Query<(&mut Node, AnyOf<(&UiContainer, &U
 
 fn style_tabs(
     ui: Res<UiState>,
-    tabs: Query<(&UiButton, &Children, &mut BaseBackground, &mut BackgroundColor, &mut BorderColor)>,
+    tabs: Query<(
+        &UiButton,
+        &Children,
+        &mut BaseBackground,
+        &mut BackgroundColor,
+        &mut BorderColor,
+    )>,
     mut texts: Query<&mut TextColor>,
 ) {
     for (button, children, mut base, mut background, mut border) in tabs {

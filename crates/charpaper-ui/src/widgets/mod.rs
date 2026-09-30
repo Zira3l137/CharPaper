@@ -11,7 +11,11 @@ use crate::elements::CyclerValue;
 use crate::elements::Section;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
-use crate::locale::UiLocale;
+use i18n_embed::fluent::FluentLanguageLoader;
+use i18n_embed_fl::fl;
+
+use crate::locale::Localized;
+use crate::locale::Tr;
 use crate::theme::*;
 
 // Ignored by picking, so a click on the text reaches the button under it.
@@ -19,25 +23,34 @@ pub(crate) fn label(text: impl Into<String>, size: FontSize, color: Color) -> im
     (Text::new(text), TextFont { font_size: size, ..default() }, TextColor(color), Pickable::IGNORE)
 }
 
-fn control(text: &str, size: FontSize) -> ButtonBuilder {
-    ButtonBuilder::new(text).font_size(size).text_color(TEXT).fill(BUTTON_BG).border_color(BORDER).node(
-        |n| {
-            n.border = UiRect::all(LINE);
-            n.border_radius = BorderRadius::all(RADIUS);
-            n.height = CONTROL_HEIGHT;
-            n.justify_content = JustifyContent::Center;
-            n.align_items = AlignItems::Center;
-        },
-    )
+// Filled in, and filled in again on a language change, by `locale::relabel`.
+pub(crate) fn translated(text: Tr, size: FontSize, color: Color) -> impl Bundle {
+    (label("", size, color), Localized(Some(text)))
+}
+
+fn control(builder: ButtonBuilder, size: FontSize) -> ButtonBuilder {
+    builder.font_size(size).text_color(TEXT).fill(BUTTON_BG).border_color(BORDER).node(|n| {
+        n.border = UiRect::all(LINE);
+        n.border_radius = BorderRadius::all(RADIUS);
+        n.height = CONTROL_HEIGHT;
+        n.justify_content = JustifyContent::Center;
+        n.align_items = AlignItems::Center;
+    })
 }
 
 // Left unbuilt, so the caller can restyle it before `build`.
 pub(crate) fn button(text: &str) -> ButtonBuilder {
-    control(text, CONTROL_SIZE).node(|n| n.padding = UiRect::horizontal(Val::Px(14.0)))
+    control(ButtonBuilder::new(text), CONTROL_SIZE)
+        .node(|n| n.padding = UiRect::horizontal(Val::Px(14.0)))
+}
+
+pub(crate) fn translated_button(text: Tr) -> ButtonBuilder {
+    control(ButtonBuilder::translated(text), CONTROL_SIZE)
+        .node(|n| n.padding = UiRect::horizontal(Val::Px(14.0)))
 }
 
 pub(crate) fn glyph_button(glyph: &str, action: UiButton) -> impl Bundle {
-    control(glyph, GLYPH_SIZE)
+    control(ButtonBuilder::new(glyph), GLYPH_SIZE)
         .node(|n| {
             n.width = CONTROL_HEIGHT;
             n.flex_shrink = 0.0;
@@ -46,18 +59,18 @@ pub(crate) fn glyph_button(glyph: &str, action: UiButton) -> impl Bundle {
 }
 
 // Hidden until something fills it.
-pub(crate) fn section(title: &str, section: Section, content: impl Bundle) -> impl Bundle {
+pub(crate) fn section(title: Tr, section: Section, content: impl Bundle) -> impl Bundle {
     section_with(Display::None, title, section, content)
 }
 
 // Shown from the start, for settings that exist whatever the suite holds.
-pub(crate) fn open_section(title: &str, section: Section, content: impl Bundle) -> impl Bundle {
+pub(crate) fn open_section(title: Tr, section: Section, content: impl Bundle) -> impl Bundle {
     section_with(Display::Flex, title, section, content)
 }
 
 fn section_with(
     display: Display,
-    title: &str,
+    title: Tr,
     section: Section,
     content: impl Bundle,
 ) -> impl Bundle {
@@ -65,7 +78,7 @@ fn section_with(
         Node { display, flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
         UiContainer::Section(section),
         Pickable::IGNORE,
-        children![label(title, SMALL_SIZE, TEXT_DIM), content],
+        children![translated(title, SMALL_SIZE, TEXT_DIM), content],
     )
 }
 
@@ -78,7 +91,7 @@ pub(crate) fn rows(content: impl Bundle) -> impl Bundle {
 }
 
 // A label, then a value stepped through with `<` and `>`.
-pub(crate) fn cycler(title: impl Into<String>, cycler: Cycler) -> impl Bundle {
+pub(crate) fn cycler(title: Tr, cycler: Cycler) -> impl Bundle {
     (
         Node {
             align_items: AlignItems::Center,
@@ -92,7 +105,7 @@ pub(crate) fn cycler(title: impl Into<String>, cycler: Cycler) -> impl Bundle {
             (
                 Node { width: LABEL_WIDTH, flex_shrink: 0.0, ..default() },
                 Pickable::IGNORE,
-                children![label(title, BODY_SIZE, TEXT_LABEL)],
+                children![translated(title, BODY_SIZE, TEXT_LABEL)],
             ),
             (
                 Node { flex_grow: 1.0, column_gap: Val::Px(4.0), ..default() },
@@ -151,8 +164,8 @@ pub(crate) fn set_value(values: &mut Query<(&CyclerValue, &mut Text)>, cycler: C
     }
 }
 
-pub(crate) fn on_off(locale: &UiLocale, on: bool) -> &str {
-    if on { locale.get_or("value.on", "On") } else { locale.get_or("value.off", "Off") }
+pub(crate) fn on_off(locale: &FluentLanguageLoader, on: bool) -> String {
+    if on { fl!(locale, "value-on") } else { fl!(locale, "value-off") }
 }
 
 // Wraps around. An unknown current value steps to the first option.

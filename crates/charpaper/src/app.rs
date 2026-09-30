@@ -21,9 +21,10 @@ use crate::save::StatePlugin;
 use crate::wallpaper::WallpaperPlugin;
 
 const CHARACTERS_DIR: &str = "characters";
+const LOCALES_DIR: &str = "locales";
 
 // Everything the app reads and writes sits next to the executable: suites in
-// characters/, the viewer's choices in state.toml.
+// characters/, translations in locales/, the viewer's choices in state.toml.
 pub fn run(mut config: AppConfig) -> Result<()> {
     let exe_dir = exe_dir()?;
     config.scene.characters_dir = exe_dir.join(CHARACTERS_DIR);
@@ -35,6 +36,10 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     }
     config.scene.render = loaded.state.render.clone();
     config.scene.gaze = loaded.state.gaze.clone();
+    config.ui.locales_dir = exe_dir.join(LOCALES_DIR);
+    if config.ui.language.is_none() {
+        config.ui.language = loaded.state.ui.language.clone();
+    }
     let characters =
         config.scene.characters_dir.to_str().with_context(|| {
             format!("{} is not valid UTF-8", config.scene.characters_dir.display())

@@ -6,15 +6,15 @@ use charpaper_scene::LookBackup;
 use charpaper_scene::Resolved;
 use charpaper_scene::RestoreLook;
 use charpaper_suite::Tonemapping;
+use i18n_embed_fl::fl;
 
 use crate::Tab;
-use crate::UiConfig;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
-use crate::locale::UiLocale;
+use crate::locale::Locale;
 use crate::widgets::*;
 
 // cd/m², spaced so each step looks about as big as the last.
@@ -44,7 +44,8 @@ impl Plugin for SceneTabPlugin {
                 ),
                 show_values.run_if(
                     resource_changed::<CharacterState>
-                        .or_eager(resource_exists_and_changed::<ActiveLook>),
+                        .or_eager(resource_exists_and_changed::<ActiveLook>)
+                        .or_eager(resource_changed::<Locale>),
                 ),
                 show_restore.run_if(resource_changed::<LookBackup>),
             )
@@ -53,32 +54,32 @@ impl Plugin for SceneTabPlugin {
     }
 }
 
-pub(crate) fn page(locale: &UiLocale) -> impl Bundle {
+pub(crate) fn page() -> impl Bundle {
     children![
         section(
-            locale.get_or("section.camera", "CAMERA"),
+            |l| fl!(l, "section-camera"),
             Section::Camera,
-            cycler(locale.get_or("label.camera", "Camera"), Cycler::Camera),
+            cycler(|l| fl!(l, "label-camera"), Cycler::Camera),
         ),
         section(
-            locale.get_or("section.environment", "ENVIRONMENT"),
+            |l| fl!(l, "section-environment"),
             Section::Environment,
             rows(children![
-                cycler(locale.get_or("label.environment", "Environment"), Cycler::Environment),
-                cycler(locale.get_or("label.brightness", "Brightness"), Cycler::Brightness),
-                cycler(locale.get_or("label.shadows", "Shadows"), Cycler::Shadows),
+                cycler(|l| fl!(l, "label-environment"), Cycler::Environment),
+                cycler(|l| fl!(l, "label-brightness"), Cycler::Brightness),
+                cycler(|l| fl!(l, "label-shadows"), Cycler::Shadows),
             ]),
         ),
         section(
-            locale.get_or("section.image", "IMAGE"),
+            |l| fl!(l, "section-image"),
             Section::Image,
             rows(children![
-                cycler(locale.get_or("label.tonemapping", "Tonemapping"), Cycler::Tonemapping),
-                cycler(locale.get_or("label.exposure", "Exposure"), Cycler::Exposure),
-                cycler(locale.get_or("label.bloom", "Bloom"), Cycler::Bloom),
+                cycler(|l| fl!(l, "label-tonemapping"), Cycler::Tonemapping),
+                cycler(|l| fl!(l, "label-exposure"), Cycler::Exposure),
+                cycler(|l| fl!(l, "label-bloom"), Cycler::Bloom),
             ]),
         ),
-        button(locale.get_or("restore_look", "Restore defaults"))
+        translated_button(|l| fl!(l, "restore-look"))
             .node(|n| n.display = Display::None)
             .build(UiButton::RestoreLook),
     ]
@@ -131,24 +132,22 @@ fn show_restore(backup: Res<LookBackup>, buttons: Query<(&UiButton, &mut Node)>)
 fn show_values(
     state: Res<CharacterState>,
     look: Option<Res<ActiveLook>>,
-    config: Res<UiConfig>,
+    locale: Res<Locale>,
     values: Query<(&CyclerValue, &mut Text)>,
 ) {
-    let locale = &config.locale;
     let look = look.map(|l| l.0.clone()).unwrap_or_default();
     let resolved = Resolved::new(&look, state.environment.as_deref());
     for (value, mut text) in values {
         text.0 = match value.0 {
-            Cycler::Camera => state
-                .camera
-                .clone()
-                .unwrap_or_else(|| locale.get_or("camera.orbit", "Orbit").into()),
+            Cycler::Camera => {
+                state.camera.clone().unwrap_or_else(|| fl!(locale, "camera-orbit").into())
+            }
             Cycler::Environment => state.environment.clone().unwrap_or_else(|| "-".into()),
             Cycler::Brightness => format!("{:.0}", resolved.brightness),
-            Cycler::Shadows => on_off(locale, resolved.shadows).into(),
+            Cycler::Shadows => on_off(&locale, resolved.shadows).into(),
             Cycler::Tonemapping => tonemapping_name(resolved.tonemapping).into(),
             Cycler::Exposure => format!("{:+.1} EV", resolved.exposure),
-            Cycler::Bloom if resolved.bloom <= 0.0 => on_off(locale, false).into(),
+            Cycler::Bloom if resolved.bloom <= 0.0 => on_off(&locale, false).into(),
             Cycler::Bloom => format!("{:.2}", resolved.bloom),
             _ => continue,
         };

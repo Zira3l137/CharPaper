@@ -6,15 +6,15 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
 use charpaper_scene::GazeSettings;
 use charpaper_scene::SkinObjects;
+use i18n_embed_fl::fl;
 
-use crate::UiConfig;
 use crate::UiState;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
-use crate::locale::UiLocale;
+use crate::locale::Locale;
 use crate::theme::*;
 use crate::widgets::*;
 
@@ -35,15 +35,20 @@ impl Plugin for CharacterTabPlugin {
                 style_outfits.run_if(resource_changed::<CharacterState>),
                 fill_objects.run_if(resource_changed::<SkinObjects>),
                 show_expression.run_if(
-                    resource_changed::<CharacterState>.or_eager(resource_changed::<Expressions>),
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_changed::<Expressions>)
+                        .or_eager(resource_changed::<Locale>),
                 ),
                 show_gaze.run_if(
-                    resource_changed::<CharacterState>.or_eager(resource_changed::<GazeSettings>),
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_changed::<GazeSettings>)
+                        .or_eager(resource_changed::<Locale>),
                 ),
                 show_objects.run_if(
                     resource_changed::<UiState>
                         .or_eager(resource_changed::<CharacterState>)
-                        .or_eager(resource_changed::<SkinObjects>),
+                        .or_eager(resource_changed::<SkinObjects>)
+                        .or_eager(resource_changed::<Locale>),
                 ),
                 // or_eager keeps resource_added evaluated every frame. Skipped on a frame with a
                 // change, it would report the clips as new once more on the next one.
@@ -56,15 +61,15 @@ impl Plugin for CharacterTabPlugin {
     }
 }
 
-pub(crate) fn page(locale: &UiLocale) -> impl Bundle {
+pub(crate) fn page() -> impl Bundle {
     children![
         section(
-            locale.get_or("section.suite", "CHARACTER"),
+            |l| fl!(l, "section-suite"),
             Section::Suite,
-            cycler(locale.get_or("label.suite", "Character"), Cycler::Suite),
+            cycler(|l| fl!(l, "label-suite"), Cycler::Suite),
         ),
         section(
-            locale.get_or("section.outfit", "OUTFIT"),
+            |l| fl!(l, "section-outfit"),
             Section::Outfit,
             (
                 Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
@@ -81,7 +86,7 @@ pub(crate) fn page(locale: &UiLocale) -> impl Bundle {
                         Pickable::IGNORE,
                         UiContainer::OutfitGrid,
                     ),
-                    cycler(locale.get_or("label.advanced", "Advanced"), Cycler::Advanced),
+                    cycler(|l| fl!(l, "label-advanced"), Cycler::Advanced),
                     (
                         Node {
                             display: Display::None,
@@ -96,19 +101,19 @@ pub(crate) fn page(locale: &UiLocale) -> impl Bundle {
             ),
         ),
         section(
-            locale.get_or("section.animation", "ANIMATION"),
+            |l| fl!(l, "section-animation"),
             Section::Animation,
-            cycler(locale.get_or("label.animation", "Animation"), Cycler::Animation),
+            cycler(|l| fl!(l, "label-animation"), Cycler::Animation),
         ),
         section(
-            locale.get_or("section.expression", "EXPRESSION"),
+            |l| fl!(l, "section-expression"),
             Section::Expression,
-            cycler(locale.get_or("label.expression", "Expression"), Cycler::Expression),
+            cycler(|l| fl!(l, "label-expression"), Cycler::Expression),
         ),
         section(
-            locale.get_or("section.gaze", "GAZE"),
+            |l| fl!(l, "section-gaze"),
             Section::Gaze,
-            cycler(locale.get_or("label.follow_cursor", "Follow cursor"), Cycler::FollowCursor),
+            cycler(|l| fl!(l, "label-follow-cursor"), Cycler::FollowCursor),
         ),
     ]
 }
@@ -121,7 +126,9 @@ fn fill_outfits(
 ) {
     for (entity, container, mut node) in containers {
         match container {
-            UiContainer::Section(Section::Outfit) => node.display = display(!suite.skins.is_empty()),
+            UiContainer::Section(Section::Outfit) => {
+                node.display = display(!suite.skins.is_empty())
+            }
             UiContainer::OutfitGrid => {
                 commands.entity(entity).despawn_children().with_children(|grid| {
                     for skin in &suite.skins {
@@ -168,27 +175,27 @@ fn show_suite(
 fn show_expression(
     state: Res<CharacterState>,
     expressions: Res<Expressions>,
-    config: Res<UiConfig>,
+    locale: Res<Locale>,
     mut sections: Query<(&UiContainer, &mut Node)>,
     mut values: Query<(&CyclerValue, &mut Text)>,
 ) {
     let shown = !expressions.0.is_empty();
     show_container(&mut sections, UiContainer::Section(Section::Expression), shown);
-    let neutral = config.locale.get_or("expression.neutral", "Neutral");
-    set_value(&mut values, Cycler::Expression, state.expression().unwrap_or(neutral));
+    let neutral = fl!(locale, "expression-neutral");
+    set_value(&mut values, Cycler::Expression, state.expression().unwrap_or(&neutral));
 }
 
 // Only for a suite whose suite.toml says which bones follow the cursor.
 fn show_gaze(
     suite: Option<Res<ActiveSuite>>,
     settings: Res<GazeSettings>,
-    config: Res<UiConfig>,
+    locale: Res<Locale>,
     mut sections: Query<(&UiContainer, &mut Node)>,
     mut values: Query<(&CyclerValue, &mut Text)>,
 ) {
     let shown = suite.is_some_and(|suite| suite.gaze.is_some());
     show_container(&mut sections, UiContainer::Section(Section::Gaze), shown);
-    set_value(&mut values, Cycler::FollowCursor, on_off(&config.locale, settings.follow_cursor));
+    set_value(&mut values, Cycler::FollowCursor, &on_off(&locale, settings.follow_cursor));
 }
 
 // Clips arrive a moment after the suite, once their files have loaded.
@@ -242,13 +249,12 @@ fn show_objects(
     ui: Res<UiState>,
     state: Res<CharacterState>,
     objects: Res<SkinObjects>,
-    config: Res<UiConfig>,
+    locale: Res<Locale>,
     mut nodes: Query<(&UiContainer, &mut Node)>,
     buttons: Query<(&UiButton, &Children)>,
     mut texts: Query<&mut Text>,
     values: Query<(Entity, &CyclerValue)>,
 ) {
-    let locale = &config.locale;
     let several = objects.names().count() > 1;
     show_container(&mut nodes, UiContainer::Row(Cycler::Advanced), several);
     show_container(&mut nodes, UiContainer::ObjectList, several && ui.advanced_outfit);
@@ -261,14 +267,14 @@ fn show_objects(
         let shown = !hidden.is_some_and(|h| h.contains(name));
         for &child in &**children {
             if let Ok(mut text) = texts.get_mut(child) {
-                text.0 = on_off(locale, shown).into();
+                text.0 = on_off(&locale, shown).into();
             }
         }
     }
     for (entity, value) in &values {
         if value.0 == Cycler::Advanced {
             if let Ok(mut text) = texts.get_mut(entity) {
-                text.0 = on_off(locale, ui.advanced_outfit).into();
+                text.0 = on_off(&locale, ui.advanced_outfit).into();
             }
         }
     }
