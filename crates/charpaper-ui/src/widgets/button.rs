@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::text::FontSource;
 
 use crate::elements::UiButton;
 use crate::locale::Localized;
@@ -27,7 +28,7 @@ impl ButtonBuilder {
             node: Node::default(),
             text: text.into(),
             translated: None,
-            font: TextFont::default(),
+            font: TextFont { font: FontSource::SystemUi, ..default() },
             text_color: TextColor::default(),
             fill: Color::default(),
             border_color: Color::NONE,

@@ -1,6 +1,7 @@
 mod button;
 
 use bevy::prelude::*;
+use bevy::text::FontSource;
 
 pub(crate) use button::BaseBackground;
 pub(crate) use button::ButtonBuilder;
@@ -20,7 +21,13 @@ use crate::theme::*;
 
 // Ignored by picking, so a click on the text reaches the button under it.
 pub(crate) fn label(text: impl Into<String>, size: FontSize, color: Color) -> impl Bundle {
-    (Text::new(text), TextFont { font_size: size, ..default() }, TextColor(color), Pickable::IGNORE)
+    (Text::new(text), font(size), TextColor(color), Pickable::IGNORE)
+}
+
+// The system's UI font (Segoe UI on Windows) rather than Bevy's built-in one, which covers
+// little beyond ASCII and would show a translation into Cyrillic, say, as empty boxes.
+pub(crate) fn font(size: FontSize) -> TextFont {
+    TextFont { font: FontSource::SystemUi, font_size: size, ..default() }
 }
 
 // Filled in, and filled in again on a language change, by `locale::relabel`.
