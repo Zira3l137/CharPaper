@@ -12,6 +12,9 @@ pub struct DesktopProbe {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct DesktopActivity {
+    // Nobody is at the screen: the session is locked, the screen saver runs, or another user
+    // is signed in. Always a reason to pause, with no setting.
+    pub away: bool,
     pub fullscreen_app: bool,
     pub covered: bool,
     pub on_battery: bool,

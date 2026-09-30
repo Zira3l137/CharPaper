@@ -46,7 +46,9 @@ fn poll_activity(
     *since = Duration::ZERO;
 
     let activity = backend.0.activity();
-    let reason = if settings.pause_when_fullscreen && activity.fullscreen_app {
+    let reason = if activity.away {
+        Some("nobody is at the screen")
+    } else if settings.pause_when_fullscreen && activity.fullscreen_app {
         Some("an app is fullscreen")
     } else if settings.pause_when_covered && activity.covered {
         Some("the desktop is covered")

@@ -140,6 +140,7 @@ pub const WS_EX_TOOLWINDOW: isize = 0x0000_0080;
 
 pub const DWMWA_CLOAKED: u32 = 14;
 
+pub const QUNS_NOT_PRESENT: i32 = 1;
 pub const QUNS_BUSY: i32 = 2;
 pub const QUNS_RUNNING_D3D_FULL_SCREEN: i32 = 3;
 pub const QUNS_PRESENTATION_MODE: i32 = 4;

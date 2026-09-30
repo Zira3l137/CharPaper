@@ -8,22 +8,29 @@ const SHELL_CLASSES: [&str; 4] = ["Progman", "WorkerW", "Shell_TrayWnd", "Shell_
 
 // Every check leans towards not pausing: a wallpaper frozen while visible looks broken.
 pub fn desktop_activity() -> DesktopActivity {
+    let state = notification_state();
     DesktopActivity {
-        fullscreen_app: fullscreen_app(),
+        away: state == Some(sys::QUNS_NOT_PRESENT),
+        fullscreen_app: fullscreen_app(state),
         covered: covered(),
         on_battery: on_battery(),
     }
 }
 
-fn fullscreen_app() -> bool {
+// Windows' own summary of what the user is doing. The lock screen and the screen saver live on
+// a desktop of their own, where none of our window checks can see them; this answer is the
+// only one that covers them.
+fn notification_state() -> Option<i32> {
     let mut state = 0;
     let ok = unsafe { sys::SHQueryUserNotificationState(&mut state) } == 0;
-    if ok
-        && matches!(
-            state,
-            sys::QUNS_BUSY | sys::QUNS_RUNNING_D3D_FULL_SCREEN | sys::QUNS_PRESENTATION_MODE
-        )
-    {
+    ok.then_some(state)
+}
+
+fn fullscreen_app(state: Option<i32>) -> bool {
+    if matches!(
+        state,
+        Some(sys::QUNS_BUSY | sys::QUNS_RUNNING_D3D_FULL_SCREEN | sys::QUNS_PRESENTATION_MODE)
+    ) {
         return true;
     }
 
