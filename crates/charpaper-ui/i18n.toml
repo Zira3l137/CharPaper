@@ -3,3 +3,6 @@ fallback_language = "en-US"
 
 [fluent]
 assets_dir = "i18n"
+# Spelled out because `fl!` otherwise guesses the file name from the package name, and in this
+# workspace it gets `charpaper-ui` rather than the `charpaper_ui` the runtime loader uses.
+domain = "charpaper_ui"
