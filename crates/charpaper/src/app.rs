@@ -34,6 +34,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
         config.scene.suite = loaded.state.suite.clone();
     }
     config.scene.render = loaded.state.render.clone();
+    config.scene.gaze = loaded.state.gaze.clone();
     let characters =
         config.scene.characters_dir.to_str().with_context(|| {
             format!("{} is not valid UTF-8", config.scene.characters_dir.display())

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterState;
+use charpaper_scene::GazeSettings;
 use charpaper_scene::Picks;
 use charpaper_scene::RenderSettings;
 use charpaper_ui::UiState;
@@ -22,6 +23,7 @@ pub struct SavedState {
     pub suite: Option<String>,
     pub ui: UiState,
     pub render: RenderSettings,
+    pub gaze: GazeSettings,
     pub suites: BTreeMap<String, Picks>,
 }
 
@@ -78,7 +80,8 @@ impl Plugin for StatePlugin {
             save.run_if(
                 resource_changed::<CharacterState>
                     .or_eager(resource_changed::<UiState>)
-                    .or_eager(resource_changed::<RenderSettings>),
+                    .or_eager(resource_changed::<RenderSettings>)
+                    .or_eager(resource_changed::<GazeSettings>),
             ),
         );
     }
@@ -102,12 +105,14 @@ fn save(
     mut file: ResMut<StateFile>,
     ui: Res<UiState>,
     render: Res<RenderSettings>,
+    gaze: Res<GazeSettings>,
     character: Res<CharacterState>,
     suite: Option<Res<ActiveSuite>>,
 ) {
     let mut next = file.saved.clone();
     next.ui = ui.clone();
     next.render = render.clone();
+    next.gaze = gaze.clone();
     if character.suite.is_some() {
         next.suite = character.suite.clone();
     }

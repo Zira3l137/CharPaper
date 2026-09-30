@@ -1,4 +1,5 @@
 mod attach;
+mod cursor;
 mod input;
 mod pacing;
 mod platform;
@@ -10,7 +11,8 @@ use charpaper_wallpaper::WallpaperConfig;
 pub use platform::inspect_report;
 
 // Puts the window behind the desktop icons and keeps it working there: attaching, replaying
-// the mouse input the desktop keeps from it, and resting while nobody can see it. Everything
+// the mouse input the desktop keeps from it, telling the scene where the cursor is, and
+// resting while nobody can see it. Everything
 // OS-specific stays behind the WallpaperBackend that platform.rs picks.
 pub struct WallpaperPlugin {
     pub config: WallpaperConfig,
@@ -20,7 +22,12 @@ impl Plugin for WallpaperPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(WallpaperSettings(self.config.clone()))
             .insert_resource(Backend(platform::create_backend()))
-            .add_plugins((attach::AttachPlugin, input::InputPlugin, pacing::PacingPlugin));
+            .add_plugins((
+                attach::AttachPlugin,
+                cursor::CursorPlugin,
+                input::InputPlugin,
+                pacing::PacingPlugin,
+            ));
     }
 }
 
