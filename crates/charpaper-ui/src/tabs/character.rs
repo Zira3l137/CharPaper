@@ -4,6 +4,7 @@ use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
+use charpaper_scene::GazeSettings;
 use charpaper_scene::SkinObjects;
 
 use crate::UiConfig;
@@ -35,6 +36,9 @@ impl Plugin for CharacterTabPlugin {
                 fill_objects.run_if(resource_changed::<SkinObjects>),
                 show_expression.run_if(
                     resource_changed::<CharacterState>.or_eager(resource_changed::<Expressions>),
+                ),
+                show_gaze.run_if(
+                    resource_changed::<CharacterState>.or_eager(resource_changed::<GazeSettings>),
                 ),
                 show_objects.run_if(
                     resource_changed::<UiState>
@@ -100,6 +104,11 @@ pub(crate) fn page(locale: &UiLocale) -> impl Bundle {
             locale.get_or("section.expression", "EXPRESSION"),
             Section::Expression,
             cycler(locale.get_or("label.expression", "Expression"), Cycler::Expression),
+        ),
+        section(
+            locale.get_or("section.gaze", "GAZE"),
+            Section::Gaze,
+            cycler(locale.get_or("label.follow_cursor", "Follow cursor"), Cycler::FollowCursor),
         ),
     ]
 }
@@ -167,6 +176,19 @@ fn show_expression(
     show_container(&mut sections, UiContainer::Section(Section::Expression), shown);
     let neutral = config.locale.get_or("expression.neutral", "Neutral");
     set_value(&mut values, Cycler::Expression, state.expression().unwrap_or(neutral));
+}
+
+// Only for a suite whose suite.toml says which bones follow the cursor.
+fn show_gaze(
+    suite: Option<Res<ActiveSuite>>,
+    settings: Res<GazeSettings>,
+    config: Res<UiConfig>,
+    mut sections: Query<(&UiContainer, &mut Node)>,
+    mut values: Query<(&CyclerValue, &mut Text)>,
+) {
+    let shown = suite.is_some_and(|suite| suite.gaze.is_some());
+    show_container(&mut sections, UiContainer::Section(Section::Gaze), shown);
+    set_value(&mut values, Cycler::FollowCursor, on_off(&config.locale, settings.follow_cursor));
 }
 
 // Clips arrive a moment after the suite, once their files have loaded.
@@ -260,6 +282,7 @@ fn on_click(
     expressions: Res<Expressions>,
     mut state: ResMut<CharacterState>,
     mut ui: ResMut<UiState>,
+    mut gaze: ResMut<GazeSettings>,
 ) {
     let Ok(button) = buttons.get(event.entity) else {
         return;
@@ -283,6 +306,7 @@ fn on_click(
     };
     match cycler {
         Cycler::Advanced => ui.advanced_outfit ^= true,
+        Cycler::FollowCursor => gaze.follow_cursor ^= true,
         Cycler::Suite => {
             let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
             if let Some(next) = step(&options, &state.suite, forward) {
