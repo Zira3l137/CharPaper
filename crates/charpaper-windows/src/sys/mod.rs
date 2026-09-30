@@ -85,6 +85,12 @@ pub fn root_ancestor(hwnd: Hwnd) -> Hwnd {
     unsafe { GetAncestor(hwnd, GA_ROOT) }
 }
 
+pub fn cursor_pos() -> Option<Point> {
+    let mut point = Point::default();
+    let ok = unsafe { GetCursorPos(&mut point) };
+    (ok != 0).then_some(point)
+}
+
 pub fn screen_to_client(hwnd: Hwnd, screen: Point) -> Option<Point> {
     let mut point = screen;
     let ok = unsafe { ScreenToClient(hwnd, &mut point) };

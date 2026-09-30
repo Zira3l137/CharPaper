@@ -208,6 +208,7 @@ unsafe extern "system" {
     pub fn WindowFromPoint(point: Point) -> Hwnd;
     pub fn GetAncestor(hwnd: Hwnd, flags: u32) -> Hwnd;
     pub fn ScreenToClient(hwnd: Hwnd, point: *mut Point) -> Bool;
+    pub fn GetCursorPos(point: *mut Point) -> Bool;
 
     #[cfg(target_pointer_width = "64")]
     pub fn GetWindowLongPtrW(hwnd: Hwnd, index: i32) -> isize;

@@ -43,4 +43,11 @@ pub trait WallpaperBackend: Send + Sync + 'static {
     fn activity(&mut self) -> DesktopActivity {
         DesktopActivity::default()
     }
+
+    // Where the cursor is, wherever it is on screen, in physical pixels from the attached
+    // window's top-left corner. Polled every frame. None when unknown, which leaves the app to
+    // Bevy's own cursor position, known only while the cursor is over the window.
+    fn cursor_position(&mut self) -> Option<[f32; 2]> {
+        None
+    }
 }

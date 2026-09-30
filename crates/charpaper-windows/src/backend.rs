@@ -76,6 +76,11 @@ impl WallpaperBackend for WindowsBackend {
     fn activity(&mut self) -> DesktopActivity {
         activity::desktop_activity()
     }
+
+    fn cursor_position(&mut self) -> Option<[f32; 2]> {
+        let point = sys::screen_to_client(self.attached_hwnd?, sys::cursor_pos()?)?;
+        Some([point.x as f32, point.y as f32])
+    }
 }
 
 pub fn inspect_report() -> Vec<String> {
