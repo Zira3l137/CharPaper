@@ -29,6 +29,8 @@ pub fn save_look(root: &Path, look: &Look) -> Result<bool, SuiteError> {
     changed |= set(&mut doc, &["post"], "tonemapping", post.tonemapping.map(|t| t.as_str().into()));
     changed |= set(&mut doc, &["post"], "exposure", post.exposure.map(float));
     changed |= set(&mut doc, &["post"], "bloom", post.bloom.map(float));
+    changed |=
+        set(&mut doc, &["post"], "chromatic_aberration", post.chromatic_aberration.map(float));
     for (name, entry) in &look.environments {
         let table = ["environments", name.as_str()];
         changed |= set(&mut doc, &table, "brightness", entry.brightness.map(float));

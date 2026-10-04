@@ -46,6 +46,7 @@ pub(crate) enum Cycler {
     Tonemapping,
     Exposure,
     Bloom,
+    ChromaticAberration,
     FpsLimit,
     RenderScale,
     AntiAliasing,

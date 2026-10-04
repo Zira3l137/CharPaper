@@ -26,6 +26,8 @@ const EXPOSURE_STEP: f32 = 0.5;
 const EXPOSURE_LIMIT: f32 = 10.0;
 const BLOOM_STEP: f32 = 0.05;
 const BLOOM_LIMIT: f32 = 1.0;
+const ABERRATION_STEP: f32 = 0.0025;
+const ABERRATION_LIMIT: f32 = 0.05;
 
 // Which camera and environment, and how the picture is finished. Look edits go to
 // ActiveLook, which the app writes back into the suite's suite.toml.
@@ -77,6 +79,7 @@ pub(crate) fn page() -> impl Bundle {
                 cycler(|l| fl!(l, "label-tonemapping"), Cycler::Tonemapping),
                 cycler(|l| fl!(l, "label-exposure"), Cycler::Exposure),
                 cycler(|l| fl!(l, "label-bloom"), Cycler::Bloom),
+                cycler(|l| fl!(l, "label-chromatic-aberration"), Cycler::ChromaticAberration),
             ]),
         ),
         translated_button(|l| fl!(l, "restore-look"))
@@ -149,6 +152,10 @@ fn show_values(
             Cycler::Exposure => format!("{:+.1} EV", resolved.exposure),
             Cycler::Bloom if resolved.bloom <= 0.0 => on_off(&locale, false).into(),
             Cycler::Bloom => format!("{:.2}", resolved.bloom),
+            Cycler::ChromaticAberration if resolved.chromatic_aberration <= 0.0 => {
+                on_off(&locale, false).into()
+            }
+            Cycler::ChromaticAberration => format!("{:.4}", resolved.chromatic_aberration),
             _ => continue,
         };
     }
@@ -194,7 +201,8 @@ fn on_click(
         | Cycler::Shadows
         | Cycler::Tonemapping
         | Cycler::Exposure
-        | Cycler::Bloom => {
+        | Cycler::Bloom
+        | Cycler::ChromaticAberration => {
             if let Some(mut look) = look {
                 edit_look(&mut look, state.environment.as_deref(), cycler, forward);
             }
@@ -215,6 +223,11 @@ fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, f
         Cycler::Bloom => {
             let bloom = (resolved.bloom + sign * BLOOM_STEP).clamp(0.0, BLOOM_LIMIT);
             look.post.bloom = Some(round(bloom, 100.0));
+        }
+        Cycler::ChromaticAberration => {
+            let aberration = (resolved.chromatic_aberration + sign * ABERRATION_STEP)
+                .clamp(0.0, ABERRATION_LIMIT);
+            look.post.chromatic_aberration = Some(round(aberration, 10_000.0));
         }
         Cycler::Exposure => {
             let exposure =

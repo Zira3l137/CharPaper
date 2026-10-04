@@ -40,6 +40,7 @@ section-image = IMAGE
 label-tonemapping = Tonemapping
 label-exposure = Exposure
 label-bloom = Bloom
+label-chromatic-aberration = Aberration
 restore-look = Restore defaults
 camera-orbit = Orbit
 

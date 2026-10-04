@@ -3,6 +3,7 @@ use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::Skybox;
 use bevy::post_process::bloom::Bloom;
+use bevy::post_process::effect_stack::ChromaticAberration;
 use bevy::prelude::*;
 use charpaper_suite::Look;
 use charpaper_suite::Tonemapping as SuiteTonemapping;
@@ -32,6 +33,7 @@ impl Plugin for LookPlugin {
 pub const DEFAULT_TONEMAPPING: SuiteTonemapping = SuiteTonemapping::TonyMcMapface;
 pub const DEFAULT_EXPOSURE: f32 = 0.0;
 pub const DEFAULT_BLOOM: f32 = 0.0;
+pub const DEFAULT_CHROMATIC_ABERRATION: f32 = 0.0;
 pub const DEFAULT_BRIGHTNESS: f32 = 1000.0;
 pub const DEFAULT_SHADOWS: bool = true;
 
@@ -50,6 +52,7 @@ pub struct RestoreLook;
 pub struct Resolved {
     pub tonemapping: SuiteTonemapping,
     pub bloom: f32,
+    pub chromatic_aberration: f32,
     pub brightness: f32,
     pub shadows: bool,
     pub exposure: f32,
@@ -61,6 +64,10 @@ impl Resolved {
         Self {
             tonemapping: look.post.tonemapping.unwrap_or(DEFAULT_TONEMAPPING),
             bloom: look.post.bloom.unwrap_or(DEFAULT_BLOOM),
+            chromatic_aberration: look
+                .post
+                .chromatic_aberration
+                .unwrap_or(DEFAULT_CHROMATIC_ABERRATION),
             brightness: entry.brightness.unwrap_or(DEFAULT_BRIGHTNESS),
             shadows: entry.shadows.unwrap_or(DEFAULT_SHADOWS),
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
@@ -91,6 +98,12 @@ pub(crate) fn apply_look(
             commands.entity(entity).insert(Bloom { intensity: resolved.bloom, ..Bloom::NATURAL });
         } else {
             commands.entity(entity).remove::<Bloom>();
+        }
+        if resolved.chromatic_aberration > 0.0 {
+            let intensity = resolved.chromatic_aberration;
+            commands.entity(entity).insert(ChromaticAberration { intensity, ..default() });
+        } else {
+            commands.entity(entity).remove::<ChromaticAberration>();
         }
         if let Some(mut skybox) = skybox {
             skybox.brightness = resolved.brightness;

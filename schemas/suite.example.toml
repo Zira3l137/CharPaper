@@ -38,6 +38,7 @@ anisotropy = 0.4
 tonemapping = "tony_mc_mapface"
 exposure = 0.0
 bloom = 0.15
+chromatic_aberration = 0.005
 
 [camera]
 default = "closeup"

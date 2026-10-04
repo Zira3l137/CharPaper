@@ -37,6 +37,7 @@ section-image = ИЗОБРАЖЕНИЕ
 label-tonemapping = Тонмаппинг
 label-exposure = Экспозиция
 label-bloom = Свечение
+label-chromatic-aberration = Аберрация
 restore-look = Сбросить настройки
 camera-orbit = Орбита
 

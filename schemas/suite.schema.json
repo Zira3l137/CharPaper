@@ -486,6 +486,14 @@
           ],
           "format": "float"
         },
+        "chromatic_aberration": {
+          "description": "Color fringes that grow towards the edges of the image, as a fraction\nof its size. 0.0 turns them off; 0.005 is subtle.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
         "exposure": {
           "description": "Exposure compensation in EV stops; positive is brighter.",
           "type": [

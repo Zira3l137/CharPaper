@@ -236,6 +236,9 @@ pub struct Post {
     pub exposure: Option<f32>,
     /// Bloom intensity; 0.0 turns bloom off.
     pub bloom: Option<f32>,
+    /// Color fringes that grow towards the edges of the image, as a fraction
+    /// of its size. 0.0 turns them off; 0.005 is subtle.
+    pub chromatic_aberration: Option<f32>,
 }
 
 // Mirrors Bevy's Tonemapping so this crate doesn't need Bevy.
