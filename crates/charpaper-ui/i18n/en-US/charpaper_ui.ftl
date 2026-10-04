@@ -51,7 +51,10 @@ section-quality = QUALITY
 label-render-scale = Render scale
 label-anti-aliasing = Anti-aliasing
 label-depth-of-field = Depth of field
+section-fog = FOG
 label-fog = Fog
+label-fog-quality = Quality
+label-fog-dithering = Dithering
 section-pause = PAUSE RENDERING WHEN
 label-pause-fullscreen = App fullscreen
 label-pause-covered = Desktop covered
@@ -59,6 +62,10 @@ label-pause-battery = On battery
 value-max = Max
 value-blur = Blur
 value-bokeh = Bokeh
+value-low = Low
+value-medium = Medium
+value-high = High
+value-ultra = Ultra
 
 ## System tab
 

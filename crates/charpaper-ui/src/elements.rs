@@ -26,6 +26,7 @@ pub(crate) enum Section {
     Image,
     FrameRate,
     Quality,
+    Fog,
     Pause,
     Interface,
 }
@@ -50,6 +51,8 @@ pub(crate) enum Cycler {
     AntiAliasing,
     DepthOfField,
     Fog,
+    FogQuality,
+    FogDithering,
     PauseFullscreen,
     PauseCovered,
     PauseBattery,

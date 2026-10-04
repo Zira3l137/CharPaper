@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use charpaper_scene::AntiAliasing;
 use charpaper_scene::DepthOfFieldQuality;
+use charpaper_scene::FogQuality;
 use charpaper_scene::FpsLimit;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
@@ -41,7 +42,15 @@ pub(crate) fn page() -> impl Bundle {
                 cycler(|l| fl!(l, "label-render-scale"), Cycler::RenderScale),
                 cycler(|l| fl!(l, "label-anti-aliasing"), Cycler::AntiAliasing),
                 cycler(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
+            ]),
+        ),
+        open_section(
+            |l| fl!(l, "section-fog"),
+            Section::Fog,
+            rows(children![
                 cycler(|l| fl!(l, "label-fog"), Cycler::Fog),
+                cycler(|l| fl!(l, "label-fog-quality"), Cycler::FogQuality),
+                cycler(|l| fl!(l, "label-fog-dithering"), Cycler::FogDithering),
             ]),
         ),
         open_section(
@@ -78,6 +87,13 @@ fn show_values(
                 DepthOfFieldQuality::Bokeh => fl!(locale, "value-bokeh").into(),
             },
             Cycler::Fog => on_off(&locale, settings.fog).into(),
+            Cycler::FogQuality => match settings.fog_quality {
+                FogQuality::Low => fl!(locale, "value-low").into(),
+                FogQuality::Medium => fl!(locale, "value-medium").into(),
+                FogQuality::High => fl!(locale, "value-high").into(),
+                FogQuality::Ultra => fl!(locale, "value-ultra").into(),
+            },
+            Cycler::FogDithering => on_off(&locale, settings.fog_dithering).into(),
             Cycler::PauseFullscreen => on_off(&locale, settings.pause_when_fullscreen).into(),
             Cycler::PauseCovered => on_off(&locale, settings.pause_when_covered).into(),
             Cycler::PauseBattery => on_off(&locale, settings.pause_on_battery).into(),
@@ -116,6 +132,12 @@ fn on_click(
             }
         }
         Cycler::Fog => settings.fog ^= true,
+        Cycler::FogQuality => {
+            if let Some(next) = step(&FogQuality::ALL, &settings.fog_quality, forward) {
+                settings.fog_quality = next;
+            }
+        }
+        Cycler::FogDithering => settings.fog_dithering ^= true,
         Cycler::PauseFullscreen => settings.pause_when_fullscreen ^= true,
         Cycler::PauseCovered => settings.pause_when_covered ^= true,
         Cycler::PauseBattery => settings.pause_on_battery ^= true,

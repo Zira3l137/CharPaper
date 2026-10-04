@@ -48,7 +48,10 @@ section-quality = КАЧЕСТВО
 label-render-scale = Масштаб
 label-anti-aliasing = Сглаживание
 label-depth-of-field = Глубина резкости
+section-fog = ТУМАН
 label-fog = Туман
+label-fog-quality = Качество
+label-fog-dithering = Дизеринг
 section-pause = ПАУЗА, КОГДА
 label-pause-fullscreen = Полный экран
 label-pause-covered = Стол закрыт
@@ -56,6 +59,10 @@ label-pause-battery = От батареи
 value-max = Макс.
 value-blur = Размытие
 value-bokeh = Боке
+value-low = Низкое
+value-medium = Среднее
+value-high = Высокое
+value-ultra = Ультра
 
 ## System tab
 
