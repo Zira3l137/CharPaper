@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "charpaper_exporter"
+version = "0.1.0"
+name = "CharPaper Exporter"
+tagline = "Export a CharPaper character suite in one click"
+maintainer = "Zirael"
+type = "add-on"
+website = "https://github.com/Zira3l137/CharPaper"
+tags = ["Import-Export"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Writes glTF files and suite.toml into the suite folder"
