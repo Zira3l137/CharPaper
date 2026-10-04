@@ -1,3 +1,4 @@
+mod focus;
 mod orbit;
 mod rig;
 
@@ -40,12 +41,12 @@ impl Plugin for CameraPlugin {
             .add_systems(Update, (rig::choose_camera, reset_view).in_set(SceneSet::Fill))
             .add_systems(Update, (rig::switch_rig, rig::spawn_rig).chain().in_set(SceneSet::Run))
             // After propagation, so the rig's animated transform is final, and before frusta
-            // are built from the camera's.
+            // are built from the camera's. Focus is measured once the camera has moved.
             .add_systems(
                 PostUpdate,
-                rig::follow_selected
-                    .after(TransformSystems::Propagate)
-                    .before(VisibilitySystems::UpdateFrusta),
+                (rig::follow_selected.before(VisibilitySystems::UpdateFrusta), focus::focus_lens)
+                    .chain()
+                    .after(TransformSystems::Propagate),
             );
     }
 }

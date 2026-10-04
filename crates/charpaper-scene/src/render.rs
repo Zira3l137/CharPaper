@@ -29,6 +29,7 @@ pub struct RenderSettings {
     pub fps_limit: FpsLimit,
     pub render_scale: u32,
     pub anti_aliasing: AntiAliasing,
+    pub depth_of_field: DepthOfFieldQuality,
     pub pause_when_fullscreen: bool,
     pub pause_when_covered: bool,
     pub pause_on_battery: bool,
@@ -40,6 +41,7 @@ impl Default for RenderSettings {
             fps_limit: FpsLimit::default(),
             render_scale: 100,
             anti_aliasing: AntiAliasing::default(),
+            depth_of_field: DepthOfFieldQuality::default(),
             pause_when_fullscreen: true,
             pause_when_covered: true,
             pause_on_battery: false,
@@ -101,6 +103,22 @@ impl AntiAliasing {
             AntiAliasing::Msaa4 => Msaa::Sample4,
         }
     }
+}
+
+// Only for cameras whose suite asks for depth of field. Bokeh turns bright out-of-focus spots
+// into lens-shaped discs, as Blender does; Blur is a cheaper plain blur.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DepthOfFieldQuality {
+    Off,
+    Blur,
+    #[default]
+    Bokeh,
+}
+
+impl DepthOfFieldQuality {
+    pub const ALL: [DepthOfFieldQuality; 3] =
+        [DepthOfFieldQuality::Off, DepthOfFieldQuality::Blur, DepthOfFieldQuality::Bokeh];
 }
 
 #[derive(Resource)]

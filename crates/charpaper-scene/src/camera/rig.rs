@@ -5,10 +5,12 @@
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
+use charpaper_suite::CameraEntry;
 use charpaper_suite::ExportedCamera;
 use charpaper_suite::ORBIT_CAMERA;
 
 use crate::assets::asset_path;
+use crate::camera::focus::FocusTarget;
 use crate::camera::orbit::OrbitCamera;
 use crate::camera::orbit::update_camera_transform;
 use crate::state::CharacterState;
@@ -26,6 +28,7 @@ pub(crate) struct ShownRig {
 #[derive(Component)]
 pub(crate) struct CameraRig {
     pub name: String,
+    pub settings: CameraEntry,
     node: Option<String>,
     clip: Option<Handle<AnimationClip>>,
     _file: Handle<Gltf>,
@@ -36,6 +39,12 @@ pub(crate) struct Lens(pub Entity);
 
 #[derive(Component, Default)]
 pub(crate) struct Following(Option<String>);
+
+impl Following {
+    pub fn name(&self) -> Option<&str> {
+        self.0.as_deref()
+    }
+}
 
 pub(crate) fn choose_camera(
     suite: Option<Res<ActiveSuite>>,
@@ -115,7 +124,8 @@ pub(crate) fn spawn_rig(
     let root = commands
         .spawn((
             Name::new(format!("Camera rig {name}")),
-            CameraRig { name, node: camera.node, clip, _file: file },
+            CameraRig { name, settings: camera.settings, node: camera.node, clip, _file: file },
+            FocusTarget::default(),
             WorldAssetRoot(scene),
         ))
         .id();
