@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use charpaper_scene::AntiAliasing;
+use charpaper_scene::DepthOfFieldQuality;
 use charpaper_scene::FpsLimit;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
@@ -39,6 +40,7 @@ pub(crate) fn page() -> impl Bundle {
             rows(children![
                 cycler(|l| fl!(l, "label-render-scale"), Cycler::RenderScale),
                 cycler(|l| fl!(l, "label-anti-aliasing"), Cycler::AntiAliasing),
+                cycler(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
             ]),
         ),
         open_section(
@@ -68,6 +70,11 @@ fn show_values(
             Cycler::AntiAliasing => match settings.anti_aliasing {
                 AntiAliasing::Off => on_off(&locale, false).into(),
                 AntiAliasing::Msaa4 => "4x".into(),
+            },
+            Cycler::DepthOfField => match settings.depth_of_field {
+                DepthOfFieldQuality::Off => on_off(&locale, false).into(),
+                DepthOfFieldQuality::Blur => fl!(locale, "value-blur").into(),
+                DepthOfFieldQuality::Bokeh => fl!(locale, "value-bokeh").into(),
             },
             Cycler::PauseFullscreen => on_off(&locale, settings.pause_when_fullscreen).into(),
             Cycler::PauseCovered => on_off(&locale, settings.pause_when_covered).into(),
@@ -99,6 +106,11 @@ fn on_click(
         Cycler::AntiAliasing => {
             if let Some(next) = step(&AntiAliasing::ALL, &settings.anti_aliasing, forward) {
                 settings.anti_aliasing = next;
+            }
+        }
+        Cycler::DepthOfField => {
+            if let Some(next) = step(&DepthOfFieldQuality::ALL, &settings.depth_of_field, forward) {
+                settings.depth_of_field = next;
             }
         }
         Cycler::PauseFullscreen => settings.pause_when_fullscreen ^= true,

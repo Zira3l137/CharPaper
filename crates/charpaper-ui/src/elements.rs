@@ -48,6 +48,7 @@ pub(crate) enum Cycler {
     FpsLimit,
     RenderScale,
     AntiAliasing,
+    DepthOfField,
     PauseFullscreen,
     PauseCovered,
     PauseBattery,

@@ -47,11 +47,14 @@ label-fps-limit = Лимит FPS
 section-quality = КАЧЕСТВО
 label-render-scale = Масштаб
 label-anti-aliasing = Сглаживание
+label-depth-of-field = Глубина резкости
 section-pause = ПАУЗА, КОГДА
 label-pause-fullscreen = Полный экран
 label-pause-covered = Стол закрыт
 label-pause-battery = От батареи
 value-max = Макс.
+value-blur = Размытие
+value-bokeh = Боке
 
 ## System tab
 

@@ -50,11 +50,14 @@ label-fps-limit = FPS limit
 section-quality = QUALITY
 label-render-scale = Render scale
 label-anti-aliasing = Anti-aliasing
+label-depth-of-field = Depth of field
 section-pause = PAUSE RENDERING WHEN
 label-pause-fullscreen = App fullscreen
 label-pause-covered = Desktop covered
 label-pause-battery = On battery
 value-max = Max
+value-blur = Blur
+value-bokeh = Bokeh
 
 ## System tab
 
