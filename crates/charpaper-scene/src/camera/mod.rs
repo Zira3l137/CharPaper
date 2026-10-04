@@ -2,6 +2,7 @@ mod focus;
 mod orbit;
 mod rig;
 
+use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
@@ -14,6 +15,7 @@ use crate::camera::orbit::OrbitCamera;
 use crate::camera::orbit::PITCH_LIMIT;
 use crate::camera::orbit::update_camera_transform;
 use crate::camera::rig::Following;
+use crate::environment::ShownEnvironment;
 use crate::render::RenderSettings;
 use crate::render::scene_target;
 use crate::suite::ActiveSuite;
@@ -44,7 +46,11 @@ impl Plugin for CameraPlugin {
             // are built from the camera's. Focus is measured once the camera has moved.
             .add_systems(
                 PostUpdate,
-                (rig::follow_selected.before(VisibilitySystems::UpdateFrusta), focus::focus_lens)
+                (
+                    rig::follow_selected.before(VisibilitySystems::UpdateFrusta),
+                    focus::focus_lens,
+                    reset_history,
+                )
                     .chain()
                     .after(TransformSystems::Propagate),
             );
@@ -94,5 +100,18 @@ fn orbit_for(view: Option<&charpaper_suite::Camera>) -> OrbitCamera {
         // The orbit's pitch grows downward, the manifest's upward.
         pitch: (-view.pitch_deg.unwrap_or(ORBIT_PITCH_DEG).to_radians())
             .clamp(-PITCH_LIMIT, PITCH_LIMIT),
+    }
+}
+
+// After a cut to another camera or environment, TAA's past frames show something else, and
+// blending them in would leave a ghost of it for a moment.
+fn reset_history(
+    shown: Res<ShownEnvironment>,
+    mut cameras: Query<(&mut TemporalAntiAliasing, Ref<Following>)>,
+) {
+    for (mut taa, following) in &mut cameras {
+        if following.is_changed() || shown.is_changed() {
+            taa.reset = true;
+        }
     }
 }

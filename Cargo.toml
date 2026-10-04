@@ -30,8 +30,10 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "ui_picking",
     "bevy_picking",
     "bevy_core_pipeline",
-    # Bloom.
+    # Bloom, depth of field, chromatic aberration.
     "bevy_post_process",
+    # TAA.
+    "bevy_anti_alias",
     "bevy_pbr",
     "bevy_camera",
     "bevy_light",

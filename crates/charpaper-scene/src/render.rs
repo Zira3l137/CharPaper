@@ -1,6 +1,11 @@
+use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::RenderTarget;
+use bevy::core_pipeline::prepass::DepthPrepass;
+use bevy::core_pipeline::prepass::MotionVectorPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::prelude::*;
+use bevy::render::camera::MipBias;
+use bevy::render::camera::TemporalJitter;
 use bevy::render::render_resource::Extent3d;
 use bevy::render::render_resource::TextureFormat;
 use bevy::window::PrimaryWindow;
@@ -90,7 +95,9 @@ impl FpsLimit {
     }
 }
 
-// Only sample counts every GPU supports. An unsupported one crashes on the first frame.
+// MSAA only at a sample count every GPU supports: an unsupported one crashes on the first
+// frame. TAA blends each frame with the ones before, which also smooths fog dithering, but
+// can leave faint trails behind motion, more so at low frame rates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AntiAliasing {
@@ -98,14 +105,15 @@ pub enum AntiAliasing {
     #[default]
     #[serde(rename = "4x")]
     Msaa4,
+    Taa,
 }
 
 impl AntiAliasing {
-    pub const ALL: [AntiAliasing; 2] = [AntiAliasing::Off, AntiAliasing::Msaa4];
+    pub const ALL: [AntiAliasing; 3] = [AntiAliasing::Off, AntiAliasing::Msaa4, AntiAliasing::Taa];
 
     fn msaa(self) -> Msaa {
         match self {
-            AntiAliasing::Off => Msaa::Off,
+            AntiAliasing::Off | AntiAliasing::Taa => Msaa::Off,
             AntiAliasing::Msaa4 => Msaa::Sample4,
         }
     }
@@ -212,13 +220,27 @@ pub(crate) fn fit_scene_target(
     }
 }
 
+// TAA can't run with MSAA. Inserting it brings the prepasses and camera jitter it needs, but
+// removing it leaves them behind, so they go explicitly.
 pub(crate) fn apply_anti_aliasing(
     mut commands: Commands,
     settings: Res<RenderSettings>,
     camera: Query<Entity, With<SceneCamera>>,
 ) {
     for camera in &camera {
-        commands.entity(camera).insert(settings.anti_aliasing.msaa());
+        let mut camera = commands.entity(camera);
+        camera.insert(settings.anti_aliasing.msaa());
+        if settings.anti_aliasing == AntiAliasing::Taa {
+            camera.insert(TemporalAntiAliasing::default());
+        } else {
+            camera.remove::<(
+                TemporalAntiAliasing,
+                TemporalJitter,
+                MipBias,
+                DepthPrepass,
+                MotionVectorPrepass,
+            )>();
+        }
     }
 }
 

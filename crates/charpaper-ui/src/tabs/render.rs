@@ -80,6 +80,7 @@ fn show_values(
             Cycler::AntiAliasing => match settings.anti_aliasing {
                 AntiAliasing::Off => on_off(&locale, false).into(),
                 AntiAliasing::Msaa4 => "4x".into(),
+                AntiAliasing::Taa => "TAA".into(),
             },
             Cycler::DepthOfField => match settings.depth_of_field {
                 DepthOfFieldQuality::Off => on_off(&locale, false).into(),
