@@ -31,6 +31,8 @@ pub struct RenderSettings {
     pub anti_aliasing: AntiAliasing,
     pub depth_of_field: DepthOfFieldQuality,
     pub fog: bool,
+    pub fog_quality: FogQuality,
+    pub fog_dithering: bool,
     pub pause_when_fullscreen: bool,
     pub pause_when_covered: bool,
     pub pause_on_battery: bool,
@@ -44,6 +46,8 @@ impl Default for RenderSettings {
             anti_aliasing: AntiAliasing::default(),
             depth_of_field: DepthOfFieldQuality::default(),
             fog: true,
+            fog_quality: FogQuality::default(),
+            fog_dithering: false,
             pause_when_fullscreen: true,
             pause_when_covered: true,
             pause_on_battery: false,
@@ -121,6 +125,32 @@ pub enum DepthOfFieldQuality {
 impl DepthOfFieldQuality {
     pub const ALL: [DepthOfFieldQuality; 3] =
         [DepthOfFieldQuality::Off, DepthOfFieldQuality::Blur, DepthOfFieldQuality::Bokeh];
+}
+
+// How many samples each pixel takes through the fog. Too few show as stripes wherever
+// shadows cross it; each step up doubles the cost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FogQuality {
+    Low,
+    #[default]
+    Medium,
+    High,
+    Ultra,
+}
+
+impl FogQuality {
+    pub const ALL: [FogQuality; 4] =
+        [FogQuality::Low, FogQuality::Medium, FogQuality::High, FogQuality::Ultra];
+
+    pub fn steps(self) -> u32 {
+        match self {
+            FogQuality::Low => 32,
+            FogQuality::Medium => 64,
+            FogQuality::High => 128,
+            FogQuality::Ultra => 256,
+        }
+    }
 }
 
 #[derive(Resource)]

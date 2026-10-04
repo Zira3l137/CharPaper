@@ -37,6 +37,13 @@ saved in the `.blend`.
   character's armature with a bone picked, or on an object of one of its skins, follows that
   bone or object instead. Animated Focus Distance or F-Stop doesn't carry over; animate a
   focus empty instead.
+- **Fog** is any mesh in an environment whose material has a Volume and no Surface. The
+  app fills its bounding box with fog set up like its Principled Volume: Color, Density,
+  Anisotropy and Absorption Color. Only lights light fog, not the sky: a light whose
+  *Influence > Volume Scatter* is 0 doesn't, and a sun only does while it casts shadows.
+- **Shadows** follow each light's *Shadow* checkbox and each object's *Visibility > Ray
+  Visibility > Shadow*. Turn the latter off on a lamp's housing to keep its pattern out of
+  the fog and off the walls.
 - Your scene is never changed. Each file is exported from temporary copies in a throwaway
   scene, so your NLA tracks, active actions and selection stay as they were.
 
@@ -49,8 +56,10 @@ Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.
 - An empty field leaves the matching key in the file alone.
 - Each exported camera's `[cameras.<name>]` is rewritten from its Depth of Field panel, and
   removed when depth of field is off.
-- Clips of files that weren't exported this time, `[post]`, `[environments.*]` and the
-  orbit camera settings are kept as they are.
+- Each exported environment's fog, `no_volume_scatter`, `no_shadow` and `no_shadow_casting`
+  are rewritten from the scene; its brightness, shadows and exposure are kept.
+- Clips of files that weren't exported this time, `[post]`, environments that weren't
+  exported, and the orbit camera settings are kept as they are.
 
 *Load suite.toml* fills the panel from an existing file.
 

@@ -4,6 +4,7 @@ from collections import Counter
 import bpy
 
 from . import anim
+from . import env_settings
 from . import gltf
 from . import lens
 from .props import file_stem
@@ -293,6 +294,53 @@ def _check_environment(entry, add):
     cameras = [o.name for o in objects if o.type == "CAMERA"]
     if cameras:
         add(Finding(f"environment {entry.name!r}: cameras are left out, use Cameras: {_examples(cameras)}", severity="INFO"))
+    _check_fog(entry.name, objects, add)
+
+
+def _check_fog(name, objects, add):
+    fog = env_settings.fog_objects(objects)
+    for obj, node in fog.items():
+        if not env_settings.is_principled(node):
+            add(Finding(f"fog {obj.name}: only a Principled Volume is read; this one shows as its defaults", obj))
+            continue
+        linked = [socket for socket in env_settings.FOG_INPUTS if node.inputs[socket].is_linked]
+        if linked:
+            add(Finding(
+                f"fog {obj.name}: {', '.join(linked)} come from other nodes, which don't carry over; "
+                "the app uses the values typed into the node",
+                obj,
+            ))
+        glowing = [
+            label
+            for socket, label in (("Emission Strength", "emission"), ("Blackbody Intensity", "blackbody"))
+            if socket in node.inputs and node.inputs[socket].default_value > 0.0
+        ]
+        if glowing:
+            add(Finding(f"fog {obj.name}: {' and '.join(glowing)} don't carry over", obj))
+        if len(obj.data.vertices) != 8:
+            add(Finding(f"fog {obj.name} is not a box; the app fills its bounding box", obj, severity="INFO"))
+
+    lights = [o for o in objects if o.type == "LIGHT"]
+    partial = [o.name for o in lights if 0.0 < o.data.volume_factor != 1.0]
+    if fog and partial:
+        add(Finding(
+            f"environment {name!r}: the app has no Volume Scatter strength, only on or off; "
+            f"above 0 counts as on: {_examples(partial)}",
+            severity="INFO",
+        ))
+    lighting = [o for o in lights if o.data.volume_factor > 0.0]
+    suns = [o.name for o in lighting if o.data.type == "SUN" and not o.data.use_shadow]
+    if fog and suns:
+        add(Finding(
+            f"environment {name!r}: a sun lights fog only while it casts shadows, so these don't: "
+            f"{_examples(suns)}",
+            severity="INFO",
+        ))
+    if fog and len(lighting) == len(suns):
+        add(Finding(
+            f"environment {name!r} has fog but no light that lights it, so the fog never shows; "
+            "the sky does not light fog",
+        ))
 
 
 def _check_camera(suite, entry, add):

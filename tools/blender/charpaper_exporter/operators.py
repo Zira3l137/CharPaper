@@ -8,6 +8,7 @@ from bpy.props import IntProperty
 from bpy.types import Operator
 
 from . import anim
+from . import env_settings
 from . import exporters
 from . import gltf
 from . import lens
@@ -248,7 +249,7 @@ class CHARPAPER_OT_export(Operator):
         _store(suite, findings)
 
         done, failed, exported_animations, model_exported = [], [], [], False
-        lenses = {}
+        lenses, environments = {}, {}
         with object_mode(context):
             for kind, entry in self._jobs(suite):
                 label = entry.name if entry else "model"
@@ -271,11 +272,15 @@ class CHARPAPER_OT_export(Operator):
                     exported_animations.append(entry)
                 if kind == "CAMERA":
                     lenses[file_stem(entry.name)] = lens.table(entry.camera, context.scene.render)
+                if kind == "ENVIRONMENT":
+                    environments[file_stem(entry.name)] = env_settings.table(entry.collection)
                 model_exported |= kind == "MODEL"
 
         if suite.write_manifest and done:
             try:
-                self._write_manifest(suite, folder, exported_animations, model_exported, lenses)
+                self._write_manifest(
+                    suite, folder, exported_animations, model_exported, lenses, environments
+                )
             except Exception as error:
                 traceback.print_exc()
                 failed.append(f"suite.toml: {error}")
@@ -309,11 +314,17 @@ class CHARPAPER_OT_export(Operator):
         return exporters.camera(context, suite, entry, folder)
 
     @staticmethod
-    def _write_manifest(suite, folder, exported_animations, model_exported, lenses):
+    def _write_manifest(suite, folder, exported_animations, model_exported, lenses, environments):
         path = manifest.path(folder)
         existing = toml_io.load(path) if os.path.isfile(path) else {}
         data = manifest.update(
-            existing, suite, exporters.extension(suite), exported_animations, model_exported, lenses
+            existing,
+            suite,
+            exporters.extension(suite),
+            exported_animations,
+            model_exported,
+            lenses,
+            environments,
         )
         manifest.write(folder, data)
 

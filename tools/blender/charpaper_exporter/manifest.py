@@ -4,6 +4,7 @@ from pathlib import PurePosixPath
 
 import bpy
 
+from . import env_settings
 from . import toml_io
 from .props import file_stem
 
@@ -56,7 +57,7 @@ def gaze_table(gaze):
     return table
 
 
-def update(data, suite, extension, exported_animations, model_exported, lenses):
+def update(data, suite, extension, exported_animations, model_exported, lenses, environments):
     data = dict(data)
     data.setdefault("schema", 1)
     _set_or_keep(data, "name", suite.suite_name)
@@ -92,6 +93,19 @@ def update(data, suite, extension, exported_animations, model_exported, lenses):
         data["environment"] = {**data.get("environment", {}), "default": suite.default_environment}
     if suite.default_camera:
         data["camera"] = {**data.get("camera", {}), "default": suite.default_camera}
+
+    tables = dict(data.get("environments", {}))
+    for name, exported in environments.items():
+        table = {k: v for k, v in tables.get(name, {}).items() if k not in env_settings.KEYS}
+        table.update({k: v for k, v in exported.items() if v})
+        if table:
+            tables[name] = table
+        else:
+            tables.pop(name, None)
+    if tables:
+        data["environments"] = tables
+    else:
+        data.pop("environments", None)
 
     # An exported camera's table comes whole from its Depth of Field panel.
     cameras = dict(data.get("cameras", {}))

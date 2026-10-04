@@ -29,6 +29,7 @@ pub use look::Resolved;
 pub use look::RestoreLook;
 pub use render::AntiAliasing;
 pub use render::DepthOfFieldQuality;
+pub use render::FogQuality;
 pub use render::FpsLimit;
 pub use render::RENDER_SCALES;
 pub use render::RenderSettings;
