@@ -3,6 +3,7 @@ mod camera;
 mod character;
 mod config;
 mod environment;
+mod fog;
 mod gaze;
 mod look;
 mod render;
@@ -69,6 +70,7 @@ impl Plugin for ScenePlugin {
                 character::CharacterPlugin,
                 camera::CameraPlugin,
                 environment::EnvironmentPlugin,
+                fog::FogPlugin,
                 look::LookPlugin,
                 render::RenderPlugin,
                 gaze::GazePlugin,
