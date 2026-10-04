@@ -1,8 +1,8 @@
 # What an environment's [environments.<name>] table takes from Blender that glTF can't
-# carry: fog boxes, read from their Principled Volume, and the lights and objects that
-# skip fog or shadows. Export owns these keys; the look's keys are left alone.
+# carry: fog boxes, read from their Principled Volume, and the lights that skip the fog.
+# Export owns these keys; the look's keys are left alone.
 
-KEYS = ("fog", "no_volume_scatter", "no_shadow", "no_shadow_casting")
+KEYS = ("fog", "no_volume_scatter")
 
 FOG_INPUTS = {
     "Color": "color",
@@ -10,10 +10,6 @@ FOG_INPUTS = {
     "Anisotropy": "anisotropy",
     "Absorption Color": "absorption_color",
 }
-
-# Objects the glTF exporter turns into meshes.
-CASTERS = {"MESH", "CURVE", "SURFACE", "FONT", "META"}
-
 
 def volume_node(obj):
     """What feeds the Volume output of a fog object: a material with a volume and no surface."""
@@ -56,8 +52,4 @@ def table(collection):
     return {
         "fog": {obj.name: fog_table(node) for obj, node in sorted(fog.items(), key=lambda i: i[0].name)},
         "no_volume_scatter": sorted(o.name for o in lights if o.data.volume_factor <= 0.0),
-        "no_shadow": sorted(o.name for o in lights if not o.data.use_shadow),
-        "no_shadow_casting": sorted(
-            o.name for o in objects if o.type in CASTERS and not o.visible_shadow and o not in fog
-        ),
     }

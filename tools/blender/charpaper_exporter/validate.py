@@ -328,15 +328,7 @@ def _check_fog(name, objects, add):
             f"above 0 counts as on: {_examples(partial)}",
             severity="INFO",
         ))
-    lighting = [o for o in lights if o.data.volume_factor > 0.0]
-    suns = [o.name for o in lighting if o.data.type == "SUN" and not o.data.use_shadow]
-    if fog and suns:
-        add(Finding(
-            f"environment {name!r}: a sun lights fog only while it casts shadows, so these don't: "
-            f"{_examples(suns)}",
-            severity="INFO",
-        ))
-    if fog and len(lighting) == len(suns):
+    if fog and not any(o.data.volume_factor > 0.0 for o in lights):
         add(Finding(
             f"environment {name!r} has fog but no light that lights it, so the fog never shows; "
             "the sky does not light fog",
