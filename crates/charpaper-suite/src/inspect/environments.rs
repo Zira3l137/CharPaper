@@ -6,7 +6,10 @@ use crate::inspect::Report;
 use crate::inspect::Severity;
 use crate::inspect::examples;
 use crate::inspect::open;
+use crate::inspect::tree::Gltf;
+use crate::layout::Environment;
 use crate::layout::Suite;
+use crate::manifest::MANIFEST_FILE;
 
 // An environment is lit only by what it ships: the lights in its scene and its maps. With
 // neither, the character renders black in it.
@@ -23,6 +26,7 @@ pub(super) fn check_environments(suite: &Suite, report: &mut Report) {
         if let Some(scene) = &environment.scene {
             if let Some(gltf) = open(suite, scene, report) {
                 lights = gltf.doc.nodes().filter(|n| n.light().is_some()).count();
+                check_fog(environment, scene, &gltf, report);
                 let cameras: Vec<&str> = gltf
                     .doc
                     .nodes()
@@ -38,6 +42,14 @@ pub(super) fn check_environments(suite: &Suite, report: &mut Report) {
                     report.push(Severity::Warning, Some(scene), message);
                 }
             }
+        }
+
+        if environment.scene.is_none() && !environment.settings.fog.is_empty() {
+            let message = format!(
+                "environment {:?} has fog but no scene file to hold its objects, so it shows none",
+                environment.name
+            );
+            report.push(Severity::Warning, Some(Path::new(MANIFEST_FILE)), message);
         }
 
         let maps = [&environment.skybox, &environment.diffuse, &environment.specular];
@@ -71,6 +83,56 @@ pub(super) fn check_environments(suite: &Suite, report: &mut Report) {
             );
             report.push(Severity::Warning, None, message);
         }
+    }
+}
+
+// Fog renders only where a light lights it, and Bevy drops all fog when no light does.
+fn check_fog(environment: &Environment, scene: &Path, gltf: &Gltf, report: &mut Report) {
+    let settings = &environment.settings;
+    let manifest = Some(Path::new(MANIFEST_FILE));
+    let name = &environment.name;
+
+    for (object, fog) in &settings.fog {
+        if !gltf.names.iter().any(|n| n == object) {
+            let message = format!(
+                "environment {name:?}: fog object {object:?} is not in {}, so it shows no fog",
+                scene.display()
+            );
+            report.push(Severity::Warning, manifest, message);
+        }
+        if fog.density.is_some_and(|d| !(d >= 0.0 && d.is_finite())) {
+            let message =
+                format!("environment {name:?}: fog {object:?} needs a `density` of 0 or more");
+            report.push(Severity::Error, manifest, message);
+        }
+    }
+
+    // A light goes by its object's name, or by its light data's name.
+    let lights: Vec<(&str, Option<&str>)> = gltf
+        .doc
+        .nodes()
+        .filter_map(|n| Some((gltf.names[n.index()].as_str(), n.light()?.name())))
+        .collect();
+    let skipped = |name: &str| settings.no_volume_scatter.iter().any(|s| s == name);
+    for listed in &settings.no_volume_scatter {
+        if !lights.iter().any(|&(object, data)| object == listed || data == Some(listed.as_str())) {
+            let message = format!(
+                "environment {name:?}: `no_volume_scatter` names {listed:?}, which is not a light \
+                 in {}",
+                scene.display()
+            );
+            report.push(Severity::Warning, manifest, message);
+        }
+    }
+
+    let lighting =
+        lights.iter().filter(|&&(object, data)| !(skipped(object) || data.is_some_and(skipped)));
+    if !settings.fog.is_empty() && lighting.count() == 0 {
+        let message = format!(
+            "environment {name:?} has fog but no light that lights it, so the fog never shows; \
+             the sky and reflection maps do not light fog"
+        );
+        report.push(Severity::Warning, manifest, message);
     }
 }
 

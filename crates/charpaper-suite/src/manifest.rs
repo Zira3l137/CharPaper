@@ -196,6 +196,35 @@ pub struct EnvironmentEntry {
     /// Exposure compensation in EV stops while this environment is shown,
     /// replacing `post.exposure`. A sunlit scene needs far less than a room.
     pub exposure: Option<f32>,
+    /// Boxes of fog, keyed by the name of their object in the environment's
+    /// file: in Blender, usually a cube with a Principled Volume material. The
+    /// fog fills the object's bounding box, or the 2 m cube Blender draws for
+    /// an empty, and moves, turns and scales with it. Only lights light fog,
+    /// not the sky.
+    #[serde(default)]
+    pub fog: BTreeMap<String, Fog>,
+    /// Lights that do not light the fog, by object name, like a Blender light
+    /// whose Volume Scatter is 0. Every other light does. A sun only lights
+    /// fog while it casts shadows.
+    #[serde(default)]
+    pub no_volume_scatter: Vec<String>,
+}
+
+/// A box of fog, set up like Blender's Principled Volume. Colors are linear,
+/// as the node shows them.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Fog {
+    /// The color light takes on as the fog scatters it. Defaults to
+    /// [0.5, 0.5, 0.5].
+    pub color: Option<[f32; 3]>,
+    /// How thick the fog is. Defaults to 1.
+    pub density: Option<f32>,
+    /// From -1 to 1. Above 0, light keeps going the way it was heading, so
+    /// the fog glows most when looking towards a light. Defaults to 0.
+    pub anisotropy: Option<f32>,
+    /// The fog absorbs the light this color lacks. Defaults to black.
+    pub absorption_color: Option<[f32; 3]>,
 }
 
 /// Effects applied to the finished image.

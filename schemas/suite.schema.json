@@ -244,6 +244,21 @@
           ],
           "format": "float"
         },
+        "fog": {
+          "description": "Boxes of fog, keyed by the name of their object in the environment's\nfile: in Blender, usually a cube with a Principled Volume material. The\nfog fills the object's bounding box, or the 2 m cube Blender draws for\nan empty, and moves, turns and scales with it. Only lights light fog,\nnot the sky.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Fog"
+          }
+        },
+        "no_volume_scatter": {
+          "description": "Lights that do not light the fog, by object name, like a Blender light\nwhose Volume Scatter is 0. Every other light does. A sun only lights\nfog while it casts shadows.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
         "shadows": {
           "description": "Whether the environment's lights cast shadows. glTF cannot say, so it\nis set here. Defaults to true.",
           "type": [
@@ -264,6 +279,55 @@
             "string",
             "null"
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Fog": {
+      "description": "A box of fog, set up like Blender's Principled Volume. Colors are linear,\nas the node shows them.",
+      "type": "object",
+      "properties": {
+        "absorption_color": {
+          "description": "The fog absorbs the light this color lacks. Defaults to black.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "anisotropy": {
+          "description": "From -1 to 1. Above 0, light keeps going the way it was heading, so\nthe fog glows most when looking towards a light. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "color": {
+          "description": "The color light takes on as the fog scatters it. Defaults to\n[0.5, 0.5, 0.5].",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "density": {
+          "description": "How thick the fog is. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
         }
       },
       "additionalProperties": false

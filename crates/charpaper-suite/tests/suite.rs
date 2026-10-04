@@ -107,6 +107,21 @@ fn lit_scene() -> String {
         .to_string()
 }
 
+fn foggy_scene() -> String {
+    format!(
+        r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0, 1, 2]}}],
+        "extensionsUsed": ["KHR_lights_punctual"],
+        "extensions": {{"KHR_lights_punctual": {{"lights": [
+            {{"type": "directional"}}, {{"type": "point", "name": "Bulb"}}]}}}},
+        "nodes": [
+            {{"name": "Mist", "mesh": 0}},
+            {{"name": "Sun", "extensions": {{"KHR_lights_punctual": {{"light": 0}}}}}},
+            {{"name": "Lamp", "extensions": {{"KHR_lights_punctual": {{"light": 1}}}}}}
+        ],
+        {MESH}, {ACCESSORS}}}"#
+    )
+}
+
 struct Fixture(PathBuf);
 
 impl Fixture {
@@ -394,6 +409,40 @@ fn environments_come_from_scenes_and_map_folders() {
     assert!(warnings.iter().any(|w| w.contains("room.gltf: 1 camera(s) will be ignored")));
     assert!(warnings.iter().any(|w| w.contains("\"sky\" has no lights and no reflection maps")));
     assert!(!warnings.iter().any(|w| w.contains("\"room\" has no lights")), "{warnings:#?}");
+}
+
+#[test]
+fn fog_objects_and_the_lights_skipping_them_are_checked() {
+    let manifest = r#"schema = 1
+[environments.foggy]
+no_volume_scatter = ["Lamp"]
+[environments.foggy.fog.Mist]
+density = 0.2
+"#;
+    let fixture = Fixture::new("fog", manifest);
+    fixture.write("environment/foggy.gltf", &foggy_scene());
+    let suite = fixture.load().unwrap();
+    let foggy = &suite.environments[0];
+    assert_eq!(foggy.settings.fog["Mist"].density, Some(0.2));
+    assert!(messages(&suite, Severity::Error).is_empty());
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(!warnings.iter().any(|w| w.contains("foggy")), "{warnings:#?}");
+
+    let manifest = r#"schema = 1
+[environments.foggy]
+no_volume_scatter = ["Sun", "Bulb", "Ghost"]
+[environments.foggy.fog.Haze]
+density = -1.0
+"#;
+    fixture.write("suite.toml", manifest);
+    let suite = fixture.load().unwrap();
+    let errors = messages(&suite, Severity::Error);
+    assert!(errors.iter().any(|e| e.contains("fog \"Haze\" needs a `density`")), "{errors:#?}");
+    let warnings = messages(&suite, Severity::Warning);
+    for expected in ["fog object \"Haze\" is not in", "names \"Ghost\"", "no light that lights it"]
+    {
+        assert!(warnings.iter().any(|w| w.contains(expected)), "{expected}: {warnings:#?}");
+    }
 }
 
 #[test]
