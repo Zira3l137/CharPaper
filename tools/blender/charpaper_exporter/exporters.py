@@ -2,6 +2,7 @@ import os
 
 from . import anim
 from . import gltf
+from . import lens
 from .isolate import isolated
 from .isolate import showing
 from .props import file_stem
@@ -137,26 +138,44 @@ def environment(context, suite, entry, folder):
         )
 
 
+def _chain(obj):
+    while obj is not None:
+        yield obj
+        obj = obj.parent
+
+
+def _active_action(obj):
+    data = obj.animation_data
+    return data.action if data else None
+
+
 def camera(context, suite, entry, folder):
     path = target(folder, CAMERAS_DIR, entry.name, suite)
+    focus = lens.exported_with(suite, entry.camera)
     with isolated(context) as iso:
         iso.add_with_ancestors(entry.camera)
-        animated = False
+        chain = list(_chain(entry.camera))
+        clip = None
         if entry.action:
-            chain = []
-            current = entry.camera
-            while current is not None:
-                chain.append(current)
-                current = current.parent
+            clip = entry.action.name
             owners = [obj for obj in chain if anim.users(entry.action, obj)] or [entry.camera]
             for owner in owners:
-                anim.object_track(iso.copies[owner], entry.action.name, entry.action)
-            animated = True
+                anim.object_track(iso.copies[owner], clip, entry.action)
+        if focus is not None:
+            iso.add_with_ancestors(focus)
+            # A camera file plays one clip, so the focus object's motion joins the camera's.
+            for obj in _chain(focus):
+                if obj in chain:
+                    break
+                action = entry.action if entry.action and anim.users(entry.action, obj) else _active_action(obj)
+                if action is not None:
+                    clip = clip or action.name
+                    anim.object_track(iso.copies[obj], clip, action)
         return _run(
             context, iso, path,
             _options(
                 suite,
-                export_animations=animated,
+                export_animations=clip is not None,
                 export_animation_mode="NLA_TRACKS",
                 export_lights=False,
                 export_cameras=True,

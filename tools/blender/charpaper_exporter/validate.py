@@ -5,6 +5,7 @@ import bpy
 
 from . import anim
 from . import gltf
+from . import lens
 from .props import file_stem
 
 MAX_SHAPE_KEYS = 256
@@ -65,7 +66,7 @@ def check(context, suite):
             _check_environment(entry, add)
     for entry in suite.cameras:
         if entry.enabled:
-            _check_camera(entry, add)
+            _check_camera(suite, entry, add)
     _check_stale_formats(suite, add)
     return out
 
@@ -294,7 +295,7 @@ def _check_environment(entry, add):
         add(Finding(f"environment {entry.name!r}: cameras are left out, use Cameras: {_examples(cameras)}", severity="INFO"))
 
 
-def _check_camera(entry, add):
+def _check_camera(suite, entry, add):
     if entry.camera is None:
         add(Finding(f"camera {entry.name!r} has no camera object"))
         return
@@ -309,6 +310,64 @@ def _check_camera(entry, add):
             entry.camera,
             severity="INFO",
         ))
+    _check_lens(suite, entry, add)
+
+
+def _check_lens(suite, entry, add):
+    camera = entry.camera
+    dof = camera.data.dof
+    if not dof.use_dof:
+        return
+    name = entry.name
+    if camera.data.type != "PERSP":
+        add(Finding(f"camera {name!r} is not perspective, so its depth of field is left out", camera))
+        return
+
+    data = camera.data.animation_data
+    keyed = {c.data_path for c in anim.fcurves(data.action)} if data and data.action else set()
+    labels = {"dof.aperture_fstop": "F-Stop"}
+    if dof.focus_object is None:
+        labels["dof.focus_distance"] = "Focus Distance"
+    animated = [label for path, label in labels.items() if path in keyed]
+    if animated:
+        add(Finding(
+            f"camera {name!r}: animated {' and '.join(animated)} does not carry over, the app "
+            "uses the current value; animate a focus object instead",
+            camera,
+        ))
+    if dof.aperture_blades or dof.aperture_rotation or dof.aperture_ratio != 1.0:
+        add(Finding(
+            f"camera {name!r}: aperture blades, rotation and ratio have no match in the app",
+            camera,
+            severity="INFO",
+        ))
+
+    target = dof.focus_object
+    if target is None:
+        return
+    if target.type == "ARMATURE" and target != suite.armature:
+        add(Finding(
+            f"camera {name!r} focuses on {target.name}, an armature other than the character's; "
+            "the app cannot find it",
+            target,
+        ))
+    elif lens.on_character(suite, target) and target != suite.armature and not _in_skin(suite, target):
+        add(Finding(
+            f"camera {name!r} focuses on {target.name}, which hangs from the character but is in "
+            "no skin; the app cannot find it",
+            target,
+        ))
+    elif lens.exported_with(suite, camera) is target and target.type != "EMPTY":
+        add(Finding(
+            f"camera {name!r}: focus object {target.name} is a {target.type.lower()} and goes into "
+            "the camera's file whole; an empty is enough",
+            target,
+            severity="INFO",
+        ))
+
+
+def _in_skin(suite, obj):
+    return any(s.collection and obj.name in s.collection.all_objects for s in suite.skins)
 
 
 def _check_stale_formats(suite, add):

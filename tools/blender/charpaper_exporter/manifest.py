@@ -56,7 +56,7 @@ def gaze_table(gaze):
     return table
 
 
-def update(data, suite, extension, exported_animations, model_exported):
+def update(data, suite, extension, exported_animations, model_exported, lenses):
     data = dict(data)
     data.setdefault("schema", 1)
     _set_or_keep(data, "name", suite.suite_name)
@@ -92,6 +92,18 @@ def update(data, suite, extension, exported_animations, model_exported):
         data["environment"] = {**data.get("environment", {}), "default": suite.default_environment}
     if suite.default_camera:
         data["camera"] = {**data.get("camera", {}), "default": suite.default_camera}
+
+    # An exported camera's table comes whole from its Depth of Field panel.
+    cameras = dict(data.get("cameras", {}))
+    for name, table in lenses.items():
+        if table:
+            cameras[name] = table
+        else:
+            cameras.pop(name, None)
+    if cameras:
+        data["cameras"] = cameras
+    else:
+        data.pop("cameras", None)
 
     if suite.gaze.mode == "WRITE":
         data["gaze"] = gaze_table(suite.gaze)

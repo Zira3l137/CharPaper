@@ -4,7 +4,7 @@ import re
 import tomllib
 
 SCHEMA_LINE = "#:schema https://raw.githubusercontent.com/Zira3l137/CharPaper/main/schemas/suite.schema.json"
-ORDER = ("character", "animations", "environment", "environments", "post", "camera", "gaze")
+ORDER = ("character", "animations", "environment", "environments", "post", "camera", "cameras", "gaze")
 BARE_KEY = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
