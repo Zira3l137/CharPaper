@@ -51,6 +51,7 @@ section-quality = QUALITY
 label-render-scale = Render scale
 label-anti-aliasing = Anti-aliasing
 label-depth-of-field = Depth of field
+label-fog = Fog
 section-pause = PAUSE RENDERING WHEN
 label-pause-fullscreen = App fullscreen
 label-pause-covered = Desktop covered

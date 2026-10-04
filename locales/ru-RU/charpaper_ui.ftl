@@ -48,6 +48,7 @@ section-quality = КАЧЕСТВО
 label-render-scale = Масштаб
 label-anti-aliasing = Сглаживание
 label-depth-of-field = Глубина резкости
+label-fog = Туман
 section-pause = ПАУЗА, КОГДА
 label-pause-fullscreen = Полный экран
 label-pause-covered = Стол закрыт

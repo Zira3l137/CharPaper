@@ -41,6 +41,7 @@ pub(crate) fn page() -> impl Bundle {
                 cycler(|l| fl!(l, "label-render-scale"), Cycler::RenderScale),
                 cycler(|l| fl!(l, "label-anti-aliasing"), Cycler::AntiAliasing),
                 cycler(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
+                cycler(|l| fl!(l, "label-fog"), Cycler::Fog),
             ]),
         ),
         open_section(
@@ -76,6 +77,7 @@ fn show_values(
                 DepthOfFieldQuality::Blur => fl!(locale, "value-blur").into(),
                 DepthOfFieldQuality::Bokeh => fl!(locale, "value-bokeh").into(),
             },
+            Cycler::Fog => on_off(&locale, settings.fog).into(),
             Cycler::PauseFullscreen => on_off(&locale, settings.pause_when_fullscreen).into(),
             Cycler::PauseCovered => on_off(&locale, settings.pause_when_covered).into(),
             Cycler::PauseBattery => on_off(&locale, settings.pause_on_battery).into(),
@@ -113,6 +115,7 @@ fn on_click(
                 settings.depth_of_field = next;
             }
         }
+        Cycler::Fog => settings.fog ^= true,
         Cycler::PauseFullscreen => settings.pause_when_fullscreen ^= true,
         Cycler::PauseCovered => settings.pause_when_covered ^= true,
         Cycler::PauseBattery => settings.pause_on_battery ^= true,
