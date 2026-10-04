@@ -42,6 +42,11 @@ pub struct Manifest {
     pub post: Post,
     #[serde(default)]
     pub camera: Camera,
+    /// Settings for each exported camera, keyed by its name: the file name in
+    /// `cameras/` without its extension, or the camera's own name in a file
+    /// that holds several.
+    #[serde(default)]
+    pub cameras: BTreeMap<String, CameraEntry>,
     /// Makes the character look towards the mouse cursor. Without this
     /// section she never does.
     pub gaze: Option<Gaze>,
@@ -264,4 +269,39 @@ pub struct Camera {
     pub yaw_deg: Option<f32>,
     /// Angle above the horizon, in degrees.
     pub pitch_deg: Option<f32>,
+    /// Turns on depth of field for the orbit camera with this f-stop, as in
+    /// Blender: lower blurs more. The point it orbits stays sharp.
+    pub f_stop: Option<f32>,
+}
+
+/// One exported camera's lens, which glTF cannot carry. The Blender exporter
+/// fills it in from the camera's Depth of Field settings.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CameraEntry {
+    /// Turns on depth of field with this f-stop, as in Blender: lower blurs
+    /// more. Without it the whole image is sharp.
+    pub f_stop: Option<f32>,
+    /// What stays sharp, followed as it moves: the name of an object in the
+    /// camera's file, or of a bone or object on the character. Used instead of
+    /// `focus_distance` when found.
+    pub focus_object: Option<String>,
+    /// Distance in meters to what stays sharp, measured along the direction
+    /// the camera looks. Defaults to 10.
+    pub focus_distance: Option<f32>,
+    /// Height of the camera's sensor in millimeters. With the field of view it
+    /// sets the lens, and so how strong the blur is. Defaults to 18.66. To
+    /// match Blender with Sensor Fit on Auto and a landscape image: its sensor
+    /// size × image height ÷ image width.
+    pub sensor_height_mm: Option<f32>,
+}
+
+impl CameraEntry {
+    pub fn focus_distance(&self) -> f32 {
+        self.focus_distance.unwrap_or(10.0)
+    }
+
+    pub fn sensor_height_mm(&self) -> f32 {
+        self.sensor_height_mm.unwrap_or(18.66)
+    }
 }

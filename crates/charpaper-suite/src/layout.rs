@@ -12,6 +12,7 @@ use tracing::debug;
 use crate::document::read_document;
 use crate::error::SuiteError;
 use crate::manifest::Camera;
+use crate::manifest::CameraEntry;
 use crate::manifest::EnvironmentEntry;
 use crate::manifest::Gaze;
 use crate::manifest::MANIFEST_FILE;
@@ -85,6 +86,7 @@ pub struct ExportedCamera {
     pub file: PathBuf,
     pub node: Option<String>,
     pub clip: Option<String>,
+    pub settings: CameraEntry,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -179,6 +181,10 @@ impl Suite {
             .map(|(name, file)| Skin { name, file })
             .collect();
         let environments = resolve_environments(root, &manifest)?;
+        let cameras = resolve_cameras(root, &manifest)?;
+        if cameras.iter().any(|c| c.name == ORBIT_CAMERA) {
+            return Err(SuiteError::ReservedName { kind: "camera", name: ORBIT_CAMERA.into() });
+        }
 
         let default_skin = match manifest.character.default_skin {
             Some(name) if !skins.iter().any(|s| s.name == name) => {
@@ -207,11 +213,6 @@ impl Suite {
             }
             (None, None) => return Err(SuiteError::NoModel),
         };
-
-        let cameras = resolve_cameras(root)?;
-        if cameras.iter().any(|c| c.name == ORBIT_CAMERA) {
-            return Err(SuiteError::ReservedName { kind: "camera", name: ORBIT_CAMERA.into() });
-        }
 
         let default_camera = match manifest.camera.default.as_deref() {
             None | Some(ORBIT_CAMERA) => None,
@@ -290,18 +291,29 @@ fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationF
     Ok(files)
 }
 
-fn resolve_cameras(root: &Path) -> Result<Vec<ExportedCamera>, SuiteError> {
+fn resolve_cameras(root: &Path, manifest: &Manifest) -> Result<Vec<ExportedCamera>, SuiteError> {
     let mut cameras: Vec<ExportedCamera> = Vec::new();
     for (name, file) in named_files(root, CAMERAS_DIR, "camera")? {
         // An unreadable file stays one camera here; `inspect` reports what is wrong with it.
         let found = read_document(&root.join(&file)).map(|d| camera_nodes(&d)).unwrap_or_default();
         if found.len() <= 1 {
-            cameras.push(ExportedCamera { name, file, node: None, clip: None });
+            cameras.push(ExportedCamera {
+                name,
+                file,
+                node: None,
+                clip: None,
+                settings: CameraEntry::default(),
+            });
             continue;
         }
         for (node, clip) in found {
-            let camera =
-                ExportedCamera { name: node.clone(), file: file.clone(), node: Some(node), clip };
+            let camera = ExportedCamera {
+                name: node.clone(),
+                file: file.clone(),
+                node: Some(node),
+                clip,
+                settings: CameraEntry::default(),
+            };
             cameras.push(camera);
         }
     }
@@ -312,6 +324,13 @@ fn resolve_cameras(root: &Path) -> Result<Vec<ExportedCamera>, SuiteError> {
             name: pair[0].name.clone(),
             files: format!("{}, {}", pair[0].file.display(), pair[1].file.display()),
         });
+    }
+
+    for (name, settings) in &manifest.cameras {
+        let Some(camera) = cameras.iter_mut().find(|c| &c.name == name) else {
+            return Err(SuiteError::UnknownEntry { kind: "camera", name: name.clone() });
+        };
+        camera.settings = settings.clone();
     }
     Ok(cameras)
 }

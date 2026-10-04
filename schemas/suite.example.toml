@@ -39,6 +39,12 @@ focus = [0.0, 1.0, 0.0]
 radius = 2.0
 yaw_deg = 0.0
 pitch_deg = 10.0
+f_stop = 4.0
+
+[cameras.closeup]
+f_stop = 2.8
+focus_object = "Head"
+sensor_height_mm = 20.25
 
 [gaze]
 eyes = ["Eye.L", "Eye.R"]

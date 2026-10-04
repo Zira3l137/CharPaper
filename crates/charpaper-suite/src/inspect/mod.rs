@@ -5,6 +5,7 @@ mod gaze;
 mod skins;
 mod tree;
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::Path;
@@ -13,6 +14,8 @@ use std::path::PathBuf;
 use crate::document::read_document;
 use crate::inspect::animations::check_animations;
 use crate::inspect::cameras::check_camera_file;
+use crate::inspect::cameras::check_lens;
+use crate::inspect::cameras::check_orbit_lens;
 use crate::inspect::environments::check_environments;
 use crate::inspect::gaze::check_gaze;
 use crate::inspect::skins::check_skin_expressions;
@@ -127,11 +130,18 @@ pub fn inspect(suite: &Suite) -> Report {
         check_skin_expressions(&skin.file, gltf, &mut report);
     }
     let camera_files: BTreeSet<&Path> = suite.cameras.iter().map(|c| c.file.as_path()).collect();
-    for file in camera_files {
-        if let Some(gltf) = open(suite, file, &mut report) {
-            check_camera_file(file, &gltf, &mut report);
-        }
+    let camera_files: BTreeMap<&Path, Gltf> = camera_files
+        .into_iter()
+        .filter_map(|file| Some((file, open(suite, file, &mut report)?)))
+        .collect();
+    for (file, gltf) in &camera_files {
+        check_camera_file(file, gltf, &mut report);
     }
+    for camera in &suite.cameras {
+        let file = camera_files.get(camera.file.as_path());
+        check_lens(camera, file, &bones, &skins, &mut report);
+    }
+    check_orbit_lens(&suite.camera, &mut report);
 
     check_environments(suite, &mut report);
     if let Some(gaze) = &suite.gaze {

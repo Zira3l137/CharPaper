@@ -229,6 +229,7 @@ fn bad_manifests_are_rejected() {
         ("camera", "schema = 1\n[camera]\ndefault = \"drone\"", "default camera \"drone\""),
         ("env", "schema = 1\n[environment]\ndefault = \"moon\"", "default environment \"moon\""),
         ("env-entry", "schema = 1\n[environments.moon]\nshadows = false", "environment \"moon\""),
+        ("cam-entry", "schema = 1\n[cameras.drone]\nf_stop = 2.0", "camera \"drone\""),
         ("lighting", "schema = 1\n[lighting.sun]\nilluminance = 1.0", "not a valid suite manifest"),
         ("skins", "schema = 1\n[skins.casual]", "not a valid suite manifest"),
     ];
@@ -306,6 +307,46 @@ fn camera_files_hold_one_camera_and_at_most_one_clip() {
     assert_eq!(errors.len(), 2, "{errors:#?}");
     assert!(errors.iter().any(|e| e.contains("holds 2 clips (Dolly, Pan)")));
     assert!(errors.iter().any(|e| e.contains("wide.gltf: holds no camera")));
+}
+
+#[test]
+fn lens_settings_reach_their_camera_and_are_checked() {
+    let manifest = r#"schema = 1
+[camera]
+f_stop = 0.0
+[cameras.closeup]
+f_stop = 2.8
+focus_object = "Head"
+[cameras.wide]
+f_stop = 4.0
+focus_object = "Tripod"
+"#;
+    let fixture = Fixture::new("lens", manifest);
+    let suite = fixture.load().unwrap();
+    assert_eq!(suite.cameras[0].settings.focus_object.as_deref(), Some("Head"));
+    assert_eq!(suite.cameras[1].settings.focus_distance(), 10.0);
+
+    let errors = messages(&suite, Severity::Error);
+    assert_eq!(errors, ["error   suite.toml: camera: `f_stop` must be above 0"]);
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(
+        warnings.iter().any(|w| w.contains("\"Tripod\" is neither in cameras/wide.gltf")),
+        "{warnings:#?}"
+    );
+
+    let manifest = r#"schema = 1
+[cameras.closeup]
+focus_object = "Rig"
+f_stop = 2.0
+[cameras.wide]
+focus_distance = 3.0
+"#;
+    fixture.write("suite.toml", manifest);
+    let suite = fixture.load().unwrap();
+    assert!(messages(&suite, Severity::Error).is_empty());
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(!warnings.iter().any(|w| w.contains("focus_object")), "{warnings:#?}");
+    assert!(warnings.iter().any(|w| w.contains("\"wide\": depth of field is off")));
 }
 
 #[test]

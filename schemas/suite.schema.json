@@ -14,6 +14,13 @@
     "camera": {
       "$ref": "#/$defs/Camera"
     },
+    "cameras": {
+      "description": "Settings for each exported camera, keyed by its name: the file name in\n`cameras/` without its extension, or the camera's own name in a file\nthat holds several.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/CameraEntry"
+      }
+    },
     "character": {
       "$ref": "#/$defs/CharacterSection"
     },
@@ -72,6 +79,14 @@
             "null"
           ]
         },
+        "f_stop": {
+          "description": "Turns on depth of field for the orbit camera with this f-stop, as in\nBlender: lower blurs more. The point it orbits stays sharp.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
         "focus": {
           "description": "The point the orbit camera orbits around, as [x, y, z]. Y is up.",
           "type": [
@@ -103,6 +118,44 @@
         },
         "yaw_deg": {
           "description": "Angle around the vertical axis, in degrees.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CameraEntry": {
+      "description": "One exported camera's lens, which glTF cannot carry. The Blender exporter\nfills it in from the camera's Depth of Field settings.",
+      "type": "object",
+      "properties": {
+        "f_stop": {
+          "description": "Turns on depth of field with this f-stop, as in Blender: lower blurs\nmore. Without it the whole image is sharp.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "focus_distance": {
+          "description": "Distance in meters to what stays sharp, measured along the direction\nthe camera looks. Defaults to 10.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "focus_object": {
+          "description": "What stays sharp, followed as it moves: the name of an object in the\ncamera's file, or of a bone or object on the character. Used instead of\n`focus_distance` when found.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sensor_height_mm": {
+          "description": "Height of the camera's sensor in millimeters. With the field of view it\nsets the lens, and so how strong the blur is. Defaults to 18.66. To\nmatch Blender with Sensor Fit on Auto and a landscape image: its sensor\nsize × image height ÷ image width.",
           "type": [
             "number",
             "null"
