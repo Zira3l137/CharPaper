@@ -365,6 +365,32 @@ focus_distance = 3.0
 }
 
 #[test]
+fn an_animated_focus_object_is_not_idle() {
+    let manifest = "schema = 1\n[cameras.closeup]\nf_stop = 2.0\nfocus_object = \"Focus\"";
+    let fixture = Fixture::new("focus-moves", manifest);
+    let closeup = camera(&["Dolly"]).replace(
+        r#"{"name": "Lens", "camera": 0}"#,
+        r#"{"name": "Lens", "camera": 0}, {"name": "Focus"}"#,
+    );
+    let closeup =
+        closeup.replace(r#""scenes": [{"nodes": [0]}]"#, r#""scenes": [{"nodes": [0, 2]}]"#);
+    let closeup = closeup.replace(
+        r#"{"sampler": 0, "target": {"node": 0, "path": "translation"}}"#,
+        r#"{"sampler": 0, "target": {"node": 0, "path": "translation"}},
+           {"sampler": 0, "target": {"node": 2, "path": "translation"}}"#,
+    );
+    fixture.write("cameras/closeup.gltf", &closeup);
+    let suite = fixture.load().unwrap();
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(!warnings.iter().any(|w| w.contains("do not carry a camera")), "{warnings:#?}");
+
+    fixture.write("suite.toml", "schema = 1");
+    let suite = fixture.load().unwrap();
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("changes nothing: Focus")), "{warnings:#?}");
+}
+
+#[test]
 fn animation_pointer_clips_get_a_readable_error() {
     let fixture = Fixture::new("pointer", "schema = 1");
     let zoom = camera(&["Zoom"]).replace(

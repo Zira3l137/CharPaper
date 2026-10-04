@@ -93,7 +93,8 @@ pub(super) fn check_orbit_lens(orbit: &Camera, report: &mut Report) {
     }
 }
 
-pub(super) fn check_camera_file(path: &Path, gltf: &Gltf, report: &mut Report) {
+// `focus` names the focus objects of this file's cameras, which may move as well.
+pub(super) fn check_camera_file(path: &Path, gltf: &Gltf, focus: &[&str], report: &mut Report) {
     let path = Some(path);
     let cameras: Vec<usize> =
         gltf.doc.nodes().filter(|n| n.camera().is_some()).map(|n| n.index()).collect();
@@ -152,7 +153,9 @@ pub(super) fn check_camera_file(path: &Path, gltf: &Gltf, report: &mut Report) {
         }
     }
 
-    let moving: HashSet<usize> = cameras.iter().flat_map(|&c| carriers(c)).collect();
+    let focused = (0..gltf.names.len()).filter(|&n| focus.contains(&gltf.names[n].as_str()));
+    let moving: HashSet<usize> =
+        cameras.iter().copied().chain(focused).flat_map(carriers).collect();
     let idle: BTreeSet<&str> = gltf
         .doc
         .animations()

@@ -135,7 +135,13 @@ pub fn inspect(suite: &Suite) -> Report {
         .filter_map(|file| Some((file, open(suite, file, &mut report)?)))
         .collect();
     for (file, gltf) in &camera_files {
-        check_camera_file(file, gltf, &mut report);
+        let focus: Vec<&str> = suite
+            .cameras
+            .iter()
+            .filter(|c| c.file == *file)
+            .filter_map(|c| c.settings.focus_object.as_deref())
+            .collect();
+        check_camera_file(file, gltf, &focus, &mut report);
     }
     for camera in &suite.cameras {
         let file = camera_files.get(camera.file.as_path());
