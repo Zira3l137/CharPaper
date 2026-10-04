@@ -18,6 +18,10 @@ class Isolation:
         self.scene = bpy.data.scenes.new("charpaper~" + uuid.uuid4().hex[:8])
         render, theirs = self.scene.render, source.render
         render.fps, render.fps_base = theirs.fps, theirs.fps_base
+        # The glTF exporter takes a camera's aspect ratio, and so its vertical field of view,
+        # from the scene's resolution.
+        render.resolution_x, render.resolution_y = theirs.resolution_x, theirs.resolution_y
+        render.pixel_aspect_x, render.pixel_aspect_y = theirs.pixel_aspect_x, theirs.pixel_aspect_y
         self.scene.frame_start, self.scene.frame_end = source.frame_start, source.frame_end
         self.scene.frame_current = source.frame_current
         self.copies = {}
