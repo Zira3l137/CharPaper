@@ -29,7 +29,7 @@ impl Plugin for FogPlugin {
         app.add_observer(spawn_fog).add_systems(
             Update,
             light_fog
-                .run_if(look_needs_applying.or(resource_changed::<RenderSettings>))
+                .run_if(look_needs_applying.or_eager(resource_changed::<RenderSettings>))
                 .in_set(SceneSet::Run)
                 .after(spawn_environment_scenes),
         );
