@@ -40,6 +40,15 @@ exposure = 0.0
 bloom = 0.15
 chromatic_aberration = 0.005
 
+[post.vignette]
+intensity = 0.4
+size = 1.0
+falloff = 2.0
+
+[post.grain]
+intensity = 0.04
+size = 1.5
+
 [camera]
 default = "closeup"
 focus = [0.0, 1.0, 0.0]

@@ -42,6 +42,7 @@ pub use manifest::CameraEntry;
 pub use manifest::EnvironmentEntry;
 pub use manifest::Fog;
 pub use manifest::Gaze;
+pub use manifest::Grain;
 pub use manifest::GazeShapeKeys;
 pub use manifest::MANIFEST_FILE;
 pub use manifest::Manifest;
@@ -49,6 +50,7 @@ pub use manifest::PlayMode;
 pub use manifest::Post;
 pub use manifest::SCHEMA_VERSION;
 pub use manifest::Tonemapping;
+pub use manifest::Vignette;
 pub use shape_keys::MeshShapeKeys;
 pub use shape_keys::mesh_shape_keys;
 

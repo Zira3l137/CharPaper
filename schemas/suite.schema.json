@@ -454,6 +454,36 @@
       },
       "additionalProperties": false
     },
+    "Grain": {
+      "description": "Film grain: fine noise over the finished image that changes every frame.",
+      "type": "object",
+      "properties": {
+        "colored": {
+          "description": "Grain of separate colors, like color film, instead of gray. Defaults to\nfalse.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "intensity": {
+          "description": "How strong the grain is: 0 is off, 0.04 subtle, 0.1 heavy. Defaults to\n0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "size": {
+          "description": "The size of a grain in screen pixels, whatever the render scale.\nDefaults to 1.5.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
+    },
     "PlayMode": {
       "description": "How the animation plays. Defaults to `loop`.",
       "oneOf": [
@@ -502,6 +532,9 @@
           ],
           "format": "float"
         },
+        "grain": {
+          "$ref": "#/$defs/Grain"
+        },
         "tonemapping": {
           "anyOf": [
             {
@@ -511,6 +544,9 @@
               "type": "null"
             }
           ]
+        },
+        "vignette": {
+          "$ref": "#/$defs/Vignette"
         }
       },
       "additionalProperties": false
@@ -536,6 +572,58 @@
           "const": "blender_filmic"
         }
       ]
+    },
+    "Vignette": {
+      "description": "Darkens the edges of the image, the way a lens does towards its rim.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "The color the edges fade to, as [r, g, b] from 0 to 1, the way a color\npicker shows it. Defaults to black.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "falloff": {
+          "description": "How far in from the edges the darkening reaches: higher spreads it\ntowards the middle. Defaults to 2.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "intensity": {
+          "description": "How dark the edges get, from 0 (off) to 1. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "roundness": {
+          "description": "1 is a circle; above stretches it tall, below wide. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "size": {
+          "description": "The size of the clear middle: higher pushes the darkening out towards\nthe corners, lower closes it in. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

@@ -37,6 +37,8 @@ fn edits_keep_the_authors_file_and_back_it_up_once() {
     let mut look = Look::default();
     look.post.bloom = Some(0.3);
     look.post.tonemapping = Some(Tonemapping::Agx);
+    look.post.vignette.intensity = Some(0.4);
+    look.post.grain.size = Some(2.0);
     look.environments
         .insert("room".into(), EnvironmentEntry { shadows: Some(false), ..Default::default() });
     look.environments
@@ -49,6 +51,8 @@ fn edits_keep_the_authors_file_and_back_it_up_once() {
     assert!(text.contains("tonemapping = \"agx\""), "{text}");
     assert!(text.contains("[environments.room]\nbrightness = 1000\nshadows = false"), "{text}");
     assert!(text.contains("[environments.field]\nexposure = -2.5"), "{text}");
+    assert!(text.contains("[post.vignette]\nintensity = 0.4"), "{text}");
+    assert!(text.contains("[post.grain]\nsize = 2.0"), "{text}");
     assert!(!text.contains("[environments]\n"), "{text}");
     assert_eq!(fs::read_to_string(root.join("suite.toml.bak")).unwrap(), AUTHORED);
     toml::from_str::<charpaper_suite::Manifest>(&text).unwrap();

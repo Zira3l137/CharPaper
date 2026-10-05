@@ -239,6 +239,80 @@ pub struct Post {
     /// Color fringes that grow towards the edges of the image, as a fraction
     /// of its size. 0.0 turns them off; 0.005 is subtle.
     pub chromatic_aberration: Option<f32>,
+    #[serde(default)]
+    pub vignette: Vignette,
+    #[serde(default)]
+    pub grain: Grain,
+}
+
+/// Darkens the edges of the image, the way a lens does towards its rim.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Vignette {
+    /// How dark the edges get, from 0 (off) to 1. Defaults to 0.
+    pub intensity: Option<f32>,
+    /// The size of the clear middle: higher pushes the darkening out towards
+    /// the corners, lower closes it in. Defaults to 1.
+    pub size: Option<f32>,
+    /// How far in from the edges the darkening reaches: higher spreads it
+    /// towards the middle. Defaults to 2.
+    pub falloff: Option<f32>,
+    /// 1 is a circle; above stretches it tall, below wide. Defaults to 1.
+    pub roundness: Option<f32>,
+    /// The color the edges fade to, as [r, g, b] from 0 to 1, the way a color
+    /// picker shows it. Defaults to black.
+    pub color: Option<[f32; 3]>,
+}
+
+impl Vignette {
+    pub fn intensity(&self) -> f32 {
+        self.intensity.unwrap_or(0.0).clamp(0.0, 1.0)
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size.unwrap_or(1.0).max(0.01)
+    }
+
+    pub fn falloff(&self) -> f32 {
+        self.falloff.unwrap_or(2.0).max(0.01)
+    }
+
+    pub fn roundness(&self) -> f32 {
+        self.roundness.unwrap_or(1.0).max(0.01)
+    }
+
+    pub fn color(&self) -> [f32; 3] {
+        self.color.unwrap_or([0.0; 3])
+    }
+}
+
+/// Film grain: fine noise over the finished image that changes every frame.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Grain {
+    /// How strong the grain is: 0 is off, 0.04 subtle, 0.1 heavy. Defaults to
+    /// 0.
+    pub intensity: Option<f32>,
+    /// The size of a grain in screen pixels, whatever the render scale.
+    /// Defaults to 1.5.
+    pub size: Option<f32>,
+    /// Grain of separate colors, like color film, instead of gray. Defaults to
+    /// false.
+    pub colored: Option<bool>,
+}
+
+impl Grain {
+    pub fn intensity(&self) -> f32 {
+        self.intensity.unwrap_or(0.0).max(0.0)
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size.unwrap_or(1.5).max(1.0)
+    }
+
+    pub fn colored(&self) -> bool {
+        self.colored.unwrap_or(false)
+    }
 }
 
 // Mirrors Bevy's Tonemapping so this crate doesn't need Bevy.
