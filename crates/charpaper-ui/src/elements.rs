@@ -57,6 +57,8 @@ pub(crate) enum Cycler {
     Tint,
     Saturation,
     Contrast,
+    Lut,
+    LutStrength,
     FpsLimit,
     RenderScale,
     AntiAliasing,

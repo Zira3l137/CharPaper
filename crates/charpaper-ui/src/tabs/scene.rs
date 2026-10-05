@@ -5,6 +5,7 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::LookBackup;
 use charpaper_scene::Resolved;
 use charpaper_scene::RestoreLook;
+use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
 use i18n_embed_fl::fl;
 
@@ -100,6 +101,8 @@ pub(crate) fn page() -> impl Bundle {
                 cycler(|l| fl!(l, "label-tint"), Cycler::Tint),
                 cycler(|l| fl!(l, "label-saturation"), Cycler::Saturation),
                 cycler(|l| fl!(l, "label-contrast"), Cycler::Contrast),
+                cycler(|l| fl!(l, "label-lut"), Cycler::Lut),
+                cycler(|l| fl!(l, "label-lut-strength"), Cycler::LutStrength),
             ]),
         ),
         section(
@@ -152,6 +155,9 @@ fn show_rows(
     show_container(&mut nodes, UiContainer::Row(Cycler::Environment), several);
     show_container(&mut nodes, UiContainer::Row(Cycler::Brightness), lit);
     show_container(&mut nodes, UiContainer::Row(Cycler::Shadows), scene);
+    let luts = !suite.luts.is_empty();
+    show_container(&mut nodes, UiContainer::Row(Cycler::Lut), luts);
+    show_container(&mut nodes, UiContainer::Row(Cycler::LutStrength), luts);
 }
 
 fn show_restore(backup: Res<LookBackup>, buttons: Query<(&UiButton, &mut Node)>) {
@@ -196,6 +202,11 @@ fn show_values(
             Cycler::Tint => format!("{:+.2}", resolved.tint),
             Cycler::Saturation => format!("{:.2}", resolved.saturation),
             Cycler::Contrast => format!("{:.2}", resolved.contrast),
+            Cycler::Lut => match look.post.lut.name() {
+                Some(name) => name.to_string(),
+                None => on_off(&locale, false).into(),
+            },
+            Cycler::LutStrength => format!("{:.2}", resolved.lut_strength),
             _ => continue,
         };
     }
@@ -237,6 +248,17 @@ fn on_click(
                 state.environment = next;
             }
         }
+        Cycler::Lut => {
+            if let Some(mut look) = look {
+                let options: Vec<Option<String>> = std::iter::once(None)
+                    .chain(suite.luts.iter().map(|l| Some(l.name.clone())))
+                    .collect();
+                let current = look.post.lut.name().map(str::to_string);
+                if let Some(next) = step(&options, &current, forward) {
+                    look.post.lut.name = Some(next.unwrap_or_else(|| NO_LUT.to_string()));
+                }
+            }
+        }
         Cycler::Brightness
         | Cycler::Shadows
         | Cycler::Tonemapping
@@ -250,7 +272,8 @@ fn on_click(
         | Cycler::Warmth
         | Cycler::Tint
         | Cycler::Saturation
-        | Cycler::Contrast => {
+        | Cycler::Contrast
+        | Cycler::LutStrength => {
             if let Some(mut look) = look {
                 edit_look(&mut look, state.environment.as_deref(), cycler, forward);
             }
@@ -312,6 +335,10 @@ fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, f
             let (min, max) = CONTRASTS;
             let contrast = (resolved.contrast + sign * GRADING_STEP).clamp(min, max);
             look.post.grading.contrast = Some(round(contrast, 100.0));
+        }
+        Cycler::LutStrength => {
+            let strength = (resolved.lut_strength + sign * GRADING_STEP).clamp(0.0, 1.0);
+            look.post.lut.strength = Some(round(strength, 100.0));
         }
         Cycler::Exposure => {
             let exposure =
