@@ -1,15 +1,23 @@
-// The scene image as the display camera shows it, with film grain added. The grain goes on in
-// a roughly perceptual space and mostly in the midtones, as on film; added to linear light it
-// would lift the shadows into digital noise.
+// The scene image as the display camera shows it: graded by the LUT, then with film grain
+// added. LUTs from grading apps expect display-ready sRGB values, so that is what they get.
+// The grain goes on in a roughly perceptual space and mostly in the midtones, as on film;
+// added to linear light it would lift the shadows into digital noise.
 
 #import bevy_render::globals::Globals
 #import bevy_ui::ui_vertex_output::UiVertexOutput
 
+struct Settings {
+    // Intensity, grain size in pixels, 1 for colored grain, unused.
+    grain: vec4<f32>,
+    // 0 while there is no LUT.
+    lut_strength: f32,
+}
+
 @group(0) @binding(1) var<uniform> globals: Globals;
 @group(1) @binding(0) var scene_texture: texture_2d<f32>;
 @group(1) @binding(1) var scene_sampler: sampler;
-// Intensity, grain size in pixels, 1 for colored grain, unused.
-@group(1) @binding(2) var<uniform> grain: vec4<f32>;
+@group(1) @binding(2) var<uniform> settings: Settings;
+@group(1) @binding(3) var lut: texture_3d<f32>;
 
 const GAMMA: f32 = 2.2;
 
@@ -40,9 +48,48 @@ fn noise(pixel: vec2<f32>, size: f32, layer: u32) -> f32 {
     return mix(mix(a, b, t.x), mix(c, d, t.x), t.y) - 0.5;
 }
 
+fn to_srgb(linear: vec3<f32>) -> vec3<f32> {
+    let low = linear * 12.92;
+    let high = 1.055 * pow(linear, vec3(1.0 / 2.4)) - 0.055;
+    return select(high, low, linear <= vec3(0.0031308));
+}
+
+fn to_linear(srgb: vec3<f32>) -> vec3<f32> {
+    let low = srgb / 12.92;
+    let high = pow((srgb + 0.055) / 1.055, vec3(2.4));
+    return select(high, low, srgb <= vec3(0.04045));
+}
+
+// Trilinear between the eight entries around the color.
+fn look_up(color: vec3<f32>) -> vec3<f32> {
+    let last = i32(textureDimensions(lut).x) - 1;
+    let p = clamp(color, vec3(0.0), vec3(1.0)) * f32(last);
+    let low = min(vec3<i32>(floor(p)), vec3(last));
+    let high = min(low + 1, vec3(last));
+    let t = p - vec3<f32>(low);
+    let c000 = textureLoad(lut, vec3(low.x, low.y, low.z), 0).rgb;
+    let c100 = textureLoad(lut, vec3(high.x, low.y, low.z), 0).rgb;
+    let c010 = textureLoad(lut, vec3(low.x, high.y, low.z), 0).rgb;
+    let c110 = textureLoad(lut, vec3(high.x, high.y, low.z), 0).rgb;
+    let c001 = textureLoad(lut, vec3(low.x, low.y, high.z), 0).rgb;
+    let c101 = textureLoad(lut, vec3(high.x, low.y, high.z), 0).rgb;
+    let c011 = textureLoad(lut, vec3(low.x, high.y, high.z), 0).rgb;
+    let c111 = textureLoad(lut, vec3(high.x, high.y, high.z), 0).rgb;
+    let near = mix(mix(c000, c100, t.x), mix(c010, c110, t.x), t.y);
+    let far = mix(mix(c001, c101, t.x), mix(c011, c111, t.x), t.y);
+    return mix(near, far, t.z);
+}
+
 @fragment
 fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(scene_texture, scene_sampler, in.uv);
+    var color = textureSample(scene_texture, scene_sampler, in.uv);
+    if (settings.lut_strength > 0.0) {
+        let srgb = to_srgb(color.rgb);
+        let graded = mix(srgb, look_up(srgb), settings.lut_strength);
+        color = vec4(to_linear(clamp(graded, vec3(0.0), vec3(1.0))), color.a);
+    }
+
+    let grain = settings.grain;
     let intensity = grain.x;
     if (intensity <= 0.0) {
         return color;

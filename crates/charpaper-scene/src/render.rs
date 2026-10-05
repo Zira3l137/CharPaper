@@ -9,6 +9,7 @@ use bevy::render::camera::MipBias;
 use bevy::render::camera::TemporalJitter;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::render::render_resource::Extent3d;
+use bevy::render::render_resource::ShaderType;
 use bevy::render::render_resource::TextureFormat;
 use bevy::shader::ShaderRef;
 use bevy::window::PrimaryWindow;
@@ -171,16 +172,27 @@ pub(crate) struct SceneTarget {
     pub material: Handle<SceneImage>,
 }
 
-// Shows the scene image with film grain on top. Grain is added here, after the 3D camera,
-// so it stays one screen pixel fine at any render scale and TAA can't smear it.
+// Shows the scene image graded by the LUT, then with film grain on top. Both happen here,
+// after the 3D camera, so grain stays one screen pixel fine at any render scale and TAA
+// can't smear it. The LUT is read without a sampler: the shader blends its entries itself,
+// which lets it be 32-bit float, a format not every GPU can filter.
 #[derive(Asset, TypePath, AsBindGroup, Clone, Debug)]
 pub(crate) struct SceneImage {
     #[texture(0)]
     #[sampler(1)]
     image: Handle<Image>,
-    // Intensity, grain size in pixels, 1 for colored grain, unused.
     #[uniform(2)]
+    pub settings: SceneImageSettings,
+    #[texture(3, dimension = "3d", sample_type = "float", filterable = false)]
+    pub lut: Option<Handle<Image>>,
+}
+
+#[derive(ShaderType, Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct SceneImageSettings {
+    // Intensity, grain size in pixels, 1 for colored grain, unused.
     pub grain: Vec4,
+    // 0 while there is no LUT.
+    pub lut_strength: f32,
 }
 
 impl UiMaterial for SceneImage {
@@ -201,7 +213,8 @@ pub(crate) fn scene_target(
     let size = window.map_or(UVec2::ONE, |w| scaled(w, settings));
     let image =
         images.add(Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None));
-    let material = materials.add(SceneImage { image: image.clone(), grain: Vec4::ZERO });
+    let material =
+        materials.add(SceneImage { image: image.clone(), settings: default(), lut: None });
     commands.insert_resource(SceneTarget { image: image.clone(), material: material.clone() });
 
     commands.spawn((

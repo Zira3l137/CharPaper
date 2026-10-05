@@ -68,6 +68,7 @@ pub struct Resolved {
     pub tint: f32,
     pub saturation: f32,
     pub contrast: f32,
+    pub lut_strength: f32,
     pub brightness: f32,
     pub shadows: bool,
     pub exposure: f32,
@@ -91,6 +92,7 @@ impl Resolved {
             tint: look.post.grading.tint(),
             saturation: look.post.grading.saturation(),
             contrast: look.post.grading.contrast(),
+            lut_strength: look.post.lut.strength(),
             brightness: entry.brightness.unwrap_or(DEFAULT_BRIGHTNESS),
             shadows: entry.shadows.unwrap_or(DEFAULT_SHADOWS),
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
@@ -213,10 +215,10 @@ pub(crate) fn apply_grain(
     let colored = if grain.colored() { 1.0 } else { 0.0 };
     let wanted = Vec4::new(grain.intensity(), grain.size(), colored, 0.0);
     // Only on a real change: every change rebuilds the material on the GPU.
-    if materials.get(&target.material).is_some_and(|m| m.grain != wanted)
+    if materials.get(&target.material).is_some_and(|m| m.settings.grain != wanted)
         && let Some(mut material) = materials.get_mut(&target.material)
     {
-        material.grain = wanted;
+        material.settings.grain = wanted;
     }
 }
 

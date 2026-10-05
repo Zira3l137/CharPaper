@@ -6,6 +6,7 @@ mod environment;
 mod fog;
 mod gaze;
 mod look;
+mod lut;
 mod render;
 mod state;
 mod suite;
@@ -73,6 +74,7 @@ impl Plugin for ScenePlugin {
                 environment::EnvironmentPlugin,
                 fog::FogPlugin,
                 look::LookPlugin,
+                lut::LutPlugin,
                 render::RenderPlugin,
                 gaze::GazePlugin,
             ));
