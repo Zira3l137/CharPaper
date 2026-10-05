@@ -17,6 +17,7 @@ use crate::manifest::EnvironmentEntry;
 use crate::manifest::Gaze;
 use crate::manifest::MANIFEST_FILE;
 use crate::manifest::Manifest;
+use crate::manifest::NO_LUT;
 use crate::manifest::PlayMode;
 use crate::manifest::Post;
 use crate::manifest::SCHEMA_VERSION;
@@ -24,6 +25,7 @@ use crate::manifest::SCHEMA_VERSION;
 const ANIMATIONS_DIR: &str = "animations";
 const SKINS_DIR: &str = "skins";
 const CAMERAS_DIR: &str = "cameras";
+const LUTS_DIR: &str = "luts";
 
 pub const ORBIT_CAMERA: &str = "orbit";
 const ENVIRONMENT_DIR: &str = "environment";
@@ -48,6 +50,7 @@ pub struct Suite {
     pub default_camera: Option<String>,
     pub environments: Vec<Environment>,
     pub default_environment: Option<String>,
+    pub luts: Vec<LutFile>,
     pub post: Post,
     pub camera: Camera,
     pub gaze: Option<Gaze>,
@@ -76,6 +79,12 @@ pub struct ClipBinding {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Skin {
+    pub name: String,
+    pub file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LutFile {
     pub name: String,
     pub file: PathBuf,
 }
@@ -222,6 +231,18 @@ impl Suite {
             Some(name) => Some(name.to_string()),
         };
 
+        let luts: Vec<LutFile> = files_in(root, LUTS_DIR)?
+            .into_iter()
+            .filter(|p| has_extension(p, &["cube"]))
+            .map(|file| {
+                let name = file.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+                LutFile { name, file }
+            })
+            .collect();
+        if luts.iter().any(|l| l.name == NO_LUT) {
+            return Err(SuiteError::ReservedName { kind: "LUT", name: NO_LUT.into() });
+        }
+
         let default_environment = match &manifest.environment.default {
             Some(name) if !environments.iter().any(|e| &e.name == name) => {
                 return Err(SuiteError::UnknownDefault { kind: "environment", name: name.clone() });
@@ -243,6 +264,7 @@ impl Suite {
             default_camera,
             environments,
             default_environment,
+            luts,
             post: manifest.post,
             camera: manifest.camera,
             gaze: manifest.gaze,

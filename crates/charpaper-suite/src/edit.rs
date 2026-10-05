@@ -45,6 +45,9 @@ pub fn save_look(root: &Path, look: &Look) -> Result<bool, SuiteError> {
     ] {
         changed |= set(&mut doc, &["post", "grading"], key, value.map(float));
     }
+    let lut = &post.lut;
+    changed |= set(&mut doc, &["post", "lut"], "name", lut.name.as_deref().map(Value::from));
+    changed |= set(&mut doc, &["post", "lut"], "strength", lut.strength.map(float));
     for (name, entry) in &look.environments {
         let table = ["environments", name.as_str()];
         changed |= set(&mut doc, &table, "brightness", entry.brightness.map(float));

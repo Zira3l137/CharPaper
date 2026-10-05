@@ -40,6 +40,7 @@ fn edits_keep_the_authors_file_and_back_it_up_once() {
     look.post.vignette.intensity = Some(0.4);
     look.post.grain.size = Some(2.0);
     look.post.grading.warmth = Some(0.25);
+    look.post.lut.name = Some("teal".into());
     look.environments
         .insert("room".into(), EnvironmentEntry { shadows: Some(false), ..Default::default() });
     look.environments
@@ -55,6 +56,7 @@ fn edits_keep_the_authors_file_and_back_it_up_once() {
     assert!(text.contains("[post.vignette]\nintensity = 0.4"), "{text}");
     assert!(text.contains("[post.grain]\nsize = 2.0"), "{text}");
     assert!(text.contains("[post.grading]\nwarmth = 0.25"), "{text}");
+    assert!(text.contains("[post.lut]\nname = \"teal\""), "{text}");
     assert!(!text.contains("[environments]\n"), "{text}");
     assert_eq!(fs::read_to_string(root.join("suite.toml.bak")).unwrap(), AUTHORED);
     toml::from_str::<charpaper_suite::Manifest>(&text).unwrap();

@@ -245,6 +245,34 @@ pub struct Post {
     pub grain: Grain,
     #[serde(default)]
     pub grading: Grading,
+    #[serde(default)]
+    pub lut: Lut,
+}
+
+/// A color lookup table from `luts/`: the .cube files grading apps like
+/// Resolve and Photoshop export. It grades the finished image, after
+/// everything else but the grain.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Lut {
+    /// The file in `luts/` without its extension, or `none`. Defaults to
+    /// none.
+    pub name: Option<String>,
+    /// How much of the LUT shows, from 0 to 1. Defaults to 1.
+    pub strength: Option<f32>,
+}
+
+/// The `[post.lut]` name that picks no LUT.
+pub const NO_LUT: &str = "none";
+
+impl Lut {
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref().filter(|&name| name != NO_LUT)
+    }
+
+    pub fn strength(&self) -> f32 {
+        self.strength.unwrap_or(1.0).clamp(0.0, 1.0)
+    }
 }
 
 /// Darkens the edges of the image, the way a lens does towards its rim.

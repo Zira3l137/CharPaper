@@ -1,6 +1,7 @@
 // Bevy-free: suites are plain data, so this builds fast, is easy to test, and powers
 // `--check-suite` without starting the engine.
 
+mod cube;
 mod document;
 mod edit;
 mod error;
@@ -12,6 +13,9 @@ mod layout;
 mod manifest;
 mod shape_keys;
 
+pub use cube::CubeLut;
+pub use cube::MAX_LUT_SIZE;
+pub use cube::parse_cube;
 pub use edit::BACKUP_FILE;
 pub use edit::has_backup;
 pub use edit::restore_look;
@@ -32,6 +36,7 @@ pub use layout::DIFFUSE_MAP;
 pub use layout::Environment;
 pub use layout::ExportedCamera;
 pub use layout::Look;
+pub use layout::LutFile;
 pub use layout::ORBIT_CAMERA;
 pub use layout::SKYBOX_MAP;
 pub use layout::SPECULAR_MAP;
@@ -47,8 +52,10 @@ pub use manifest::GazeShapeKeys;
 pub use manifest::Grading;
 pub use manifest::GradingSection;
 pub use manifest::Grain;
+pub use manifest::Lut;
 pub use manifest::MANIFEST_FILE;
 pub use manifest::Manifest;
+pub use manifest::NO_LUT;
 pub use manifest::PlayMode;
 pub use manifest::Post;
 pub use manifest::SCHEMA_VERSION;

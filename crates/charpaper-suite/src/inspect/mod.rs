@@ -2,6 +2,7 @@ mod animations;
 mod cameras;
 mod environments;
 mod gaze;
+mod luts;
 mod skins;
 mod tree;
 
@@ -18,6 +19,7 @@ use crate::inspect::cameras::check_lens;
 use crate::inspect::cameras::check_orbit_lens;
 use crate::inspect::environments::check_environments;
 use crate::inspect::gaze::check_gaze;
+use crate::inspect::luts::check_luts;
 use crate::inspect::skins::check_skin_expressions;
 use crate::inspect::skins::check_skin_file;
 use crate::inspect::skins::model_bones;
@@ -153,6 +155,7 @@ pub fn inspect(suite: &Suite) -> Report {
     check_orbit_lens(&suite.camera, &mut report);
 
     check_environments(suite, &mut report);
+    check_luts(suite, &mut report);
     if suite.post.tonemapping == Some(Tonemapping::None) && suite.post.grading != Grading::default()
     {
         let message = "`post.grading` does nothing while `tonemapping` is \"none\": Bevy grades \

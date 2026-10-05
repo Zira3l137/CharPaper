@@ -56,6 +56,10 @@ saturation = 1.1
 [post.grading.shadows]
 lift = 0.01
 
+[post.lut]
+name = "teal-orange"
+strength = 0.8
+
 [camera]
 default = "closeup"
 focus = [0.0, 1.0, 0.0]

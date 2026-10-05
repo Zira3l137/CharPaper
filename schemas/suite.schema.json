@@ -600,6 +600,28 @@
       },
       "additionalProperties": false
     },
+    "Lut": {
+      "description": "A color lookup table from `luts/`: the .cube files grading apps like\nResolve and Photoshop export. It grades the finished image, after\neverything else but the grain.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The file in `luts/` without its extension, or `none`. Defaults to\nnone.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "strength": {
+          "description": "How much of the LUT shows, from 0 to 1. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
+    },
     "PlayMode": {
       "description": "How the animation plays. Defaults to `loop`.",
       "oneOf": [
@@ -653,6 +675,9 @@
         },
         "grain": {
           "$ref": "#/$defs/Grain"
+        },
+        "lut": {
+          "$ref": "#/$defs/Lut"
         },
         "tonemapping": {
           "anyOf": [

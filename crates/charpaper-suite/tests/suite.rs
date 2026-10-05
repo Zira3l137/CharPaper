@@ -403,6 +403,33 @@ fn grading_without_tonemapping_is_flagged() {
 }
 
 #[test]
+fn luts_are_found_and_the_chosen_one_is_checked() {
+    let fixture = Fixture::new("luts", "schema = 1\n[post.lut]\nname = \"teal\"");
+    fixture.write("luts/teal.cube", "LUT_3D_SIZE 2\n0 0 0\n");
+    fixture.write("luts/warm.cube", "LUT_1D_SIZE 2\n0 0 0\n1 1 1\n");
+    fixture.write("luts/readme.txt", "not a LUT");
+    let suite = fixture.load().unwrap();
+    let names: Vec<&str> = suite.luts.iter().map(|l| l.name.as_str()).collect();
+    assert_eq!(names, ["teal", "warm"]);
+
+    let errors = messages(&suite, Severity::Error);
+    assert!(errors.iter().any(|e| e.contains("luts/teal.cube: has 1 entries")), "{errors:#?}");
+
+    fixture.write("suite.toml", "schema = 1\n[post.lut]\nname = \"cold\"");
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("teal.cube: has 1 entries")), "{warnings:#?}");
+    assert!(warnings.iter().any(|w| w.contains("names \"cold\", which is not in `luts/`")));
+
+    fixture.write("suite.toml", "schema = 1\n[post.lut]\nname = \"none\"");
+    let suite = fixture.load().unwrap();
+    assert_eq!(suite.post.lut.name(), None);
+    assert!(!messages(&suite, Severity::Warning).iter().any(|w| w.contains("post.lut")));
+
+    fixture.write("luts/none.cube", "LUT_1D_SIZE 2\n0 0 0\n1 1 1\n");
+    assert!(fixture.load().unwrap_err().to_string().contains("LUT \"none\" uses a reserved name"));
+}
+
+#[test]
 fn animation_pointer_clips_get_a_readable_error() {
     let fixture = Fixture::new("pointer", "schema = 1");
     let zoom = camera(&["Zoom"]).replace(
