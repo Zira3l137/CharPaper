@@ -35,6 +35,9 @@ const GRAIN_STEP: f32 = 0.01;
 const GRAIN_LIMIT: f32 = 0.2;
 const GRAIN_SIZE_STEP: f32 = 0.25;
 const GRAIN_SIZES: (f32, f32) = (1.0, 4.0);
+const GRADING_STEP: f32 = 0.05;
+const SATURATIONS: (f32, f32) = (0.0, 2.0);
+const CONTRASTS: (f32, f32) = (0.5, 1.5);
 
 // Which camera and environment, and how the picture is finished. Look edits go to
 // ActiveLook, which the app writes back into the suite's suite.toml.
@@ -90,6 +93,16 @@ pub(crate) fn page() -> impl Bundle {
             ]),
         ),
         section(
+            |l| fl!(l, "section-color"),
+            Section::Color,
+            rows(children![
+                cycler(|l| fl!(l, "label-warmth"), Cycler::Warmth),
+                cycler(|l| fl!(l, "label-tint"), Cycler::Tint),
+                cycler(|l| fl!(l, "label-saturation"), Cycler::Saturation),
+                cycler(|l| fl!(l, "label-contrast"), Cycler::Contrast),
+            ]),
+        ),
+        section(
             |l| fl!(l, "section-film"),
             Section::Film,
             rows(children![
@@ -111,7 +124,7 @@ fn show_tab(suite: Res<ActiveSuite>, nodes: Query<(&mut Node, AnyOf<(&UiContaine
         let shown = match element {
             (Some(UiContainer::Section(Section::Camera)), _) => !suite.cameras.is_empty(),
             (Some(UiContainer::Section(Section::Environment)), _) => !suite.environments.is_empty(),
-            (Some(UiContainer::Section(Section::Image | Section::Film)), _)
+            (Some(UiContainer::Section(Section::Image | Section::Color | Section::Film)), _)
             | (_, Some(UiButton::Tab(Tab::Scene))) => true,
             _ => continue,
         };
@@ -179,6 +192,10 @@ fn show_values(
             Cycler::Grain if resolved.grain <= 0.0 => on_off(&locale, false).into(),
             Cycler::Grain => format!("{:.2}", resolved.grain),
             Cycler::GrainSize => format!("{:.2} px", resolved.grain_size),
+            Cycler::Warmth => format!("{:+.2}", resolved.warmth),
+            Cycler::Tint => format!("{:+.2}", resolved.tint),
+            Cycler::Saturation => format!("{:.2}", resolved.saturation),
+            Cycler::Contrast => format!("{:.2}", resolved.contrast),
             _ => continue,
         };
     }
@@ -229,7 +246,11 @@ fn on_click(
         | Cycler::Vignette
         | Cycler::VignetteSize
         | Cycler::Grain
-        | Cycler::GrainSize => {
+        | Cycler::GrainSize
+        | Cycler::Warmth
+        | Cycler::Tint
+        | Cycler::Saturation
+        | Cycler::Contrast => {
             if let Some(mut look) = look {
                 edit_look(&mut look, state.environment.as_deref(), cycler, forward);
             }
@@ -273,6 +294,24 @@ fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, f
             let (min, max) = GRAIN_SIZES;
             let size = (resolved.grain_size + sign * GRAIN_SIZE_STEP).clamp(min, max);
             look.post.grain.size = Some(round(size, 100.0));
+        }
+        Cycler::Warmth => {
+            let warmth = (resolved.warmth + sign * GRADING_STEP).clamp(-1.0, 1.0);
+            look.post.grading.warmth = Some(round(warmth, 100.0));
+        }
+        Cycler::Tint => {
+            let tint = (resolved.tint + sign * GRADING_STEP).clamp(-1.0, 1.0);
+            look.post.grading.tint = Some(round(tint, 100.0));
+        }
+        Cycler::Saturation => {
+            let (min, max) = SATURATIONS;
+            let saturation = (resolved.saturation + sign * GRADING_STEP).clamp(min, max);
+            look.post.grading.saturation = Some(round(saturation, 100.0));
+        }
+        Cycler::Contrast => {
+            let (min, max) = CONTRASTS;
+            let contrast = (resolved.contrast + sign * GRADING_STEP).clamp(min, max);
+            look.post.grading.contrast = Some(round(contrast, 100.0));
         }
         Cycler::Exposure => {
             let exposure =
