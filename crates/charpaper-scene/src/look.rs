@@ -6,6 +6,10 @@ use bevy::post_process::bloom::Bloom;
 use bevy::post_process::effect_stack;
 use bevy::post_process::effect_stack::ChromaticAberration;
 use bevy::prelude::*;
+use bevy::render::view::ColorGrading;
+use bevy::render::view::ColorGradingGlobal;
+use bevy::render::view::ColorGradingSection;
+use charpaper_suite::GradingSection;
 use charpaper_suite::Look;
 use charpaper_suite::Tonemapping as SuiteTonemapping;
 
@@ -60,6 +64,10 @@ pub struct Resolved {
     pub vignette_size: f32,
     pub grain: f32,
     pub grain_size: f32,
+    pub warmth: f32,
+    pub tint: f32,
+    pub saturation: f32,
+    pub contrast: f32,
     pub brightness: f32,
     pub shadows: bool,
     pub exposure: f32,
@@ -79,6 +87,10 @@ impl Resolved {
             vignette_size: look.post.vignette.size(),
             grain: look.post.grain.intensity(),
             grain_size: look.post.grain.size(),
+            warmth: look.post.grading.warmth(),
+            tint: look.post.grading.tint(),
+            saturation: look.post.grading.saturation(),
+            contrast: look.post.grading.contrast(),
             brightness: entry.brightness.unwrap_or(DEFAULT_BRIGHTNESS),
             shadows: entry.shadows.unwrap_or(DEFAULT_SHADOWS),
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
@@ -130,6 +142,7 @@ pub(crate) fn apply_look(
         } else {
             commands.entity(entity).remove::<effect_stack::Vignette>();
         }
+        commands.entity(entity).insert(color_grading(&look));
         if let Some(mut skybox) = skybox {
             skybox.brightness = resolved.brightness;
         }
@@ -158,6 +171,33 @@ pub(crate) fn apply_look(
             light.shadow_maps_enabled = resolved.shadows;
             light.contact_shadows_enabled = resolved.shadows;
         }
+    }
+}
+
+// Always present, and neutral when the look has no grading.
+fn color_grading(look: &Look) -> ColorGrading {
+    let grading = &look.post.grading;
+    let [temperature, tint] = grading.white_balance();
+    let [start, end] = grading.midtones_range();
+    let section = |section: &GradingSection| ColorGradingSection {
+        saturation: section.saturation(),
+        contrast: section.contrast() * grading.contrast(),
+        gamma: section.gamma(),
+        gain: section.gain(),
+        lift: section.lift(),
+    };
+    ColorGrading {
+        global: ColorGradingGlobal {
+            temperature,
+            tint,
+            hue: grading.hue_deg().to_radians(),
+            post_saturation: grading.saturation(),
+            midtones_range: start..end,
+            ..default()
+        },
+        shadows: section(&grading.shadows),
+        midtones: section(&grading.midtones),
+        highlights: section(&grading.highlights),
     }
 }
 
