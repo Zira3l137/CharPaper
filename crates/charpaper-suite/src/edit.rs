@@ -36,6 +36,15 @@ pub fn save_look(root: &Path, look: &Look) -> Result<bool, SuiteError> {
     changed |= set(&mut doc, &["post", "vignette"], "size", vignette.size.map(float));
     changed |= set(&mut doc, &["post", "grain"], "intensity", post.grain.intensity.map(float));
     changed |= set(&mut doc, &["post", "grain"], "size", post.grain.size.map(float));
+    let grading = &post.grading;
+    for (key, value) in [
+        ("warmth", grading.warmth),
+        ("tint", grading.tint),
+        ("saturation", grading.saturation),
+        ("contrast", grading.contrast),
+    ] {
+        changed |= set(&mut doc, &["post", "grading"], key, value.map(float));
+    }
     for (name, entry) in &look.environments {
         let table = ["environments", name.as_str()];
         changed |= set(&mut doc, &table, "brightness", entry.brightness.map(float));

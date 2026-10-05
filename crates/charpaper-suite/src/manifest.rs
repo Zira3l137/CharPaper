@@ -243,6 +243,8 @@ pub struct Post {
     pub vignette: Vignette,
     #[serde(default)]
     pub grain: Grain,
+    #[serde(default)]
+    pub grading: Grading,
 }
 
 /// Darkens the edges of the image, the way a lens does towards its rim.
@@ -284,6 +286,59 @@ impl Vignette {
     pub fn color(&self) -> [f32; 3] {
         self.color.unwrap_or([0.0; 3])
     }
+}
+
+/// Color grading: white balance, saturation and contrast for the whole
+/// image, and finer controls for its shadows, midtones and highlights. Bevy
+/// grades while it tonemaps, so none of this works with `tonemapping =
+/// "none"`.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Grading {
+    /// Warms the image towards orange (positive) or cools it towards blue
+    /// (negative), from -1 to 1. 0.25 is a gentle shift. Defaults to 0.
+    pub warmth: Option<f32>,
+    /// Shifts the image towards magenta (positive) or green (negative), from
+    /// -1 to 1. Defaults to 0.
+    pub tint: Option<f32>,
+    /// Turns every color around the color wheel, in degrees. Defaults to 0.
+    pub hue_deg: Option<f32>,
+    /// 0 is black and white, 1 unchanged, above more vivid. Applied after
+    /// tonemapping. Defaults to 1.
+    pub saturation: Option<f32>,
+    /// Spreads colors away from middle gray (above 1) or pulls them towards
+    /// it (below 1), on top of each section's own contrast. Defaults to 1.
+    pub contrast: Option<f32>,
+    /// Where the midtones begin and end, as brightness from 0 to 1; the
+    /// sections blend into each other smoothly. Defaults to [0.2, 0.7].
+    pub midtones_range: Option<[f32; 2]>,
+    #[serde(default)]
+    pub shadows: GradingSection,
+    #[serde(default)]
+    pub midtones: GradingSection,
+    #[serde(default)]
+    pub highlights: GradingSection,
+}
+
+/// Grading for one brightness range, as in the ASC CDL formula
+/// `out = (in × gain + lift) ^ gamma`.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct GradingSection {
+    /// 0 is black and white, 1 unchanged, above more vivid. Defaults to 1.
+    pub saturation: Option<f32>,
+    /// Spreads colors away from middle gray (above 1) or pulls them towards
+    /// it (below 1). Defaults to 1.
+    pub contrast: Option<f32>,
+    /// Bends brightness, mostly in the upper part of the range: above 1
+    /// darker, below brighter. Defaults to 1.
+    pub gamma: Option<f32>,
+    /// Multiplies brightness, mostly in the middle of the range. Defaults to
+    /// 1.
+    pub gain: Option<f32>,
+    /// Adds to brightness, mostly in the lower part of the range. Defaults to
+    /// 0.
+    pub lift: Option<f32>,
 }
 
 /// Film grain: fine noise over the finished image that changes every frame.

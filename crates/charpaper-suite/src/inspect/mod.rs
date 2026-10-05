@@ -25,6 +25,9 @@ use crate::inspect::tree::Gltf;
 use crate::inspect::tree::index;
 use crate::layout::Skin;
 use crate::layout::Suite;
+use crate::manifest::Grading;
+use crate::manifest::MANIFEST_FILE;
+use crate::manifest::Tonemapping;
 
 // Opens the suite's glTF files and checks that the pieces fit together the way the scene
 // will use them. Problems a suite survives are findings; SuiteError is for the rest.
@@ -150,6 +153,12 @@ pub fn inspect(suite: &Suite) -> Report {
     check_orbit_lens(&suite.camera, &mut report);
 
     check_environments(suite, &mut report);
+    if suite.post.tonemapping == Some(Tonemapping::None) && suite.post.grading != Grading::default()
+    {
+        let message = "`post.grading` does nothing while `tonemapping` is \"none\": Bevy grades \
+                       as it tonemaps";
+        report.push(Severity::Warning, Some(Path::new(MANIFEST_FILE)), message.to_string());
+    }
     if let Some(gaze) = &suite.gaze {
         check_gaze(gaze, &suite.model, &bones, &skins, &mut report);
     }

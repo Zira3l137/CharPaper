@@ -49,6 +49,13 @@ falloff = 2.0
 intensity = 0.04
 size = 1.5
 
+[post.grading]
+warmth = 0.2
+saturation = 1.1
+
+[post.grading.shadows]
+lift = 0.01
+
 [camera]
 default = "closeup"
 focus = [0.0, 1.0, 0.0]

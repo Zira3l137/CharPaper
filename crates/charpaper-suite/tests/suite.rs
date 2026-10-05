@@ -391,6 +391,18 @@ fn an_animated_focus_object_is_not_idle() {
 }
 
 #[test]
+fn grading_without_tonemapping_is_flagged() {
+    let manifest = "schema = 1\n[post]\ntonemapping = \"none\"\n[post.grading]\nwarmth = 0.3";
+    let fixture = Fixture::new("grading", manifest);
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("`post.grading` does nothing")), "{warnings:#?}");
+
+    fixture.write("suite.toml", "schema = 1\n[post.grading]\nwarmth = 0.3");
+    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
+    assert!(!warnings.iter().any(|w| w.contains("post.grading")), "{warnings:#?}");
+}
+
+#[test]
 fn animation_pointer_clips_get_a_readable_error() {
     let fixture = Fixture::new("pointer", "schema = 1");
     let zoom = camera(&["Zoom"]).replace(

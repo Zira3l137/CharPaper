@@ -454,6 +454,122 @@
       },
       "additionalProperties": false
     },
+    "Grading": {
+      "description": "Color grading: white balance, saturation and contrast for the whole\nimage, and finer controls for its shadows, midtones and highlights. Bevy\ngrades while it tonemaps, so none of this works with `tonemapping =\n\"none\"`.",
+      "type": "object",
+      "properties": {
+        "contrast": {
+          "description": "Spreads colors away from middle gray (above 1) or pulls them towards\nit (below 1), on top of each section's own contrast. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "highlights": {
+          "$ref": "#/$defs/GradingSection"
+        },
+        "hue_deg": {
+          "description": "Turns every color around the color wheel, in degrees. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "midtones": {
+          "$ref": "#/$defs/GradingSection"
+        },
+        "midtones_range": {
+          "description": "Where the midtones begin and end, as brightness from 0 to 1; the\nsections blend into each other smoothly. Defaults to [0.2, 0.7].",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "saturation": {
+          "description": "0 is black and white, 1 unchanged, above more vivid. Applied after\ntonemapping. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "shadows": {
+          "$ref": "#/$defs/GradingSection"
+        },
+        "tint": {
+          "description": "Shifts the image towards magenta (positive) or green (negative), from\n-1 to 1. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "warmth": {
+          "description": "Warms the image towards orange (positive) or cools it towards blue\n(negative), from -1 to 1. 0.25 is a gentle shift. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GradingSection": {
+      "description": "Grading for one brightness range, as in the ASC CDL formula\n`out = (in × gain + lift) ^ gamma`.",
+      "type": "object",
+      "properties": {
+        "contrast": {
+          "description": "Spreads colors away from middle gray (above 1) or pulls them towards\nit (below 1). Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "gain": {
+          "description": "Multiplies brightness, mostly in the middle of the range. Defaults to\n1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "gamma": {
+          "description": "Bends brightness, mostly in the upper part of the range: above 1\ndarker, below brighter. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "lift": {
+          "description": "Adds to brightness, mostly in the lower part of the range. Defaults to\n0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "saturation": {
+          "description": "0 is black and white, 1 unchanged, above more vivid. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
+    },
     "Grain": {
       "description": "Film grain: fine noise over the finished image that changes every frame.",
       "type": "object",
@@ -531,6 +647,9 @@
             "null"
           ],
           "format": "float"
+        },
+        "grading": {
+          "$ref": "#/$defs/Grading"
         },
         "grain": {
           "$ref": "#/$defs/Grain"
