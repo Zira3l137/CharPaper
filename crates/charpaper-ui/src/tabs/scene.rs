@@ -28,6 +28,13 @@ const BLOOM_STEP: f32 = 0.05;
 const BLOOM_LIMIT: f32 = 1.0;
 const ABERRATION_STEP: f32 = 0.0025;
 const ABERRATION_LIMIT: f32 = 0.05;
+const VIGNETTE_STEP: f32 = 0.05;
+const VIGNETTE_SIZE_STEP: f32 = 0.1;
+const VIGNETTE_SIZES: (f32, f32) = (0.3, 2.0);
+const GRAIN_STEP: f32 = 0.01;
+const GRAIN_LIMIT: f32 = 0.2;
+const GRAIN_SIZE_STEP: f32 = 0.25;
+const GRAIN_SIZES: (f32, f32) = (1.0, 4.0);
 
 // Which camera and environment, and how the picture is finished. Look edits go to
 // ActiveLook, which the app writes back into the suite's suite.toml.
@@ -82,6 +89,16 @@ pub(crate) fn page() -> impl Bundle {
                 cycler(|l| fl!(l, "label-chromatic-aberration"), Cycler::ChromaticAberration),
             ]),
         ),
+        section(
+            |l| fl!(l, "section-film"),
+            Section::Film,
+            rows(children![
+                cycler(|l| fl!(l, "label-vignette"), Cycler::Vignette),
+                cycler(|l| fl!(l, "label-vignette-size"), Cycler::VignetteSize),
+                cycler(|l| fl!(l, "label-grain"), Cycler::Grain),
+                cycler(|l| fl!(l, "label-grain-size"), Cycler::GrainSize),
+            ]),
+        ),
         translated_button(|l| fl!(l, "restore-look"))
             .node(|n| n.display = Display::None)
             .build(UiButton::RestoreLook),
@@ -94,7 +111,7 @@ fn show_tab(suite: Res<ActiveSuite>, nodes: Query<(&mut Node, AnyOf<(&UiContaine
         let shown = match element {
             (Some(UiContainer::Section(Section::Camera)), _) => !suite.cameras.is_empty(),
             (Some(UiContainer::Section(Section::Environment)), _) => !suite.environments.is_empty(),
-            (Some(UiContainer::Section(Section::Image)), _)
+            (Some(UiContainer::Section(Section::Image | Section::Film)), _)
             | (_, Some(UiButton::Tab(Tab::Scene))) => true,
             _ => continue,
         };
@@ -156,6 +173,12 @@ fn show_values(
                 on_off(&locale, false).into()
             }
             Cycler::ChromaticAberration => format!("{:.4}", resolved.chromatic_aberration),
+            Cycler::Vignette if resolved.vignette <= 0.0 => on_off(&locale, false).into(),
+            Cycler::Vignette => format!("{:.2}", resolved.vignette),
+            Cycler::VignetteSize => format!("{:.1}", resolved.vignette_size),
+            Cycler::Grain if resolved.grain <= 0.0 => on_off(&locale, false).into(),
+            Cycler::Grain => format!("{:.2}", resolved.grain),
+            Cycler::GrainSize => format!("{:.2} px", resolved.grain_size),
             _ => continue,
         };
     }
@@ -202,7 +225,11 @@ fn on_click(
         | Cycler::Tonemapping
         | Cycler::Exposure
         | Cycler::Bloom
-        | Cycler::ChromaticAberration => {
+        | Cycler::ChromaticAberration
+        | Cycler::Vignette
+        | Cycler::VignetteSize
+        | Cycler::Grain
+        | Cycler::GrainSize => {
             if let Some(mut look) = look {
                 edit_look(&mut look, state.environment.as_deref(), cycler, forward);
             }
@@ -228,6 +255,24 @@ fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, f
             let aberration = (resolved.chromatic_aberration + sign * ABERRATION_STEP)
                 .clamp(0.0, ABERRATION_LIMIT);
             look.post.chromatic_aberration = Some(round(aberration, 10_000.0));
+        }
+        Cycler::Vignette => {
+            let vignette = (resolved.vignette + sign * VIGNETTE_STEP).clamp(0.0, 1.0);
+            look.post.vignette.intensity = Some(round(vignette, 100.0));
+        }
+        Cycler::VignetteSize => {
+            let (min, max) = VIGNETTE_SIZES;
+            let size = (resolved.vignette_size + sign * VIGNETTE_SIZE_STEP).clamp(min, max);
+            look.post.vignette.size = Some(round(size, 10.0));
+        }
+        Cycler::Grain => {
+            let grain = (resolved.grain + sign * GRAIN_STEP).clamp(0.0, GRAIN_LIMIT);
+            look.post.grain.intensity = Some(round(grain, 100.0));
+        }
+        Cycler::GrainSize => {
+            let (min, max) = GRAIN_SIZES;
+            let size = (resolved.grain_size + sign * GRAIN_SIZE_STEP).clamp(min, max);
+            look.post.grain.size = Some(round(size, 100.0));
         }
         Cycler::Exposure => {
             let exposure =

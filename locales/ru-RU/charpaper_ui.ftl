@@ -38,6 +38,11 @@ label-tonemapping = Тонмаппинг
 label-exposure = Экспозиция
 label-bloom = Свечение
 label-chromatic-aberration = Аберрация
+section-film = ПЛЁНКА
+label-vignette = Виньетка
+label-vignette-size = Размер виньетки
+label-grain = Зерно
+label-grain-size = Размер зерна
 restore-look = Сбросить настройки
 camera-orbit = Орбита
 

@@ -41,6 +41,11 @@ label-tonemapping = Tonemapping
 label-exposure = Exposure
 label-bloom = Bloom
 label-chromatic-aberration = Aberration
+section-film = FILM
+label-vignette = Vignette
+label-vignette-size = Vignette size
+label-grain = Grain
+label-grain-size = Grain size
 restore-look = Restore defaults
 camera-orbit = Orbit
 
