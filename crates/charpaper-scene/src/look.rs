@@ -3,6 +3,7 @@ use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::Skybox;
 use bevy::post_process::bloom::Bloom;
+use bevy::post_process::effect_stack;
 use bevy::post_process::effect_stack::ChromaticAberration;
 use bevy::prelude::*;
 use charpaper_suite::Look;
@@ -13,6 +14,8 @@ use crate::camera::SceneCamera;
 use crate::environment::EnvironmentReady;
 use crate::environment::ShownEnvironment;
 use crate::environment::spawn_environment_scenes;
+use crate::render::SceneImage;
+use crate::render::SceneTarget;
 
 // Applies the look, the settings the viewer can change while the app runs, to the camera
 // and the environment's lights. Recomputed whole on every change, so no value is kept twice.
@@ -22,7 +25,7 @@ impl Plugin for LookPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LookBackup>().add_message::<RestoreLook>().add_systems(
             Update,
-            apply_look
+            (apply_look, apply_grain)
                 .run_if(look_needs_applying)
                 .in_set(SceneSet::Run)
                 .after(spawn_environment_scenes),
@@ -53,6 +56,10 @@ pub struct Resolved {
     pub tonemapping: SuiteTonemapping,
     pub bloom: f32,
     pub chromatic_aberration: f32,
+    pub vignette: f32,
+    pub vignette_size: f32,
+    pub grain: f32,
+    pub grain_size: f32,
     pub brightness: f32,
     pub shadows: bool,
     pub exposure: f32,
@@ -68,6 +75,10 @@ impl Resolved {
                 .post
                 .chromatic_aberration
                 .unwrap_or(DEFAULT_CHROMATIC_ABERRATION),
+            vignette: look.post.vignette.intensity(),
+            vignette_size: look.post.vignette.size(),
+            grain: look.post.grain.intensity(),
+            grain_size: look.post.grain.size(),
             brightness: entry.brightness.unwrap_or(DEFAULT_BRIGHTNESS),
             shadows: entry.shadows.unwrap_or(DEFAULT_SHADOWS),
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
@@ -105,6 +116,20 @@ pub(crate) fn apply_look(
         } else {
             commands.entity(entity).remove::<ChromaticAberration>();
         }
+        let vignette = &look.post.vignette;
+        if vignette.intensity() > 0.0 {
+            let [r, g, b] = vignette.color();
+            commands.entity(entity).insert(effect_stack::Vignette {
+                intensity: vignette.intensity(),
+                radius: vignette.size(),
+                smoothness: vignette.falloff(),
+                roundness: vignette.roundness(),
+                color: Color::srgb(r, g, b),
+                ..default()
+            });
+        } else {
+            commands.entity(entity).remove::<effect_stack::Vignette>();
+        }
         if let Some(mut skybox) = skybox {
             skybox.brightness = resolved.brightness;
         }
@@ -133,6 +158,25 @@ pub(crate) fn apply_look(
             light.shadow_maps_enabled = resolved.shadows;
             light.contact_shadows_enabled = resolved.shadows;
         }
+    }
+}
+
+pub(crate) fn apply_grain(
+    look: Option<Res<ActiveLook>>,
+    target: Option<Res<SceneTarget>>,
+    mut materials: ResMut<Assets<SceneImage>>,
+) {
+    let Some(target) = target else {
+        return;
+    };
+    let grain = look.map(|l| l.post.grain.clone()).unwrap_or_default();
+    let colored = if grain.colored() { 1.0 } else { 0.0 };
+    let wanted = Vec4::new(grain.intensity(), grain.size(), colored, 0.0);
+    // Only on a real change: every change rebuilds the material on the GPU.
+    if materials.get(&target.material).is_some_and(|m| m.grain != wanted)
+        && let Some(mut material) = materials.get_mut(&target.material)
+    {
+        material.grain = wanted;
     }
 }
 

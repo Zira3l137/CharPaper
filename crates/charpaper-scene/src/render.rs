@@ -1,4 +1,5 @@
 use bevy::anti_alias::taa::TemporalAntiAliasing;
+use bevy::asset::embedded_asset;
 use bevy::camera::RenderTarget;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::prepass::MotionVectorPrepass;
@@ -6,8 +7,10 @@ use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::prelude::*;
 use bevy::render::camera::MipBias;
 use bevy::render::camera::TemporalJitter;
+use bevy::render::render_resource::AsBindGroup;
 use bevy::render::render_resource::Extent3d;
 use bevy::render::render_resource::TextureFormat;
+use bevy::shader::ShaderRef;
 use bevy::window::PrimaryWindow;
 use serde::Deserialize;
 use serde::Serialize;
@@ -19,7 +22,8 @@ pub(crate) struct RenderPlugin;
 
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        embedded_asset!(app, "scene_image.wgsl");
+        app.add_plugins(UiMaterialPlugin::<SceneImage>::default()).add_systems(
             Update,
             (fit_scene_target, apply_anti_aliasing.run_if(resource_changed::<RenderSettings>))
                 .in_set(SceneSet::Run),
@@ -162,20 +166,43 @@ impl FogQuality {
 }
 
 #[derive(Resource)]
-pub(crate) struct SceneTarget(Handle<Image>);
+pub(crate) struct SceneTarget {
+    image: Handle<Image>,
+    pub material: Handle<SceneImage>,
+}
+
+// Shows the scene image with film grain on top. Grain is added here, after the 3D camera,
+// so it stays one screen pixel fine at any render scale and TAA can't smear it.
+#[derive(Asset, TypePath, AsBindGroup, Clone, Debug)]
+pub(crate) struct SceneImage {
+    #[texture(0)]
+    #[sampler(1)]
+    image: Handle<Image>,
+    // Intensity, grain size in pixels, 1 for colored grain, unused.
+    #[uniform(2)]
+    pub grain: Vec4,
+}
+
+impl UiMaterial for SceneImage {
+    fn fragment_shader() -> ShaderRef {
+        "embedded://charpaper_scene/scene_image.wgsl".into()
+    }
+}
 
 // The 3D camera draws into an image, and a second camera shows that image full-screen
 // under the UI. So the scene can render at a lower resolution while the UI stays sharp.
 pub(crate) fn scene_target(
     commands: &mut Commands,
     images: &mut Assets<Image>,
+    materials: &mut Assets<SceneImage>,
     window: Option<&Window>,
     settings: &RenderSettings,
 ) -> impl Bundle {
     let size = window.map_or(UVec2::ONE, |w| scaled(w, settings));
     let image =
         images.add(Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None));
-    commands.insert_resource(SceneTarget(image.clone()));
+    let material = materials.add(SceneImage { image: image.clone(), grain: Vec4::ZERO });
+    commands.insert_resource(SceneTarget { image: image.clone(), material: material.clone() });
 
     commands.spawn((
         Name::new("Display camera"),
@@ -193,30 +220,35 @@ pub(crate) fn scene_target(
             height: percent(100),
             ..default()
         },
-        ImageNode::new(image.clone()),
+        MaterialNode(material),
         GlobalZIndex(i32::MIN),
     ));
 
     (RenderTarget::from(image), settings.anti_aliasing.msaa())
 }
 
-// Resizing the image is enough: Bevy recreates the GPU texture behind the same handle.
+// Bevy recreates the GPU texture behind the same handle. The material that shows it keeps
+// the old texture until it is marked changed, which makes Bevy build it again.
 pub(crate) fn fit_scene_target(
     settings: Res<RenderSettings>,
     target: Option<Res<SceneTarget>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<SceneImage>>,
 ) {
     let (Some(target), Ok(window)) = (target, windows.single()) else {
         return;
     };
     let size = scaled(window, &settings);
-    if images.get(&target.0).is_none_or(|image| image.size() == size) {
+    if images.get(&target.image).is_none_or(|image| image.size() == size) {
         return;
     }
-    if let Some(mut image) = images.get_mut(&target.0) {
+    if let Some(mut image) = images.get_mut(&target.image) {
         image.resize(Extent3d { width: size.x, height: size.y, depth_or_array_layers: 1 });
         debug!("scene renders at {}×{}", size.x, size.y);
+    }
+    if let Some(material) = materials.get_mut(&target.material) {
+        let _ = material.into_inner();
     }
 }
 

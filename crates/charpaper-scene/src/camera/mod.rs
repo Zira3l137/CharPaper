@@ -17,6 +17,7 @@ use crate::camera::orbit::update_camera_transform;
 use crate::camera::rig::Following;
 use crate::environment::ShownEnvironment;
 use crate::render::RenderSettings;
+use crate::render::SceneImage;
 use crate::render::scene_target;
 use crate::suite::ActiveSuite;
 
@@ -61,13 +62,15 @@ fn spawn_camera(
     mut commands: Commands,
     settings: Res<RenderSettings>,
     mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<SceneImage>>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
     let orbit = orbit_for(None);
     let mut transform = Transform::default();
     update_camera_transform(&mut transform, &orbit);
 
-    let target = scene_target(&mut commands, &mut images, windows.single().ok(), &settings);
+    let window = windows.single().ok();
+    let target = scene_target(&mut commands, &mut images, &mut materials, window, &settings);
     commands.spawn((
         Name::new("Scene camera"),
         SceneCamera,
