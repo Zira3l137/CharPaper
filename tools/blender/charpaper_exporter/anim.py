@@ -92,12 +92,19 @@ def pick_slot(action, id_type, wanted, identifier):
     return None
 
 
-def add_track(anim_data, name, action, slot=None):
+def add_track(anim_data, name, action, slot=None, frame_range=None):
+    start, end = action.frame_range if frame_range is None else frame_range
     track = anim_data.nla_tracks.new()
     track.name = name
-    strip = track.strips.new(name, int(round(action.frame_range[0])), action)
+    strip = track.strips.new(name, int(round(start)), action)
     if slot is not None and hasattr(strip, "action_slot"):
         strip.action_slot = slot
+    # Blender sizes a new strip by the keys of the slot it guesses for it, before the slot above
+    # is set. With several slots and none named after this object it guesses none, and the strip
+    # comes out one frame long. Each end is clamped against the other, hence `end` twice.
+    strip.action_frame_end = end
+    strip.action_frame_start = start
+    strip.action_frame_end = end
     return track
 
 
@@ -109,7 +116,7 @@ def object_track(obj, name, action):
     return add_track(data, name, action, slot)
 
 
-def key_track(mesh_obj, name, action):
+def key_track(mesh_obj, name, action, frame_range=None):
     key = mesh_obj.data.shape_keys
     own = set(key.key_blocks.keys())
     if is_layered(action):
@@ -121,4 +128,4 @@ def key_track(mesh_obj, name, action):
         if not key_names(action) & own:
             return None
     data = key.animation_data or key.animation_data_create()
-    return add_track(data, name, action, slot)
+    return add_track(data, name, action, slot, frame_range)

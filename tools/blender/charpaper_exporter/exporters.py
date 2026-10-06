@@ -103,7 +103,10 @@ def animation(context, suite, entry, folder):
             name = clip.action.name
             anim.object_track(armature, name, clip.action)
             if clip.corrective and meshes:
-                if not any(anim.key_track(mesh, name, clip.corrective) for mesh in meshes):
+                # The glTF exporter slides each object's strip to frame 0 on its own, so the
+                # correctives must start and end with the body or they drift out of step.
+                span = tuple(clip.action.frame_range)
+                if not any(anim.key_track(mesh, name, clip.corrective, span) for mesh in meshes):
                     result_notes.append(f"{name}: {clip.corrective.name} keys none of the corrective meshes")
         result = _run(
             context, iso, path,
