@@ -23,7 +23,7 @@ impl Plugin for SystemTabPlugin {
 }
 
 pub(crate) fn page() -> impl Bundle {
-    children![open_section(
+    children![shown_section(
         |l| fl!(l, "section-interface"),
         Section::Interface,
         cycler(|l| fl!(l, "label-language"), Cycler::Language),

@@ -8,6 +8,8 @@ pub(crate) enum UiContainer {
     MainMenu,
     Page(Tab),
     Section(Section),
+    // The part of a section that folds away under its title.
+    Body(Section),
     OutfitGrid,
     ObjectList,
     // The row a cycler sits in, so a single row can be hidden.
@@ -18,6 +20,8 @@ pub(crate) enum UiContainer {
 pub(crate) enum Section {
     Suite,
     Outfit,
+    // The worn skin's objects, switched on and off one by one. Inside Outfit.
+    Parts,
     Animation,
     Expression,
     Gaze,
@@ -33,11 +37,47 @@ pub(crate) enum Section {
     Interface,
 }
 
+impl Section {
+    // Its name in state.toml.
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            Section::Suite => "suite",
+            Section::Outfit => "outfit",
+            Section::Parts => "parts",
+            Section::Animation => "animation",
+            Section::Expression => "expression",
+            Section::Gaze => "gaze",
+            Section::Camera => "camera",
+            Section::Environment => "environment",
+            Section::Image => "image",
+            Section::Color => "color",
+            Section::Film => "film",
+            Section::FrameRate => "frame_rate",
+            Section::Quality => "quality",
+            Section::Fog => "fog",
+            Section::Pause => "pause",
+            Section::Interface => "interface",
+        }
+    }
+
+    // Fine-tuning starts folded, so a first look at the panel shows the main choices.
+    pub(crate) fn folded_by_default(self) -> bool {
+        matches!(
+            self,
+            Section::Parts
+                | Section::Image
+                | Section::Color
+                | Section::Film
+                | Section::Fog
+                | Section::Pause
+        )
+    }
+}
+
 // The values stepped through with `<` and `>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Cycler {
     Suite,
-    Advanced,
     Animation,
     Expression,
     FollowCursor,
@@ -79,6 +119,7 @@ pub(crate) enum UiButton {
     RevealMenu,
     Exit,
     Tab(Tab),
+    Fold(Section),
     Skin(String),
     Object(String),
     Previous(Cycler),
@@ -100,6 +141,10 @@ impl UiButton {
 // The text showing a cycler's current value.
 #[derive(Component)]
 pub(crate) struct CyclerValue(pub Cycler);
+
+// The arrow beside a section's title, pointing down while the section is open.
+#[derive(Component)]
+pub(crate) struct Chevron(pub Section);
 
 // The line under the panel's title: the suite's name.
 #[derive(Component)]

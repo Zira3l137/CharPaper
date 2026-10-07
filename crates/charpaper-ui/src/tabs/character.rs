@@ -8,7 +8,6 @@ use charpaper_scene::GazeSettings;
 use charpaper_scene::SkinObjects;
 use i18n_embed_fl::fl;
 
-use crate::UiState;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
@@ -45,8 +44,7 @@ impl Plugin for CharacterTabPlugin {
                         .or_eager(resource_changed::<Locale>),
                 ),
                 show_objects.run_if(
-                    resource_changed::<UiState>
-                        .or_eager(resource_changed::<CharacterState>)
+                    resource_changed::<CharacterState>
                         .or_eager(resource_changed::<SkinObjects>)
                         .or_eager(resource_changed::<Locale>),
                 ),
@@ -86,16 +84,18 @@ pub(crate) fn page() -> impl Bundle {
                         Pickable::IGNORE,
                         UiContainer::OutfitGrid,
                     ),
-                    cycler(|l| fl!(l, "label-advanced"), Cycler::Advanced),
-                    (
-                        Node {
-                            display: Display::None,
-                            flex_direction: FlexDirection::Column,
-                            row_gap: Val::Px(4.0),
-                            ..default()
-                        },
-                        Pickable::IGNORE,
-                        UiContainer::ObjectList,
+                    section(
+                        |l| fl!(l, "section-parts"),
+                        Section::Parts,
+                        (
+                            Node {
+                                flex_direction: FlexDirection::Column,
+                                row_gap: Val::Px(4.0),
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                            UiContainer::ObjectList,
+                        ),
                     ),
                 ],
             ),
@@ -246,18 +246,15 @@ fn fill_objects(
 
 // Only with two or more objects: switching off a skin's only object is switching off the skin.
 fn show_objects(
-    ui: Res<UiState>,
     state: Res<CharacterState>,
     objects: Res<SkinObjects>,
     locale: Res<Locale>,
     mut nodes: Query<(&UiContainer, &mut Node)>,
     buttons: Query<(&UiButton, &Children)>,
     mut texts: Query<&mut Text>,
-    values: Query<(Entity, &CyclerValue)>,
 ) {
     let several = objects.names().count() > 1;
-    show_container(&mut nodes, UiContainer::Row(Cycler::Advanced), several);
-    show_container(&mut nodes, UiContainer::ObjectList, several && ui.advanced_outfit);
+    show_container(&mut nodes, UiContainer::Section(Section::Parts), several);
 
     let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
     for (button, children) in &buttons {
@@ -271,13 +268,6 @@ fn show_objects(
             }
         }
     }
-    for (entity, value) in &values {
-        if value.0 == Cycler::Advanced {
-            if let Ok(mut text) = texts.get_mut(entity) {
-                text.0 = on_off(&locale, ui.advanced_outfit).into();
-            }
-        }
-    }
 }
 
 fn on_click(
@@ -287,7 +277,6 @@ fn on_click(
     available: Res<AvailableSuites>,
     expressions: Res<Expressions>,
     mut state: ResMut<CharacterState>,
-    mut ui: ResMut<UiState>,
     mut gaze: ResMut<GazeSettings>,
 ) {
     let Ok(button) = buttons.get(event.entity) else {
@@ -311,7 +300,6 @@ fn on_click(
         return;
     };
     match cycler {
-        Cycler::Advanced => ui.advanced_outfit ^= true,
         Cycler::FollowCursor => gaze.follow_cursor ^= true,
         Cycler::Suite => {
             let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();

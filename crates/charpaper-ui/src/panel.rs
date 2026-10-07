@@ -7,6 +7,7 @@ use i18n_embed_fl::fl;
 use crate::PanelHovered;
 use crate::Tab;
 use crate::UiState;
+use crate::elements::Chevron;
 use crate::elements::StatusText;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
@@ -26,7 +27,10 @@ impl Plugin for PanelPlugin {
         app.init_resource::<PanelHovered>()
             .add_systems(Startup, spawn_panel)
             .add_systems(Update, track_hover)
-            .add_systems(Update, (show_panel, style_tabs).run_if(resource_changed::<UiState>))
+            .add_systems(
+                Update,
+                (show_panel, style_tabs, show_folds).run_if(resource_changed::<UiState>),
+            )
             .add_systems(Update, show_suite_name.run_if(resource_added::<ActiveSuite>))
             .add_observer(on_click);
     }
@@ -223,6 +227,29 @@ fn footer() -> impl Bundle {
     )
 }
 
+// Written only on a real change: UiState changes on every tab switch too, and an untouched
+// Node or Text spares Bevy laying the panel out again.
+fn show_folds(
+    ui: Res<UiState>,
+    mut bodies: Query<(&UiContainer, &mut Node)>,
+    mut chevrons: Query<(&Chevron, &mut Text)>,
+) {
+    for (container, mut node) in &mut bodies {
+        if let UiContainer::Body(section) = container {
+            let shown = display(!ui.is_folded(*section));
+            if node.display != shown {
+                node.display = shown;
+            }
+        }
+    }
+    for (chevron, mut text) in &mut chevrons {
+        let arrow = if ui.is_folded(chevron.0) { "►" } else { "▼" };
+        if text.0 != arrow {
+            text.0 = arrow.to_string();
+        }
+    }
+}
+
 fn show_panel(ui: Res<UiState>, nodes: Query<(&mut Node, AnyOf<(&UiContainer, &UiButton)>)>) {
     for (mut node, element) in nodes {
         let shown = match element {
@@ -292,6 +319,7 @@ fn on_click(
         UiButton::HideMenu => ui.is_menu_closed = true,
         UiButton::RevealMenu => ui.is_menu_closed = false,
         UiButton::Tab(tab) => ui.tab = *tab,
+        UiButton::Fold(section) => ui.toggle_fold(*section),
         _ => {}
     }
 }

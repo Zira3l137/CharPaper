@@ -7,6 +7,7 @@ pub(crate) use button::BaseBackground;
 pub(crate) use button::ButtonBuilder;
 pub(crate) use button::HoverFeedback;
 
+use crate::elements::Chevron;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
@@ -71,10 +72,11 @@ pub(crate) fn section(title: Tr, section: Section, content: impl Bundle) -> impl
 }
 
 // Shown from the start, for settings that exist whatever the suite holds.
-pub(crate) fn open_section(title: Tr, section: Section, content: impl Bundle) -> impl Bundle {
+pub(crate) fn shown_section(title: Tr, section: Section, content: impl Bundle) -> impl Bundle {
     section_with(Display::Flex, title, section, content)
 }
 
+// Whether the body is folded is up to the panel, which sets it from UiState on the first frame.
 fn section_with(
     display: Display,
     title: Tr,
@@ -85,7 +87,42 @@ fn section_with(
         Node { display, flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
         UiContainer::Section(section),
         Pickable::IGNORE,
-        children![translated(title, SMALL_SIZE, TEXT_DIM), content],
+        children![
+            fold_header(title, section),
+            (
+                Node { flex_direction: FlexDirection::Column, ..default() },
+                UiContainer::Body(section),
+                Pickable::IGNORE,
+                children![content],
+            ),
+        ],
+    )
+}
+
+// The whole title row is the button. It's filled with the panel's own color, which looks like
+// no fill at rest but gives hover feedback something to brighten.
+fn fold_header(title: Tr, section: Section) -> impl Bundle {
+    (
+        Node {
+            height: Val::Px(24.0),
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(6.0),
+            padding: UiRect::horizontal(Val::Px(4.0)),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        BaseBackground(PANEL_BG),
+        BackgroundColor(PANEL_BG),
+        UiButton::Fold(section),
+        children![
+            // Fixed width: the two arrows differ, and the title shouldn't shift between them.
+            (
+                Node { width: Val::Px(10.0), justify_content: JustifyContent::Center, ..default() },
+                Pickable::IGNORE,
+                children![(label("", SMALL_SIZE, TEXT_DIM), Chevron(section))],
+            ),
+            translated(title, SMALL_SIZE, TEXT_DIM),
+        ],
     )
 }
 

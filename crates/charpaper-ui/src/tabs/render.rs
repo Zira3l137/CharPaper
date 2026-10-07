@@ -30,12 +30,12 @@ impl Plugin for RenderTabPlugin {
 
 pub(crate) fn page() -> impl Bundle {
     children![
-        open_section(
+        shown_section(
             |l| fl!(l, "section-frame-rate"),
             Section::FrameRate,
             cycler(|l| fl!(l, "label-fps-limit"), Cycler::FpsLimit),
         ),
-        open_section(
+        shown_section(
             |l| fl!(l, "section-quality"),
             Section::Quality,
             rows(children![
@@ -44,7 +44,7 @@ pub(crate) fn page() -> impl Bundle {
                 cycler(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
             ]),
         ),
-        open_section(
+        shown_section(
             |l| fl!(l, "section-fog"),
             Section::Fog,
             rows(children![
@@ -53,7 +53,7 @@ pub(crate) fn page() -> impl Bundle {
                 cycler(|l| fl!(l, "label-fog-dithering"), Cycler::FogDithering),
             ]),
         ),
-        open_section(
+        shown_section(
             |l| fl!(l, "section-pause"),
             Section::Pause,
             rows(children![

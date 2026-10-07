@@ -5,6 +5,8 @@ mod tabs;
 mod theme;
 mod widgets;
 
+use std::collections::BTreeMap;
+
 use bevy::prelude::*;
 use i18n_embed_fl::fl;
 use serde::Deserialize;
@@ -13,6 +15,7 @@ use serde::Serialize;
 pub use locale::Locale;
 pub use locale::UiConfig;
 
+use crate::elements::Section;
 use crate::locale::Tr;
 
 // Only tabs with something working behind them exist.
@@ -43,10 +46,25 @@ impl Tab {
 pub struct UiState {
     pub is_menu_closed: bool,
     pub tab: Tab,
-    pub advanced_outfit: bool,
     // A tag such as `de-DE`, for a translation in `locales/`. None follows the system.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    // Whether the viewer folded a section, by its key. A section missing here starts as it
+    // does by default. Keyed by plain names rather than Section itself, so a section renamed
+    // in a later version is ignored instead of making the whole file unreadable.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) folded: BTreeMap<String, bool>,
+}
+
+impl UiState {
+    pub(crate) fn is_folded(&self, section: Section) -> bool {
+        self.folded.get(section.key()).copied().unwrap_or_else(|| section.folded_by_default())
+    }
+
+    pub(crate) fn toggle_fold(&mut self, section: Section) {
+        let folded = !self.is_folded(section);
+        self.folded.insert(section.key().to_string(), folded);
+    }
 }
 
 // Whether the pointer is on the panel or on the button that brings it back. The app keeps the
