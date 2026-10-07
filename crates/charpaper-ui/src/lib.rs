@@ -3,6 +3,7 @@ mod locale;
 mod panel;
 mod tabs;
 mod theme;
+mod wheel;
 mod widgets;
 
 use std::collections::BTreeMap;
@@ -98,6 +99,7 @@ impl Plugin for SettingsPanelPlugin {
                 tabs::scene::SceneTabPlugin,
                 tabs::render::RenderTabPlugin,
                 tabs::system::SystemTabPlugin,
+                wheel::WheelPlugin,
             ));
     }
 }

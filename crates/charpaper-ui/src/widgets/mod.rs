@@ -1,5 +1,6 @@
 mod button;
 
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
@@ -8,11 +9,13 @@ pub(crate) use button::ButtonBuilder;
 pub(crate) use button::HoverFeedback;
 
 use crate::elements::Chevron;
+use crate::elements::Control;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
+use crate::elements::Well;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
@@ -151,9 +154,11 @@ pub(crate) fn cycler(title: Tr, cycler: Cycler) -> impl Bundle {
                 Pickable::IGNORE,
                 children![translated(title, BODY_SIZE, TEXT_LABEL)],
             ),
+            // Pickable, so the wheel finds it in the gaps between the arrows and the value too.
             (
                 Node { flex_grow: 1.0, column_gap: Val::Px(4.0), ..default() },
-                Pickable::IGNORE,
+                Control(cycler),
+                Hovered::default(),
                 children![
                     glyph_button("<", UiButton::Previous(cycler)),
                     (
@@ -169,6 +174,7 @@ pub(crate) fn cycler(title: Tr, cycler: Cycler) -> impl Bundle {
                         BackgroundColor(WELL_BG),
                         BorderColor::all(BORDER),
                         Pickable::IGNORE,
+                        Well(cycler),
                         children![(label("-", BODY_SIZE, TEXT), CyclerValue(cycler))],
                     ),
                     glyph_button(">", UiButton::Next(cycler)),

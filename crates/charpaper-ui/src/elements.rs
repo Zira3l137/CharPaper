@@ -112,6 +112,28 @@ pub(crate) enum Cycler {
     Language,
 }
 
+impl Cycler {
+    // Numbers rather than a list of choices. The faster the wheel spins over these, the further
+    // each notch goes; a list moves one choice per notch so none is skipped unseen.
+    pub(crate) fn accelerates(self) -> bool {
+        matches!(
+            self,
+            Cycler::Exposure
+                | Cycler::Bloom
+                | Cycler::ChromaticAberration
+                | Cycler::Vignette
+                | Cycler::VignetteSize
+                | Cycler::Grain
+                | Cycler::GrainSize
+                | Cycler::Warmth
+                | Cycler::Tint
+                | Cycler::Saturation
+                | Cycler::Contrast
+                | Cycler::LutStrength
+        )
+    }
+}
+
 // What a button does when clicked.
 #[derive(Component, Debug, Clone, PartialEq)]
 pub(crate) enum UiButton {
@@ -156,6 +178,14 @@ impl Step {
         !self.continuous
     }
 }
+
+// A row's `<`, value and `>` together: the part the wheel changes rather than scrolls past.
+#[derive(Component)]
+pub(crate) struct Control(pub Cycler);
+
+// The box around a cycler's value.
+#[derive(Component)]
+pub(crate) struct Well(pub Cycler);
 
 // The text showing a cycler's current value.
 #[derive(Component)]
