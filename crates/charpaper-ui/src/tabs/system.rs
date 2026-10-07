@@ -50,7 +50,7 @@ fn on_step(event: On<Step>, languages: Res<Languages>, mut ui: ResMut<UiState>) 
     }
     let options: Vec<Option<String>> =
         std::iter::once(None).chain(languages.0.iter().map(|l| Some(l.tag.clone()))).collect();
-    if let Some(next) = step(&options, &ui.language, event.by, event.wraps()) {
+    if let Some(next) = step(&options, &ui.language, &event) {
         ui.language = next;
     }
 }

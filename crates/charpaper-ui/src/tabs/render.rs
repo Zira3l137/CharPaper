@@ -105,45 +105,41 @@ fn show_values(
 }
 
 fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>) {
-    let (by, wrap) = (event.by, event.wraps());
     match event.cycler {
         Cycler::FpsLimit => {
-            if let Some(next) = step(&FpsLimit::ALL, &settings.fps_limit, by, wrap) {
+            if let Some(next) = step(&FpsLimit::ALL, &settings.fps_limit, &event) {
                 settings.fps_limit = next;
             }
         }
         Cycler::RenderScale => {
-            if let Some(next) = step(&RENDER_SCALES, &settings.scale_percent(), by, wrap) {
+            if let Some(next) = step(&RENDER_SCALES, &settings.scale_percent(), &event) {
                 settings.render_scale = next;
             }
         }
         Cycler::AntiAliasing => {
-            if let Some(next) = step(&AntiAliasing::ALL, &settings.anti_aliasing, by, wrap) {
+            if let Some(next) = step(&AntiAliasing::ALL, &settings.anti_aliasing, &event) {
                 settings.anti_aliasing = next;
             }
         }
         Cycler::DepthOfField => {
-            if let Some(next) = step(&DepthOfFieldQuality::ALL, &settings.depth_of_field, by, wrap)
-            {
+            if let Some(next) = step(&DepthOfFieldQuality::ALL, &settings.depth_of_field, &event) {
                 settings.depth_of_field = next;
             }
         }
-        Cycler::Fog => settings.fog = flip(settings.fog, by, wrap),
+        Cycler::Fog => settings.fog = flip(settings.fog, &event),
         Cycler::FogQuality => {
-            if let Some(next) = step(&FogQuality::ALL, &settings.fog_quality, by, wrap) {
+            if let Some(next) = step(&FogQuality::ALL, &settings.fog_quality, &event) {
                 settings.fog_quality = next;
             }
         }
-        Cycler::FogDithering => settings.fog_dithering = flip(settings.fog_dithering, by, wrap),
+        Cycler::FogDithering => settings.fog_dithering = flip(settings.fog_dithering, &event),
         Cycler::PauseFullscreen => {
-            settings.pause_when_fullscreen = flip(settings.pause_when_fullscreen, by, wrap)
+            settings.pause_when_fullscreen = flip(settings.pause_when_fullscreen, &event)
         }
         Cycler::PauseCovered => {
-            settings.pause_when_covered = flip(settings.pause_when_covered, by, wrap)
+            settings.pause_when_covered = flip(settings.pause_when_covered, &event)
         }
-        Cycler::PauseBattery => {
-            settings.pause_on_battery = flip(settings.pause_on_battery, by, wrap)
-        }
+        Cycler::PauseBattery => settings.pause_on_battery = flip(settings.pause_on_battery, &event),
         _ => {}
     }
 }

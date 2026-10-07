@@ -8,11 +8,13 @@ pub(crate) use button::BaseBackground;
 pub(crate) use button::ButtonBuilder;
 pub(crate) use button::HoverFeedback;
 
+use crate::elements::Change;
 use crate::elements::Chevron;
 use crate::elements::Control;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
+use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::elements::Well;
@@ -218,27 +220,20 @@ pub(crate) fn on_off(locale: &FluentLanguageLoader, on: bool) -> String {
     if on { fl!(locale, "value-on") } else { fl!(locale, "value-off") }
 }
 
-// Moves `by` places through the options, going round past either end when `wrap` is set and
-// stopping there otherwise. An unknown current value moves to the first option.
-pub(crate) fn step<T: PartialEq + Clone>(
-    options: &[T],
-    current: &T,
-    by: i32,
-    wrap: bool,
-) -> Option<T> {
+// The option the step lands on. Moving by places goes round past either end when the step
+// wraps and stops there otherwise. An unknown current value moves to the first option.
+pub(crate) fn step<T: PartialEq + Clone>(options: &[T], current: &T, event: &Step) -> Option<T> {
     let len = options.len() as i32;
-    if len == 0 {
-        return None;
-    }
-    let index = match options.iter().position(|o| o == current) {
-        Some(i) if wrap => (i as i32 + by).rem_euclid(len),
-        Some(i) => (i as i32 + by).clamp(0, len - 1),
-        None => 0,
+    let index = match (event.change, options.iter().position(|o| o == current)) {
+        (Change::To(index), _) => index as i32,
+        (Change::By(by), Some(i)) if event.wraps() => (i as i32 + by).rem_euclid(len),
+        (Change::By(by), Some(i)) => (i as i32 + by).clamp(0, len - 1),
+        (Change::By(_), None) => 0,
     };
-    Some(options[index as usize].clone())
+    options.get(index as usize).cloned()
 }
 
 // A switch is a list of Off and On: a click flips it, going up turns it on, going down off.
-pub(crate) fn flip(on: bool, by: i32, wrap: bool) -> bool {
-    step(&[false, true], &on, by, wrap).unwrap_or(on)
+pub(crate) fn flip(on: bool, event: &Step) -> bool {
+    step(&[false, true], &on, event).unwrap_or(on)
 }

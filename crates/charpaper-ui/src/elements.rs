@@ -157,7 +157,7 @@ impl UiButton {
             UiButton::Next(cycler) => (cycler, 1),
             _ => return None,
         };
-        Some(Step { cycler, by, continuous: false })
+        Some(Step { cycler, change: Change::By(by), continuous: false })
     }
 }
 
@@ -165,10 +165,17 @@ impl UiButton {
 #[derive(Event, Debug, Clone, Copy)]
 pub(crate) struct Step {
     pub cycler: Cycler,
-    // Forward when positive.
-    pub by: i32,
+    pub change: Change,
     // From the wheel or a held arrow rather than a single click.
     pub continuous: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Change {
+    // Places to move, forward when positive.
+    By(i32),
+    // A choice picked straight from a list, by its place in it.
+    To(usize),
 }
 
 impl Step {
@@ -176,6 +183,14 @@ impl Step {
     // instead of landing back where it started.
     pub(crate) fn wraps(&self) -> bool {
         !self.continuous
+    }
+
+    // How far a number moves. A number is never picked from a list, so a pick moves it nowhere.
+    pub(crate) fn by(&self) -> i32 {
+        match self.change {
+            Change::By(by) => by,
+            Change::To(_) => 0,
+        }
     }
 }
 

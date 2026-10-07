@@ -308,13 +308,12 @@ fn on_step(
     mut state: ResMut<CharacterState>,
     mut gaze: ResMut<GazeSettings>,
 ) {
-    let (by, wrap) = (event.by, event.wraps());
     match event.cycler {
-        Cycler::FollowCursor => gaze.follow_cursor = flip(gaze.follow_cursor, by, wrap),
+        Cycler::FollowCursor => gaze.follow_cursor = flip(gaze.follow_cursor, &event),
         Cycler::Suite => {
             let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
             let current = held.current(Cycler::Suite, &state.suite);
-            if let Some(next) = step(&options, &current, by, wrap) {
+            if let Some(next) = step(&options, &current, &event) {
                 if let Some(choice) = held.hold(&event, next, time.elapsed()) {
                     state.suite = choice;
                 }
@@ -328,7 +327,7 @@ fn on_step(
             let options: Vec<String> =
                 std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect();
             let current = state.expression().unwrap_or_default().to_string();
-            if let Some(next) = step(&options, &current, by, wrap) {
+            if let Some(next) = step(&options, &current, &event) {
                 state.expressions.insert(skin, next);
             }
         }
@@ -337,7 +336,7 @@ fn on_step(
                 return;
             };
             let options: Vec<Option<String>> = clips.names().map(|n| Some(n.to_string())).collect();
-            if let Some(next) = step(&options, &state.animation, by, wrap) {
+            if let Some(next) = step(&options, &state.animation, &event) {
                 state.animation = next;
             }
         }

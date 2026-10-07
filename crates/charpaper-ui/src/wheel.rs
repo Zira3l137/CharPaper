@@ -4,6 +4,7 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
+use crate::elements::Change;
 use crate::elements::Control;
 use crate::elements::Cycler;
 use crate::elements::Step;
@@ -110,7 +111,8 @@ fn on_wheel(
             gesture.speed = if fast { (gesture.speed + 1).min(TOP_SPEED) } else { 1 };
             gesture.stepped = Some(now);
             let speed = if cycler.accelerates() { gesture.speed } else { 1 };
-            commands.trigger(Step { cycler, by: whole as i32 * speed, continuous: true });
+            let change = Change::By(whole as i32 * speed);
+            commands.trigger(Step { cycler, change, continuous: true });
         }
         None => {}
     }

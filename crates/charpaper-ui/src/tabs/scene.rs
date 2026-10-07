@@ -239,7 +239,6 @@ fn on_step(
     let Some(suite) = suite else {
         return;
     };
-    let (by, wrap) = (event.by, event.wraps());
     match event.cycler {
         Cycler::Camera => {
             // None is the orbit camera, which every suite has.
@@ -247,7 +246,7 @@ fn on_step(
                 .chain(suite.cameras.iter().map(|c| Some(c.name.clone())))
                 .collect();
             let current = held.current(Cycler::Camera, &state.camera);
-            if let Some(next) = step(&options, &current, by, wrap) {
+            if let Some(next) = step(&options, &current, &event) {
                 if let Some(choice) = held.hold(&event, next, time.elapsed()) {
                     state.camera = choice;
                 }
@@ -257,7 +256,7 @@ fn on_step(
             let options: Vec<Option<String>> =
                 suite.environments.iter().map(|e| Some(e.name.clone())).collect();
             let current = held.current(Cycler::Environment, &state.environment);
-            if let Some(next) = step(&options, &current, by, wrap) {
+            if let Some(next) = step(&options, &current, &event) {
                 if let Some(choice) = held.hold(&event, next, time.elapsed()) {
                     state.environment = choice;
                 }
@@ -269,7 +268,7 @@ fn on_step(
                     .chain(suite.luts.iter().map(|l| Some(l.name.clone())))
                     .collect();
                 let current = look.post.lut.name().map(str::to_string);
-                if let Some(next) = step(&options, &current, by, wrap) {
+                if let Some(next) = step(&options, &current, &event) {
                     look.post.lut.name = Some(next.unwrap_or_else(|| NO_LUT.to_string()));
                 }
             }
@@ -290,7 +289,7 @@ fn on_step(
         | Cycler::Contrast
         | Cycler::LutStrength => {
             if let Some(mut look) = look {
-                edit_look(&mut look, state.environment.as_deref(), event.cycler, by, wrap);
+                edit_look(&mut look, state.environment.as_deref(), &event);
             }
         }
         _ => {}
@@ -299,18 +298,12 @@ fn on_step(
 
 // Environment settings are kept per environment, so they only change while one shows.
 // Exposure falls back to the suite-wide value without one.
-fn edit_look(
-    look: &mut ActiveLook,
-    environment: Option<&str>,
-    cycler: Cycler,
-    by: i32,
-    wrap: bool,
-) {
+fn edit_look(look: &mut ActiveLook, environment: Option<&str>, event: &Step) {
     let resolved = Resolved::new(look, environment);
-    let steps = by as f32;
-    match cycler {
+    let steps = event.by() as f32;
+    match event.cycler {
         Cycler::Tonemapping => {
-            look.post.tonemapping = step(&Tonemapping::ALL, &resolved.tonemapping, by, wrap);
+            look.post.tonemapping = step(&Tonemapping::ALL, &resolved.tonemapping, event);
         }
         Cycler::Bloom => {
             let bloom = (resolved.bloom + steps * BLOOM_STEP).clamp(0.0, BLOOM_LIMIT);
@@ -372,13 +365,13 @@ fn edit_look(
         }
         Cycler::Brightness => {
             if let Some(name) = environment {
-                let brightness = step_stops(&BRIGHTNESS_STOPS, resolved.brightness, by);
+                let brightness = step_stops(&BRIGHTNESS_STOPS, resolved.brightness, event.by());
                 look.environments.entry(name.into()).or_default().brightness = Some(brightness);
             }
         }
         Cycler::Shadows => {
             if let Some(name) = environment {
-                let shadows = flip(resolved.shadows, by, wrap);
+                let shadows = flip(resolved.shadows, event);
                 look.environments.entry(name.into()).or_default().shadows = Some(shadows);
             }
         }
