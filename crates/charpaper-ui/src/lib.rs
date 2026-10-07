@@ -1,4 +1,5 @@
 mod elements;
+mod held;
 mod locale;
 mod panel;
 mod tabs;
@@ -100,6 +101,7 @@ impl Plugin for SettingsPanelPlugin {
                 tabs::render::RenderTabPlugin,
                 tabs::system::SystemTabPlugin,
                 wheel::WheelPlugin,
+                held::HeldPlugin,
             ));
     }
 }

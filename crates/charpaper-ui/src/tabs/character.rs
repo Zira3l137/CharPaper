@@ -14,6 +14,7 @@ use crate::elements::Section;
 use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
+use crate::held::Held;
 use crate::locale::Locale;
 use crate::theme::*;
 use crate::widgets::*;
@@ -30,7 +31,8 @@ impl Plugin for CharacterTabPlugin {
                 fill_outfits.run_if(resource_added::<ActiveSuite>),
                 show_suite.run_if(
                     resource_changed::<CharacterState>
-                        .or_eager(resource_changed::<AvailableSuites>),
+                        .or_eager(resource_changed::<AvailableSuites>)
+                        .or_eager(resource_changed::<Held>),
                 ),
                 style_outfits.run_if(resource_changed::<CharacterState>),
                 fill_objects.run_if(resource_changed::<SkinObjects>),
@@ -164,12 +166,14 @@ fn style_outfits(
 // Only with two or more suites to pick from.
 fn show_suite(
     state: Res<CharacterState>,
+    held: Res<Held>,
     available: Res<AvailableSuites>,
     mut sections: Query<(&UiContainer, &mut Node)>,
     mut values: Query<(&CyclerValue, &mut Text)>,
 ) {
     show_container(&mut sections, UiContainer::Section(Section::Suite), available.0.len() > 1);
-    set_value(&mut values, Cycler::Suite, state.suite.as_deref().unwrap_or("-"));
+    let suite = held.current(Cycler::Suite, &state.suite);
+    set_value(&mut values, Cycler::Suite, suite.as_deref().unwrap_or("-"));
 }
 
 // Expressions arrive with the worn skin's file, so this follows every skin change.
@@ -296,6 +300,8 @@ fn on_click(
 
 fn on_step(
     event: On<Step>,
+    time: Res<Time<Real>>,
+    mut held: ResMut<Held>,
     clips: Option<Res<CharacterClips>>,
     available: Res<AvailableSuites>,
     expressions: Res<Expressions>,
@@ -307,8 +313,11 @@ fn on_step(
         Cycler::FollowCursor => gaze.follow_cursor = flip(gaze.follow_cursor, by, wrap),
         Cycler::Suite => {
             let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
-            if let Some(next) = step(&options, &state.suite, by, wrap) {
-                state.suite = next;
+            let current = held.current(Cycler::Suite, &state.suite);
+            if let Some(next) = step(&options, &current, by, wrap) {
+                if let Some(choice) = held.hold(&event, next, time.elapsed()) {
+                    state.suite = choice;
+                }
             }
         }
         Cycler::Expression => {

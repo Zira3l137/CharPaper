@@ -16,6 +16,7 @@ use crate::elements::Section;
 use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
+use crate::held::Held;
 use crate::locale::Locale;
 use crate::widgets::*;
 
@@ -59,7 +60,8 @@ impl Plugin for SceneTabPlugin {
                 show_values.run_if(
                     resource_changed::<CharacterState>
                         .or_eager(resource_exists_and_changed::<ActiveLook>)
-                        .or_eager(resource_changed::<Locale>),
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(resource_changed::<Held>),
                 ),
                 show_restore.run_if(resource_changed::<LookBackup>),
             )
@@ -171,6 +173,7 @@ fn show_restore(backup: Res<LookBackup>, buttons: Query<(&UiButton, &mut Node)>)
 
 fn show_values(
     state: Res<CharacterState>,
+    held: Res<Held>,
     look: Option<Res<ActiveLook>>,
     locale: Res<Locale>,
     values: Query<(&CyclerValue, &mut Text)>,
@@ -179,10 +182,12 @@ fn show_values(
     let resolved = Resolved::new(&look, state.environment.as_deref());
     for (value, mut text) in values {
         text.0 = match value.0 {
-            Cycler::Camera => {
-                state.camera.clone().unwrap_or_else(|| fl!(locale, "camera-orbit").into())
+            Cycler::Camera => held
+                .current(Cycler::Camera, &state.camera)
+                .unwrap_or_else(|| fl!(locale, "camera-orbit").into()),
+            Cycler::Environment => {
+                held.current(Cycler::Environment, &state.environment).unwrap_or_else(|| "-".into())
             }
-            Cycler::Environment => state.environment.clone().unwrap_or_else(|| "-".into()),
             Cycler::Brightness => format!("{:.0}", resolved.brightness),
             Cycler::Shadows => on_off(&locale, resolved.shadows).into(),
             Cycler::Tonemapping => tonemapping_name(resolved.tonemapping).into(),
@@ -225,6 +230,8 @@ fn on_click(
 
 fn on_step(
     event: On<Step>,
+    time: Res<Time<Real>>,
+    mut held: ResMut<Held>,
     suite: Option<Res<ActiveSuite>>,
     look: Option<ResMut<ActiveLook>>,
     mut state: ResMut<CharacterState>,
@@ -239,15 +246,21 @@ fn on_step(
             let options: Vec<Option<String>> = std::iter::once(None)
                 .chain(suite.cameras.iter().map(|c| Some(c.name.clone())))
                 .collect();
-            if let Some(next) = step(&options, &state.camera, by, wrap) {
-                state.camera = next;
+            let current = held.current(Cycler::Camera, &state.camera);
+            if let Some(next) = step(&options, &current, by, wrap) {
+                if let Some(choice) = held.hold(&event, next, time.elapsed()) {
+                    state.camera = choice;
+                }
             }
         }
         Cycler::Environment => {
             let options: Vec<Option<String>> =
                 suite.environments.iter().map(|e| Some(e.name.clone())).collect();
-            if let Some(next) = step(&options, &state.environment, by, wrap) {
-                state.environment = next;
+            let current = held.current(Cycler::Environment, &state.environment);
+            if let Some(next) = step(&options, &current, by, wrap) {
+                if let Some(choice) = held.hold(&event, next, time.elapsed()) {
+                    state.environment = choice;
+                }
             }
         }
         Cycler::Lut => {
