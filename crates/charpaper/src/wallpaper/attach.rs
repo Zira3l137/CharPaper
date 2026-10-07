@@ -2,14 +2,17 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::window::RawHandleWrapper;
+use bevy::winit::EventLoopProxyWrapper;
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
+use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 
 use crate::wallpaper::Backend;
 use crate::wallpaper::WallpaperSettings;
+use crate::wallpaper::input::PointerOnDesktop;
 use crate::wallpaper::input::PointerSourceResource;
 
 #[derive(Resource, Default)]
@@ -57,6 +60,8 @@ fn attach_window(
     mut state: ResMut<AttachState>,
     handles: Query<&RawHandleWrapper, With<PrimaryWindow>>,
     mut windows: Query<&mut Window, With<PrimaryWindow>>,
+    on_desktop: Res<PointerOnDesktop>,
+    proxy: Option<Res<EventLoopProxyWrapper>>,
 ) {
     if state.finished {
         return;
@@ -68,7 +73,8 @@ fn attach_window(
     }
 
     let handle = handles.single().ok().map(RawHandleWrapper::get_window_handle);
-    let step = decide(&mut backend.0, &config, handle);
+    let wake = on_desktop.waker(proxy.as_deref());
+    let step = decide(&mut backend.0, &config, handle, wake);
 
     // Shown on failure too: an invisible process with no way to close it is worse.
     let mut reveal = false;
@@ -114,6 +120,7 @@ fn decide(
     backend: &mut Box<dyn WallpaperBackend>,
     config: &WallpaperConfig,
     handle: Option<RawWindowHandle>,
+    wake: Wake,
 ) -> Step {
     if !config.enabled || config.strategy == AttachStrategy::None {
         return Step::Done { message: "wallpaper attach disabled".to_string(), input: None };
@@ -137,7 +144,7 @@ fn decide(
             let how =
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
             let message = format!("attached to desktop using {how}");
-            Step::Done { message, input: start_forwarding(backend, config) }
+            Step::Done { message, input: start_forwarding(backend, config, wake) }
         }
         Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
     }
@@ -147,13 +154,14 @@ fn decide(
 fn start_forwarding(
     backend: &mut Box<dyn WallpaperBackend>,
     config: &WallpaperConfig,
+    wake: Wake,
 ) -> Option<Box<dyn PointerSource>> {
     if !config.forward_input {
         debug!("pointer input forwarding disabled");
         return None;
     }
 
-    match backend.forward_input() {
+    match backend.forward_input(wake) {
         Ok(Some(source)) => {
             info!("forwarding desktop pointer input to the window");
             Some(source)

@@ -1,6 +1,7 @@
 use charpaper_wallpaper::PointerButton;
 use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
+use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperError;
 
 use crate::hook::MouseHook;
@@ -27,8 +28,9 @@ pub struct DesktopPointer {
 }
 
 impl DesktopPointer {
-    pub fn new(window: Hwnd) -> Result<Self, WallpaperError> {
-        Ok(Self { hook: MouseHook::install()?, window, inside: false, held: 0, last_root: None })
+    pub fn new(window: Hwnd, wake: Wake) -> Result<Self, WallpaperError> {
+        let hook = MouseHook::install(wake)?;
+        Ok(Self { hook, window, inside: false, held: 0, last_root: None })
     }
 
     fn translate(&mut self, raw: RawMouseEvent, out: &mut Vec<PointerEvent>) {

@@ -19,5 +19,6 @@ pub use error::WallpaperError;
 pub use input::PointerButton;
 pub use input::PointerEvent;
 pub use input::PointerSource;
+pub use input::Wake;
 pub use raw_window_handle::RawWindowHandle;
 pub use unsupported::UnsupportedBackend;

@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 
+use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperError;
 use tracing::debug;
 use tracing::warn;
@@ -17,9 +18,14 @@ pub struct RawMouseEvent {
     pub mouse_data: u32,
 }
 
+struct Sink {
+    events: mpsc::SyncSender<RawMouseEvent>,
+    wake: Wake,
+}
+
 thread_local! {
     // The callback gets no user data, but it always runs on the hook thread.
-    static SINK: RefCell<Option<mpsc::SyncSender<RawMouseEvent>>> = const { RefCell::new(None) };
+    static SINK: RefCell<Option<Sink>> = const { RefCell::new(None) };
 }
 
 // Windows calls a mouse hook on the thread that installed it, and only while that thread
@@ -32,13 +38,13 @@ pub struct MouseHook {
 }
 
 impl MouseHook {
-    pub fn install() -> Result<Self, WallpaperError> {
+    pub fn install(wake: Wake) -> Result<Self, WallpaperError> {
         let (sink, events) = mpsc::sync_channel(QUEUE_CAPACITY);
         let (ready_tx, ready_rx) = mpsc::channel();
 
         let thread = std::thread::Builder::new()
             .name("charpaper-mouse-hook".to_string())
-            .spawn(move || run(sink, ready_tx))
+            .spawn(move || run(Sink { events: sink, wake }, ready_tx))
             .map_err(|source| WallpaperError::NativeCall {
                 what: "spawning the hook thread",
                 source,
@@ -75,7 +81,7 @@ impl Drop for MouseHook {
     }
 }
 
-fn run(sink: mpsc::SyncSender<RawMouseEvent>, ready: mpsc::Sender<Result<u32, u32>>) {
+fn run(sink: Sink, ready: mpsc::Sender<Result<u32, u32>>) {
     let mut msg = sys::Msg::default();
 
     // A thread only gets a message queue on its first message call. Create it now so a
@@ -125,7 +131,11 @@ unsafe extern "system" fn hook_proc(
         SINK.with_borrow(|sink| {
             if let Some(sink) = sink {
                 // Never block here. A full queue drops the event instead.
-                let _ = sink.try_send(event);
+                let _ = sink.events.try_send(event);
+                // Not for moves: a fast mouse would keep the app from ever resting.
+                if event.message != sys::WM_MOUSEMOVE {
+                    (sink.wake)();
+                }
             }
         });
     }

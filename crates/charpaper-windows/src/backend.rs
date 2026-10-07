@@ -4,6 +4,7 @@ use charpaper_wallpaper::DesktopActivity;
 use charpaper_wallpaper::DesktopProbe;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
+use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WallpaperError;
@@ -66,11 +67,14 @@ impl WallpaperBackend for WindowsBackend {
         Ok(AttachOutcome { strategy_used: Some(strategy) })
     }
 
-    fn forward_input(&mut self) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
+    fn forward_input(
+        &mut self,
+        wake: Wake,
+    ) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
         let Some(hwnd) = self.attached_hwnd else {
             return Ok(None);
         };
-        Ok(Some(Box::new(DesktopPointer::new(hwnd)?)))
+        Ok(Some(Box::new(DesktopPointer::new(hwnd, wake)?)))
     }
 
     fn activity(&mut self) -> DesktopActivity {

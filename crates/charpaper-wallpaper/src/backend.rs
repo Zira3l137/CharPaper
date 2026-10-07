@@ -4,6 +4,7 @@ use crate::AttachStrategy;
 use crate::config::WallpaperConfig;
 use crate::error::WallpaperError;
 use crate::input::PointerSource;
+use crate::input::Wake;
 
 #[derive(Debug, Default)]
 pub struct DesktopProbe {
@@ -38,7 +39,10 @@ pub trait WallpaperBackend: Send + Sync + 'static {
     ) -> Result<AttachOutcome, WallpaperError>;
 
     // Ok(None) means there is nothing to recover: the window gets its input on its own.
-    fn forward_input(&mut self) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
+    fn forward_input(
+        &mut self,
+        _wake: Wake,
+    ) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
         Ok(None)
     }
 

@@ -1,3 +1,7 @@
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+
 use bevy::ecs::system::SystemParam;
 use bevy::input::ButtonState;
 use bevy::input::mouse::MouseButtonInput;
@@ -12,16 +16,19 @@ use bevy::window::CursorLeft;
 use bevy::window::CursorMoved;
 use bevy::window::PrimaryWindow;
 use bevy::window::WindowEvent;
+use bevy::winit::EventLoopProxyWrapper;
+use bevy::winit::WinitUserEvent;
 use charpaper_wallpaper::PointerButton;
 use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
+use charpaper_wallpaper::Wake;
 
 pub(crate) struct InputPlugin;
 
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         // winit writes its input before First, so picking still sees ours this frame.
-        app.add_systems(
+        app.init_resource::<PointerOnDesktop>().add_systems(
             First,
             replay_forwarded_pointer
                 .run_if(resource_exists::<PointerSourceResource>)
@@ -37,6 +44,27 @@ pub struct PointerSourceResource(SyncCell<Box<dyn PointerSource>>);
 impl PointerSourceResource {
     pub fn new(source: Box<dyn PointerSource>) -> Self {
         Self(SyncCell::new(source))
+    }
+}
+
+// Whether the forwarded pointer was last seen over the desktop. The backend's input thread
+// checks it through the waker, so a click in some other app doesn't wake this one.
+#[derive(Resource, Default)]
+pub(crate) struct PointerOnDesktop(Arc<AtomicBool>);
+
+impl PointerOnDesktop {
+    // Does for forwarded input what winit does for input sent to the window itself: pokes the
+    // event loop so the app runs a frame now.
+    pub(crate) fn waker(&self, proxy: Option<&EventLoopProxyWrapper>) -> Wake {
+        let on_desktop = self.0.clone();
+        let Some(proxy) = proxy.map(|proxy| (**proxy).clone()) else {
+            return Box::new(|| {});
+        };
+        Box::new(move || {
+            if on_desktop.load(Ordering::Relaxed) {
+                let _ = proxy.send_event(WinitUserEvent::WakeUp);
+            }
+        })
     }
 }
 
@@ -60,6 +88,7 @@ fn replay_forwarded_pointer(
     mut source: ResMut<PointerSourceResource>,
     windows: Query<(Entity, &Window), With<PrimaryWindow>>,
     mut writers: WindowInputWriters,
+    on_desktop: Res<PointerOnDesktop>,
     mut pending: Local<Vec<PointerEvent>>,
     mut last_position: Local<Option<Vec2>>,
 ) {
@@ -74,8 +103,12 @@ fn replay_forwarded_pointer(
     for event in pending.drain(..) {
         let w = &mut writers;
         match event {
-            PointerEvent::Entered => write(&mut w.entered, &mut w.all, CursorEntered { window }),
+            PointerEvent::Entered => {
+                on_desktop.0.store(true, Ordering::Relaxed);
+                write(&mut w.entered, &mut w.all, CursorEntered { window });
+            }
             PointerEvent::Left => {
+                on_desktop.0.store(false, Ordering::Relaxed);
                 *last_position = None;
                 write(&mut w.left, &mut w.all, CursorLeft { window });
             }
