@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+use gltf::khr_lights_punctual::Kind;
+
 use crate::inspect::Report;
 use crate::inspect::Severity;
 use crate::inspect::examples;
@@ -27,6 +29,7 @@ pub(super) fn check_environments(suite: &Suite, report: &mut Report) {
             if let Some(gltf) = open(suite, scene, report) {
                 lights = gltf.doc.nodes().filter(|n| n.light().is_some()).count();
                 check_fog(environment, scene, &gltf, report);
+                check_light_ranges(scene, &gltf, report);
                 let cameras: Vec<&str> = gltf
                     .doc
                     .nodes()
@@ -133,6 +136,29 @@ fn check_fog(environment: &Environment, scene: &Path, gltf: &Gltf, report: &mut 
              the sky and reflection maps do not light fog"
         );
         report.push(Severity::Warning, manifest, message);
+    }
+}
+
+// glTF carries a light's range only when Blender's Custom Distance is ticked. Without one
+// Bevy lets a lamp reach 20 m, so it shades, and costs, well past where Blender fades it out.
+fn check_light_ranges(scene: &Path, gltf: &Gltf, report: &mut Report) {
+    let unbounded: Vec<&str> = gltf
+        .doc
+        .nodes()
+        .filter(|n| {
+            n.light().is_some_and(|l| l.range().is_none() && !matches!(l.kind(), Kind::Directional))
+        })
+        .map(|n| gltf.names[n.index()].as_str())
+        .collect();
+    if !unbounded.is_empty() {
+        let message = format!(
+            "{} light(s) have no range, so each reaches 20 m, often far past where Blender \
+             fades it out; export with the CharPaper exporter to give every light the range \
+             Blender uses: {}",
+            unbounded.len(),
+            examples(&unbounded)
+        );
+        report.push(Severity::Warning, Some(scene), message);
     }
 }
 

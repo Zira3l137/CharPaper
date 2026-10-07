@@ -1,5 +1,6 @@
 mod animations;
 mod cameras;
+mod cost;
 mod environments;
 mod gaze;
 mod luts;
@@ -17,6 +18,8 @@ use crate::inspect::animations::check_animations;
 use crate::inspect::cameras::check_camera_file;
 use crate::inspect::cameras::check_lens;
 use crate::inspect::cameras::check_orbit_lens;
+pub use crate::inspect::cost::Cost;
+pub use crate::inspect::cost::costs;
 use crate::inspect::environments::check_environments;
 use crate::inspect::gaze::check_gaze;
 use crate::inspect::luts::check_luts;

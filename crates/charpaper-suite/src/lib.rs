@@ -1,6 +1,7 @@
 // Bevy-free: suites are plain data, so this builds fast, is easy to test, and powers
 // `--check-suite` without starting the engine.
 
+mod cascades;
 mod cube;
 mod document;
 mod edit;
@@ -13,6 +14,9 @@ mod layout;
 mod manifest;
 mod shape_keys;
 
+pub use cascades::FIRST_CASCADE;
+pub use cascades::MAX_SHADOW_DISTANCE;
+pub use cascades::sun_cascades;
 pub use cube::CubeLut;
 pub use cube::MAX_LUT_SIZE;
 pub use cube::parse_cube;
@@ -25,9 +29,11 @@ pub use expressions::MAX_SHAPE_KEYS;
 pub use expressions::SkinClips;
 pub use expressions::skin_clips;
 pub use fog::Medium;
+pub use inspect::Cost;
 pub use inspect::Finding;
 pub use inspect::Report;
 pub use inspect::Severity;
+pub use inspect::costs;
 pub use inspect::inspect;
 pub use layout::AnimationFile;
 pub use layout::ClipBinding;

@@ -35,6 +35,13 @@ pub fn check_suite(path: &Path) -> Result<()> {
     println!("cameras  [{}], default {default_camera:?}", cameras.join(", "));
     let environments: Vec<&str> = suite.environments.iter().map(|e| e.name.as_str()).collect();
     println!("envs     [{}], default {:?}", environments.join(", "), suite.default_environment);
+    for (i, cost) in charpaper_suite::costs(&suite).iter().enumerate() {
+        for (j, line) in cost.to_string().lines().enumerate() {
+            let label = if i + j == 0 { "cost" } else { "" };
+            let indent = if j == 0 { "" } else { "  " };
+            println!("{label:<9}{indent}{line}");
+        }
+    }
 
     let report = charpaper_suite::inspect(&suite);
     println!("{report}");
