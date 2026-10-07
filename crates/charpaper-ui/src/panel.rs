@@ -1,3 +1,4 @@
+use bevy::input::mouse::MouseScrollUnit;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use i18n_embed_fl::fl;
@@ -10,6 +11,9 @@ use crate::elements::UiContainer;
 use crate::tabs;
 use crate::theme::*;
 use crate::widgets::*;
+
+// Logical pixels, about one row.
+const SCROLL_PER_NOTCH: f32 = 40.0;
 
 // The frame around the tabs: the button that brings the panel back, the header, the tab
 // bar and the footer.
@@ -34,22 +38,10 @@ fn spawn_panel(mut commands: Commands, ui: Res<UiState>) {
             .with_children(|panel| {
                 panel.spawn(header());
                 panel.spawn(tab_bar());
-                panel
-                    .spawn((
-                        Node {
-                            flex_grow: 1.0,
-                            flex_direction: FlexDirection::Column,
-                            padding: UiRect::all(Val::Px(16.0)),
-                            ..default()
-                        },
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|content| {
-                        content.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
-                        content.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
-                        content.spawn(page(Tab::Render, ui.tab, tabs::render::page()));
-                        content.spawn(page(Tab::System, ui.tab, tabs::system::page()));
-                    });
+                panel.spawn(page(Tab::Character, ui.tab, tabs::character::page())).observe(scroll);
+                panel.spawn(page(Tab::Scene, ui.tab, tabs::scene::page())).observe(scroll);
+                panel.spawn(page(Tab::Render, ui.tab, tabs::render::page())).observe(scroll);
+                panel.spawn(page(Tab::System, ui.tab, tabs::system::page())).observe(scroll);
                 panel.spawn(footer());
             })
             .with_hover_feedback();
@@ -166,18 +158,42 @@ fn tab_bar() -> impl Bundle {
     )
 }
 
+// Each page scrolls on its own, so a tab is where it was left when you come back to it.
 fn page(tab: Tab, active: Tab, content: impl Bundle) -> impl Bundle {
     (
         Node {
             display: display(tab == active),
+            flex_grow: 1.0,
+            // Otherwise the page grows to fit its rows and pushes the footer out of the panel.
+            min_height: Val::ZERO,
             flex_direction: FlexDirection::Column,
             row_gap: Val::Px(20.0),
+            padding: UiRect::all(Val::Px(16.0)),
+            overflow: Overflow::scroll_y(),
             ..default()
         },
-        Pickable::IGNORE,
         UiContainer::Page(tab),
         content,
     )
+}
+
+// Bevy draws the page scrolled no further than its end, but keeps whatever offset is written
+// here. Clamped here too, or scrolling past the end would have to be wound back before the
+// page moved again.
+fn scroll(event: On<Pointer<Scroll>>, mut pages: Query<(&mut ScrollPosition, &ComputedNode)>) {
+    let Ok((mut position, page)) = pages.get_mut(event.entity) else {
+        return;
+    };
+    let distance = match event.unit {
+        MouseScrollUnit::Line => event.y * SCROLL_PER_NOTCH,
+        MouseScrollUnit::Pixel => event.y,
+    };
+    let overflow = page.content_size().y - page.size().y + page.scrollbar_size.y;
+    let end = overflow.max(0.0) * page.inverse_scale_factor();
+    let y = (position.y.min(end) - distance).clamp(0.0, end);
+    if y != position.y {
+        position.y = y;
+    }
 }
 
 fn footer() -> impl Bundle {
