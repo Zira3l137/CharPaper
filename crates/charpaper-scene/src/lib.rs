@@ -8,6 +8,7 @@ mod gaze;
 mod look;
 mod lut;
 mod render;
+mod shadows;
 mod state;
 mod suite;
 
@@ -76,6 +77,7 @@ impl Plugin for ScenePlugin {
                 look::LookPlugin,
                 lut::LutPlugin,
                 render::RenderPlugin,
+                shadows::ShadowsPlugin,
                 gaze::GazePlugin,
             ));
     }

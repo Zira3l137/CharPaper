@@ -9,6 +9,7 @@ use bevy::transform::TransformSystems;
 use bevy::window::PrimaryWindow;
 
 pub(crate) use rig::ShownRig;
+pub(crate) use rig::follow_selected;
 
 use crate::SceneSet;
 use crate::camera::orbit::OrbitCamera;
