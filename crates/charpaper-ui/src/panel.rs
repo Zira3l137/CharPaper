@@ -25,34 +25,35 @@ impl Plugin for PanelPlugin {
 }
 
 fn spawn_panel(mut commands: Commands, ui: Res<UiState>) {
-    commands.spawn(Node { width: percent(100), height: percent(100), ..default() }).with_children(
-        |root| {
-            root.spawn(reveal_button(ui.is_menu_closed)).with_hover_feedback();
-            root.spawn(main_menu(ui.is_menu_closed))
-                .with_children(|panel| {
-                    panel.spawn(header());
-                    panel.spawn(tab_bar());
-                    panel
-                        .spawn((
-                            Node {
-                                flex_grow: 1.0,
-                                flex_direction: FlexDirection::Column,
-                                padding: UiRect::all(Val::Px(16.0)),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                        ))
-                        .with_children(|content| {
-                            content.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
-                            content.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
-                            content.spawn(page(Tab::Render, ui.tab, tabs::render::page()));
-                            content.spawn(page(Tab::System, ui.tab, tabs::system::page()));
-                        });
-                    panel.spawn(footer());
-                })
-                .with_hover_feedback();
-        },
-    );
+    // Spans the screen only to lay the panel out, so it lets the pointer through to the scene.
+    let screen =
+        (Node { width: percent(100), height: percent(100), ..default() }, Pickable::IGNORE);
+    commands.spawn(screen).with_children(|root| {
+        root.spawn(reveal_button(ui.is_menu_closed)).with_hover_feedback();
+        root.spawn(main_menu(ui.is_menu_closed))
+            .with_children(|panel| {
+                panel.spawn(header());
+                panel.spawn(tab_bar());
+                panel
+                    .spawn((
+                        Node {
+                            flex_grow: 1.0,
+                            flex_direction: FlexDirection::Column,
+                            padding: UiRect::all(Val::Px(16.0)),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|content| {
+                        content.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
+                        content.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
+                        content.spawn(page(Tab::Render, ui.tab, tabs::render::page()));
+                        content.spawn(page(Tab::System, ui.tab, tabs::system::page()));
+                    });
+                panel.spawn(footer());
+            })
+            .with_hover_feedback();
+    });
 }
 
 fn reveal_button(closed: bool) -> impl Bundle {
@@ -100,7 +101,8 @@ fn main_menu(closed: bool) -> impl Bundle {
             blur_radius: Val::Px(8.0),
             spread_radius: Val::Px(0.0),
         }]),
-        Pickable::IGNORE,
+        // Pickable, unlike most nodes inside it: the pointer anywhere on the panel stops here
+        // instead of reaching the scene behind it.
         UiContainer::MainMenu,
     )
 }

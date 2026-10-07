@@ -2,9 +2,11 @@ use bevy::prelude::*;
 
 use crate::state::CharacterState;
 
-const BASE_ZOOM_SPEED: f32 = 0.1;
-const BASE_PAN_SPEED: f32 = 0.001;
-const BASE_SENSITIVITY: f32 = 0.005;
+// The orbit radius is multiplied by this once per wheel notch towards the screen, so a fast
+// spin can't overshoot to zero.
+const ZOOM_PER_NOTCH: f32 = 0.81;
+const BASE_PAN_SPEED: f32 = 0.002;
+const BASE_SENSITIVITY: f32 = 0.01;
 // Just short of straight up or down, where the orbit would flip over.
 pub(crate) const PITCH_LIMIT: f32 = 1.54;
 
@@ -25,11 +27,7 @@ pub(crate) fn on_zoom(
         return;
     }
     let (camera, orbit) = &mut *query;
-
-    let scroll_y = event.y;
-
-    let zoom_factor = 1.0 - scroll_y * BASE_ZOOM_SPEED;
-    orbit.radius = (orbit.radius * zoom_factor).clamp(1.0, 100.0);
+    orbit.radius = (orbit.radius * ZOOM_PER_NOTCH.powf(event.y)).clamp(1.0, 100.0);
     update_camera_transform(camera, orbit);
 }
 

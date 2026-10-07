@@ -37,9 +37,6 @@ pub(crate) struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ShownRig>()
-            .add_observer(orbit::on_pan)
-            .add_observer(orbit::on_orbit)
-            .add_observer(orbit::on_zoom)
             .add_observer(rig::on_rig_ready)
             .add_systems(Startup, spawn_camera)
             .add_systems(Update, (rig::choose_camera, reset_view).in_set(SceneSet::Fill))
@@ -71,7 +68,11 @@ fn spawn_camera(
     update_camera_transform(&mut transform, &orbit);
 
     let window = windows.single().ok();
-    let target = scene_target(&mut commands, &mut images, &mut materials, window, &settings);
+    let (target, view) =
+        scene_target(&mut commands, &mut images, &mut materials, window, &settings);
+    // Only the pointer over the scene steers the orbit, so anything drawn on top of the scene,
+    // such as the settings panel, keeps its scrolls and drags to itself.
+    commands.entity(view).observe(orbit::on_pan).observe(orbit::on_orbit).observe(orbit::on_zoom);
     commands.spawn((
         Name::new("Scene camera"),
         SceneCamera,

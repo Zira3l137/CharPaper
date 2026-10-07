@@ -211,13 +211,14 @@ impl UiMaterial for SceneImage {
 
 // The 3D camera draws into an image, and a second camera shows that image full-screen
 // under the UI. So the scene can render at a lower resolution while the UI stays sharp.
+// Returns what the 3D camera needs, and the node showing the image.
 pub(crate) fn scene_target(
     commands: &mut Commands,
     images: &mut Assets<Image>,
     materials: &mut Assets<SceneImage>,
     window: Option<&Window>,
     settings: &RenderSettings,
-) -> impl Bundle {
+) -> (impl Bundle, Entity) {
     let size = window.map_or(UVec2::ONE, |w| scaled(w, settings));
     let image =
         images.add(Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None));
@@ -233,19 +234,21 @@ pub(crate) fn scene_target(
         Msaa::Off,
         Tonemapping::None,
     ));
-    commands.spawn((
-        Name::new("Scene image"),
-        Node {
-            position_type: PositionType::Absolute,
-            width: percent(100),
-            height: percent(100),
-            ..default()
-        },
-        MaterialNode(material),
-        GlobalZIndex(i32::MIN),
-    ));
+    let view = commands
+        .spawn((
+            Name::new("Scene image"),
+            Node {
+                position_type: PositionType::Absolute,
+                width: percent(100),
+                height: percent(100),
+                ..default()
+            },
+            MaterialNode(material),
+            GlobalZIndex(i32::MIN),
+        ))
+        .id();
 
-    (RenderTarget::from(image), settings.anti_aliasing.msaa())
+    ((RenderTarget::from(image), settings.anti_aliasing.msaa()), view)
 }
 
 // Bevy recreates the GPU texture behind the same handle. The material that shows it keeps
