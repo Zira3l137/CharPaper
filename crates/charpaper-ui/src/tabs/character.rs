@@ -9,8 +9,8 @@ use charpaper_scene::SkinObjects;
 use i18n_embed_fl::fl;
 
 use crate::elements::Cycler;
-use crate::elements::CyclerValue;
 use crate::elements::Section;
+use crate::elements::Shown;
 use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
@@ -169,11 +169,12 @@ fn show_suite(
     held: Res<Held>,
     available: Res<AvailableSuites>,
     mut sections: Query<(&UiContainer, &mut Node)>,
-    mut values: Query<(&CyclerValue, &mut Text)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
     show_container(&mut sections, UiContainer::Section(Section::Suite), available.0.len() > 1);
-    let suite = held.current(Cycler::Suite, &state.suite);
-    set_value(&mut values, Cycler::Suite, suite.as_deref().unwrap_or("-"));
+    let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
+    let current = held.current(Cycler::Suite, &state.suite);
+    show(&mut rows, Cycler::Suite, choice(&options, &current, name));
 }
 
 // Expressions arrive with the worn skin's file, so this follows every skin change.
@@ -182,12 +183,20 @@ fn show_expression(
     expressions: Res<Expressions>,
     locale: Res<Locale>,
     mut sections: Query<(&UiContainer, &mut Node)>,
-    mut values: Query<(&CyclerValue, &mut Text)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
     let shown = !expressions.0.is_empty();
     show_container(&mut sections, UiContainer::Section(Section::Expression), shown);
+    let options = expression_options(&expressions);
+    let current = state.expression().unwrap_or_default().to_string();
     let neutral = fl!(locale, "expression-neutral");
-    set_value(&mut values, Cycler::Expression, state.expression().unwrap_or(&neutral));
+    let label = |name: &String| if name.is_empty() { neutral.clone() } else { name.clone() };
+    show(&mut rows, Cycler::Expression, choice(&options, &current, label));
+}
+
+// Neutral is an empty name; see CharacterState::expressions.
+fn expression_options(expressions: &Expressions) -> Vec<String> {
+    std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect()
 }
 
 // Only for a suite whose suite.toml says which bones follow the cursor.
@@ -196,11 +205,11 @@ fn show_gaze(
     settings: Res<GazeSettings>,
     locale: Res<Locale>,
     mut sections: Query<(&UiContainer, &mut Node)>,
-    mut values: Query<(&CyclerValue, &mut Text)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
     let shown = suite.is_some_and(|suite| suite.gaze.is_some());
     show_container(&mut sections, UiContainer::Section(Section::Gaze), shown);
-    set_value(&mut values, Cycler::FollowCursor, &on_off(&locale, settings.follow_cursor));
+    show(&mut rows, Cycler::FollowCursor, switch(&locale, settings.follow_cursor));
 }
 
 // Clips arrive a moment after the suite, once their files have loaded.
@@ -208,11 +217,15 @@ fn show_animation(
     state: Res<CharacterState>,
     clips: Option<Res<CharacterClips>>,
     mut sections: Query<(&UiContainer, &mut Node)>,
-    mut values: Query<(&CyclerValue, &mut Text)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
-    let any = clips.is_some_and(|clips| clips.names().next().is_some());
-    show_container(&mut sections, UiContainer::Section(Section::Animation), any);
-    set_value(&mut values, Cycler::Animation, state.animation.as_deref().unwrap_or("-"));
+    let options = clips.as_deref().map(animation_options).unwrap_or_default();
+    show_container(&mut sections, UiContainer::Section(Section::Animation), !options.is_empty());
+    show(&mut rows, Cycler::Animation, choice(&options, &state.animation, name));
+}
+
+fn animation_options(clips: &CharacterClips) -> Vec<Option<String>> {
+    clips.names().map(|name| Some(name.to_string())).collect()
 }
 
 // One row per mesh object of the worn skin.
@@ -323,9 +336,7 @@ fn on_step(
             let Some(skin) = state.skin.clone() else {
                 return;
             };
-            // Neutral is an empty name; see CharacterState::expressions.
-            let options: Vec<String> =
-                std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect();
+            let options = expression_options(&expressions);
             let current = state.expression().unwrap_or_default().to_string();
             if let Some(next) = step(&options, &current, &event) {
                 state.expressions.insert(skin, next);
@@ -335,7 +346,7 @@ fn on_step(
             let Some(clips) = clips else {
                 return;
             };
-            let options: Vec<Option<String>> = clips.names().map(|n| Some(n.to_string())).collect();
+            let options = animation_options(&clips);
             if let Some(next) = step(&options, &state.animation, &event) {
                 state.animation = next;
             }

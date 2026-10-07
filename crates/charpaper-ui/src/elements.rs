@@ -202,6 +202,29 @@ pub(crate) struct Control(pub Cycler);
 #[derive(Component)]
 pub(crate) struct Well(pub Cycler);
 
+// What a row shows. The tab that owns the row works it out, and the row's widgets draw it.
+#[derive(Component, Debug, Clone, PartialEq, Default)]
+pub(crate) enum Shown {
+    #[default]
+    Nothing,
+    // A number as text, and where it sits in its range from 0 to 1. A centered range, one with
+    // its neutral value in the middle, fills out from the middle.
+    Number {
+        text: String,
+        fill: f32,
+        centered: bool,
+    },
+    // A list of choices by their labels, and which one is current.
+    Choice {
+        labels: Vec<String>,
+        current: Option<usize>,
+    },
+}
+
+// The bar along the bottom of a number's box, as long as the number is far into its range.
+#[derive(Component)]
+pub(crate) struct FillBar(pub Cycler);
+
 // The text showing a cycler's current value.
 #[derive(Component)]
 pub(crate) struct CyclerValue(pub Cycler);

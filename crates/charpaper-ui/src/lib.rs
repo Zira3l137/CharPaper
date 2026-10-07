@@ -3,6 +3,7 @@ mod elements;
 mod held;
 mod locale;
 mod panel;
+mod rows;
 mod tabs;
 mod theme;
 mod wheel;
@@ -104,6 +105,7 @@ impl Plugin for SettingsPanelPlugin {
                 wheel::WheelPlugin,
                 held::HeldPlugin,
                 arrows::ArrowsPlugin,
+                rows::RowsPlugin,
             ));
     }
 }

@@ -6,6 +6,8 @@ pub(crate) const BUTTON_BG: Color = Color::srgb_u8(0x1D, 0x20, 0x29);
 pub(crate) const WELL_BG: Color = Color::srgb_u8(0x15, 0x17, 0x1D);
 pub(crate) const SELECTED_BG: Color = Color::srgb_u8(0x1B, 0x35, 0x50);
 pub(crate) const ACCENT: Color = Color::srgb_u8(0x5A, 0xA6, 0xF2);
+// The bar under a number, showing how far into its range it is.
+pub(crate) const FILL: Color = Color::srgba_u8(0x5A, 0xA6, 0xF2, 0x99);
 // Around a value the wheel would change right now.
 pub(crate) const LIVE_BORDER: Color = Color::srgb_u8(0x3A, 0x63, 0x8C);
 pub(crate) const ON_ACCENT: Color = Color::srgb_u8(0x08, 0x11, 0x1C);

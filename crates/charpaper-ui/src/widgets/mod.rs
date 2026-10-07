@@ -13,7 +13,9 @@ use crate::elements::Chevron;
 use crate::elements::Control;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
+use crate::elements::FillBar;
 use crate::elements::Section;
+use crate::elements::Shown;
 use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
@@ -149,6 +151,7 @@ pub(crate) fn cycler(title: Tr, cycler: Cycler) -> impl Bundle {
             ..default()
         },
         UiContainer::Row(cycler),
+        Shown::default(),
         Pickable::IGNORE,
         children![
             (
@@ -177,7 +180,20 @@ pub(crate) fn cycler(title: Tr, cycler: Cycler) -> impl Bundle {
                         BorderColor::all(BORDER),
                         Pickable::IGNORE,
                         Well(cycler),
-                        children![(label("-", BODY_SIZE, TEXT), CyclerValue(cycler))],
+                        children![
+                            (label("-", BODY_SIZE, TEXT), CyclerValue(cycler)),
+                            (
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    bottom: Val::ZERO,
+                                    height: Val::Px(2.0),
+                                    ..default()
+                                },
+                                BackgroundColor(FILL),
+                                Pickable::IGNORE,
+                                FillBar(cycler),
+                            ),
+                        ],
                     ),
                     glyph_button(">", UiButton::Next(cycler)),
                 ],
@@ -214,6 +230,58 @@ pub(crate) fn set_value(values: &mut Query<(&CyclerValue, &mut Text)>, cycler: C
             shown.0 = text.to_string();
         }
     }
+}
+
+// Hands a row what it should show. Left untouched when that hasn't changed, so the row isn't
+// drawn again for nothing.
+pub(crate) fn show(rows: &mut Query<(&UiContainer, &mut Shown)>, cycler: Cycler, shown: Shown) {
+    for (container, mut current) in rows.iter_mut() {
+        if *container == UiContainer::Row(cycler) {
+            current.set_if_neq(shown.clone());
+        }
+    }
+}
+
+pub(crate) fn number(text: impl Into<String>, value: f32, min: f32, max: f32) -> Shown {
+    Shown::Number { text: text.into(), fill: fraction(value, min, max), centered: false }
+}
+
+// For a range with its neutral value in the middle, such as warmth.
+pub(crate) fn balance(text: impl Into<String>, value: f32, min: f32, max: f32) -> Shown {
+    Shown::Number { text: text.into(), fill: fraction(value, min, max), centered: true }
+}
+
+// max and min rather than clamp: they turn a NaN, say from the log of a zero, into 0.
+fn fraction(value: f32, min: f32, max: f32) -> f32 {
+    if max > min { ((value - min) / (max - min)).max(0.0).min(1.0) } else { 0.0 }
+}
+
+pub(crate) fn choice<T: PartialEq>(
+    options: &[T],
+    current: &T,
+    label: impl Fn(&T) -> String,
+) -> Shown {
+    let labels = options.iter().map(label).collect();
+    Shown::Choice { labels, current: options.iter().position(|option| option == current) }
+}
+
+pub(crate) fn percent(fraction: f32) -> String {
+    format!("{:.0}%", fraction * 100.0)
+}
+
+// With a sign, and none on zero, which also keeps a rounded -0 from showing.
+pub(crate) fn signed_percent(fraction: f32) -> String {
+    let percent = (fraction * 100.0).round();
+    if percent == 0.0 { "0%".into() } else { format!("{percent:+.0}%") }
+}
+
+// The label of a choice that is a name, or none.
+pub(crate) fn name(option: &Option<String>) -> String {
+    option.clone().unwrap_or_else(|| "-".into())
+}
+
+pub(crate) fn switch(locale: &FluentLanguageLoader, on: bool) -> Shown {
+    choice(&[false, true], &on, |&on| on_off(locale, on))
 }
 
 pub(crate) fn on_off(locale: &FluentLanguageLoader, on: bool) -> String {

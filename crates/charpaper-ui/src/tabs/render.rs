@@ -8,9 +8,10 @@ use charpaper_scene::RenderSettings;
 use i18n_embed_fl::fl;
 
 use crate::elements::Cycler;
-use crate::elements::CyclerValue;
 use crate::elements::Section;
+use crate::elements::Shown;
 use crate::elements::Step;
+use crate::elements::UiContainer;
 use crate::locale::Locale;
 use crate::widgets::*;
 
@@ -68,39 +69,55 @@ pub(crate) fn page() -> impl Bundle {
 fn show_values(
     settings: Res<RenderSettings>,
     locale: Res<Locale>,
-    values: Query<(&CyclerValue, &mut Text)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
-    for (value, mut text) in values {
-        text.0 = match value.0 {
-            Cycler::FpsLimit => match settings.fps_limit.per_second() {
-                Some(fps) => format!("{fps:.0}"),
-                None => fl!(locale, "value-max").into(),
-            },
-            Cycler::RenderScale => format!("{}%", settings.scale_percent()),
-            Cycler::AntiAliasing => match settings.anti_aliasing {
-                AntiAliasing::Off => on_off(&locale, false).into(),
-                AntiAliasing::Msaa4 => "4x".into(),
-                AntiAliasing::Taa => "TAA".into(),
-            },
-            Cycler::DepthOfField => match settings.depth_of_field {
-                DepthOfFieldQuality::Off => on_off(&locale, false).into(),
-                DepthOfFieldQuality::Blur => fl!(locale, "value-blur").into(),
-                DepthOfFieldQuality::Bokeh => fl!(locale, "value-bokeh").into(),
-            },
-            Cycler::Fog => on_off(&locale, settings.fog).into(),
-            Cycler::FogQuality => match settings.fog_quality {
-                FogQuality::VeryLow => fl!(locale, "value-very-low").into(),
-                FogQuality::Low => fl!(locale, "value-low").into(),
-                FogQuality::Medium => fl!(locale, "value-medium").into(),
-                FogQuality::High => fl!(locale, "value-high").into(),
-                FogQuality::Ultra => fl!(locale, "value-ultra").into(),
-            },
-            Cycler::FogDithering => on_off(&locale, settings.fog_dithering).into(),
-            Cycler::PauseFullscreen => on_off(&locale, settings.pause_when_fullscreen).into(),
-            Cycler::PauseCovered => on_off(&locale, settings.pause_when_covered).into(),
-            Cycler::PauseBattery => on_off(&locale, settings.pause_on_battery).into(),
+    let off = on_off(&locale, false);
+    for (container, mut shown) in &mut rows {
+        let UiContainer::Row(cycler) = *container else {
+            continue;
+        };
+        let next = match cycler {
+            Cycler::FpsLimit => {
+                choice(&FpsLimit::ALL, &settings.fps_limit, |limit| match limit.per_second() {
+                    Some(fps) => format!("{fps:.0}"),
+                    None => fl!(locale, "value-max"),
+                })
+            }
+            Cycler::RenderScale => {
+                choice(&RENDER_SCALES, &settings.scale_percent(), |scale| format!("{scale}%"))
+            }
+            Cycler::AntiAliasing => {
+                choice(&AntiAliasing::ALL, &settings.anti_aliasing, |aa| match aa {
+                    AntiAliasing::Off => off.clone(),
+                    AntiAliasing::Msaa4 => "4x".into(),
+                    AntiAliasing::Taa => "TAA".into(),
+                })
+            }
+            Cycler::DepthOfField => {
+                choice(&DepthOfFieldQuality::ALL, &settings.depth_of_field, |quality| match quality
+                {
+                    DepthOfFieldQuality::Off => off.clone(),
+                    DepthOfFieldQuality::Blur => fl!(locale, "value-blur"),
+                    DepthOfFieldQuality::Bokeh => fl!(locale, "value-bokeh"),
+                })
+            }
+            Cycler::Fog => switch(&locale, settings.fog),
+            Cycler::FogQuality => {
+                choice(&FogQuality::ALL, &settings.fog_quality, |quality| match quality {
+                    FogQuality::VeryLow => fl!(locale, "value-very-low"),
+                    FogQuality::Low => fl!(locale, "value-low"),
+                    FogQuality::Medium => fl!(locale, "value-medium"),
+                    FogQuality::High => fl!(locale, "value-high"),
+                    FogQuality::Ultra => fl!(locale, "value-ultra"),
+                })
+            }
+            Cycler::FogDithering => switch(&locale, settings.fog_dithering),
+            Cycler::PauseFullscreen => switch(&locale, settings.pause_when_fullscreen),
+            Cycler::PauseCovered => switch(&locale, settings.pause_when_covered),
+            Cycler::PauseBattery => switch(&locale, settings.pause_on_battery),
             _ => continue,
         };
+        shown.set_if_neq(next);
     }
 }
 

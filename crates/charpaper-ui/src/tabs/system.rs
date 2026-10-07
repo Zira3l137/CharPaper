@@ -3,9 +3,10 @@ use i18n_embed_fl::fl;
 
 use crate::UiState;
 use crate::elements::Cycler;
-use crate::elements::CyclerValue;
 use crate::elements::Section;
+use crate::elements::Shown;
 use crate::elements::Step;
+use crate::elements::UiContainer;
 use crate::locale::Languages;
 use crate::locale::Locale;
 use crate::widgets::*;
@@ -34,22 +35,25 @@ fn show_language(
     ui: Res<UiState>,
     locale: Res<Locale>,
     languages: Res<Languages>,
-    mut values: Query<(&CyclerValue, &mut Text)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
-    let text = match &ui.language {
+    let label = |tag: &Option<String>| match tag {
         None => fl!(locale, "language-system"),
         Some(tag) => languages.name(tag).unwrap_or(tag).to_string(),
     };
-    set_value(&mut values, Cycler::Language, &text);
+    show(&mut rows, Cycler::Language, choice(&options(&languages), &ui.language, label));
 }
 
 // None, following the system's languages, comes first.
+fn options(languages: &Languages) -> Vec<Option<String>> {
+    std::iter::once(None).chain(languages.0.iter().map(|l| Some(l.tag.clone()))).collect()
+}
+
 fn on_step(event: On<Step>, languages: Res<Languages>, mut ui: ResMut<UiState>) {
     if event.cycler != Cycler::Language {
         return;
     }
-    let options: Vec<Option<String>> =
-        std::iter::once(None).chain(languages.0.iter().map(|l| Some(l.tag.clone()))).collect();
+    let options = options(&languages);
     if let Some(next) = step(&options, &ui.language, &event) {
         ui.language = next;
     }

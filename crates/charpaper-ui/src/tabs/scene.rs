@@ -11,8 +11,8 @@ use i18n_embed_fl::fl;
 
 use crate::Tab;
 use crate::elements::Cycler;
-use crate::elements::CyclerValue;
 use crate::elements::Section;
+use crate::elements::Shown;
 use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
@@ -61,7 +61,8 @@ impl Plugin for SceneTabPlugin {
                     resource_changed::<CharacterState>
                         .or_eager(resource_exists_and_changed::<ActiveLook>)
                         .or_eager(resource_changed::<Locale>)
-                        .or_eager(resource_changed::<Held>),
+                        .or_eager(resource_changed::<Held>)
+                        .or_eager(resource_exists_and_changed::<ActiveSuite>),
                 ),
                 show_restore.run_if(resource_changed::<LookBackup>),
             )
@@ -172,50 +173,105 @@ fn show_restore(backup: Res<LookBackup>, buttons: Query<(&UiButton, &mut Node)>)
 }
 
 fn show_values(
+    suite: Option<Res<ActiveSuite>>,
     state: Res<CharacterState>,
     held: Res<Held>,
     look: Option<Res<ActiveLook>>,
     locale: Res<Locale>,
-    values: Query<(&CyclerValue, &mut Text)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
+    let Some(suite) = suite else {
+        return;
+    };
     let look = look.map(|l| l.0.clone()).unwrap_or_default();
     let resolved = Resolved::new(&look, state.environment.as_deref());
-    for (value, mut text) in values {
-        text.0 = match value.0 {
-            Cycler::Camera => held
-                .current(Cycler::Camera, &state.camera)
-                .unwrap_or_else(|| fl!(locale, "camera-orbit").into()),
+    let orbit = fl!(locale, "camera-orbit");
+    let off = on_off(&locale, false);
+    // Intensities read as a share of the strongest the row allows, Off at none.
+    let strength = |value: f32, max: f32| {
+        let text = if value <= 0.0 { off.clone() } else { percent(value / max) };
+        number(text, value, 0.0, max)
+    };
+    for (container, mut shown) in &mut rows {
+        let UiContainer::Row(cycler) = *container else {
+            continue;
+        };
+        let next = match cycler {
+            Cycler::Camera => {
+                let camera = held.current(Cycler::Camera, &state.camera);
+                choice(&camera_options(&suite), &camera, |camera| {
+                    camera.clone().unwrap_or_else(|| orbit.clone())
+                })
+            }
             Cycler::Environment => {
-                held.current(Cycler::Environment, &state.environment).unwrap_or_else(|| "-".into())
+                let environment = held.current(Cycler::Environment, &state.environment);
+                choice(&environment_options(&suite), &environment, name)
             }
-            Cycler::Brightness => format!("{:.0}", resolved.brightness),
-            Cycler::Shadows => on_off(&locale, resolved.shadows).into(),
-            Cycler::Tonemapping => tonemapping_name(resolved.tonemapping).into(),
-            Cycler::Exposure => format!("{:+.1} EV", resolved.exposure),
-            Cycler::Bloom if resolved.bloom <= 0.0 => on_off(&locale, false).into(),
-            Cycler::Bloom => format!("{:.2}", resolved.bloom),
-            Cycler::ChromaticAberration if resolved.chromatic_aberration <= 0.0 => {
-                on_off(&locale, false).into()
+            // The stops look evenly spaced, so the bar follows them on a log scale too.
+            Cycler::Brightness => {
+                let (min, max) =
+                    (BRIGHTNESS_STOPS[0], BRIGHTNESS_STOPS[BRIGHTNESS_STOPS.len() - 1]);
+                let text = format!("{:.0}", resolved.brightness);
+                number(text, resolved.brightness.ln(), min.ln(), max.ln())
             }
-            Cycler::ChromaticAberration => format!("{:.4}", resolved.chromatic_aberration),
-            Cycler::Vignette if resolved.vignette <= 0.0 => on_off(&locale, false).into(),
-            Cycler::Vignette => format!("{:.2}", resolved.vignette),
-            Cycler::VignetteSize => format!("{:.1}", resolved.vignette_size),
-            Cycler::Grain if resolved.grain <= 0.0 => on_off(&locale, false).into(),
-            Cycler::Grain => format!("{:.2}", resolved.grain),
-            Cycler::GrainSize => format!("{:.2} px", resolved.grain_size),
-            Cycler::Warmth => format!("{:+.2}", resolved.warmth),
-            Cycler::Tint => format!("{:+.2}", resolved.tint),
-            Cycler::Saturation => format!("{:.2}", resolved.saturation),
-            Cycler::Contrast => format!("{:.2}", resolved.contrast),
-            Cycler::Lut => match look.post.lut.name() {
-                Some(name) => name.to_string(),
-                None => on_off(&locale, false).into(),
-            },
-            Cycler::LutStrength => format!("{:.2}", resolved.lut_strength),
+            Cycler::Shadows => switch(&locale, resolved.shadows),
+            Cycler::Tonemapping => {
+                choice(&Tonemapping::ALL, &resolved.tonemapping, |t| tonemapping_name(*t).into())
+            }
+            Cycler::Exposure => {
+                let text = format!("{:+.1} EV", resolved.exposure);
+                balance(text, resolved.exposure, -EXPOSURE_LIMIT, EXPOSURE_LIMIT)
+            }
+            Cycler::Bloom => strength(resolved.bloom, BLOOM_LIMIT),
+            Cycler::ChromaticAberration => {
+                strength(resolved.chromatic_aberration, ABERRATION_LIMIT)
+            }
+            Cycler::Vignette => strength(resolved.vignette, 1.0),
+            Cycler::VignetteSize => {
+                let (min, max) = VIGNETTE_SIZES;
+                number(format!("{:.1}", resolved.vignette_size), resolved.vignette_size, min, max)
+            }
+            Cycler::Grain => strength(resolved.grain, GRAIN_LIMIT),
+            Cycler::GrainSize => {
+                let (min, max) = GRAIN_SIZES;
+                number(format!("{:.2} px", resolved.grain_size), resolved.grain_size, min, max)
+            }
+            Cycler::Warmth => balance(signed_percent(resolved.warmth), resolved.warmth, -1.0, 1.0),
+            Cycler::Tint => balance(signed_percent(resolved.tint), resolved.tint, -1.0, 1.0),
+            // 100% leaves the picture as it is, which sits in the middle of both ranges.
+            Cycler::Saturation => {
+                let (min, max) = SATURATIONS;
+                balance(percent(resolved.saturation), resolved.saturation, min, max)
+            }
+            Cycler::Contrast => {
+                let (min, max) = CONTRASTS;
+                balance(percent(resolved.contrast), resolved.contrast, min, max)
+            }
+            Cycler::Lut => {
+                let lut = look.post.lut.name().map(str::to_string);
+                choice(&lut_options(&suite), &lut, |lut| lut.clone().unwrap_or_else(|| off.clone()))
+            }
+            Cycler::LutStrength => {
+                number(percent(resolved.lut_strength), resolved.lut_strength, 0.0, 1.0)
+            }
             _ => continue,
         };
+        shown.set_if_neq(next);
     }
+}
+
+// None is the orbit camera, which every suite has.
+fn camera_options(suite: &ActiveSuite) -> Vec<Option<String>> {
+    std::iter::once(None).chain(suite.cameras.iter().map(|c| Some(c.name.clone()))).collect()
+}
+
+fn environment_options(suite: &ActiveSuite) -> Vec<Option<String>> {
+    suite.environments.iter().map(|e| Some(e.name.clone())).collect()
+}
+
+// None is no LUT.
+fn lut_options(suite: &ActiveSuite) -> Vec<Option<String>> {
+    std::iter::once(None).chain(suite.luts.iter().map(|l| Some(l.name.clone()))).collect()
 }
 
 fn on_click(
@@ -241,10 +297,7 @@ fn on_step(
     };
     match event.cycler {
         Cycler::Camera => {
-            // None is the orbit camera, which every suite has.
-            let options: Vec<Option<String>> = std::iter::once(None)
-                .chain(suite.cameras.iter().map(|c| Some(c.name.clone())))
-                .collect();
+            let options = camera_options(&suite);
             let current = held.current(Cycler::Camera, &state.camera);
             if let Some(next) = step(&options, &current, &event) {
                 if let Some(choice) = held.hold(&event, next, time.elapsed()) {
@@ -253,8 +306,7 @@ fn on_step(
             }
         }
         Cycler::Environment => {
-            let options: Vec<Option<String>> =
-                suite.environments.iter().map(|e| Some(e.name.clone())).collect();
+            let options = environment_options(&suite);
             let current = held.current(Cycler::Environment, &state.environment);
             if let Some(next) = step(&options, &current, &event) {
                 if let Some(choice) = held.hold(&event, next, time.elapsed()) {
@@ -264,9 +316,7 @@ fn on_step(
         }
         Cycler::Lut => {
             if let Some(mut look) = look {
-                let options: Vec<Option<String>> = std::iter::once(None)
-                    .chain(suite.luts.iter().map(|l| Some(l.name.clone())))
-                    .collect();
+                let options = lut_options(&suite);
                 let current = look.post.lut.name().map(str::to_string);
                 if let Some(next) = step(&options, &current, &event) {
                     look.post.lut.name = Some(next.unwrap_or_else(|| NO_LUT.to_string()));
