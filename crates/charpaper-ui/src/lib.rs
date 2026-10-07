@@ -1,6 +1,7 @@
 mod arrows;
 mod elements;
 mod held;
+mod help;
 mod locale;
 mod panel;
 mod rows;
@@ -106,6 +107,7 @@ impl Plugin for SettingsPanelPlugin {
                 held::HeldPlugin,
                 arrows::ArrowsPlugin,
                 rows::RowsPlugin,
+                help::HelpPlugin,
             ));
     }
 }

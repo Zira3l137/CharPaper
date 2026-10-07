@@ -8,6 +8,7 @@ use crate::PanelHovered;
 use crate::Tab;
 use crate::UiState;
 use crate::elements::Chevron;
+use crate::elements::HelpText;
 use crate::elements::StatusText;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
@@ -197,7 +198,11 @@ fn footer() -> impl Bundle {
         BorderColor::all(BORDER),
         Pickable::IGNORE,
         children![
-            (Node { flex_grow: 1.0, ..default() }, Pickable::IGNORE),
+            (
+                label("", SMALL_SIZE, TEXT_DIM),
+                Node { flex_grow: 1.0, min_width: Val::ZERO, ..default() },
+                HelpText,
+            ),
             translated_button(|l| fl!(l, "quit"))
                 .text_color(DANGER_TEXT)
                 .border_color(DANGER_BORDER)

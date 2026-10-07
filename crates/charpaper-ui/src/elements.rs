@@ -245,6 +245,10 @@ pub(crate) struct CyclerValue(pub Cycler);
 #[derive(Component)]
 pub(crate) struct Chevron(pub Section);
 
+// The line at the bottom of the panel saying what the row under the pointer does.
+#[derive(Component)]
+pub(crate) struct HelpText;
+
 // The line under the panel's title: the suite's name.
 #[derive(Component)]
 pub(crate) struct StatusText;

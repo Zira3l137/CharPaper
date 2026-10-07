@@ -143,12 +143,12 @@ pub(crate) fn rows(content: impl Bundle) -> impl Bundle {
     )
 }
 
-// The tab owning the row says what it shows.
+// The tab owning the row says what it shows. Hovered tells the help line what the pointer is on.
 fn row(title: Tr, cycler: Cycler, control: impl Bundle) -> impl Bundle {
-    (row_line(title, control), UiContainer::Row(cycler), Shown::default())
+    (row_line(title, control), UiContainer::Row(cycler), Shown::default(), Hovered::default())
 }
 
-// A label, then the row's control.
+// A label, then the row's control. Pickable, so the pointer over the label is on the row too.
 fn row_line(title: Tr, control: impl Bundle) -> impl Bundle {
     (
         Node {
@@ -157,7 +157,6 @@ fn row_line(title: Tr, control: impl Bundle) -> impl Bundle {
             height: Val::Px(36.0),
             ..default()
         },
-        Pickable::IGNORE,
         children![
             (
                 Node { width: LABEL_WIDTH, flex_shrink: 0.0, ..default() },
@@ -300,6 +299,7 @@ pub(crate) fn picker(title: Tr, cycler: Cycler) -> impl Bundle {
         Node { flex_direction: FlexDirection::Column, ..default() },
         UiContainer::Row(cycler),
         Shown::default(),
+        Hovered::default(),
         Pickable::IGNORE,
         children![row_line(title, value), list],
     )
