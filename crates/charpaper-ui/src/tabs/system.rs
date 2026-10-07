@@ -27,7 +27,7 @@ pub(crate) fn page() -> impl Bundle {
     children![shown_section(
         |l| fl!(l, "section-interface"),
         Section::Interface,
-        stepper(|l| fl!(l, "label-language"), Cycler::Language),
+        picker(|l| fl!(l, "label-language"), Cycler::Language),
     )]
 }
 

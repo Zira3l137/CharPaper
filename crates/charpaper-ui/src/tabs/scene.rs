@@ -76,13 +76,13 @@ pub(crate) fn page() -> impl Bundle {
         section(
             |l| fl!(l, "section-camera"),
             Section::Camera,
-            stepper(|l| fl!(l, "label-camera"), Cycler::Camera),
+            picker(|l| fl!(l, "label-camera"), Cycler::Camera),
         ),
         section(
             |l| fl!(l, "section-environment"),
             Section::Environment,
             rows(children![
-                stepper(|l| fl!(l, "label-environment"), Cycler::Environment),
+                picker(|l| fl!(l, "label-environment"), Cycler::Environment),
                 stepper(|l| fl!(l, "label-brightness"), Cycler::Brightness),
                 segments(|l| fl!(l, "label-shadows"), Cycler::Shadows),
             ]),
@@ -91,7 +91,7 @@ pub(crate) fn page() -> impl Bundle {
             |l| fl!(l, "section-image"),
             Section::Image,
             rows(children![
-                stepper(|l| fl!(l, "label-tonemapping"), Cycler::Tonemapping),
+                picker(|l| fl!(l, "label-tonemapping"), Cycler::Tonemapping),
                 stepper(|l| fl!(l, "label-exposure"), Cycler::Exposure),
                 stepper(|l| fl!(l, "label-bloom"), Cycler::Bloom),
                 stepper(|l| fl!(l, "label-chromatic-aberration"), Cycler::ChromaticAberration),
@@ -105,7 +105,7 @@ pub(crate) fn page() -> impl Bundle {
                 stepper(|l| fl!(l, "label-tint"), Cycler::Tint),
                 stepper(|l| fl!(l, "label-saturation"), Cycler::Saturation),
                 stepper(|l| fl!(l, "label-contrast"), Cycler::Contrast),
-                stepper(|l| fl!(l, "label-lut"), Cycler::Lut),
+                picker(|l| fl!(l, "label-lut"), Cycler::Lut),
                 stepper(|l| fl!(l, "label-lut-strength"), Cycler::LutStrength),
             ]),
         ),

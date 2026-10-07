@@ -14,6 +14,7 @@ use crate::elements::Control;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::FillBar;
+use crate::elements::PickerList;
 use crate::elements::Section;
 use crate::elements::SegmentBar;
 use crate::elements::Shown;
@@ -142,8 +143,13 @@ pub(crate) fn rows(content: impl Bundle) -> impl Bundle {
     )
 }
 
-// A label, then the row's control. The tab owning the row says what it shows.
+// The tab owning the row says what it shows.
 fn row(title: Tr, cycler: Cycler, control: impl Bundle) -> impl Bundle {
+    (row_line(title, control), UiContainer::Row(cycler), Shown::default())
+}
+
+// A label, then the row's control.
+fn row_line(title: Tr, control: impl Bundle) -> impl Bundle {
     (
         Node {
             align_items: AlignItems::Center,
@@ -151,8 +157,6 @@ fn row(title: Tr, cycler: Cycler, control: impl Bundle) -> impl Bundle {
             height: Val::Px(36.0),
             ..default()
         },
-        UiContainer::Row(cycler),
-        Shown::default(),
         Pickable::IGNORE,
         children![
             (
@@ -231,6 +235,89 @@ pub(crate) fn segments(title: Tr, cycler: Cycler) -> impl Bundle {
         SegmentBar(cycler),
     );
     row(title, cycler, control)
+}
+
+// The current choice, which opens a list of them all under the row. For lists too long to show
+// side by side, such as animations or environments. The wheel over it moves along the list.
+pub(crate) fn picker(title: Tr, cycler: Cycler) -> impl Bundle {
+    let value = (
+        Node {
+            flex_grow: 1.0,
+            height: CONTROL_HEIGHT,
+            padding: UiRect::horizontal(Val::Px(10.0)),
+            justify_content: JustifyContent::SpaceBetween,
+            align_items: AlignItems::Center,
+            border: UiRect::all(LINE),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        BaseBackground(WELL_BG),
+        BackgroundColor(WELL_BG),
+        BorderColor::all(BORDER),
+        UiButton::Open(cycler),
+        Control(cycler),
+        Well(cycler),
+        Hovered::default(),
+        // A long name is cut off rather than wrapped onto a second line, and never pushes the
+        // arrow out of the box.
+        children![
+            (
+                label("-", BODY_SIZE, TEXT),
+                TextLayout::no_wrap(),
+                Node { min_width: Val::ZERO, overflow: Overflow::clip(), ..default() },
+                CyclerValue(cycler),
+            ),
+            (label("▼", SMALL_SIZE, TEXT_DIM), Node { flex_shrink: 0.0, ..default() }),
+        ],
+    );
+    // An empty column as wide as the labels keeps the list under the value. With the list
+    // hidden it has no height, so the row takes no more room than any other.
+    let list = (
+        Node { column_gap: Val::Px(12.0), ..default() },
+        Pickable::IGNORE,
+        children![
+            (Node { width: LABEL_WIDTH, flex_shrink: 0.0, ..default() }, Pickable::IGNORE),
+            (
+                Node {
+                    display: Display::None,
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(2.0),
+                    margin: UiRect::top(Val::Px(4.0)),
+                    padding: UiRect::all(Val::Px(2.0)),
+                    border: UiRect::all(LINE),
+                    border_radius: BorderRadius::all(RADIUS),
+                    ..default()
+                },
+                BackgroundColor(WELL_BG),
+                BorderColor::all(BORDER),
+                Pickable::IGNORE,
+                PickerList(cycler),
+            ),
+        ],
+    );
+    (
+        Node { flex_direction: FlexDirection::Column, ..default() },
+        UiContainer::Row(cycler),
+        Shown::default(),
+        Pickable::IGNORE,
+        children![row_line(title, value), list],
+    )
+}
+
+// One of the choices in a picker's list. The current one stands out.
+pub(crate) fn list_item(label: &str, cycler: Cycler, index: usize, current: bool) -> impl Bundle {
+    ButtonBuilder::new(label)
+        .font_size(BODY_SIZE)
+        .text_color(if current { TEXT } else { TEXT_LABEL })
+        .fill(if current { SELECTED_BG } else { WELL_BG })
+        .node(|n| {
+            n.height = Val::Px(28.0);
+            n.padding = UiRect::horizontal(Val::Px(8.0));
+            n.align_items = AlignItems::Center;
+            n.border_radius = BorderRadius::all(RADIUS);
+        })
+        .build(UiButton::Choose(cycler, index))
 }
 
 // One of a row's choices. The current one stands out.

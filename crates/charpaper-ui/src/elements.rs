@@ -74,7 +74,7 @@ impl Section {
     }
 }
 
-// The values stepped through with `<` and `>`.
+// A row's setting: a number stepped with `<` and `>`, or a choice from a list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Cycler {
     Suite,
@@ -144,6 +144,8 @@ pub(crate) enum UiButton {
     Fold(Section),
     // A choice picked by its place in the row's list.
     Choose(Cycler, usize),
+    // Opens or closes the list of a row's choices.
+    Open(Cycler),
     Skin(String),
     Object(String),
     Previous(Cycler),
@@ -231,7 +233,11 @@ pub(crate) struct FillBar(pub Cycler);
 #[derive(Component)]
 pub(crate) struct SegmentBar(pub Cycler);
 
-// The text showing a cycler's current value.
+// The list that opens under a row, with a button per choice.
+#[derive(Component)]
+pub(crate) struct PickerList(pub Cycler);
+
+// The text showing a row's current value: a number, or the name of the current choice.
 #[derive(Component)]
 pub(crate) struct CyclerValue(pub Cycler);
 

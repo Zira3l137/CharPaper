@@ -50,7 +50,7 @@ pub(crate) fn page() -> impl Bundle {
             Section::Fog,
             rows(children![
                 segments(|l| fl!(l, "label-fog"), Cycler::Fog),
-                stepper(|l| fl!(l, "label-fog-quality"), Cycler::FogQuality),
+                picker(|l| fl!(l, "label-fog-quality"), Cycler::FogQuality),
                 segments(|l| fl!(l, "label-fog-dithering"), Cycler::FogDithering),
             ]),
         ),
