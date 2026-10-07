@@ -15,6 +15,7 @@ use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::FillBar;
 use crate::elements::Section;
+use crate::elements::SegmentBar;
 use crate::elements::Shown;
 use crate::elements::Step;
 use crate::elements::UiButton;
@@ -141,8 +142,8 @@ pub(crate) fn rows(content: impl Bundle) -> impl Bundle {
     )
 }
 
-// A label, then a value stepped through with `<` and `>`.
-pub(crate) fn cycler(title: Tr, cycler: Cycler) -> impl Bundle {
+// A label, then the row's control. The tab owning the row says what it shows.
+fn row(title: Tr, cycler: Cycler, control: impl Bundle) -> impl Bundle {
     (
         Node {
             align_items: AlignItems::Center,
@@ -159,47 +160,98 @@ pub(crate) fn cycler(title: Tr, cycler: Cycler) -> impl Bundle {
                 Pickable::IGNORE,
                 children![translated(title, BODY_SIZE, TEXT_LABEL)],
             ),
-            // Pickable, so the wheel finds it in the gaps between the arrows and the value too.
-            (
-                Node { flex_grow: 1.0, column_gap: Val::Px(4.0), ..default() },
-                Control(cycler),
-                Hovered::default(),
-                children![
-                    glyph_button("<", UiButton::Previous(cycler)),
-                    (
-                        Node {
-                            flex_grow: 1.0,
-                            height: CONTROL_HEIGHT,
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            border: UiRect::all(LINE),
-                            border_radius: BorderRadius::all(RADIUS),
-                            ..default()
-                        },
-                        BackgroundColor(WELL_BG),
-                        BorderColor::all(BORDER),
-                        Pickable::IGNORE,
-                        Well(cycler),
-                        children![
-                            (label("-", BODY_SIZE, TEXT), CyclerValue(cycler)),
-                            (
-                                Node {
-                                    position_type: PositionType::Absolute,
-                                    bottom: Val::ZERO,
-                                    height: Val::Px(2.0),
-                                    ..default()
-                                },
-                                BackgroundColor(FILL),
-                                Pickable::IGNORE,
-                                FillBar(cycler),
-                            ),
-                        ],
-                    ),
-                    glyph_button(">", UiButton::Next(cycler)),
-                ],
-            ),
+            control,
         ],
     )
+}
+
+// A number stepped with `<` and `>`, with a bar under it showing how far into its range it is.
+pub(crate) fn stepper(title: Tr, cycler: Cycler) -> impl Bundle {
+    let well = (
+        Node {
+            flex_grow: 1.0,
+            height: CONTROL_HEIGHT,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            border: UiRect::all(LINE),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        BackgroundColor(WELL_BG),
+        BorderColor::all(BORDER),
+        Pickable::IGNORE,
+        Well(cycler),
+        children![
+            (label("-", BODY_SIZE, TEXT), CyclerValue(cycler)),
+            (
+                Node {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::ZERO,
+                    height: Val::Px(2.0),
+                    ..default()
+                },
+                BackgroundColor(FILL),
+                Pickable::IGNORE,
+                FillBar(cycler),
+            ),
+        ],
+    );
+    // Pickable, so the wheel finds it in the gaps between the arrows and the value too.
+    let control = (
+        Node { flex_grow: 1.0, column_gap: Val::Px(4.0), ..default() },
+        Control(cycler),
+        Hovered::default(),
+        children![
+            glyph_button("<", UiButton::Previous(cycler)),
+            well,
+            glyph_button(">", UiButton::Next(cycler)),
+        ],
+    );
+    row(title, cycler, control)
+}
+
+// Every choice side by side, for a switch or a short list: a click picks one, the wheel moves
+// along them. The buttons are made from the row's choices once its tab names them.
+pub(crate) fn segments(title: Tr, cycler: Cycler) -> impl Bundle {
+    let control = (
+        Node {
+            flex_grow: 1.0,
+            height: CONTROL_HEIGHT,
+            padding: UiRect::all(Val::Px(2.0)),
+            column_gap: Val::Px(2.0),
+            border: UiRect::all(LINE),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        BackgroundColor(WELL_BG),
+        BorderColor::all(BORDER),
+        Control(cycler),
+        Well(cycler),
+        Hovered::default(),
+        SegmentBar(cycler),
+    );
+    row(title, cycler, control)
+}
+
+// One of a row's choices. The current one stands out.
+pub(crate) fn option_button(
+    label: &str,
+    cycler: Cycler,
+    index: usize,
+    current: bool,
+) -> impl Bundle {
+    ButtonBuilder::new(label)
+        .font_size(CONTROL_SIZE)
+        .text_color(if current { TEXT } else { TEXT_DIM })
+        .fill(if current { SELECTED_BG } else { WELL_BG })
+        .node(|n| {
+            n.flex_grow = 1.0;
+            n.flex_basis = Val::ZERO;
+            n.justify_content = JustifyContent::Center;
+            n.align_items = AlignItems::Center;
+            n.border_radius = BorderRadius::all(RADIUS);
+        })
+        .build(UiButton::Choose(cycler, index))
 }
 
 // Changes a button's resting fill along with what it shows right now.

@@ -142,6 +142,8 @@ pub(crate) enum UiButton {
     Exit,
     Tab(Tab),
     Fold(Section),
+    // A choice picked by its place in the row's list.
+    Choose(Cycler, usize),
     Skin(String),
     Object(String),
     Previous(Cycler),
@@ -224,6 +226,10 @@ pub(crate) enum Shown {
 // The bar along the bottom of a number's box, as long as the number is far into its range.
 #[derive(Component)]
 pub(crate) struct FillBar(pub Cycler);
+
+// Holds a row's segment buttons, one per choice.
+#[derive(Component)]
+pub(crate) struct SegmentBar(pub Cycler);
 
 // The text showing a cycler's current value.
 #[derive(Component)]

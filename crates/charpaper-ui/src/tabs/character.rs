@@ -67,7 +67,7 @@ pub(crate) fn page() -> impl Bundle {
         section(
             |l| fl!(l, "section-suite"),
             Section::Suite,
-            cycler(|l| fl!(l, "label-suite"), Cycler::Suite),
+            stepper(|l| fl!(l, "label-suite"), Cycler::Suite),
         ),
         section(
             |l| fl!(l, "section-outfit"),
@@ -106,17 +106,17 @@ pub(crate) fn page() -> impl Bundle {
         section(
             |l| fl!(l, "section-animation"),
             Section::Animation,
-            cycler(|l| fl!(l, "label-animation"), Cycler::Animation),
+            stepper(|l| fl!(l, "label-animation"), Cycler::Animation),
         ),
         section(
             |l| fl!(l, "section-expression"),
             Section::Expression,
-            cycler(|l| fl!(l, "label-expression"), Cycler::Expression),
+            stepper(|l| fl!(l, "label-expression"), Cycler::Expression),
         ),
         section(
             |l| fl!(l, "section-gaze"),
             Section::Gaze,
-            cycler(|l| fl!(l, "label-follow-cursor"), Cycler::FollowCursor),
+            segments(|l| fl!(l, "label-follow-cursor"), Cycler::FollowCursor),
         ),
     ]
 }

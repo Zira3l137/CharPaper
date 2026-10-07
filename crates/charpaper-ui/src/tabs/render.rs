@@ -34,33 +34,33 @@ pub(crate) fn page() -> impl Bundle {
         shown_section(
             |l| fl!(l, "section-frame-rate"),
             Section::FrameRate,
-            cycler(|l| fl!(l, "label-fps-limit"), Cycler::FpsLimit),
+            segments(|l| fl!(l, "label-fps-limit"), Cycler::FpsLimit),
         ),
         shown_section(
             |l| fl!(l, "section-quality"),
             Section::Quality,
             rows(children![
-                cycler(|l| fl!(l, "label-render-scale"), Cycler::RenderScale),
-                cycler(|l| fl!(l, "label-anti-aliasing"), Cycler::AntiAliasing),
-                cycler(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
+                segments(|l| fl!(l, "label-render-scale"), Cycler::RenderScale),
+                segments(|l| fl!(l, "label-anti-aliasing"), Cycler::AntiAliasing),
+                segments(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
             ]),
         ),
         shown_section(
             |l| fl!(l, "section-fog"),
             Section::Fog,
             rows(children![
-                cycler(|l| fl!(l, "label-fog"), Cycler::Fog),
-                cycler(|l| fl!(l, "label-fog-quality"), Cycler::FogQuality),
-                cycler(|l| fl!(l, "label-fog-dithering"), Cycler::FogDithering),
+                segments(|l| fl!(l, "label-fog"), Cycler::Fog),
+                stepper(|l| fl!(l, "label-fog-quality"), Cycler::FogQuality),
+                segments(|l| fl!(l, "label-fog-dithering"), Cycler::FogDithering),
             ]),
         ),
         shown_section(
             |l| fl!(l, "section-pause"),
             Section::Pause,
             rows(children![
-                cycler(|l| fl!(l, "label-pause-fullscreen"), Cycler::PauseFullscreen,),
-                cycler(|l| fl!(l, "label-pause-covered"), Cycler::PauseCovered),
-                cycler(|l| fl!(l, "label-pause-battery"), Cycler::PauseBattery),
+                segments(|l| fl!(l, "label-pause-fullscreen"), Cycler::PauseFullscreen,),
+                segments(|l| fl!(l, "label-pause-covered"), Cycler::PauseCovered),
+                segments(|l| fl!(l, "label-pause-battery"), Cycler::PauseBattery),
             ]),
         ),
     ]
