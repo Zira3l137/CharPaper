@@ -14,6 +14,8 @@ use charpaper_ui::UiState;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::save::Unsaved;
+
 pub const STATE_FILE: &str = "state.toml";
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -59,7 +61,7 @@ pub fn load(path: &Path) -> Loaded {
     }
 }
 
-// Saved on every change rather than on exit: a logoff, shutdown or killed process never
+// Saved once changes settle rather than on exit: a logoff, shutdown or killed process never
 // runs Bevy's exit path.
 pub struct StatePlugin {
     pub path: PathBuf,
@@ -71,18 +73,23 @@ impl Plugin for StatePlugin {
         app.insert_resource(StateFile {
             path: self.path.clone(),
             saved: self.loaded.state.clone(),
+            unsaved: None,
             problem: self.loaded.problem.clone(),
             write_failed: false,
         })
         .add_systems(Startup, report_problem)
         .add_systems(
             Last,
-            save.run_if(
-                resource_changed::<CharacterState>
-                    .or_eager(resource_changed::<UiState>)
-                    .or_eager(resource_changed::<RenderSettings>)
-                    .or_eager(resource_changed::<GazeSettings>),
-            ),
+            (
+                note_change.run_if(
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_changed::<UiState>)
+                        .or_eager(resource_changed::<RenderSettings>)
+                        .or_eager(resource_changed::<GazeSettings>),
+                ),
+                save_settled,
+            )
+                .chain(),
         );
     }
 }
@@ -91,6 +98,7 @@ impl Plugin for StatePlugin {
 struct StateFile {
     path: PathBuf,
     saved: SavedState,
+    unsaved: Option<Unsaved<SavedState>>,
     problem: Option<String>,
     write_failed: bool,
 }
@@ -101,7 +109,10 @@ fn report_problem(mut file: ResMut<StateFile>) {
     }
 }
 
-fn save(
+// Builds on what is still unsaved, so picks made in a suite just left are kept when the
+// switch comes before they were written.
+fn note_change(
+    time: Res<Time<Real>>,
     mut file: ResMut<StateFile>,
     ui: Res<UiState>,
     render: Res<RenderSettings>,
@@ -109,7 +120,8 @@ fn save(
     character: Res<CharacterState>,
     suite: Option<Res<ActiveSuite>>,
 ) {
-    let mut next = file.saved.clone();
+    let unsaved = file.unsaved.take();
+    let mut next = unsaved.map_or_else(|| file.saved.clone(), |unsaved| unsaved.value);
     next.ui = ui.clone();
     next.render = render.clone();
     next.gaze = gaze.clone();
@@ -119,11 +131,23 @@ fn save(
     if let Some(suite) = suite {
         next.suites.entry(suite.folder()).or_default().merge(Picks::from_state(&character));
     }
-    if next == file.saved {
-        return;
+    if next != file.saved {
+        file.unsaved = Some(Unsaved::new(next, time.elapsed()));
     }
+}
 
-    match write(&file.path, &next) {
+fn save_settled(
+    time: Res<Time<Real>>,
+    mut exits: MessageReader<AppExit>,
+    mut file: ResMut<StateFile>,
+) {
+    let quitting = exits.read().count() > 0;
+    let now = time.elapsed();
+    let Some(due) = file.unsaved.take_if(|u| u.is_due(now, quitting)) else {
+        return;
+    };
+
+    match write(&file.path, &due.value) {
         Ok(()) => {
             debug!("saved choices to {}", file.path.display());
             file.write_failed = false;
@@ -134,7 +158,7 @@ fn save(
         }
         Err(_) => {}
     }
-    file.saved = next;
+    file.saved = due.value;
 }
 
 // Written to a temporary file and renamed, so a crash mid-write can't truncate it.
