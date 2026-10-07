@@ -5,11 +5,15 @@ use bevy::prelude::*;
 use bevy::winit::UpdateMode;
 use bevy::winit::WinitSettings;
 use charpaper_scene::RenderSettings;
+use charpaper_ui::PanelHovered;
 
 use crate::wallpaper::Backend;
 
 const PAUSED_WAKE: Duration = Duration::from_secs(1);
 const ACTIVITY_POLL: Duration = Duration::from_secs(1);
+// While the pointer is on the panel, whatever the frame limit and even while paused, so a
+// click or a wheel turn shows at once.
+const PANEL_FPS: f64 = 60.0;
 
 #[derive(Resource, Default, Debug, PartialEq, Eq)]
 pub struct Paused(pub Option<&'static str>);
@@ -23,7 +27,9 @@ impl Plugin for PacingPlugin {
             (
                 poll_activity,
                 apply_update_mode.run_if(
-                    resource_changed::<RenderSettings>.or_eager(resource_changed::<Paused>),
+                    resource_changed::<RenderSettings>
+                        .or_eager(resource_changed::<Paused>)
+                        .or_eager(resource_changed::<PanelHovered>),
                 ),
             )
                 .chain(),
@@ -71,11 +77,15 @@ fn poll_activity(
 fn apply_update_mode(
     settings: Res<RenderSettings>,
     paused: Res<Paused>,
+    panel: Res<PanelHovered>,
     mut winit: ResMut<WinitSettings>,
 ) {
+    let every = |fps: f64| UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / fps));
     let mode = match (paused.0, settings.fps_limit.per_second()) {
+        (_, Some(fps)) if panel.0 => every(fps.max(PANEL_FPS)),
+        (_, None) if panel.0 => UpdateMode::Continuous,
         (Some(_), _) => UpdateMode::reactive_low_power(PAUSED_WAKE),
-        (None, Some(fps)) => UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / fps)),
+        (None, Some(fps)) => every(fps),
         (None, None) => UpdateMode::Continuous,
     };
     winit.focused_mode = mode;

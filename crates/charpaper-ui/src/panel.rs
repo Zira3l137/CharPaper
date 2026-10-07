@@ -1,8 +1,10 @@
 use bevy::input::mouse::MouseScrollUnit;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use i18n_embed_fl::fl;
 
+use crate::PanelHovered;
 use crate::Tab;
 use crate::UiState;
 use crate::elements::StatusText;
@@ -21,7 +23,9 @@ pub(crate) struct PanelPlugin;
 
 impl Plugin for PanelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_panel)
+        app.init_resource::<PanelHovered>()
+            .add_systems(Startup, spawn_panel)
+            .add_systems(Update, track_hover)
             .add_systems(Update, (show_panel, style_tabs).run_if(resource_changed::<UiState>))
             .add_systems(Update, show_suite_name.run_if(resource_added::<ActiveSuite>))
             .add_observer(on_click);
@@ -33,7 +37,7 @@ fn spawn_panel(mut commands: Commands, ui: Res<UiState>) {
     let screen =
         (Node { width: percent(100), height: percent(100), ..default() }, Pickable::IGNORE);
     commands.spawn(screen).with_children(|root| {
-        root.spawn(reveal_button(ui.is_menu_closed)).with_hover_feedback();
+        root.spawn((reveal_button(ui.is_menu_closed), Hovered::default())).with_hover_feedback();
         root.spawn(main_menu(ui.is_menu_closed))
             .with_children(|panel| {
                 panel.spawn(header());
@@ -96,6 +100,7 @@ fn main_menu(closed: bool) -> impl Bundle {
         // Pickable, unlike most nodes inside it: the pointer anywhere on the panel stops here
         // instead of reaching the scene behind it.
         UiContainer::MainMenu,
+        Hovered::default(),
     )
 }
 
@@ -256,6 +261,12 @@ fn style_tabs(
             }
         }
     }
+}
+
+// Hovered is kept up to date by Bevy, true while the pointer is on the entity or anything
+// inside it.
+fn track_hover(parts: Query<&Hovered>, mut panel: ResMut<PanelHovered>) {
+    panel.set_if_neq(PanelHovered(parts.iter().any(Hovered::get)));
 }
 
 fn show_suite_name(suite: Res<ActiveSuite>, mut status: Query<&mut Text, With<StatusText>>) {

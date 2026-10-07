@@ -49,6 +49,11 @@ pub struct UiState {
     pub language: Option<String>,
 }
 
+// Whether the pointer is on the panel or on the button that brings it back. The app keeps the
+// frame rate up meanwhile, so the panel answers at once whatever the scene's own pace.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PanelHovered(pub bool);
+
 // The collapsible settings panel on the desktop. The frame and every tab register their
 // own systems; a new tab is a module in `tabs/` plus a line here and in panel.rs.
 pub struct SettingsPanelPlugin {
