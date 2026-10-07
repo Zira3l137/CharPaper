@@ -33,6 +33,7 @@ impl Plugin for EnvironmentPlugin {
         app.init_resource::<ShownEnvironment>()
             .init_resource::<Baking>()
             .add_observer(on_environment_ready)
+            .add_observer(point_sized_spots)
             .add_systems(Update, choose_environment.in_set(SceneSet::Fill))
             .add_systems(
                 Update,
@@ -273,4 +274,23 @@ pub(crate) fn on_environment_ready(
         }
     }
     info!("environment: looping {} clip(s)", nodes.len());
+}
+
+// Bevy's glTF loader gives a spot light its range as its radius, the size of the bulb. glTF
+// lights are points, and a spot with a range of a few meters would shine like a soft panel
+// that wide, so it gets its point back.
+fn point_sized_spots(
+    ready: On<WorldInstanceReady>,
+    roots: Query<(), With<EnvironmentRoot>>,
+    children: Query<&Children>,
+    mut spots: Query<&mut SpotLight>,
+) {
+    if !roots.contains(ready.entity) {
+        return;
+    }
+    for entity in children.iter_descendants(ready.entity) {
+        if let Ok(mut spot) = spots.get_mut(entity) {
+            spot.radius = 0.0;
+        }
+    }
 }
