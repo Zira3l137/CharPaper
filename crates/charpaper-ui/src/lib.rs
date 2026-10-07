@@ -1,3 +1,4 @@
+mod arrows;
 mod elements;
 mod held;
 mod locale;
@@ -102,6 +103,7 @@ impl Plugin for SettingsPanelPlugin {
                 tabs::system::SystemTabPlugin,
                 wheel::WheelPlugin,
                 held::HeldPlugin,
+                arrows::ArrowsPlugin,
             ));
     }
 }

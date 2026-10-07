@@ -150,7 +150,7 @@ pub(crate) enum UiButton {
 }
 
 impl UiButton {
-    // The step a click on `<` or `>` makes.
+    // The step a press on `<` or `>` makes.
     pub(crate) fn step(&self) -> Option<Step> {
         let (cycler, by) = match *self {
             UiButton::Previous(cycler) => (cycler, -1),
