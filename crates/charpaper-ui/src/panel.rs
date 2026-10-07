@@ -1,4 +1,5 @@
 use bevy::picking::hover::Hovered;
+use bevy::prelude::percent;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use i18n_embed_fl::fl;

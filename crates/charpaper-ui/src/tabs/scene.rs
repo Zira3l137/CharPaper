@@ -18,6 +18,7 @@ use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::held::Held;
 use crate::locale::Locale;
+use crate::widgets::percent;
 use crate::widgets::*;
 
 // cd/m², spaced so each step looks about as big as the last.
