@@ -34,7 +34,7 @@ class Isolation:
         self._renamed.append((block, name))
         return name
 
-    def add(self, obj, own_mesh=False, keep_animation=False):
+    def add(self, obj, own_mesh=False, own_light=False, keep_animation=False):
         if obj in self.copies:
             return self.copies[obj]
         name = self._step_aside(obj)
@@ -48,6 +48,13 @@ class Isolation:
             data.name = mesh_name
             if data.shape_keys and key_name:
                 data.shape_keys.name = key_name
+            copy.data = data
+            self._data.append(data)
+        # glTF names a light after its light data, and the app finds lights by that name too.
+        if own_light and obj.type == "LIGHT":
+            light_name = self._step_aside(obj.data)
+            data = obj.data.copy()
+            data.name = light_name
             copy.data = data
             self._data.append(data)
         if not keep_animation:
@@ -106,7 +113,8 @@ class Isolation:
             bpy.data.objects.remove(copy, do_unlink=True)
         for data in self._data:
             if data.users == 0:
-                bpy.data.meshes.remove(data)
+                blocks = bpy.data.lights if isinstance(data, bpy.types.Light) else bpy.data.meshes
+                blocks.remove(data)
         bpy.data.scenes.remove(self.scene)
         for block, name in reversed(self._renamed):
             block.name = name

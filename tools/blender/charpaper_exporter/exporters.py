@@ -3,6 +3,7 @@ import os
 from . import anim
 from . import gltf
 from . import lens
+from . import lights
 from .isolate import isolated
 from .isolate import showing
 from .props import file_stem
@@ -125,10 +126,13 @@ def animation(context, suite, entry, folder):
 
 def environment(context, suite, entry, folder):
     path = target(folder, ENVIRONMENT_DIR, entry.name, suite)
+    threshold = context.scene.eevee.light_threshold
     with isolated(context) as iso:
         for obj in entry.collection.all_objects:
             if obj.type != "CAMERA":
-                iso.add(obj, keep_animation=True)
+                copy = iso.add(obj, own_light=True, keep_animation=True)
+                if copy.type == "LIGHT":
+                    lights.give_range(copy.data, threshold)
         return _run(
             context, iso, path,
             _options(

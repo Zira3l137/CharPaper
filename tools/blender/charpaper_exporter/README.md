@@ -41,6 +41,10 @@ saved in the `.blend`.
   app fills its bounding box with fog set up like its Principled Volume: Color, Density,
   Anisotropy and Absorption Color. Only lights light fog, not the sky: a light whose
   *Influence > Volume Scatter* is 0 doesn't, and a sun only does while it casts shadows.
+- **Lights** reach as far as they do in EEVEE: their *Light > Custom Distance* when it's
+  ticked, otherwise the distance where they fade below *Render Properties > Sampling >
+  Advanced > Light Threshold*. Every exported point and spot light carries that distance, so
+  the app stops shading and shadowing it there too. Without one it would reach 20 m.
 - Your scene is never changed. Each file is exported from temporary copies in a throwaway
   scene, so your NLA tracks, active actions and selection stay as they were.
 
