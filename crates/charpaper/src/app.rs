@@ -5,6 +5,7 @@ use anyhow::Result;
 use anyhow::bail;
 use bevy::asset::io::AssetSourceBuilder;
 use bevy::prelude::*;
+use bevy::window::PresentMode;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
 use charpaper_scene::ARMATURE_SOURCE;
@@ -12,6 +13,8 @@ use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
 use charpaper_ui::SettingsPanelPlugin;
 
+use crate::benchmark;
+use crate::benchmark::BenchmarkPlugin;
 use crate::config::AppConfig;
 use crate::config::WindowConfig;
 use crate::logging;
@@ -35,6 +38,9 @@ pub fn run(mut config: AppConfig) -> Result<()> {
         config.scene.suite = loaded.state.suite.clone();
     }
     config.scene.render = loaded.state.render.clone();
+    if config.benchmark {
+        benchmark::unthrottle(&mut config.scene.render);
+    }
     config.scene.gaze = loaded.state.gaze.clone();
     config.ui.locales_dir = exe_dir.join(LOCALES_DIR);
     if config.ui.language.is_none() {
@@ -45,16 +51,11 @@ pub fn run(mut config: AppConfig) -> Result<()> {
             format!("{} is not valid UTF-8", config.scene.characters_dir.display())
         })?;
 
-    let exit = App::new()
-        // Must come before DefaultPlugins, which builds the asset sources.
-        .register_asset_source(
-            CHARACTERS_SOURCE,
-            AssetSourceBuilder::platform_default(characters, None),
-        )
-        .register_asset_source(
-            ARMATURE_SOURCE,
-            AssetSourceBuilder::platform_default(characters, None),
-        )
+    let source = || AssetSourceBuilder::platform_default(characters, None);
+    let mut app = App::new();
+    // Must come before DefaultPlugins, which builds the asset sources.
+    app.register_asset_source(CHARACTERS_SOURCE, source())
+        .register_asset_source(ARMATURE_SOURCE, source())
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
@@ -67,10 +68,14 @@ pub fn run(mut config: AppConfig) -> Result<()> {
             WallpaperPlugin { config: config.wallpaper.clone() },
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() },
-            LookFilePlugin,
-            StatePlugin { path: state_path, loaded },
-        ))
-        .run();
+        ));
+    // The benchmark changes settings and the look as it goes, none of which may be saved.
+    if config.benchmark {
+        app.add_plugins(BenchmarkPlugin { results: exe_dir.join(benchmark::RESULTS_FILE) });
+    } else {
+        app.add_plugins((LookFilePlugin, StatePlugin { path: state_path, loaded }));
+    }
+    let exit = app.run();
 
     match exit {
         AppExit::Success => Ok(()),
@@ -89,6 +94,7 @@ fn window(config: &WindowConfig) -> Window {
         skip_taskbar: config.skip_taskbar,
         // Not topmost: that fights the reparenting.
         window_level: WindowLevel::Normal,
+        present_mode: if config.vsync { PresentMode::default() } else { PresentMode::AutoNoVsync },
         ..default()
     }
 }

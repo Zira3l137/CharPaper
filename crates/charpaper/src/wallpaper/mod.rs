@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 
+pub(crate) use pacing::Paused;
 pub use platform::inspect_report;
 
 // Puts the window behind the desktop icons and keeps it working there: attaching, replaying

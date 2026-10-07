@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub wallpaper: WallpaperConfig,
     pub ui: UiConfig,
     pub log: LogLevels,
+    pub benchmark: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -22,6 +23,7 @@ pub struct WindowConfig {
     pub start_hidden: bool,
     pub decorations: bool,
     pub skip_taskbar: bool,
+    pub vsync: bool,
 }
 
 impl Default for WindowConfig {
@@ -33,6 +35,7 @@ impl Default for WindowConfig {
             start_hidden: true,
             decorations: false,
             skip_taskbar: true,
+            vsync: true,
         }
     }
 }
@@ -45,6 +48,7 @@ impl AppConfig {
             wallpaper: WallpaperConfig::default(),
             ui: UiConfig::default(),
             log: LogLevels { ours: cli.log_level, engine: cli.bevy_log_level },
+            benchmark: cli.benchmark,
         };
 
         cfg.wallpaper.dump_window_tree = cli.tree;
@@ -80,6 +84,11 @@ impl AppConfig {
             cfg.window.start_hidden = false;
             cfg.window.decorations = true;
             cfg.window.skip_taskbar = false;
+        }
+
+        // Vsync would hold every frame to the monitor's refresh, hiding what it really costs.
+        if cli.benchmark {
+            cfg.window.vsync = false;
         }
 
         cfg

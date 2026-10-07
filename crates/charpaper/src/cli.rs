@@ -32,6 +32,16 @@ pub struct Cli {
     #[arg(long, value_name = "DIR")]
     pub bake_environments: Option<PathBuf>,
 
+    /// Measure how long the scene takes to draw with each render setting, then
+    /// exit.
+    ///
+    /// Shows the suite as the wallpaper (or in a window with `--windowed`),
+    /// with no frame-rate limit or vsync, for about two minutes. Each
+    /// result changes one setting from your saved ones, which stay unchanged.
+    /// Results are printed and written to benchmark.txt next to the executable.
+    #[arg(long)]
+    pub benchmark: bool,
+
     /// Which character suite to show: the name of a folder in `characters/`
     /// next to the executable. Defaults to the first in name order.
     #[arg(long, value_name = "NAME")]
