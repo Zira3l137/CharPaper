@@ -75,6 +75,7 @@ label-pause-battery = On battery
 value-max = Max
 value-blur = Blur
 value-bokeh = Bokeh
+value-very-low = Very low
 value-low = Low
 value-medium = Medium
 value-high = High

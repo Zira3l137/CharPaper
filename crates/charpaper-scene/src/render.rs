@@ -141,10 +141,12 @@ impl DepthOfFieldQuality {
 }
 
 // How many samples each pixel takes through the fog. Too few show as stripes wherever
-// shadows cross it; each step up doubles the cost.
+// shadows cross it; each step up doubles the cost. Very low is meant for dithering with TAA,
+// which blends the noise of a few frames into a smooth result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FogQuality {
+    VeryLow,
     Low,
     #[default]
     Medium,
@@ -153,11 +155,17 @@ pub enum FogQuality {
 }
 
 impl FogQuality {
-    pub const ALL: [FogQuality; 4] =
-        [FogQuality::Low, FogQuality::Medium, FogQuality::High, FogQuality::Ultra];
+    pub const ALL: [FogQuality; 5] = [
+        FogQuality::VeryLow,
+        FogQuality::Low,
+        FogQuality::Medium,
+        FogQuality::High,
+        FogQuality::Ultra,
+    ];
 
     pub fn steps(self) -> u32 {
         match self {
+            FogQuality::VeryLow => 16,
             FogQuality::Low => 32,
             FogQuality::Medium => 64,
             FogQuality::High => 128,

@@ -89,6 +89,7 @@ fn show_values(
             },
             Cycler::Fog => on_off(&locale, settings.fog).into(),
             Cycler::FogQuality => match settings.fog_quality {
+                FogQuality::VeryLow => fl!(locale, "value-very-low").into(),
                 FogQuality::Low => fl!(locale, "value-low").into(),
                 FogQuality::Medium => fl!(locale, "value-medium").into(),
                 FogQuality::High => fl!(locale, "value-high").into(),

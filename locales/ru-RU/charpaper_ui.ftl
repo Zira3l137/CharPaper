@@ -72,6 +72,7 @@ label-pause-battery = От батареи
 value-max = Макс.
 value-blur = Размытие
 value-bokeh = Боке
+value-very-low = Очень низкое
 value-low = Низкое
 value-medium = Среднее
 value-high = Высокое
