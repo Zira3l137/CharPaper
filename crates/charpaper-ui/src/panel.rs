@@ -304,6 +304,7 @@ fn show_suite_name(suite: Res<ActiveSuite>, mut status: Query<&mut Text, With<St
 
 fn on_click(
     event: On<Pointer<Click>>,
+    mut commands: Commands,
     buttons: Query<&UiButton>,
     mut ui: ResMut<UiState>,
     mut exit: MessageWriter<AppExit>,
@@ -311,6 +312,9 @@ fn on_click(
     let Ok(button) = buttons.get(event.entity) else {
         return;
     };
+    if let Some(step) = button.step() {
+        commands.trigger(step);
+    }
     match button {
         UiButton::Exit => {
             info!("quitting");

@@ -5,7 +5,7 @@ use crate::UiState;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
-use crate::elements::UiButton;
+use crate::elements::Step;
 use crate::locale::Languages;
 use crate::locale::Locale;
 use crate::widgets::*;
@@ -15,7 +15,7 @@ pub(crate) struct SystemTabPlugin;
 
 impl Plugin for SystemTabPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_click).add_systems(
+        app.add_observer(on_step).add_systems(
             Update,
             show_language.run_if(resource_changed::<UiState>.or_eager(resource_changed::<Locale>)),
         );
@@ -44,19 +44,13 @@ fn show_language(
 }
 
 // None, following the system's languages, comes first.
-fn on_click(
-    event: On<Pointer<Click>>,
-    buttons: Query<&UiButton>,
-    languages: Res<Languages>,
-    mut ui: ResMut<UiState>,
-) {
-    let Some((Cycler::Language, forward)) = buttons.get(event.entity).ok().and_then(UiButton::step)
-    else {
+fn on_step(event: On<Step>, languages: Res<Languages>, mut ui: ResMut<UiState>) {
+    if event.cycler != Cycler::Language {
         return;
-    };
+    }
     let options: Vec<Option<String>> =
         std::iter::once(None).chain(languages.0.iter().map(|l| Some(l.tag.clone()))).collect();
-    if let Some(next) = step(&options, &ui.language, forward) {
+    if let Some(next) = step(&options, &ui.language, event.by, event.wraps()) {
         ui.language = next;
     }
 }

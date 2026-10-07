@@ -11,6 +11,7 @@ use i18n_embed_fl::fl;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
+use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::locale::Locale;
@@ -23,7 +24,7 @@ pub(crate) struct CharacterTabPlugin;
 
 impl Plugin for CharacterTabPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_click).add_systems(
+        app.add_observer(on_click).add_observer(on_step).add_systems(
             Update,
             (
                 fill_outfits.run_if(resource_added::<ActiveSuite>),
@@ -273,11 +274,7 @@ fn show_objects(
 fn on_click(
     event: On<Pointer<Click>>,
     buttons: Query<&UiButton>,
-    clips: Option<Res<CharacterClips>>,
-    available: Res<AvailableSuites>,
-    expressions: Res<Expressions>,
     mut state: ResMut<CharacterState>,
-    mut gaze: ResMut<GazeSettings>,
 ) {
     let Ok(button) = buttons.get(event.entity) else {
         return;
@@ -295,15 +292,22 @@ fn on_click(
         }
         _ => {}
     }
+}
 
-    let Some((cycler, forward)) = button.step() else {
-        return;
-    };
-    match cycler {
-        Cycler::FollowCursor => gaze.follow_cursor ^= true,
+fn on_step(
+    event: On<Step>,
+    clips: Option<Res<CharacterClips>>,
+    available: Res<AvailableSuites>,
+    expressions: Res<Expressions>,
+    mut state: ResMut<CharacterState>,
+    mut gaze: ResMut<GazeSettings>,
+) {
+    let (by, wrap) = (event.by, event.wraps());
+    match event.cycler {
+        Cycler::FollowCursor => gaze.follow_cursor = flip(gaze.follow_cursor, by, wrap),
         Cycler::Suite => {
             let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
-            if let Some(next) = step(&options, &state.suite, forward) {
+            if let Some(next) = step(&options, &state.suite, by, wrap) {
                 state.suite = next;
             }
         }
@@ -315,7 +319,7 @@ fn on_click(
             let options: Vec<String> =
                 std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect();
             let current = state.expression().unwrap_or_default().to_string();
-            if let Some(next) = step(&options, &current, forward) {
+            if let Some(next) = step(&options, &current, by, wrap) {
                 state.expressions.insert(skin, next);
             }
         }
@@ -324,7 +328,7 @@ fn on_click(
                 return;
             };
             let options: Vec<Option<String>> = clips.names().map(|n| Some(n.to_string())).collect();
-            if let Some(next) = step(&options, &state.animation, forward) {
+            if let Some(next) = step(&options, &state.animation, by, wrap) {
                 state.animation = next;
             }
         }

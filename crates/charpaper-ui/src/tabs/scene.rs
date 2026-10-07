@@ -13,6 +13,7 @@ use crate::Tab;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
+use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::locale::Locale;
@@ -46,7 +47,7 @@ pub(crate) struct SceneTabPlugin;
 
 impl Plugin for SceneTabPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_click).add_systems(
+        app.add_observer(on_click).add_observer(on_step).add_systems(
             Update,
             (
                 show_tab.run_if(resource_added::<ActiveSuite>),
@@ -215,36 +216,37 @@ fn show_values(
 fn on_click(
     event: On<Pointer<Click>>,
     buttons: Query<&UiButton>,
+    mut restore: MessageWriter<RestoreLook>,
+) {
+    if let Ok(UiButton::RestoreLook) = buttons.get(event.entity) {
+        restore.write(RestoreLook);
+    }
+}
+
+fn on_step(
+    event: On<Step>,
     suite: Option<Res<ActiveSuite>>,
     look: Option<ResMut<ActiveLook>>,
     mut state: ResMut<CharacterState>,
-    mut restore: MessageWriter<RestoreLook>,
 ) {
-    let (Ok(button), Some(suite)) = (buttons.get(event.entity), suite) else {
+    let Some(suite) = suite else {
         return;
     };
-    if *button == UiButton::RestoreLook {
-        restore.write(RestoreLook);
-        return;
-    }
-    let Some((cycler, forward)) = button.step() else {
-        return;
-    };
-
-    match cycler {
+    let (by, wrap) = (event.by, event.wraps());
+    match event.cycler {
         Cycler::Camera => {
             // None is the orbit camera, which every suite has.
             let options: Vec<Option<String>> = std::iter::once(None)
                 .chain(suite.cameras.iter().map(|c| Some(c.name.clone())))
                 .collect();
-            if let Some(next) = step(&options, &state.camera, forward) {
+            if let Some(next) = step(&options, &state.camera, by, wrap) {
                 state.camera = next;
             }
         }
         Cycler::Environment => {
             let options: Vec<Option<String>> =
                 suite.environments.iter().map(|e| Some(e.name.clone())).collect();
-            if let Some(next) = step(&options, &state.environment, forward) {
+            if let Some(next) = step(&options, &state.environment, by, wrap) {
                 state.environment = next;
             }
         }
@@ -254,7 +256,7 @@ fn on_click(
                     .chain(suite.luts.iter().map(|l| Some(l.name.clone())))
                     .collect();
                 let current = look.post.lut.name().map(str::to_string);
-                if let Some(next) = step(&options, &current, forward) {
+                if let Some(next) = step(&options, &current, by, wrap) {
                     look.post.lut.name = Some(next.unwrap_or_else(|| NO_LUT.to_string()));
                 }
             }
@@ -275,7 +277,7 @@ fn on_click(
         | Cycler::Contrast
         | Cycler::LutStrength => {
             if let Some(mut look) = look {
-                edit_look(&mut look, state.environment.as_deref(), cycler, forward);
+                edit_look(&mut look, state.environment.as_deref(), event.cycler, by, wrap);
             }
         }
         _ => {}
@@ -284,65 +286,71 @@ fn on_click(
 
 // Environment settings are kept per environment, so they only change while one shows.
 // Exposure falls back to the suite-wide value without one.
-fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, forward: bool) {
+fn edit_look(
+    look: &mut ActiveLook,
+    environment: Option<&str>,
+    cycler: Cycler,
+    by: i32,
+    wrap: bool,
+) {
     let resolved = Resolved::new(look, environment);
-    let sign = if forward { 1.0 } else { -1.0 };
+    let steps = by as f32;
     match cycler {
         Cycler::Tonemapping => {
-            look.post.tonemapping = step(&Tonemapping::ALL, &resolved.tonemapping, forward);
+            look.post.tonemapping = step(&Tonemapping::ALL, &resolved.tonemapping, by, wrap);
         }
         Cycler::Bloom => {
-            let bloom = (resolved.bloom + sign * BLOOM_STEP).clamp(0.0, BLOOM_LIMIT);
+            let bloom = (resolved.bloom + steps * BLOOM_STEP).clamp(0.0, BLOOM_LIMIT);
             look.post.bloom = Some(round(bloom, 100.0));
         }
         Cycler::ChromaticAberration => {
-            let aberration = (resolved.chromatic_aberration + sign * ABERRATION_STEP)
+            let aberration = (resolved.chromatic_aberration + steps * ABERRATION_STEP)
                 .clamp(0.0, ABERRATION_LIMIT);
             look.post.chromatic_aberration = Some(round(aberration, 10_000.0));
         }
         Cycler::Vignette => {
-            let vignette = (resolved.vignette + sign * VIGNETTE_STEP).clamp(0.0, 1.0);
+            let vignette = (resolved.vignette + steps * VIGNETTE_STEP).clamp(0.0, 1.0);
             look.post.vignette.intensity = Some(round(vignette, 100.0));
         }
         Cycler::VignetteSize => {
             let (min, max) = VIGNETTE_SIZES;
-            let size = (resolved.vignette_size + sign * VIGNETTE_SIZE_STEP).clamp(min, max);
+            let size = (resolved.vignette_size + steps * VIGNETTE_SIZE_STEP).clamp(min, max);
             look.post.vignette.size = Some(round(size, 10.0));
         }
         Cycler::Grain => {
-            let grain = (resolved.grain + sign * GRAIN_STEP).clamp(0.0, GRAIN_LIMIT);
+            let grain = (resolved.grain + steps * GRAIN_STEP).clamp(0.0, GRAIN_LIMIT);
             look.post.grain.intensity = Some(round(grain, 100.0));
         }
         Cycler::GrainSize => {
             let (min, max) = GRAIN_SIZES;
-            let size = (resolved.grain_size + sign * GRAIN_SIZE_STEP).clamp(min, max);
+            let size = (resolved.grain_size + steps * GRAIN_SIZE_STEP).clamp(min, max);
             look.post.grain.size = Some(round(size, 100.0));
         }
         Cycler::Warmth => {
-            let warmth = (resolved.warmth + sign * GRADING_STEP).clamp(-1.0, 1.0);
+            let warmth = (resolved.warmth + steps * GRADING_STEP).clamp(-1.0, 1.0);
             look.post.grading.warmth = Some(round(warmth, 100.0));
         }
         Cycler::Tint => {
-            let tint = (resolved.tint + sign * GRADING_STEP).clamp(-1.0, 1.0);
+            let tint = (resolved.tint + steps * GRADING_STEP).clamp(-1.0, 1.0);
             look.post.grading.tint = Some(round(tint, 100.0));
         }
         Cycler::Saturation => {
             let (min, max) = SATURATIONS;
-            let saturation = (resolved.saturation + sign * GRADING_STEP).clamp(min, max);
+            let saturation = (resolved.saturation + steps * GRADING_STEP).clamp(min, max);
             look.post.grading.saturation = Some(round(saturation, 100.0));
         }
         Cycler::Contrast => {
             let (min, max) = CONTRASTS;
-            let contrast = (resolved.contrast + sign * GRADING_STEP).clamp(min, max);
+            let contrast = (resolved.contrast + steps * GRADING_STEP).clamp(min, max);
             look.post.grading.contrast = Some(round(contrast, 100.0));
         }
         Cycler::LutStrength => {
-            let strength = (resolved.lut_strength + sign * GRADING_STEP).clamp(0.0, 1.0);
+            let strength = (resolved.lut_strength + steps * GRADING_STEP).clamp(0.0, 1.0);
             look.post.lut.strength = Some(round(strength, 100.0));
         }
         Cycler::Exposure => {
             let exposure =
-                (resolved.exposure + sign * EXPOSURE_STEP).clamp(-EXPOSURE_LIMIT, EXPOSURE_LIMIT);
+                (resolved.exposure + steps * EXPOSURE_STEP).clamp(-EXPOSURE_LIMIT, EXPOSURE_LIMIT);
             let exposure = Some(round(exposure, 10.0));
             match environment {
                 Some(name) => look.environments.entry(name.into()).or_default().exposure = exposure,
@@ -351,27 +359,31 @@ fn edit_look(look: &mut ActiveLook, environment: Option<&str>, cycler: Cycler, f
         }
         Cycler::Brightness => {
             if let Some(name) = environment {
-                let brightness = step_stops(&BRIGHTNESS_STOPS, resolved.brightness, forward);
+                let brightness = step_stops(&BRIGHTNESS_STOPS, resolved.brightness, by);
                 look.environments.entry(name.into()).or_default().brightness = Some(brightness);
             }
         }
         Cycler::Shadows => {
             if let Some(name) = environment {
-                look.environments.entry(name.into()).or_default().shadows = Some(!resolved.shadows);
+                let shadows = flip(resolved.shadows, by, wrap);
+                look.environments.entry(name.into()).or_default().shadows = Some(shadows);
             }
         }
         _ => {}
     }
 }
 
-// A value between stops, like one typed into suite.toml, moves to the next stop.
-fn step_stops(stops: &[f32], current: f32, forward: bool) -> f32 {
-    let next = if forward {
-        stops.iter().copied().find(|&s| s > current * 1.001)
-    } else {
-        stops.iter().rev().copied().find(|&s| s < current * 0.999)
-    };
-    next.unwrap_or(current)
+// A value between stops, like one typed into suite.toml, moves to the next stop. Stops at the
+// ends rather than going round.
+fn step_stops(stops: &[f32], current: f32, by: i32) -> f32 {
+    (0..by.unsigned_abs()).fold(current, |value, _| {
+        let next = if by > 0 {
+            stops.iter().copied().find(|&s| s > value * 1.001)
+        } else {
+            stops.iter().rev().copied().find(|&s| s < value * 0.999)
+        };
+        next.unwrap_or(value)
+    })
 }
 
 // Keeps repeated steps from drifting into values like 0.15000001.

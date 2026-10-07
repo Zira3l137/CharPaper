@@ -10,7 +10,7 @@ use i18n_embed_fl::fl;
 use crate::elements::Cycler;
 use crate::elements::CyclerValue;
 use crate::elements::Section;
-use crate::elements::UiButton;
+use crate::elements::Step;
 use crate::locale::Locale;
 use crate::widgets::*;
 
@@ -20,7 +20,7 @@ pub(crate) struct RenderTabPlugin;
 
 impl Plugin for RenderTabPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_click).add_systems(
+        app.add_observer(on_step).add_systems(
             Update,
             show_values
                 .run_if(resource_changed::<RenderSettings>.or_eager(resource_changed::<Locale>)),
@@ -104,45 +104,46 @@ fn show_values(
     }
 }
 
-fn on_click(
-    event: On<Pointer<Click>>,
-    buttons: Query<&UiButton>,
-    mut settings: ResMut<RenderSettings>,
-) {
-    let Some((cycler, forward)) = buttons.get(event.entity).ok().and_then(UiButton::step) else {
-        return;
-    };
-    match cycler {
+fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>) {
+    let (by, wrap) = (event.by, event.wraps());
+    match event.cycler {
         Cycler::FpsLimit => {
-            if let Some(next) = step(&FpsLimit::ALL, &settings.fps_limit, forward) {
+            if let Some(next) = step(&FpsLimit::ALL, &settings.fps_limit, by, wrap) {
                 settings.fps_limit = next;
             }
         }
         Cycler::RenderScale => {
-            if let Some(next) = step(&RENDER_SCALES, &settings.scale_percent(), forward) {
+            if let Some(next) = step(&RENDER_SCALES, &settings.scale_percent(), by, wrap) {
                 settings.render_scale = next;
             }
         }
         Cycler::AntiAliasing => {
-            if let Some(next) = step(&AntiAliasing::ALL, &settings.anti_aliasing, forward) {
+            if let Some(next) = step(&AntiAliasing::ALL, &settings.anti_aliasing, by, wrap) {
                 settings.anti_aliasing = next;
             }
         }
         Cycler::DepthOfField => {
-            if let Some(next) = step(&DepthOfFieldQuality::ALL, &settings.depth_of_field, forward) {
+            if let Some(next) = step(&DepthOfFieldQuality::ALL, &settings.depth_of_field, by, wrap)
+            {
                 settings.depth_of_field = next;
             }
         }
-        Cycler::Fog => settings.fog ^= true,
+        Cycler::Fog => settings.fog = flip(settings.fog, by, wrap),
         Cycler::FogQuality => {
-            if let Some(next) = step(&FogQuality::ALL, &settings.fog_quality, forward) {
+            if let Some(next) = step(&FogQuality::ALL, &settings.fog_quality, by, wrap) {
                 settings.fog_quality = next;
             }
         }
-        Cycler::FogDithering => settings.fog_dithering ^= true,
-        Cycler::PauseFullscreen => settings.pause_when_fullscreen ^= true,
-        Cycler::PauseCovered => settings.pause_when_covered ^= true,
-        Cycler::PauseBattery => settings.pause_on_battery ^= true,
+        Cycler::FogDithering => settings.fog_dithering = flip(settings.fog_dithering, by, wrap),
+        Cycler::PauseFullscreen => {
+            settings.pause_when_fullscreen = flip(settings.pause_when_fullscreen, by, wrap)
+        }
+        Cycler::PauseCovered => {
+            settings.pause_when_covered = flip(settings.pause_when_covered, by, wrap)
+        }
+        Cycler::PauseBattery => {
+            settings.pause_on_battery = flip(settings.pause_on_battery, by, wrap)
+        }
         _ => {}
     }
 }

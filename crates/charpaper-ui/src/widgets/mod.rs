@@ -212,16 +212,27 @@ pub(crate) fn on_off(locale: &FluentLanguageLoader, on: bool) -> String {
     if on { fl!(locale, "value-on") } else { fl!(locale, "value-off") }
 }
 
-// Wraps around. An unknown current value steps to the first option.
-pub(crate) fn step<T: PartialEq + Clone>(options: &[T], current: &T, forward: bool) -> Option<T> {
-    let len = options.len();
+// Moves `by` places through the options, going round past either end when `wrap` is set and
+// stopping there otherwise. An unknown current value moves to the first option.
+pub(crate) fn step<T: PartialEq + Clone>(
+    options: &[T],
+    current: &T,
+    by: i32,
+    wrap: bool,
+) -> Option<T> {
+    let len = options.len() as i32;
     if len == 0 {
         return None;
     }
     let index = match options.iter().position(|o| o == current) {
-        Some(i) if forward => (i + 1) % len,
-        Some(i) => (i + len - 1) % len,
+        Some(i) if wrap => (i as i32 + by).rem_euclid(len),
+        Some(i) => (i as i32 + by).clamp(0, len - 1),
         None => 0,
     };
-    Some(options[index].clone())
+    Some(options[index as usize].clone())
+}
+
+// A switch is a list of Off and On: a click flips it, going up turns it on, going down off.
+pub(crate) fn flip(on: bool, by: i32, wrap: bool) -> bool {
+    step(&[false, true], &on, by, wrap).unwrap_or(on)
 }

@@ -128,13 +128,32 @@ pub(crate) enum UiButton {
 }
 
 impl UiButton {
-    // The cycler a `<` or `>` button steps, and whether it steps forward.
-    pub(crate) fn step(&self) -> Option<(Cycler, bool)> {
-        match *self {
-            UiButton::Previous(cycler) => Some((cycler, false)),
-            UiButton::Next(cycler) => Some((cycler, true)),
-            _ => None,
-        }
+    // The step a click on `<` or `>` makes.
+    pub(crate) fn step(&self) -> Option<Step> {
+        let (cycler, by) = match *self {
+            UiButton::Previous(cycler) => (cycler, -1),
+            UiButton::Next(cycler) => (cycler, 1),
+            _ => return None,
+        };
+        Some(Step { cycler, by, continuous: false })
+    }
+}
+
+// Steps through a row's values. Each tab watches for the rows it owns.
+#[derive(Event, Debug, Clone, Copy)]
+pub(crate) struct Step {
+    pub cycler: Cycler,
+    // Forward when positive.
+    pub by: i32,
+    // From the wheel or a held arrow rather than a single click.
+    pub continuous: bool,
+}
+
+impl Step {
+    // A click goes round from the last value to the first; spinning the wheel stops at the end
+    // instead of landing back where it started.
+    pub(crate) fn wraps(&self) -> bool {
+        !self.continuous
     }
 }
 
