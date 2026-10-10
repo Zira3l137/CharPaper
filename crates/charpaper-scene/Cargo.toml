@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 bevy.workspace = true
+charpaper-audio.workspace = true
 charpaper-bake.workspace = true
 charpaper-suite.workspace = true
 serde.workspace = true

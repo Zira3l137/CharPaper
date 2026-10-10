@@ -9,6 +9,7 @@ mod look;
 mod lut;
 mod render;
 mod shadows;
+mod soundscape;
 mod state;
 mod suite;
 
@@ -79,6 +80,7 @@ impl Plugin for ScenePlugin {
                 render::RenderPlugin,
                 shadows::ShadowsPlugin,
                 gaze::GazePlugin,
+                soundscape::SoundscapePlugin,
             ));
     }
 }
