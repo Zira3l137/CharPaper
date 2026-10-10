@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Check versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The tag matches the app and exporter versions
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          app=$(cargo metadata --no-deps --format-version 1 |
+            jq -r '.packages[] | select(.name == "charpaper") | .version')
+          exporter=$(sed -n 's/^version = "\(.*\)"$/\1/p' \
+            tools/blender/charpaper_exporter/blender_manifest.toml)
+          echo "tag $tag, app $app, exporter $exporter"
+          if [[ $app == "$tag" && $exporter == "$tag" ]]; then exit 0; fi
+          echo "::error::Bump both versions to $tag before tagging (see RELEASING.md)"
+          exit 1
+
+  build:
+    needs: verify
+    uses: ./.github/workflows/build.yml
+    with:
+      label: ${{ github.ref_name }}
+
+  publish:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Changes since the previous release
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --current --strip header --output notes.md
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum -- * > SHA256SUMS.txt)
+          flags=()
+          if [[ $GITHUB_REF_NAME == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "CharPaper ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            "${flags[@]}"
