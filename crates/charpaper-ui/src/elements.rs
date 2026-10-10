@@ -34,6 +34,7 @@ pub(crate) enum Section {
     Quality,
     Fog,
     Pause,
+    Sound,
     Interface,
 }
 
@@ -56,6 +57,7 @@ impl Section {
             Section::Quality => "quality",
             Section::Fog => "fog",
             Section::Pause => "pause",
+            Section::Sound => "sound",
             Section::Interface => "interface",
         }
     }
@@ -109,6 +111,10 @@ pub(crate) enum Cycler {
     PauseFullscreen,
     PauseCovered,
     PauseBattery,
+    MasterVolume,
+    MusicVolume,
+    AmbienceVolume,
+    CharacterVolume,
     Language,
 }
 
@@ -130,6 +136,10 @@ impl Cycler {
                 | Cycler::Saturation
                 | Cycler::Contrast
                 | Cycler::LutStrength
+                | Cycler::MasterVolume
+                | Cycler::MusicVolume
+                | Cycler::AmbienceVolume
+                | Cycler::CharacterVolume
         )
     }
 }

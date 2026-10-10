@@ -68,7 +68,7 @@ section-fog = FOG
 label-fog = Fog
 label-fog-quality = Quality
 label-fog-dithering = Dithering
-section-pause = PAUSE RENDERING WHEN
+section-pause = PAUSE WHEN
 label-pause-fullscreen = App fullscreen
 label-pause-covered = Desktop covered
 label-pause-battery = On battery
@@ -83,6 +83,11 @@ value-ultra = Ultra
 
 ## System tab
 
+section-sound = SOUND
+label-master-volume = Volume
+label-music-volume = Music
+label-ambience-volume = Ambience
+label-character-volume = Character
 section-interface = INTERFACE
 label-language = Language
 # The choice that follows the system's languages instead of naming one.
@@ -126,7 +131,11 @@ help-depth-of-field = Blurs what's out of focus, like a camera lens. Bokeh looks
 help-fog = Fog and light shafts, where the environment has them.
 help-fog-quality = How finely the fog is drawn. Higher costs more.
 help-fog-dithering = Hides banding in the fog with fine noise.
-help-pause-fullscreen = Stops drawing while an app, such as a game, runs fullscreen.
-help-pause-covered = Stops drawing while windows cover the whole desktop.
-help-pause-battery = Stops drawing while the computer runs on battery.
+help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
+help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
+help-pause-battery = Stops the picture and sound while the computer runs on battery.
+help-master-volume = How loud all of CharPaper's sound is.
+help-music-volume = The environment's music.
+help-ambience-volume = The environment's background sounds, such as rain or wind.
+help-character-volume = Sounds the character's animations make, such as footsteps.
 help-language = The panel's language. System follows the system's language.

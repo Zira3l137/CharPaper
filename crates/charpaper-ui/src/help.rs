@@ -73,6 +73,10 @@ fn help(cycler: Cycler, l: &FluentLanguageLoader) -> String {
         Cycler::PauseFullscreen => fl!(l, "help-pause-fullscreen"),
         Cycler::PauseCovered => fl!(l, "help-pause-covered"),
         Cycler::PauseBattery => fl!(l, "help-pause-battery"),
+        Cycler::MasterVolume => fl!(l, "help-master-volume"),
+        Cycler::MusicVolume => fl!(l, "help-music-volume"),
+        Cycler::AmbienceVolume => fl!(l, "help-ambience-volume"),
+        Cycler::CharacterVolume => fl!(l, "help-character-volume"),
         Cycler::Language => fl!(l, "help-language"),
     }
 }

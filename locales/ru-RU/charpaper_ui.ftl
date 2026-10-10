@@ -80,6 +80,11 @@ value-ultra = Ультра
 
 ## System tab
 
+section-sound = ЗВУК
+label-master-volume = Громкость
+label-music-volume = Музыка
+label-ambience-volume = Атмосфера
+label-character-volume = Персонаж
 section-interface = ИНТЕРФЕЙС
 label-language = Язык
 language-system = Системный
@@ -121,7 +126,11 @@ help-depth-of-field = Размывает то, что не в фокусе, ка
 help-fog = Туман и лучи света, если они есть в окружении.
 help-fog-quality = Насколько подробно рисуется туман. Чем выше, тем дороже.
 help-fog-dithering = Убирает полосы в тумане мелким шумом.
-help-pause-fullscreen = Не рисовать, пока приложение, например игра, открыто на весь экран.
-help-pause-covered = Не рисовать, пока окна закрывают весь рабочий стол.
-help-pause-battery = Не рисовать, пока компьютер работает от батареи.
+help-pause-fullscreen = Останавливает картинку и звук, пока приложение, например игра, открыто на весь экран.
+help-pause-covered = Останавливает картинку и звук, пока окна закрывают весь рабочий стол.
+help-pause-battery = Останавливает картинку и звук, пока компьютер работает от батареи.
+help-master-volume = Общая громкость всех звуков CharPaper.
+help-music-volume = Музыка окружения.
+help-ambience-volume = Фоновые звуки окружения, например дождь или ветер.
+help-character-volume = Звуки анимаций персонажа, например шаги.
 help-language = Язык панели. «Системный» следует языку системы.
