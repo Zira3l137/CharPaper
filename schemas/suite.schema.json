@@ -28,7 +28,7 @@
       "$ref": "#/$defs/EnvironmentSection"
     },
     "environments": {
-      "description": "Settings for each environment, keyed by its name: the `.glb` file name\nin `environment/` without its extension, or the name of its folder.",
+      "description": "Settings for each environment, keyed by its name: the `.glb` file name\nin `environment/` without its extension, or the name of its folder.\nThat folder may also hold the environment's sound: `music/`, whose\n`.ogg` files play in file-name order and then start over, and\n`ambience.ogg`, which loops under them.",
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/EnvironmentEntry"

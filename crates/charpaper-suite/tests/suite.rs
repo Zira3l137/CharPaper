@@ -497,6 +497,32 @@ fn environments_come_from_scenes_and_map_folders() {
 }
 
 #[test]
+fn environment_folders_bring_their_music_and_ambience() {
+    let fixture = Fixture::new("environment-sound", "schema = 1");
+    fixture.write("environment/room.gltf", &camera(&[]));
+    fixture.write("environment/room/ambience.ogg", "rain");
+    fixture.write("environment/room/music/02_night.ogg", "second");
+    fixture.write("environment/room/music/01_day.ogg", "first");
+    fixture.write("environment/room/music/cover.png", "not music");
+    fixture.write("environment/silent/music/01_alone.ogg", "music alone is no environment");
+    let suite = fixture.load().unwrap();
+
+    let names: Vec<&str> = suite.environments.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["room", "stage"]);
+    let room = &suite.environments[0];
+    assert_eq!(room.ambience.as_deref(), Some(Path::new("environment/room/ambience.ogg")));
+    assert_eq!(
+        room.music,
+        [
+            PathBuf::from("environment/room/music/01_day.ogg"),
+            PathBuf::from("environment/room/music/02_night.ogg")
+        ]
+    );
+    let stage = &suite.environments[1];
+    assert!(stage.music.is_empty() && stage.ambience.is_none());
+}
+
+#[test]
 fn fog_objects_and_the_lights_skipping_them_are_checked() {
     let manifest = r#"schema = 1
 [environments.foggy]

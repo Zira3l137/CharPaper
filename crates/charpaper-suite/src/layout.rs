@@ -29,6 +29,9 @@ const LUTS_DIR: &str = "luts";
 
 pub const ORBIT_CAMERA: &str = "orbit";
 const ENVIRONMENT_DIR: &str = "environment";
+const MUSIC_DIR: &str = "music";
+const AMBIENCE_FILE: &str = "ambience.ogg";
+const SOUND_EXTENSIONS: &[&str] = &["ogg"];
 
 pub const SKYBOX_MAP: &str = "skybox.ktx2";
 pub const DIFFUSE_MAP: &str = "diffuse.ktx2";
@@ -106,6 +109,9 @@ pub struct Environment {
     pub skybox: Option<PathBuf>,
     pub diffuse: Option<PathBuf>,
     pub specular: Option<PathBuf>,
+    // In file-name order, which is the order they play in.
+    pub music: Vec<PathBuf>,
+    pub ambience: Option<PathBuf>,
     pub settings: EnvironmentEntry,
 }
 
@@ -122,6 +128,17 @@ impl Environment {
         };
         (self.skybox, self.diffuse, self.specular) =
             (map(SKYBOX_MAP), map(DIFFUSE_MAP), map(SPECULAR_MAP));
+    }
+
+    fn find_sounds(&mut self, root: &Path) -> Result<(), SuiteError> {
+        let folder = self.folder();
+        let ambience = folder.join(AMBIENCE_FILE);
+        self.ambience = root.join(&ambience).is_file().then_some(ambience);
+        self.music = files_in(root, &folder.join(MUSIC_DIR).to_string_lossy())?
+            .into_iter()
+            .filter(|p| has_extension(p, SOUND_EXTENSIONS))
+            .collect();
+        Ok(())
     }
 
     pub fn needs_baking(&self) -> bool {
@@ -399,6 +416,7 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
         };
         let mut candidate = Environment { name: name.clone(), ..Default::default() };
         candidate.find_maps(root);
+        candidate.find_sounds(root)?;
         let relative = candidate.folder();
         let mut panoramas: Vec<PathBuf> = files_in(root, &relative.to_string_lossy())?
             .into_iter()
@@ -421,6 +439,8 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
         environment.skybox = candidate.skybox;
         environment.diffuse = candidate.diffuse;
         environment.specular = candidate.specular;
+        environment.music = candidate.music;
+        environment.ambience = candidate.ambience;
         debug!("environment {name:?}: folder found");
     }
 

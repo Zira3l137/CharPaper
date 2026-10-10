@@ -36,6 +36,9 @@ pub struct Manifest {
     pub environment: EnvironmentSection,
     /// Settings for each environment, keyed by its name: the `.glb` file name
     /// in `environment/` without its extension, or the name of its folder.
+    /// That folder may also hold the environment's sound: `music/`, whose
+    /// `.ogg` files play in file-name order and then start over, and
+    /// `ambience.ogg`, which loops under them.
     #[serde(default)]
     pub environments: BTreeMap<String, EnvironmentEntry>,
     #[serde(default)]
