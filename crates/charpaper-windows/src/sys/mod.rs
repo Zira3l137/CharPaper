@@ -12,7 +12,7 @@ pub fn wide(s: &str) -> Vec<u16> {
     OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
 }
 
-fn from_wide(buffer: &[u16]) -> String {
+pub fn from_wide(buffer: &[u16]) -> String {
     let end = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
     OsString::from_wide(&buffer[..end]).to_string_lossy().into_owned()
 }
@@ -85,6 +85,11 @@ pub fn root_ancestor(hwnd: Hwnd) -> Hwnd {
     unsafe { GetAncestor(hwnd, GA_ROOT) }
 }
 
+// The window a child sits in. GetParent would answer with the owner for some windows instead.
+pub fn parent(hwnd: Hwnd) -> Hwnd {
+    unsafe { GetAncestor(hwnd, GA_PARENT) }
+}
+
 pub fn cursor_pos() -> Option<Point> {
     let mut point = Point::default();
     let ok = unsafe { GetCursorPos(&mut point) };
@@ -131,4 +136,37 @@ pub fn child_windows(parent: Hwnd) -> Vec<Hwnd> {
     }
     unsafe { EnumChildWindows(parent, collect_callback, &mut out as *mut Vec<Hwnd> as LParam) };
     out
+}
+
+unsafe extern "system" fn collect_monitor(
+    monitor: HMonitor,
+    _dc: isize,
+    _rect: *mut Rect,
+    lparam: LParam,
+) -> Bool {
+    let out = unsafe { &mut *(lparam as *mut Vec<HMonitor>) };
+    out.push(monitor);
+    1
+}
+
+pub fn display_monitors() -> Vec<HMonitor> {
+    let mut out: Vec<HMonitor> = Vec::new();
+    let lparam = &mut out as *mut Vec<HMonitor> as LParam;
+    unsafe { EnumDisplayMonitors(0, std::ptr::null(), collect_monitor, lparam) };
+    out
+}
+
+pub fn monitor_info_ex(monitor: HMonitor) -> Option<MonitorInfoEx> {
+    let mut info = MonitorInfoEx::default();
+    info.info.cb_size = std::mem::size_of::<MonitorInfoEx>() as u32;
+    let ok =
+        unsafe { GetMonitorInfoW(monitor, &mut info as *mut MonitorInfoEx as *mut MonitorInfo) };
+    (ok != 0).then_some(info)
+}
+
+// 96 is 100% scaling.
+pub fn monitor_dpi(monitor: HMonitor) -> Option<u32> {
+    let (mut x, mut y) = (0, 0);
+    let ok = unsafe { GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut x, &mut y) } == 0;
+    ok.then_some(x)
 }

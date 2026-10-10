@@ -269,7 +269,7 @@ fn set_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
 // A child's position counts from its parent's corner. The parent covers every monitor, so
 // that corner is the top-left of the whole layout, which is below zero whenever a monitor sits
 // left of or above the primary one.
-fn place(hwnd: Hwnd, parent: Hwnd, area: ScreenArea) -> Result<(), WallpaperError> {
+pub fn place(hwnd: Hwnd, parent: Hwnd, area: ScreenArea) -> Result<(), WallpaperError> {
     let origin = sys::window_rect(parent)
         .ok_or_else(|| WallpaperError::native("GetWindowRect(parent)", sys::last_error()))?;
 

@@ -10,6 +10,7 @@ mod unsupported;
 
 pub use backend::AttachOutcome;
 pub use backend::DesktopActivity;
+pub use backend::DesktopMonitor;
 pub use backend::DesktopProbe;
 pub use backend::ScreenArea;
 pub use backend::WallpaperBackend;

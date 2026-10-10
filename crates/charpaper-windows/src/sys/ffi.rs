@@ -133,6 +133,111 @@ pub struct SystemPowerStatus {
     pub battery_full_life_time: u32,
 }
 
+// GetMonitorInfoW fills in the device name too when given this larger struct, with cb_size
+// saying which of the two it got.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MonitorInfoEx {
+    pub info: MonitorInfo,
+    pub device: [u16; 32],
+}
+
+pub type MonitorEnumProc = unsafe extern "system" fn(HMonitor, isize, *mut Rect, LParam) -> Bool;
+
+pub const MONITORINFOF_PRIMARY: u32 = 1;
+pub const MDT_EFFECTIVE_DPI: u32 = 0;
+pub const GA_PARENT: u32 = 1;
+
+// The display configuration API's structs. Their layout must match Windows' exactly; the
+// asserts below catch a mistake at compile time.
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Luid {
+    pub low: u32,
+    pub high: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PathSourceInfo {
+    pub adapter_id: Luid,
+    pub id: u32,
+    pub mode_info_idx: u32,
+    pub status_flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PathTargetInfo {
+    pub adapter_id: Luid,
+    pub id: u32,
+    pub mode_info_idx: u32,
+    pub output_technology: u32,
+    pub rotation: u32,
+    pub scaling: u32,
+    pub refresh_rate: [u32; 2],
+    pub scan_line_ordering: u32,
+    pub target_available: Bool,
+    pub status_flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PathInfo {
+    pub source: PathSourceInfo,
+    pub target: PathTargetInfo,
+    pub flags: u32,
+}
+
+// Only passed along for Windows to fill, never read, so its fields are left opaque.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ModeInfo([u64; 8]);
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DeviceInfoHeader {
+    pub kind: u32,
+    pub size: u32,
+    pub adapter_id: Luid,
+    pub id: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct SourceDeviceName {
+    pub header: DeviceInfoHeader,
+    pub gdi_device_name: [u16; 32],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct TargetDeviceName {
+    pub header: DeviceInfoHeader,
+    pub flags: u32,
+    pub output_technology: u32,
+    pub edid_manufacture_id: u16,
+    pub edid_product_code_id: u16,
+    pub connector_instance: u32,
+    pub friendly_name: [u16; 64],
+    pub device_path: [u16; 128],
+}
+
+const _: () = {
+    assert!(size_of::<MonitorInfoEx>() == 104);
+    assert!(size_of::<PathInfo>() == 72);
+    assert!(size_of::<ModeInfo>() == 64);
+    assert!(size_of::<DeviceInfoHeader>() == 20);
+    assert!(size_of::<SourceDeviceName>() == 84);
+    assert!(size_of::<TargetDeviceName>() == 420);
+};
+
+pub const QDC_ONLY_ACTIVE_PATHS: u32 = 0x2;
+pub const DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME: u32 = 1;
+pub const DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME: u32 = 2;
+pub const ERROR_INSUFFICIENT_BUFFER: i32 = 122;
+
 pub const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 
@@ -228,6 +333,28 @@ unsafe extern "system" {
     pub fn MonitorFromWindow(hwnd: Hwnd, flags: u32) -> HMonitor;
     pub fn MonitorFromPoint(point: Point, flags: u32) -> HMonitor;
     pub fn GetMonitorInfoW(monitor: HMonitor, info: *mut MonitorInfo) -> Bool;
+    pub fn EnumDisplayMonitors(
+        dc: isize,
+        clip: *const Rect,
+        callback: MonitorEnumProc,
+        lparam: LParam,
+    ) -> Bool;
+
+    pub fn GetDisplayConfigBufferSizes(flags: u32, paths: *mut u32, modes: *mut u32) -> i32;
+    pub fn QueryDisplayConfig(
+        flags: u32,
+        path_count: *mut u32,
+        paths: *mut PathInfo,
+        mode_count: *mut u32,
+        modes: *mut ModeInfo,
+        topology: *mut u32,
+    ) -> i32;
+    pub fn DisplayConfigGetDeviceInfo(request: *mut DeviceInfoHeader) -> i32;
+}
+
+#[link(name = "shcore")]
+unsafe extern "system" {
+    pub fn GetDpiForMonitor(monitor: HMonitor, kind: u32, dpi_x: *mut u32, dpi_y: *mut u32) -> i32;
 }
 
 #[link(name = "shell32")]

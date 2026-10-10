@@ -1,6 +1,7 @@
 use charpaper_wallpaper::AttachOutcome;
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::DesktopActivity;
+use charpaper_wallpaper::DesktopMonitor;
 use charpaper_wallpaper::DesktopProbe;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
@@ -14,6 +15,7 @@ use tracing::debug;
 
 use crate::activity;
 use crate::desktop;
+use crate::monitors;
 use crate::pointer::DesktopPointer;
 use crate::sys;
 
@@ -67,6 +69,17 @@ impl WallpaperBackend for WindowsBackend {
         }
 
         Ok(AttachOutcome { strategy_used: Some(strategy) })
+    }
+
+    fn place(&mut self, area: ScreenArea) -> Result<(), WallpaperError> {
+        match self.attached_hwnd {
+            Some(hwnd) => desktop::place(hwnd, sys::parent(hwnd), area),
+            None => Ok(()),
+        }
+    }
+
+    fn monitors(&mut self) -> Vec<DesktopMonitor> {
+        monitors::monitors()
     }
 
     fn forward_input(

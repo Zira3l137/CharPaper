@@ -32,6 +32,19 @@ pub struct ScreenArea {
     pub height: u32,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DesktopMonitor {
+    // Stays the same across reboots and driver updates, so a choice saved by it finds its
+    // monitor again.
+    pub id: String,
+    // For people: the model, when the OS knows it.
+    pub name: String,
+    pub area: ScreenArea,
+    // Physical pixels per logical one, as the OS's display scaling sets it.
+    pub scale: f64,
+    pub primary: bool,
+}
+
 #[derive(Debug, Default)]
 pub struct AttachOutcome {
     pub strategy_used: Option<AttachStrategy>,
@@ -50,6 +63,18 @@ pub trait WallpaperBackend: Send + Sync + 'static {
         area: ScreenArea,
         config: &WallpaperConfig,
     ) -> Result<AttachOutcome, WallpaperError>;
+
+    // Moves the attached window over `area`. Does nothing while no window is attached.
+    fn place(&mut self, _area: ScreenArea) -> Result<(), WallpaperError> {
+        Ok(())
+    }
+
+    // Every monitor, freshly read. Polled about once a second. Empty when the backend can't
+    // tell, which leaves the app to Bevy's own list: it has no lasting ids and can miss a
+    // monitor changing resolution.
+    fn monitors(&mut self) -> Vec<DesktopMonitor> {
+        Vec::new()
+    }
 
     // Ok(None) means there is nothing to recover: the window gets its input on its own.
     fn forward_input(

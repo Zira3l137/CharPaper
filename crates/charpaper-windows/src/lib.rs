@@ -8,6 +8,8 @@ mod desktop;
 #[cfg(windows)]
 mod hook;
 #[cfg(windows)]
+mod monitors;
+#[cfg(windows)]
 mod pointer;
 #[cfg(windows)]
 pub mod sys;
