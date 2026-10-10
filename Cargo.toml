@@ -110,6 +110,13 @@ debug = false
 [profile.dev.package.charpaper-bake]
 opt-level = 3
 
+# Build time is traded for runtime speed everywhere it can be. Fat LTO lets LLVM inline
+# across every crate, Bevy's included, which thin LTO only partly does.
 [profile.release]
-lto = "thin"
+opt-level = 3
+lto = "fat"
 codegen-units = 1
+# No unwinding tables or landing pads. A panic ends the process either way: Bevy re-raises
+# a system's panic on the main thread, and nothing here catches one to recover.
+panic = "abort"
+strip = true

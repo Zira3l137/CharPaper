@@ -1,0 +1,8 @@
+# Flags per target, so local builds and the release workflow compile the same binary.
+# A RUSTFLAGS environment variable replaces these entirely rather than adding to them.
+
+# x86-64-v3 lets LLVM use AVX2 and FMA everywhere: CPUs from 2013 on (Intel Haswell,
+# AMD Excavator/Zen). The binary will not start on anything older.
+# crt-static links the C runtime into the exe, so users need no Visual C++ Redistributable.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-cpu=x86-64-v3", "-C", "target-feature=+crt-static"]
