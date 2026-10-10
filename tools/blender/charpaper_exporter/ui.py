@@ -4,6 +4,7 @@ import bpy
 from bpy.types import Panel
 from bpy.types import UIList
 
+from . import cues
 from .props import suite_of
 
 
@@ -60,8 +61,12 @@ class CHARPAPER_UL_clips(UIList):
         row.prop(item, "name", text="", emboss=False)
         if item.action is None:
             row.label(text="action deleted", icon="ERROR")
-        elif item.action.name != item.name:
+            return
+        if item.action.name != item.name:
             row.label(text=item.action.name, icon="ACTION")
+        sounds = len(cues.markers(item.action))
+        if sounds:
+            row.label(text=str(sounds), icon="SPEAKER")
 
 
 def _list(layout, suite, kind, list_cls, items, index):

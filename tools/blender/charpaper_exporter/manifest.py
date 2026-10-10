@@ -57,7 +57,9 @@ def gaze_table(gaze):
     return table
 
 
-def update(data, suite, extension, exported_animations, model_exported, lenses, environments):
+def update(
+    data, suite, extension, exported_animations, model_exported, lenses, environments, cue_tables
+):
     data = dict(data)
     data.setdefault("schema", 1)
     _set_or_keep(data, "name", suite.suite_name)
@@ -71,6 +73,7 @@ def update(data, suite, extension, exported_animations, model_exported, lenses, 
         data["character"] = character
 
     files = {f"animations/{file_stem(e.name)}{extension}": e for e in exported_animations}
+    previous = data.get("animations", {})
     animations = {
         name: entry
         for name, entry in data.get("animations", {}).items()
@@ -85,7 +88,14 @@ def update(data, suite, extension, exported_animations, model_exported, lenses, 
                 item["mode"] = MODES[clip.mode]
             if not clip.gaze:
                 item["gaze"] = False
-            animations[clip.name or clip.action.name] = item
+            name = clip.name or clip.action.name
+            # Pose markers decide the cues; an action without any keeps those typed by hand.
+            if clip.action.name in cue_tables:
+                if cue_tables[clip.action.name]:
+                    item["cues"] = cue_tables[clip.action.name]
+            elif "cues" in previous.get(name, {}):
+                item["cues"] = previous[name]["cues"]
+            animations[name] = item
     if animations:
         data["animations"] = animations
 

@@ -45,6 +45,14 @@ saved in the `.blend`.
   ticked, otherwise the distance where they fade below *Render Properties > Sampling >
   Advanced > Light Threshold*. Every exported point and spot light carries that distance, so
   the app stops shading and shadowing it there too. Without one it would reach 20 m.
+- **Sounds** are pose markers on a clip's action. In the Action Editor, turn on *Marker >
+  Show Pose Markers*, put a marker where the sound should start and name it after a sound
+  in the .blend: `step_l` matches the Sound `step_l.wav` or `step_l`. The app plays it each
+  time the clip passes that frame, so again on every loop, and stops it when another
+  animation starts. Export writes each named sound to `sounds/<name>.ogg`: an .ogg is
+  copied, anything else is converted to Ogg Vorbis. A marker may also name an .ogg you put
+  in `sounds/` yourself. Markers outside the action's frame range play nothing. The clip
+  list shows how many markers a clip has.
 - Your scene is never changed. Each file is exported from temporary copies in a throwaway
   scene, so your NLA tracks, active actions and selection stay as they were.
 
@@ -53,7 +61,9 @@ saved in the `.blend`.
 Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.bak`:
 
 - It writes the name, the model file, the *Starts with* defaults, every exported clip (file,
-  action, mode, gaze), and `[gaze]` when Gaze is set to *Write*.
+  action, mode, gaze, cues), and `[gaze]` when Gaze is set to *Write*.
+- A clip's cues come from its pose markers. An action without any keeps the cues already
+  in suite.toml, so cues typed by hand survive an export.
 - An empty field leaves the matching key in the file alone.
 - Each exported camera's `[cameras.<name>]` is rewritten from its Depth of Field panel, and
   removed when depth of field is off.

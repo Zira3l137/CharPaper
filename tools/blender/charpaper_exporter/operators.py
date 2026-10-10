@@ -8,6 +8,7 @@ from bpy.props import IntProperty
 from bpy.types import Operator
 
 from . import anim
+from . import cues
 from . import env_settings
 from . import exporters
 from . import gltf
@@ -276,10 +277,22 @@ class CHARPAPER_OT_export(Operator):
                     environments[file_stem(entry.name)] = env_settings.table(entry.collection)
                 model_exported |= kind == "MODEL"
 
+        cue_tables = {}
+        if exported_animations:
+            try:
+                cue_tables, written, notes = cues.export(context, folder, exported_animations)
+                done += written
+                for note in notes:
+                    self.report({"WARNING"}, note)
+            except Exception as error:
+                traceback.print_exc()
+                failed.append(f"sounds: {error}")
+
         if suite.write_manifest and done:
             try:
                 self._write_manifest(
-                    suite, folder, exported_animations, model_exported, lenses, environments
+                    suite, folder, exported_animations, model_exported, lenses, environments,
+                    cue_tables,
                 )
             except Exception as error:
                 traceback.print_exc()
@@ -314,7 +327,9 @@ class CHARPAPER_OT_export(Operator):
         return exporters.camera(context, suite, entry, folder)
 
     @staticmethod
-    def _write_manifest(suite, folder, exported_animations, model_exported, lenses, environments):
+    def _write_manifest(
+        suite, folder, exported_animations, model_exported, lenses, environments, cue_tables
+    ):
         path = manifest.path(folder)
         existing = toml_io.load(path) if os.path.isfile(path) else {}
         data = manifest.update(
@@ -325,6 +340,7 @@ class CHARPAPER_OT_export(Operator):
             model_exported,
             lenses,
             environments,
+            cue_tables,
         )
         manifest.write(folder, data)
 

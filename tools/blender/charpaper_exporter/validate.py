@@ -4,6 +4,7 @@ from collections import Counter
 import bpy
 
 from . import anim
+from . import cues
 from . import env_settings
 from . import gltf
 from . import lens
@@ -253,6 +254,7 @@ def _check_animation(suite, entry, armature, add):
                     f"{_examples(missing)}",
                     armature,
                 ))
+    _check_cues(suite, clips, add)
 
     if not entry.use_correctives:
         if any(c.corrective for c in clips):
@@ -279,6 +281,34 @@ def _check_animation(suite, entry, armature, add):
             add(Finding(f"{obj.name} is in no skin, so its correctives move nothing", obj))
         if not keyed & set(obj.data.shape_keys.key_blocks.keys()):
             add(Finding(f"{obj.name}: no clip keys its shape keys, so it only takes up space", obj))
+
+
+def _check_cues(suite, clips, add):
+    folder = bpy.path.abspath(suite.folder)
+    for clip in clips:
+        inside, outside = cues.in_range(clip.action)
+        if outside:
+            add(Finding(
+                f"clip {clip.action.name!r}: pose markers outside its frame range play nothing: "
+                f"{_examples({m.name for m in outside})}"
+            ))
+        unknown = {
+            cues.sound_name(m.name)
+            for m in inside
+            if cues.find_sound(cues.sound_name(m.name)) is None
+            and not os.path.isfile(cues.path(folder, cues.sound_name(m.name)))
+        }
+        if unknown:
+            add(Finding(
+                f"clip {clip.action.name!r}: no sound named {_examples(unknown)} in the .blend or in "
+                f"{cues.SOUNDS_DIR}/, so those markers play nothing"
+            ))
+        for name in {cues.sound_name(m.name) for m in inside}:
+            sound = cues.find_sound(name)
+            if sound is not None and sound.packed_file is None:
+                source = cues.source_path(sound)
+                if not os.path.isfile(source):
+                    add(Finding(f"sound {sound.name!r}: its file {source} is missing"))
 
 
 def _check_environment(entry, add):
