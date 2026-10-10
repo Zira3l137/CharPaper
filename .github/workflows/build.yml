@@ -1,0 +1,103 @@
+name: Build
+
+# Not run on its own: nightly.yml and release.yml call it, then publish what it uploads.
+on:
+  workflow_call:
+    inputs:
+      label:
+        description: Goes into the archive names, e.g. "nightly" or "v0.2.0".
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  app:
+    name: App (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # One entry per platform. A new platform also needs its flags in .cargo/config.toml.
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+          # - name: linux-x64
+          #   os: ubuntu-latest
+          #   target: x86_64-unknown-linux-gnu
+          #   archive: tar.gz
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Tag builds read main's cache but never write their own, which would only evict it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # Only the Bevy-free crates: their tests are quick, and they guard the suite format.
+      - name: Test
+        run: cargo test --locked --target ${{ matrix.target }} -p charpaper-suite -p charpaper-bake
+
+      - name: Build
+        run: cargo build --locked --release --target ${{ matrix.target }} -p charpaper
+
+      - name: Package
+        env:
+          STAGE: charpaper-${{ inputs.label }}-${{ matrix.name }}
+        run: |
+          bin=target/${{ matrix.target }}/release/charpaper
+          if [[ -f $bin.exe ]]; then bin=$bin.exe; fi
+          mkdir -p "dist/$STAGE/characters"
+          cp "$bin" "dist/$STAGE/"
+          cp -r locales schemas "dist/$STAGE/"
+          cd dist
+          case ${{ matrix.archive }} in
+            zip) 7z a -tzip -bso0 "$STAGE.zip" "$STAGE" ;;
+            tar.gz) tar -czf "$STAGE.tar.gz" "$STAGE" ;;
+          esac
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: app-${{ matrix.name }}
+          path: dist/*.${{ matrix.archive }}
+          if-no-files-found: error
+
+  exporter:
+    name: Blender exporter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Blender's "Install from Disk" wants blender_manifest.toml at the root of the zip.
+      - name: Package
+        working-directory: tools/blender/charpaper_exporter
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          zip -r -q "$GITHUB_WORKSPACE/dist/charpaper_exporter-${{ inputs.label }}.zip" .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: exporter
+          path: dist/*.zip
+          if-no-files-found: error
