@@ -80,7 +80,7 @@ impl WallpaperBackend for WindowsBackend {
     }
 
     fn activity(&mut self) -> DesktopActivity {
-        activity::desktop_activity()
+        activity::desktop_activity(self.attached_hwnd)
     }
 
     fn cursor_position(&mut self) -> Option<[f32; 2]> {

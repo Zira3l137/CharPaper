@@ -7,12 +7,13 @@ use crate::sys::Rect;
 const SHELL_CLASSES: [&str; 4] = ["Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"];
 
 // Every check leans towards not pausing: a wallpaper frozen while visible looks broken.
-pub fn desktop_activity() -> DesktopActivity {
+// `window` is ours once attached; until then the primary monitor stands in for it.
+pub fn desktop_activity(window: Option<Hwnd>) -> DesktopActivity {
     let state = notification_state();
     DesktopActivity {
         away: state == Some(sys::QUNS_NOT_PRESENT),
         fullscreen_app: fullscreen_app(state),
-        covered: covered(),
+        covered: covered(window),
         on_battery: on_battery(),
     }
 }
@@ -47,11 +48,14 @@ fn fullscreen_app(state: Option<i32>) -> bool {
     }
 }
 
-// Only the primary monitor is checked.
-fn covered() -> bool {
-    let primary =
-        unsafe { sys::MonitorFromPoint(sys::Point { x: 0, y: 0 }, sys::MONITOR_DEFAULTTOPRIMARY) };
-    let Some(info) = monitor_info(primary) else {
+fn covered(window: Option<Hwnd>) -> bool {
+    let monitor = match window {
+        Some(hwnd) => unsafe { sys::MonitorFromWindow(hwnd, sys::MONITOR_DEFAULTTONEAREST) },
+        None => unsafe {
+            sys::MonitorFromPoint(sys::Point { x: 0, y: 0 }, sys::MONITOR_DEFAULTTOPRIMARY)
+        },
+    };
+    let Some(info) = monitor_info(monitor) else {
         return false;
     };
     sys::top_level_windows().into_iter().any(|hwnd| {
