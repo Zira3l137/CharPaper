@@ -1,5 +1,6 @@
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::LayeredMode;
+use charpaper_wallpaper::ScreenArea;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WallpaperError;
 
@@ -121,6 +122,7 @@ pub fn find_shell_windows() -> ShellWindows {
 
 pub fn attach(
     hwnd: Hwnd,
+    area: ScreenArea,
     config: &WallpaperConfig,
 ) -> Result<AttachStrategy, WallpaperError> {
     if !sys::is_window(hwnd) {
@@ -143,28 +145,18 @@ pub fn attach(
     };
     debug!("using strategy {strategy:?}");
 
-    match strategy {
-        AttachStrategy::None => Ok(strategy),
-        AttachStrategy::RaisedDesktopChild => {
-            attach_raised(hwnd, &shell, config)?;
-            Ok(strategy)
-        }
-        AttachStrategy::ClassicWorkerW => {
-            attach_classic(hwnd, &shell)?;
-            Ok(strategy)
-        }
-        AttachStrategy::ProgmanDirect => {
-            attach_progman(hwnd, &shell)?;
-            Ok(strategy)
-        }
+    let parent = match strategy {
+        AttachStrategy::None => return Ok(strategy),
+        AttachStrategy::RaisedDesktopChild => attach_raised(hwnd, &shell, config)?,
+        AttachStrategy::ClassicWorkerW => attach_classic(hwnd, &shell)?,
+        AttachStrategy::ProgmanDirect => attach_progman(hwnd, &shell)?,
         AttachStrategy::Auto => unreachable!("Auto was resolved above"),
-    }
+    };
+    place(hwnd, parent, area)?;
+    Ok(strategy)
 }
 
-fn attach_classic(
-    hwnd: Hwnd,
-    shell: &ShellWindows,
-) -> Result<(), WallpaperError> {
+fn attach_classic(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperError> {
     if shell.worker_w == 0 {
         return Err(WallpaperError::DesktopNotFound(
             "a top-level WorkerW (classic layout)".to_string(),
@@ -172,28 +164,23 @@ fn attach_classic(
     }
 
     set_parent(hwnd, shell.worker_w)?;
-    fill_parent(hwnd, shell.worker_w)?;
-    Ok(())
+    Ok(shell.worker_w)
 }
 
-fn attach_progman(
-    hwnd: Hwnd,
-    shell: &ShellWindows,
-) -> Result<(), WallpaperError> {
+fn attach_progman(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperError> {
     if shell.progman == 0 {
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
     }
     warn!("ProgmanDirect draws over the desktop icons; it proves rendering works, nothing more");
     set_parent(hwnd, shell.progman)?;
-    fill_parent(hwnd, shell.progman)?;
-    Ok(())
+    Ok(shell.progman)
 }
 
 fn attach_raised(
     hwnd: Hwnd,
     shell: &ShellWindows,
     config: &WallpaperConfig,
-) -> Result<(), WallpaperError> {
+) -> Result<Hwnd, WallpaperError> {
     if shell.progman == 0 {
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
     }
@@ -208,9 +195,7 @@ fn attach_raised(
 
     ensure_window_behind_icon_layer(hwnd, shell);
     ensure_worker_w_at_bottom(shell);
-
-    fill_parent(hwnd, shell.progman)?;
-    Ok(())
+    Ok(shell.progman)
 }
 
 fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig) {
@@ -281,18 +266,21 @@ fn set_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
     Ok(())
 }
 
-fn fill_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
-    // After SetParent our position is relative to the parent, which spans every monitor.
-    let rect = sys::window_rect(parent)
+// A child's position counts from its parent's corner. The parent covers every monitor, so
+// that corner is the top-left of the whole layout, which is below zero whenever a monitor sits
+// left of or above the primary one.
+fn place(hwnd: Hwnd, parent: Hwnd, area: ScreenArea) -> Result<(), WallpaperError> {
+    let origin = sys::window_rect(parent)
         .ok_or_else(|| WallpaperError::native("GetWindowRect(parent)", sys::last_error()))?;
 
-    let (w, h) = (rect.width(), rect.height());
+    let (x, y) = (area.x - origin.left, area.y - origin.top);
+    let (w, h) = (area.width as i32, area.height as i32);
     let ok =
-        unsafe { sys::SetWindowPos(hwnd, 0, 0, 0, w, h, sys::SWP_NOACTIVATE | sys::SWP_NOZORDER) };
+        unsafe { sys::SetWindowPos(hwnd, 0, x, y, w, h, sys::SWP_NOACTIVATE | sys::SWP_NOZORDER) };
     if ok == 0 {
-        return Err(WallpaperError::native("SetWindowPos(fill)", sys::last_error()));
+        return Err(WallpaperError::native("SetWindowPos(place)", sys::last_error()));
     }
-    debug!("sized to parent: {w}x{h} at child-relative (0, 0)");
+    debug!("placed at {w}x{h}, ({x}, {y}) inside the parent");
     Ok(())
 }
 

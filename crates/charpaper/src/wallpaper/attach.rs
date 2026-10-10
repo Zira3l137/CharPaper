@@ -1,11 +1,14 @@
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
+use bevy::window::Monitor;
+use bevy::window::PrimaryMonitor;
 use bevy::window::PrimaryWindow;
 use bevy::window::RawHandleWrapper;
 use bevy::winit::EventLoopProxyWrapper;
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
+use charpaper_wallpaper::ScreenArea;
 use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
@@ -58,8 +61,8 @@ fn attach_window(
     mut backend: ResMut<Backend>,
     config: Res<WallpaperSettings>,
     mut state: ResMut<AttachState>,
-    handles: Query<&RawHandleWrapper, With<PrimaryWindow>>,
-    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+    mut windows: Query<(Option<&RawHandleWrapper>, &mut Window), With<PrimaryWindow>>,
+    monitor: Query<&Monitor, With<PrimaryMonitor>>,
     on_desktop: Res<PointerOnDesktop>,
     proxy: Option<Res<EventLoopProxyWrapper>>,
 ) {
@@ -72,9 +75,11 @@ fn attach_window(
         return;
     }
 
-    let handle = handles.single().ok().map(RawHandleWrapper::get_window_handle);
+    let handle =
+        windows.single().ok().and_then(|(handle, _)| handle.map(|h| h.get_window_handle()));
+    let area = monitor.single().ok().map(screen_area);
     let wake = on_desktop.waker(proxy.as_deref());
-    let step = decide(&mut backend.0, &config, handle, wake);
+    let step = decide(&mut backend.0, &config, handle, area, wake);
 
     // Shown on failure too: an invisible process with no way to close it is worse.
     let mut reveal = false;
@@ -103,7 +108,7 @@ fn attach_window(
     }
 
     if reveal && config.show_window_after_attach {
-        if let Ok(mut window) = windows.single_mut() {
+        if let Ok((_, mut window)) = windows.single_mut() {
             if !window.visible {
                 window.visible = true;
             }
@@ -120,6 +125,7 @@ fn decide(
     backend: &mut Box<dyn WallpaperBackend>,
     config: &WallpaperConfig,
     handle: Option<RawWindowHandle>,
+    area: Option<ScreenArea>,
     wake: Wake,
 ) -> Step {
     if !config.enabled || config.strategy == AttachStrategy::None {
@@ -129,9 +135,12 @@ fn decide(
     let Some(raw) = handle else {
         return Step::Wait("window handle not ready".to_string());
     };
+    let Some(area) = area else {
+        return Step::Wait("primary monitor not known yet".to_string());
+    };
 
     if config.dry_run {
-        debug!("[dry-run] would attach native handle {raw:?}");
+        debug!("[dry-run] would attach native handle {raw:?} over {area:?}");
         if config.forward_input {
             debug!("[dry-run] would then ask the backend to forward pointer input");
         }
@@ -139,7 +148,7 @@ fn decide(
         return Step::Done { message, input: None };
     }
 
-    match backend.attach(raw, config) {
+    match backend.attach(raw, area, config) {
         Ok(outcome) => {
             let how =
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
@@ -148,6 +157,13 @@ fn decide(
         }
         Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
     }
+}
+
+// Bevy keeps a Monitor entity for every display, with the same coordinates the OS uses.
+fn screen_area(monitor: &Monitor) -> ScreenArea {
+    let position = monitor.physical_position;
+    let (width, height) = (monitor.physical_width, monitor.physical_height);
+    ScreenArea { x: position.x, y: position.y, width, height }
 }
 
 // A failure is only logged: a wallpaper that can't be clicked beats no wallpaper.

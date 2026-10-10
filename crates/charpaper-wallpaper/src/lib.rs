@@ -11,6 +11,7 @@ mod unsupported;
 pub use backend::AttachOutcome;
 pub use backend::DesktopActivity;
 pub use backend::DesktopProbe;
+pub use backend::ScreenArea;
 pub use backend::WallpaperBackend;
 pub use config::AttachStrategy;
 pub use config::LayeredMode;

@@ -2,6 +2,7 @@ use raw_window_handle::RawWindowHandle;
 
 use crate::backend::AttachOutcome;
 use crate::backend::DesktopProbe;
+use crate::backend::ScreenArea;
 use crate::backend::WallpaperBackend;
 use crate::config::WallpaperConfig;
 use crate::error::WallpaperError;
@@ -27,6 +28,7 @@ impl WallpaperBackend for UnsupportedBackend {
     fn attach(
         &mut self,
         _handle: RawWindowHandle,
+        _area: ScreenArea,
         _config: &WallpaperConfig,
     ) -> Result<AttachOutcome, WallpaperError> {
         Err(WallpaperError::Unsupported(std::env::consts::OS))

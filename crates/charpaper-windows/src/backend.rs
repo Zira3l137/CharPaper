@@ -4,6 +4,7 @@ use charpaper_wallpaper::DesktopActivity;
 use charpaper_wallpaper::DesktopProbe;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
+use charpaper_wallpaper::ScreenArea;
 use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
@@ -51,6 +52,7 @@ impl WallpaperBackend for WindowsBackend {
     fn attach(
         &mut self,
         handle: RawWindowHandle,
+        area: ScreenArea,
         config: &WallpaperConfig,
     ) -> Result<AttachOutcome, WallpaperError> {
         let RawWindowHandle::Win32(win32) = handle else {
@@ -58,8 +60,8 @@ impl WallpaperBackend for WindowsBackend {
         };
         let hwnd: sys::Hwnd = win32.hwnd.get();
 
-        debug!("our window HWND = {hwnd:#x}");
-        let strategy = desktop::attach(hwnd, config)?;
+        debug!("our window HWND = {hwnd:#x}, going to {area:?}");
+        let strategy = desktop::attach(hwnd, area, config)?;
         if strategy != AttachStrategy::None {
             self.attached_hwnd = Some(hwnd);
         }

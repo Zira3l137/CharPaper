@@ -21,6 +21,17 @@ pub struct DesktopActivity {
     pub on_battery: bool,
 }
 
+// A rectangle in physical pixels on the plane the OS lays every monitor out on. Coordinates
+// can be negative: Windows puts the primary monitor's corner at (0, 0), so a monitor left of
+// it starts below zero.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScreenArea {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
 #[derive(Debug, Default)]
 pub struct AttachOutcome {
     pub strategy_used: Option<AttachStrategy>,
@@ -32,9 +43,11 @@ pub trait WallpaperBackend: Send + Sync + 'static {
 
     fn probe(&mut self, config: &WallpaperConfig) -> Result<DesktopProbe, WallpaperError>;
 
+    // `area` is the part of the screen the window covers, usually one monitor.
     fn attach(
         &mut self,
         handle: RawWindowHandle,
+        area: ScreenArea,
         config: &WallpaperConfig,
     ) -> Result<AttachOutcome, WallpaperError>;
 
