@@ -60,6 +60,8 @@ pub struct FadeOut(pub Duration);
 pub enum Layer {
     Music,
     Ambience,
+    // What the character's animations play.
+    Character,
 }
 
 // From 0 (silent) to 1 (as loud as the file).
@@ -69,12 +71,13 @@ pub struct Volumes {
     pub master: f32,
     pub music: f32,
     pub ambience: f32,
+    pub character: f32,
 }
 
 // Quiet at first: a wallpaper that suddenly plays loud sound is unwelcome.
 impl Default for Volumes {
     fn default() -> Self {
-        Self { master: 0.25, music: 1.0, ambience: 1.0 }
+        Self { master: 0.25, music: 1.0, ambience: 1.0, character: 1.0 }
     }
 }
 
@@ -87,6 +90,7 @@ impl Volumes {
         let volume = match layer {
             Layer::Music => self.music,
             Layer::Ambience => self.ambience,
+            Layer::Character => self.character,
         };
         volume.clamp(0.0, 1.0)
     }

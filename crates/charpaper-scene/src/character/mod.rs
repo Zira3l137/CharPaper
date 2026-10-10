@@ -1,6 +1,7 @@
 mod animation;
 mod binding;
 mod correctives;
+mod cues;
 mod expression;
 mod skin;
 
@@ -26,6 +27,7 @@ impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ShownSkin>()
             .init_resource::<SkinObjects>()
+            .init_resource::<cues::CueClock>()
             .init_resource::<Expressions>()
             .add_observer(binding::mark_ready)
             .add_systems(Update, (spawn_character, animation::load_clips).in_set(SceneSet::Fill))
@@ -37,6 +39,7 @@ impl Plugin for CharacterPlugin {
                         animation::build_graph,
                         animation::finish_once,
                         animation::play_selected,
+                        cues::play_cues,
                     )
                         .chain(),
                     (

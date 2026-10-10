@@ -7,6 +7,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use charpaper_suite::AnimationFile;
+use charpaper_suite::ClipCue;
 use charpaper_suite::ClipSet;
 use charpaper_suite::PlayMode;
 
@@ -24,11 +25,11 @@ pub struct CharacterClips {
     clips: BTreeMap<String, Clip>,
 }
 
-#[derive(Clone, Copy)]
 pub(crate) struct Clip {
     pub node: AnimationNodeIndex,
     pub mode: PlayMode,
     pub gaze: bool,
+    pub cues: Vec<ClipCue>,
 }
 
 impl CharacterClips {
@@ -36,13 +37,13 @@ impl CharacterClips {
         self.clips.keys().map(String::as_str)
     }
 
-    pub(crate) fn get(&self, name: &str) -> Option<Clip> {
-        self.clips.get(name).copied()
+    pub(crate) fn get(&self, name: &str) -> Option<&Clip> {
+        self.clips.get(name)
     }
 }
 
 #[derive(Component, Default)]
-pub(crate) struct Playing(Option<String>);
+pub(crate) struct Playing(pub Option<String>);
 
 #[derive(Resource)]
 pub(crate) struct PendingClips(Vec<(Handle<Gltf>, AnimationFile)>);
@@ -155,9 +156,9 @@ pub(crate) fn build_graph(
             warn!("skipping the clips in {}: it failed to load", file.path.display());
             continue;
         };
-        for (name, clip, mode, gaze) in select(gltf, file) {
+        for Selected { name, clip, mode, gaze, cues } in select(gltf, file) {
             let node = graph.add_clip(clip, 1.0, graph.root);
-            if clips.insert(name.clone(), Clip { node, mode, gaze }).is_some() {
+            if clips.insert(name.clone(), Clip { node, mode, gaze, cues }).is_some() {
                 warn!("animation {name:?} is defined twice; the later one wins");
             }
         }
@@ -246,8 +247,13 @@ pub(crate) fn play_selected(
     debug!("playing {name:?} ({:?})", clip.mode);
 }
 
-// Name, clip, how it plays, and whether gaze may follow the cursor during it.
-type Selected = (String, Handle<AnimationClip>, PlayMode, bool);
+struct Selected {
+    name: String,
+    clip: Handle<AnimationClip>,
+    mode: PlayMode,
+    gaze: bool,
+    cues: Vec<ClipCue>,
+}
 
 fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<Selected> {
     match &file.clips {
@@ -255,9 +261,15 @@ fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<Selected> {
             let mut all: Vec<_> = gltf
                 .named_animations
                 .iter()
-                .map(|(name, clip)| (name.to_string(), clip.clone(), PlayMode::Loop, true))
+                .map(|(name, clip)| Selected {
+                    name: name.to_string(),
+                    clip: clip.clone(),
+                    mode: PlayMode::Loop,
+                    gaze: true,
+                    cues: Vec::new(),
+                })
                 .collect();
-            all.sort_by(|a, b| a.0.cmp(&b.0));
+            all.sort_by(|a, b| a.name.cmp(&b.name));
             all
         }
         ClipSet::Listed(bindings) => bindings
@@ -275,7 +287,13 @@ fn select(gltf: &Gltf, file: &AnimationFile) -> Vec<Selected> {
                         file.path.display()
                     );
                 }
-                clip.map(|clip| (binding.name.clone(), clip, binding.mode, binding.gaze))
+                clip.map(|clip| Selected {
+                    name: binding.name.clone(),
+                    clip,
+                    mode: binding.mode,
+                    gaze: binding.gaze,
+                    cues: binding.cues.clone(),
+                })
             })
             .collect(),
     }
