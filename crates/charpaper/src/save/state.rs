@@ -11,6 +11,7 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::GazeSettings;
 use charpaper_scene::Picks;
 use charpaper_scene::RenderSettings;
+use charpaper_scene::ScreenSettings;
 use charpaper_ui::UiState;
 use serde::Deserialize;
 use serde::Serialize;
@@ -26,6 +27,7 @@ pub struct SavedState {
     pub suite: Option<String>,
     pub ui: UiState,
     pub render: RenderSettings,
+    pub screen: ScreenSettings,
     pub gaze: GazeSettings,
     pub audio: Volumes,
     pub suites: BTreeMap<String, Picks>,
@@ -87,6 +89,7 @@ impl Plugin for StatePlugin {
                     resource_changed::<CharacterState>
                         .or_eager(resource_changed::<UiState>)
                         .or_eager(resource_changed::<RenderSettings>)
+                        .or_eager(resource_changed::<ScreenSettings>)
                         .or_eager(resource_changed::<GazeSettings>)
                         .or_eager(resource_changed::<Volumes>),
                 ),
@@ -119,6 +122,7 @@ fn note_change(
     mut file: ResMut<StateFile>,
     ui: Res<UiState>,
     render: Res<RenderSettings>,
+    screen: Res<ScreenSettings>,
     gaze: Res<GazeSettings>,
     volumes: Res<Volumes>,
     character: Res<CharacterState>,
@@ -128,6 +132,7 @@ fn note_change(
     let mut next = unsaved.map_or_else(|| file.saved.clone(), |unsaved| unsaved.value);
     next.ui = ui.clone();
     next.render = render.clone();
+    next.screen = screen.clone();
     next.gaze = gaze.clone();
     next.audio = volumes.clone();
     if character.suite.is_some() {

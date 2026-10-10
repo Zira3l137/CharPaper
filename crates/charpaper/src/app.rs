@@ -67,7 +67,10 @@ pub fn run(mut config: AppConfig) -> Result<()> {
         )
         .add_plugins((
             SoundPlugin { volumes: loaded.state.audio.clone() },
-            WallpaperPlugin { config: config.wallpaper.clone() },
+            WallpaperPlugin {
+                config: config.wallpaper.clone(),
+                screen: loaded.state.screen.clone(),
+            },
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() },
         ));

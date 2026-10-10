@@ -1,7 +1,5 @@
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
-use bevy::window::Monitor;
-use bevy::window::PrimaryMonitor;
 use bevy::window::PrimaryWindow;
 use bevy::window::RawHandleWrapper;
 use bevy::winit::EventLoopProxyWrapper;
@@ -17,10 +15,13 @@ use crate::wallpaper::Backend;
 use crate::wallpaper::WallpaperSettings;
 use crate::wallpaper::input::PointerOnDesktop;
 use crate::wallpaper::input::PointerSourceResource;
+use crate::wallpaper::monitors::Layout;
+use crate::wallpaper::monitors::Target;
 
 #[derive(Resource, Default)]
 struct AttachState {
     finished: bool,
+    attached: bool,
     attempts: u32,
     countdown: u32,
 }
@@ -29,9 +30,10 @@ pub(crate) struct AttachPlugin;
 
 impl Plugin for AttachPlugin {
     fn build(&self, app: &mut App) {
+        let moved = resource_changed::<Target>.or_eager(resource_changed::<Layout>);
         app.init_resource::<AttachState>()
             .add_systems(Startup, probe_desktop)
-            .add_systems(Update, attach_window);
+            .add_systems(Update, (attach_window, follow_target.run_if(moved)).chain());
     }
 }
 
@@ -62,7 +64,7 @@ fn attach_window(
     config: Res<WallpaperSettings>,
     mut state: ResMut<AttachState>,
     mut windows: Query<(Option<&RawHandleWrapper>, &mut Window), With<PrimaryWindow>>,
-    monitor: Query<&Monitor, With<PrimaryMonitor>>,
+    target: Res<Target>,
     on_desktop: Res<PointerOnDesktop>,
     proxy: Option<Res<EventLoopProxyWrapper>>,
 ) {
@@ -77,7 +79,7 @@ fn attach_window(
 
     let handle =
         windows.single().ok().and_then(|(handle, _)| handle.map(|h| h.get_window_handle()));
-    let area = monitor.single().ok().map(screen_area);
+    let area = target.0.as_ref().map(|monitor| monitor.area);
     let wake = on_desktop.waker(proxy.as_deref());
     let step = decide(&mut backend.0, &config, handle, area, wake);
 
@@ -97,28 +99,64 @@ fn attach_window(
                 state.countdown = config.frames_between_attempts;
             }
         }
-        Step::Done { message, input } => {
+        Step::Done { message, input, attached } => {
             info!("{message}");
             if let Some(source) = input {
                 commands.insert_resource(PointerSourceResource::new(source));
             }
             state.finished = true;
+            state.attached = attached;
             reveal = true;
         }
     }
 
-    if reveal && config.show_window_after_attach {
-        if let Ok((_, mut window)) = windows.single_mut() {
-            if !window.visible {
-                window.visible = true;
-            }
-        }
+    let Ok((_, mut window)) = windows.single_mut() else {
+        return;
+    };
+    if let Some(monitor) = target.0.as_ref().filter(|_| state.attached) {
+        match_scale(&mut window, monitor.scale);
+    }
+    if reveal && config.show_window_after_attach && !window.visible {
+        window.visible = true;
+    }
+}
+
+// After attaching, the window follows its monitor: to another one when the choice changes,
+// and back into place when the layout shifts. A monitor added left of the primary one moves
+// the desktop's corner that the window's position counts from, so even an unchanged area
+// needs placing again.
+fn follow_target(
+    _main_thread: NonSendMarker,
+    state: Res<AttachState>,
+    mut backend: ResMut<Backend>,
+    target: Res<Target>,
+    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    let Some(monitor) = target.0.as_ref().filter(|_| state.attached) else {
+        return;
+    };
+    if let Err(err) = backend.0.place(monitor.area) {
+        warn!("cannot move the wallpaper to {}: {:#}", monitor.name, anyhow::Error::new(err));
+        return;
+    }
+    if let Ok(mut window) = windows.single_mut() {
+        match_scale(&mut window, monitor.scale);
+    }
+}
+
+// Windows tells only top-level windows about a monitor's scaling, never an attached one, so
+// the panel would keep the size it had on the monitor the window was created on. Bevy lets
+// the app state the scale instead.
+fn match_scale(window: &mut Window, scale: f64) {
+    let scale = Some(scale as f32);
+    if window.resolution.scale_factor_override() != scale {
+        window.resolution.set_scale_factor_override(scale);
     }
 }
 
 enum Step {
     Wait(String),
-    Done { message: String, input: Option<Box<dyn PointerSource>> },
+    Done { message: String, input: Option<Box<dyn PointerSource>>, attached: bool },
 }
 
 fn decide(
@@ -129,14 +167,15 @@ fn decide(
     wake: Wake,
 ) -> Step {
     if !config.enabled || config.strategy == AttachStrategy::None {
-        return Step::Done { message: "wallpaper attach disabled".to_string(), input: None };
+        let message = "wallpaper attach disabled".to_string();
+        return Step::Done { message, input: None, attached: false };
     }
 
     let Some(raw) = handle else {
         return Step::Wait("window handle not ready".to_string());
     };
     let Some(area) = area else {
-        return Step::Wait("primary monitor not known yet".to_string());
+        return Step::Wait("no monitor known yet".to_string());
     };
 
     if config.dry_run {
@@ -145,7 +184,7 @@ fn decide(
             debug!("[dry-run] would then ask the backend to forward pointer input");
         }
         let message = "dry run: no windows were modified".to_string();
-        return Step::Done { message, input: None };
+        return Step::Done { message, input: None, attached: false };
     }
 
     match backend.attach(raw, area, config) {
@@ -153,17 +192,11 @@ fn decide(
             let how =
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
             let message = format!("attached to desktop using {how}");
-            Step::Done { message, input: start_forwarding(backend, config, wake) }
+            let attached = outcome.strategy_used.is_some_and(|s| s != AttachStrategy::None);
+            Step::Done { message, input: start_forwarding(backend, config, wake), attached }
         }
         Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
     }
-}
-
-// Bevy keeps a Monitor entity for every display, with the same coordinates the OS uses.
-fn screen_area(monitor: &Monitor) -> ScreenArea {
-    let position = monitor.physical_position;
-    let (width, height) = (monitor.physical_width, monitor.physical_height);
-    ScreenArea { x: position.x, y: position.y, width, height }
 }
 
 // A failure is only logged: a wallpaper that can't be clicked beats no wallpaper.
