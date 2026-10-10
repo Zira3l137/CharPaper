@@ -180,12 +180,13 @@ impl Drop for Fixture {
     }
 }
 
+// Findings print paths the OS's way; the assertions are written with forward slashes.
 fn messages(suite: &Suite, severity: Severity) -> Vec<String> {
     inspect(suite)
         .findings
         .into_iter()
         .filter(|f| f.severity == severity)
-        .map(|f| f.to_string())
+        .map(|f| f.to_string().replace('\\', "/"))
         .collect()
 }
 
