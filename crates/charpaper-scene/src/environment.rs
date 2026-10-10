@@ -37,7 +37,7 @@ impl Plugin for EnvironmentPlugin {
             .add_systems(Update, choose_environment.in_set(SceneSet::Fill))
             .add_systems(
                 Update,
-                (switch_environment, finish_bakes, spawn_environment_scenes)
+                (switch_environment, finish_bakes, equip_new_cameras, spawn_environment_scenes)
                     .chain()
                     .in_set(SceneSet::Run),
             );
@@ -88,19 +88,21 @@ pub(crate) fn switch_environment(
     assets: Res<AssetServer>,
     mut shown: ResMut<ShownEnvironment>,
     mut baking: ResMut<Baking>,
-    camera: Query<Entity, With<SceneCamera>>,
+    cameras: Query<Entity, With<SceneCamera>>,
 ) {
     if shown.name == state.environment {
         return;
     }
-    let (Some(suite), Ok(camera)) = (suite, camera.single()) else {
+    let Some(suite) = suite else {
         return;
     };
 
     if let Some(root) = shown.root.take() {
         commands.entity(root).despawn();
     }
-    commands.entity(camera).remove::<(Skybox, EnvironmentMapLight)>();
+    for camera in &cameras {
+        commands.entity(camera).remove::<(Skybox, EnvironmentMapLight)>();
+    }
     shown.name = state.environment.clone();
 
     let Some(environment) = state
@@ -111,7 +113,9 @@ pub(crate) fn switch_environment(
         return;
     };
 
-    attach_maps(&mut commands, camera, &assets, &suite, environment);
+    for camera in &cameras {
+        attach_maps(&mut commands, camera, &assets, &suite, environment);
+    }
     if environment.needs_baking() && !baking.0.contains_key(&environment.name) {
         start_bake(&mut baking, &suite, environment, &config);
     }
@@ -184,7 +188,7 @@ pub(crate) fn finish_bakes(
     suite: Option<ResMut<ActiveSuite>>,
     assets: Res<AssetServer>,
     mut shown: ResMut<ShownEnvironment>,
-    camera: Query<Entity, With<SceneCamera>>,
+    cameras: Query<Entity, With<SceneCamera>>,
 ) {
     let Some(mut suite) = suite else {
         return;
@@ -210,12 +214,33 @@ pub(crate) fn finish_bakes(
         info!("environment {name:?}: maps baked");
 
         if shown.name.as_deref() == Some(name.as_str()) {
-            if let Ok(camera) = camera.single() {
-                let environment = environment.clone();
+            let environment = environment.clone();
+            for camera in &cameras {
                 attach_maps(&mut commands, camera, &assets, &suite, &environment);
-                shown.set_changed();
             }
+            shown.set_changed();
         }
+    }
+}
+
+// A camera that comes later, for a screen added while the app runs, gets the maps too.
+fn equip_new_cameras(
+    mut commands: Commands,
+    suite: Option<Res<ActiveSuite>>,
+    shown: Res<ShownEnvironment>,
+    assets: Res<AssetServer>,
+    cameras: Query<Entity, Added<SceneCamera>>,
+) {
+    let Some(suite) = suite else {
+        return;
+    };
+    let shown =
+        shown.name.as_ref().and_then(|name| suite.environments.iter().find(|e| &e.name == name));
+    let Some(environment) = shown else {
+        return;
+    };
+    for camera in &cameras {
+        attach_maps(&mut commands, camera, &assets, &suite, environment);
     }
 }
 

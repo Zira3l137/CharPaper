@@ -1,6 +1,7 @@
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use charpaper_scene::CursorAt;
 use charpaper_scene::CursorPosition;
 
 use crate::wallpaper::Backend;
@@ -18,13 +19,17 @@ impl Plugin for CursorPlugin {
 fn track_cursor(
     _main_thread: NonSendMarker,
     mut backend: ResMut<Backend>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    windows: Query<(Entity, &Window), With<PrimaryWindow>>,
     mut cursor: ResMut<CursorPosition>,
 ) {
+    let Ok((window, settings)) = windows.single() else {
+        cursor.set_if_neq(CursorPosition(None));
+        return;
+    };
     let position = backend
         .0
         .cursor_position()
         .map(Vec2::from_array)
-        .or_else(|| windows.single().ok()?.physical_cursor_position());
-    cursor.set_if_neq(CursorPosition(position));
+        .or_else(|| settings.physical_cursor_position());
+    cursor.set_if_neq(CursorPosition(position.map(|position| CursorAt { window, position })));
 }

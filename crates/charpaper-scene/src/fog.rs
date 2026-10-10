@@ -114,7 +114,7 @@ fn light_fog(
     look: Option<Res<ActiveLook>>,
     shown: Res<ShownEnvironment>,
     suite: Option<Res<ActiveSuite>>,
-    camera: Single<Entity, With<SceneCamera>>,
+    cameras: Query<Entity, With<SceneCamera>>,
     volumes: Query<(), With<FogVolume>>,
     children: Query<&Children>,
     parents: Query<&ChildOf>,
@@ -125,11 +125,13 @@ fn light_fog(
     >,
 ) {
     let on = settings.fog && !volumes.is_empty();
-    if on {
-        // No ambient: Bevy adds it evenly whatever the density, which no Blender fog does.
-        commands.entity(*camera).insert(VolumetricFog { ambient_intensity: 0.0, ..default() });
-    } else {
-        commands.entity(*camera).remove::<VolumetricFog>();
+    for camera in &cameras {
+        if on {
+            // No ambient: Bevy adds it evenly whatever the density, which no Blender fog does.
+            commands.entity(camera).insert(VolumetricFog { ambient_intensity: 0.0, ..default() });
+        } else {
+            commands.entity(camera).remove::<VolumetricFog>();
+        }
     }
 
     let Some(root) = shown.root else {
@@ -169,19 +171,18 @@ fn shown_environment<'a>(
 fn sample_fog(
     settings: Res<RenderSettings>,
     volumes: Query<&GlobalTransform, With<FogVolume>>,
-    mut fog: Query<&mut VolumetricFog>,
+    mut fogs: Query<&mut VolumetricFog>,
 ) {
-    let Ok(mut fog) = fog.single_mut() else {
-        return;
-    };
     let steps = settings.fog_quality.steps();
     // Starting each pixel's samples up to one step further along turns the stripes between
     // steps into fine noise. Bevy wants that as a distance, so the step is measured along the
     // longest way through any fog box: its diagonal.
     let longest = volumes.iter().map(|v| v.scale().length()).fold(0.0, f32::max);
     let jitter = if settings.fog_dithering { longest / steps as f32 } else { 0.0 };
-    if fog.step_count != steps || fog.jitter != jitter {
-        fog.step_count = steps;
-        fog.jitter = jitter;
+    for mut fog in &mut fogs {
+        if fog.step_count != steps || fog.jitter != jitter {
+            fog.step_count = steps;
+            fog.jitter = jitter;
+        }
     }
 }

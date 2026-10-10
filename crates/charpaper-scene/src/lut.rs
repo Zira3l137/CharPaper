@@ -21,7 +21,7 @@ use crate::SceneSet;
 use crate::assets::asset_path;
 use crate::look::ActiveLook;
 use crate::render::SceneImage;
-use crate::render::SceneTarget;
+use crate::render::ScreenParts;
 use crate::suite::ActiveSuite;
 
 pub(crate) struct LutPlugin;
@@ -86,14 +86,11 @@ pub(crate) struct ShownLut {
 fn apply_lut(
     look: Option<Res<ActiveLook>>,
     suite: Option<Res<ActiveSuite>>,
-    target: Option<Res<SceneTarget>>,
+    screens: Query<&ScreenParts>,
     assets: Res<AssetServer>,
     mut shown: ResMut<ShownLut>,
     mut materials: ResMut<Assets<SceneImage>>,
 ) {
-    let Some(target) = target else {
-        return;
-    };
     let lut = look.map(|l| l.post.lut.clone()).unwrap_or_default();
     let wanted = suite.as_ref().and_then(|suite| {
         let name = lut.name()?;
@@ -118,12 +115,14 @@ fn apply_lut(
         },
     };
     let strength = if ready.is_some() { lut.strength() } else { 0.0 };
-    if materials
-        .get(&target.material)
-        .is_some_and(|m| m.lut != ready || m.settings.lut_strength != strength)
-        && let Some(mut material) = materials.get_mut(&target.material)
-    {
-        material.lut = ready;
-        material.settings.lut_strength = strength;
+    for parts in &screens {
+        if materials
+            .get(&parts.material)
+            .is_some_and(|m| m.lut != ready || m.settings.lut_strength != strength)
+            && let Some(mut material) = materials.get_mut(&parts.material)
+        {
+            material.lut = ready.clone();
+            material.settings.lut_strength = strength;
+        }
     }
 }

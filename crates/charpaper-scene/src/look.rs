@@ -19,7 +19,7 @@ use crate::environment::EnvironmentReady;
 use crate::environment::ShownEnvironment;
 use crate::environment::spawn_environment_scenes;
 use crate::render::SceneImage;
-use crate::render::SceneTarget;
+use crate::render::ScreenParts;
 
 // Applies the look, the settings the viewer can change while the app runs, to the camera
 // and the environment's lights. Recomputed whole on every change, so no value is kept twice.
@@ -104,7 +104,7 @@ pub(crate) fn apply_look(
     mut commands: Commands,
     look: Option<Res<ActiveLook>>,
     shown: Res<ShownEnvironment>,
-    mut camera: Query<
+    mut cameras: Query<
         (Entity, Option<&mut Skybox>, Option<&mut EnvironmentMapLight>),
         With<SceneCamera>,
     >,
@@ -114,7 +114,7 @@ pub(crate) fn apply_look(
     let look = look.map(|l| l.0.clone()).unwrap_or_default();
     let resolved = Resolved::new(&look, shown.name.as_deref());
 
-    if let Ok((entity, skybox, environment_light)) = camera.single_mut() {
+    for (entity, skybox, environment_light) in &mut cameras {
         // A higher EV100 is darker; a higher look exposure is brighter.
         let ev100 = Exposure::EV100_BLENDER - resolved.exposure;
         commands.entity(entity).insert((to_bevy(resolved.tonemapping), Exposure { ev100 }));
@@ -205,29 +205,33 @@ fn color_grading(look: &Look) -> ColorGrading {
 
 pub(crate) fn apply_grain(
     look: Option<Res<ActiveLook>>,
-    target: Option<Res<SceneTarget>>,
+    screens: Query<&ScreenParts>,
     mut materials: ResMut<Assets<SceneImage>>,
 ) {
-    let Some(target) = target else {
-        return;
-    };
     let grain = look.map(|l| l.post.grain.clone()).unwrap_or_default();
     let colored = if grain.colored() { 1.0 } else { 0.0 };
     let wanted = Vec4::new(grain.intensity(), grain.size(), colored, 0.0);
-    // Only on a real change: every change rebuilds the material on the GPU.
-    if materials.get(&target.material).is_some_and(|m| m.settings.grain != wanted)
-        && let Some(mut material) = materials.get_mut(&target.material)
-    {
-        material.settings.grain = wanted;
+    for parts in &screens {
+        // Only on a real change: every change rebuilds the material on the GPU.
+        if materials.get(&parts.material).is_some_and(|m| m.settings.grain != wanted)
+            && let Some(mut material) = materials.get_mut(&parts.material)
+        {
+            material.settings.grain = wanted;
+        }
     }
 }
 
+// A new camera, for a screen added while the app runs, needs the whole look too.
 pub(crate) fn look_needs_applying(
     look: Option<Res<ActiveLook>>,
     shown: Res<ShownEnvironment>,
     ready: Query<(), Added<EnvironmentReady>>,
+    new_cameras: Query<(), Added<SceneCamera>>,
 ) -> bool {
-    look.is_some_and(|l| l.is_changed()) || shown.is_changed() || !ready.is_empty()
+    look.is_some_and(|l| l.is_changed())
+        || shown.is_changed()
+        || !ready.is_empty()
+        || !new_cameras.is_empty()
 }
 
 fn to_bevy(from: SuiteTonemapping) -> Tonemapping {

@@ -2,6 +2,14 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
+// A window the scene is shown in. The app spawns one per window; the scene gives each a
+// camera of its own, at that window's size, all looking from the one scene view. Despawning
+// the entity takes all of that away again.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Screen {
+    pub window: Entity,
+}
+
 // What the panel needs to show and change where the wallpaper is. The app fills these in and
 // acts on them; they live here only so the panel, which can't see the app, can reach them.
 

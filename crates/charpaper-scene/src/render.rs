@@ -12,23 +12,31 @@ use bevy::render::render_resource::Extent3d;
 use bevy::render::render_resource::ShaderType;
 use bevy::render::render_resource::TextureFormat;
 use bevy::shader::ShaderRef;
-use bevy::window::PrimaryWindow;
+use bevy::window::WindowRef;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::SceneSet;
 use crate::camera::SceneCamera;
+use crate::screens::Screen;
 
 pub(crate) struct RenderPlugin;
 
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "scene_image.wgsl");
-        app.add_plugins(UiMaterialPlugin::<SceneImage>::default()).add_systems(
-            Update,
-            (fit_scene_target, apply_anti_aliasing.run_if(resource_changed::<RenderSettings>))
-                .in_set(SceneSet::Run),
-        );
+        let new_camera = any_match_filter::<Added<SceneCamera>>;
+        app.add_plugins(UiMaterialPlugin::<SceneImage>::default())
+            .add_observer(remove_screen_parts)
+            .add_systems(
+                Update,
+                (
+                    fit_scene_targets,
+                    apply_anti_aliasing
+                        .run_if(resource_changed::<RenderSettings>.or_eager(new_camera)),
+                )
+                    .in_set(SceneSet::Run),
+            );
     }
 }
 
@@ -174,8 +182,12 @@ impl FogQuality {
     }
 }
 
-#[derive(Resource)]
-pub(crate) struct SceneTarget {
+// What the scene added to a Screen to draw on it. Despawned along with the screen.
+#[derive(Component)]
+pub(crate) struct ScreenParts {
+    pub camera: Entity,
+    display: Entity,
+    pub image_node: Entity,
     image: Handle<Image>,
     pub material: Handle<SceneImage>,
 }
@@ -209,32 +221,39 @@ impl UiMaterial for SceneImage {
     }
 }
 
-// The 3D camera draws into an image, and a second camera shows that image full-screen
-// under the UI. So the scene can render at a lower resolution while the UI stays sharp.
-// Returns what the 3D camera needs, and the node showing the image.
-pub(crate) fn scene_target(
+// The 3D camera draws into an image, and a second camera shows that image across the
+// screen's window under the UI. So the scene can render at a lower resolution while the UI
+// stays sharp. Returns what the 3D camera needs, and the parts to keep on the screen, still
+// without the 3D camera, which the caller spawns.
+pub(crate) fn screen_parts(
     commands: &mut Commands,
     images: &mut Assets<Image>,
     materials: &mut Assets<SceneImage>,
-    window: Option<&Window>,
+    screen: &Screen,
+    window: &Window,
+    primary: bool,
     settings: &RenderSettings,
-) -> (impl Bundle, Entity) {
-    let size = window.map_or(UVec2::ONE, |w| scaled(w, settings));
+) -> (impl Bundle, ScreenParts) {
+    let size = scaled(window, settings);
     let image =
         images.add(Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None));
     let material =
         materials.add(SceneImage { image: image.clone(), settings: default(), lut: None });
-    commands.insert_resource(SceneTarget { image: image.clone(), material: material.clone() });
 
-    commands.spawn((
+    let mut display = commands.spawn((
         Name::new("Display camera"),
         Camera2d,
         Camera { order: 1, ..default() },
-        IsDefaultUiCamera,
+        RenderTarget::Window(WindowRef::Entity(screen.window)),
         Msaa::Off,
         Tonemapping::None,
     ));
-    let view = commands
+    // The panel draws through the camera marked default.
+    if primary {
+        display.insert(IsDefaultUiCamera);
+    }
+    let display = display.id();
+    let image_node = commands
         .spawn((
             Name::new("Scene image"),
             Node {
@@ -243,36 +262,59 @@ pub(crate) fn scene_target(
                 height: percent(100),
                 ..default()
             },
-            MaterialNode(material),
+            MaterialNode(material.clone()),
             GlobalZIndex(i32::MIN),
+            UiTargetCamera(display),
         ))
         .id();
 
-    ((RenderTarget::from(image), settings.anti_aliasing.msaa()), view)
+    let parts = ScreenParts {
+        camera: Entity::PLACEHOLDER,
+        display,
+        image_node,
+        image: image.clone(),
+        material,
+    };
+    ((RenderTarget::from(image), settings.anti_aliasing.msaa()), parts)
+}
+
+fn remove_screen_parts(
+    remove: On<Remove, ScreenParts>,
+    parts: Query<&ScreenParts>,
+    mut commands: Commands,
+) {
+    let Ok(parts) = parts.get(remove.entity) else {
+        return;
+    };
+    for entity in [parts.camera, parts.display, parts.image_node] {
+        commands.entity(entity).try_despawn();
+    }
 }
 
 // Bevy recreates the GPU texture behind the same handle. The material that shows it keeps
 // the old texture until it is marked changed, which makes Bevy build it again.
-pub(crate) fn fit_scene_target(
+pub(crate) fn fit_scene_targets(
     settings: Res<RenderSettings>,
-    target: Option<Res<SceneTarget>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    screens: Query<(&Screen, &ScreenParts)>,
+    windows: Query<&Window>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<SceneImage>>,
 ) {
-    let (Some(target), Ok(window)) = (target, windows.single()) else {
-        return;
-    };
-    let size = scaled(window, &settings);
-    if images.get(&target.image).is_none_or(|image| image.size() == size) {
-        return;
-    }
-    if let Some(mut image) = images.get_mut(&target.image) {
-        image.resize(Extent3d { width: size.x, height: size.y, depth_or_array_layers: 1 });
-        debug!("scene renders at {}×{}", size.x, size.y);
-    }
-    if let Some(material) = materials.get_mut(&target.material) {
-        let _ = material.into_inner();
+    for (screen, parts) in &screens {
+        let Ok(window) = windows.get(screen.window) else {
+            continue;
+        };
+        let size = scaled(window, &settings);
+        if images.get(&parts.image).is_none_or(|image| image.size() == size) {
+            continue;
+        }
+        if let Some(mut image) = images.get_mut(&parts.image) {
+            image.resize(Extent3d { width: size.x, height: size.y, depth_or_array_layers: 1 });
+            debug!("scene renders at {}×{} on {}", size.x, size.y, screen.window);
+        }
+        if let Some(material) = materials.get_mut(&parts.material) {
+            let _ = material.into_inner();
+        }
     }
 }
 

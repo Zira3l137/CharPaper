@@ -19,7 +19,9 @@ use crate::camera::rig::Following;
 use crate::environment::ShownEnvironment;
 use crate::render::RenderSettings;
 use crate::render::SceneImage;
-use crate::render::scene_target;
+use crate::render::ScreenParts;
+use crate::render::screen_parts;
+use crate::screens::Screen;
 use crate::suite::ActiveSuite;
 
 const ORBIT_FOCUS: [f32; 3] = [0.0, 1.0, 0.0];
@@ -43,7 +45,8 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ShownRig>()
             .add_observer(rig::on_rig_ready)
-            .add_systems(Startup, spawn_camera)
+            .add_systems(Startup, spawn_view)
+            .add_systems(Update, spawn_screen_cameras.before(SceneSet::Switch))
             .add_systems(Update, (rig::choose_camera, reset_view).in_set(SceneSet::Fill))
             .add_systems(Update, (rig::switch_rig, rig::spawn_rig).chain().in_set(SceneSet::Run))
             // After propagation, so the rig's animated transform is final, and before frusta
@@ -61,37 +64,54 @@ impl Plugin for CameraPlugin {
     }
 }
 
-fn spawn_camera(
+fn spawn_view(mut commands: Commands) {
+    let orbit = orbit_for(None);
+    let mut transform = Transform::default();
+    update_camera_transform(&mut transform, &orbit);
+    commands.spawn((Name::new("Scene view"), SceneView, orbit, Following::default(), transform));
+}
+
+// A screen whose window doesn't exist yet is tried again next frame.
+fn spawn_screen_cameras(
     mut commands: Commands,
     settings: Res<RenderSettings>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<SceneImage>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    view: Single<Entity, With<SceneView>>,
+    screens: Query<(Entity, &Screen), Without<ScreenParts>>,
+    windows: Query<(&Window, Has<PrimaryWindow>)>,
 ) {
-    let orbit = orbit_for(None);
-    let mut transform = Transform::default();
-    update_camera_transform(&mut transform, &orbit);
-
-    let window = windows.single().ok();
-    let (target, image_node) =
-        scene_target(&mut commands, &mut images, &mut materials, window, &settings);
-    // Only the pointer over the scene steers the orbit, so anything drawn on top of the scene,
-    // such as the settings panel, keeps its scrolls and drags to itself.
-    commands
-        .entity(image_node)
-        .observe(orbit::on_pan)
-        .observe(orbit::on_orbit)
-        .observe(orbit::on_zoom);
-    let view = commands
-        .spawn((Name::new("Scene view"), SceneView, orbit, Following::default(), transform))
-        .id();
-    commands.spawn((
-        Name::new("Scene camera"),
-        SceneCamera,
-        Camera3d::default(),
-        target,
-        ChildOf(view),
-    ));
+    for (entity, screen) in &screens {
+        let Ok((window, primary)) = windows.get(screen.window) else {
+            continue;
+        };
+        let (target, mut parts) = screen_parts(
+            &mut commands,
+            &mut images,
+            &mut materials,
+            screen,
+            window,
+            primary,
+            &settings,
+        );
+        // Only the pointer over the scene steers the orbit, so anything drawn on top of the
+        // scene, such as the settings panel, keeps its scrolls and drags to itself.
+        commands
+            .entity(parts.image_node)
+            .observe(orbit::on_pan)
+            .observe(orbit::on_orbit)
+            .observe(orbit::on_zoom);
+        parts.camera = commands
+            .spawn((
+                Name::new("Scene camera"),
+                SceneCamera,
+                Camera3d::default(),
+                target,
+                ChildOf(*view),
+            ))
+            .id();
+        commands.entity(entity).insert(parts);
+    }
 }
 
 // Back to the orbit camera, placed where the new suite says, whenever a suite is shown.

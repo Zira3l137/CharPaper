@@ -14,6 +14,8 @@ use crate::character::ShownSkin;
 use crate::character::SkinObjects;
 use crate::config::SceneConfig;
 use crate::render::RenderSettings;
+use crate::render::ScreenParts;
+use crate::screens::Screen;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
 
@@ -56,10 +58,16 @@ impl Default for GazeSettings {
     }
 }
 
-// In physical pixels from the window's top-left corner, possibly outside the window. The app
-// fills it in every frame.
+// The app fills it in every frame.
 #[derive(Resource, Default, Clone, Copy, Debug, PartialEq)]
-pub struct CursorPosition(pub Option<Vec2>);
+pub struct CursorPosition(pub Option<CursorAt>);
+
+// In physical pixels from the top-left corner of a Screen's window, possibly outside it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CursorAt {
+    pub window: Entity,
+    pub position: Vec2,
+}
 
 #[derive(Clone, Debug)]
 pub struct GazeTuning {
@@ -114,7 +122,7 @@ pub(crate) struct GazeRig {
     keys: [Vec<(Entity, usize)>; 4],
     weight: f32,
     target: Option<Vec3>,
-    last_cursor: Option<Vec2>,
+    last_cursor: Option<CursorAt>,
     still_secs: f32,
     keys_written: bool,
 }
@@ -242,7 +250,8 @@ fn aim(
     cursor: Res<CursorPosition>,
     state: Res<CharacterState>,
     clips: Option<Res<CharacterClips>>,
-    camera: Query<(&Camera, &GlobalTransform), With<SceneCamera>>,
+    screens: Query<(&Screen, &ScreenParts)>,
+    cameras: Query<(&Camera, &GlobalTransform), With<SceneCamera>>,
     globals: Query<&GlobalTransform>,
     parents: Query<&ChildOf>,
     mut transforms: Query<&mut Transform>,
@@ -299,7 +308,12 @@ fn aim(
     let reference = rig.head.as_ref().or(rig.neck.as_ref()).unwrap_or(&rig.eyes[0]);
     let (reference_bone, reference_forward) = (reference.bone, reference.forward);
     let to_model = armature_global.affine().inverse();
-    if let (Some(at), Ok((camera, camera_global))) = (cursor.0, camera.single()) {
+    // Through the camera of the screen the cursor is measured from.
+    let seen = cursor.0.and_then(|at| {
+        let (_, parts) = screens.iter().find(|(screen, _)| screen.window == at.window)?;
+        Some((at.position, cameras.get(parts.camera).ok()?))
+    });
+    if let Some((at, (camera, camera_global))) = seen {
         let scale = render.scale_percent() as f32 / 100.0;
         if let Ok(ray) = camera.viewport_to_world(camera_global, at * scale) {
             let head = pose(reference_bone, armature, &parents, &transforms.as_readonly());

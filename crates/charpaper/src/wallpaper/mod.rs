@@ -6,6 +6,8 @@ mod pacing;
 mod platform;
 
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
+use charpaper_scene::Screen;
 use charpaper_scene::ScreenSettings;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
@@ -26,6 +28,7 @@ impl Plugin for WallpaperPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(WallpaperSettings(self.config.clone()))
             .insert_resource(Backend(platform::create_backend()))
+            .add_systems(Startup, spawn_screen)
             .add_plugins((
                 monitors::MonitorsPlugin { screen: self.screen.clone() },
                 attach::AttachPlugin,
@@ -34,6 +37,11 @@ impl Plugin for WallpaperPlugin {
                 pacing::PacingPlugin,
             ));
     }
+}
+
+// For now the one window is the one screen the scene shows on.
+fn spawn_screen(mut commands: Commands, window: Single<Entity, With<PrimaryWindow>>) {
+    commands.spawn((Name::new("Screen"), Screen { window: *window }));
 }
 
 // WallpaperConfig lives in a Bevy-free crate, so it can't derive Resource itself.
