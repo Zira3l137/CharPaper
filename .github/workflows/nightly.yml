@@ -1,0 +1,61 @@
+name: Nightly
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push makes a nightly that is still building pointless.
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      label: nightly
+
+  publish:
+    name: Publish
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Changes since the last release
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --unreleased --strip header --output notes.md
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      # The `nightly` release and its tag are recreated on every push, so the download
+      # links never change while the tag follows main.
+      - name: Replace the nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum -- * > SHA256SUMS.txt)
+          {
+            echo "Automatic build of ${GITHUB_SHA::7}, untested. Expect bugs."
+            echo
+            cat notes.md
+          } > body.md
+          gh release delete nightly --cleanup-tag --yes || true
+          gh release create nightly dist/* \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Nightly ($(date -u +%Y-%m-%d), ${GITHUB_SHA::7})" \
+            --notes-file body.md
