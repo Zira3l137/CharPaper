@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
+use charpaper_audio::SoundPlugin;
 use charpaper_scene::ARMATURE_SOURCE;
 use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
@@ -65,6 +66,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
                 .set(logging::plugin(config.log)),
         )
         .add_plugins((
+            SoundPlugin { volumes: loaded.state.audio.clone() },
             WallpaperPlugin { config: config.wallpaper.clone() },
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() },

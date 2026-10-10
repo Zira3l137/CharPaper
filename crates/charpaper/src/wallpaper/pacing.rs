@@ -4,6 +4,7 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::winit::UpdateMode;
 use bevy::winit::WinitSettings;
+use charpaper_audio::Hush;
 use charpaper_scene::RenderSettings;
 use charpaper_ui::PanelHovered;
 
@@ -31,6 +32,7 @@ impl Plugin for PacingPlugin {
                         .or_eager(resource_changed::<Paused>)
                         .or_eager(resource_changed::<PanelHovered>),
                 ),
+                hush_while_paused.run_if(resource_changed::<Paused>),
             )
                 .chain(),
         );
@@ -70,6 +72,11 @@ fn poll_activity(
         }
         paused.0 = reason;
     }
+}
+
+// Whatever stops the drawing stops the sound too.
+fn hush_while_paused(paused: Res<Paused>, mut hush: ResMut<Hush>) {
+    hush.set_if_neq(Hush(paused.0.is_some()));
 }
 
 // In reactive mode winit sleeps until the wait runs out or an event arrives, so between

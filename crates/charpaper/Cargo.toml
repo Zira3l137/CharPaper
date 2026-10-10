@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+charpaper-audio.workspace = true
 charpaper-bake.workspace = true
 charpaper-scene.workspace = true
 charpaper-suite.workspace = true

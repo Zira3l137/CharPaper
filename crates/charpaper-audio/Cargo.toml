@@ -1,0 +1,10 @@
+[package]
+name = "charpaper-audio"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+bevy_audio.workspace = true
+rodio.workspace = true
+serde.workspace = true

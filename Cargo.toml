@@ -55,6 +55,11 @@ bevy = { version = "0.19.1", default-features = false, features = [
     "ktx2",
     "zstd_rust",
 ] }
+# Only its .ogg loader is used. Playback goes through rodio directly, because Bevy's player
+# opens the sound card once and can't reopen it when the device changes.
+bevy_audio = { version = "0.19.1", default-features = false, features = ["vorbis"] }
+# The version bevy_audio builds.
+rodio = { version = "0.22", default-features = false, features = ["playback"] }
 
 raw-window-handle = { version = "0.6", default-features = false, features = ["std"] }
 
@@ -86,6 +91,7 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 
+charpaper-audio = { path = "crates/charpaper-audio" }
 charpaper-scene = { path = "crates/charpaper-scene" }
 charpaper-suite = { path = "crates/charpaper-suite" }
 charpaper-bake = { path = "crates/charpaper-bake" }

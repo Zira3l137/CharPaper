@@ -5,6 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use charpaper_audio::Volumes;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterState;
 use charpaper_scene::GazeSettings;
@@ -26,6 +27,7 @@ pub struct SavedState {
     pub ui: UiState,
     pub render: RenderSettings,
     pub gaze: GazeSettings,
+    pub audio: Volumes,
     pub suites: BTreeMap<String, Picks>,
 }
 
@@ -85,7 +87,8 @@ impl Plugin for StatePlugin {
                     resource_changed::<CharacterState>
                         .or_eager(resource_changed::<UiState>)
                         .or_eager(resource_changed::<RenderSettings>)
-                        .or_eager(resource_changed::<GazeSettings>),
+                        .or_eager(resource_changed::<GazeSettings>)
+                        .or_eager(resource_changed::<Volumes>),
                 ),
                 save_settled,
             )
@@ -117,6 +120,7 @@ fn note_change(
     ui: Res<UiState>,
     render: Res<RenderSettings>,
     gaze: Res<GazeSettings>,
+    volumes: Res<Volumes>,
     character: Res<CharacterState>,
     suite: Option<Res<ActiveSuite>>,
 ) {
@@ -125,6 +129,7 @@ fn note_change(
     next.ui = ui.clone();
     next.render = render.clone();
     next.gaze = gaze.clone();
+    next.audio = volumes.clone();
     if character.suite.is_some() {
         next.suite = character.suite.clone();
     }
