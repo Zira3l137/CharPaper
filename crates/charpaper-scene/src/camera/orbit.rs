@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::camera::SceneView;
 use crate::state::CharacterState;
 
 // The orbit radius is multiplied by this once per wheel notch towards the screen, so a fast
@@ -20,7 +21,7 @@ pub(crate) struct OrbitCamera {
 
 pub(crate) fn on_zoom(
     event: On<Pointer<Scroll>>,
-    mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+    mut query: Single<(&mut Transform, &mut OrbitCamera), With<SceneView>>,
     state: Res<CharacterState>,
 ) {
     if state.camera.is_some() {
@@ -33,7 +34,7 @@ pub(crate) fn on_zoom(
 
 pub(crate) fn on_pan(
     event: On<Pointer<Drag>>,
-    mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+    mut query: Single<(&mut Transform, &mut OrbitCamera), With<SceneView>>,
     state: Res<CharacterState>,
 ) {
     if state.camera.is_some() {
@@ -58,7 +59,7 @@ pub(crate) fn on_pan(
 
 pub(crate) fn on_orbit(
     event: On<Pointer<Drag>>,
-    mut query: Single<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
+    mut query: Single<(&mut Transform, &mut OrbitCamera), With<SceneView>>,
     state: Res<CharacterState>,
 ) {
     if state.camera.is_some() {

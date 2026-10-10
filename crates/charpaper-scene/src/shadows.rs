@@ -14,7 +14,7 @@ use charpaper_suite::FIRST_CASCADE;
 use charpaper_suite::MAX_SHADOW_DISTANCE;
 use charpaper_suite::sun_cascades;
 
-use crate::camera::SceneCamera;
+use crate::camera::SceneView;
 use crate::camera::follow_selected;
 
 pub(crate) struct ShadowsPlugin;
@@ -39,7 +39,7 @@ struct ShadowReach(Option<f32>);
 
 fn fit_cascades(
     mut reach: ResMut<ShadowReach>,
-    camera: Query<&GlobalTransform, With<SceneCamera>>,
+    camera: Query<&GlobalTransform, With<SceneView>>,
     meshes: Query<(&Aabb, &GlobalTransform, &InheritedVisibility), With<Mesh3d>>,
     mut suns: Query<&mut CascadeShadowConfig, With<DirectionalLight>>,
 ) {

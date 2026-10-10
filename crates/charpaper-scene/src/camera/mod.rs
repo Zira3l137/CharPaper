@@ -27,8 +27,13 @@ const ORBIT_RADIUS: f32 = 2.0;
 const ORBIT_YAW_DEG: f32 = 0.0;
 const ORBIT_PITCH_DEG: f32 = 0.0;
 
-// The one camera that renders. The mouse moves it while it orbits; otherwise it copies the
-// exported camera in use.
+// Where the scene is seen from: the orbit, moved by the mouse, or the exported camera in use.
+// It renders nothing itself. The cameras that do are its children, so they all look from
+// wherever it is.
+#[derive(Component)]
+pub(crate) struct SceneView;
+
+// A camera rendering the scene, always a child of the SceneView.
 #[derive(Component)]
 pub(crate) struct SceneCamera;
 
@@ -68,32 +73,40 @@ fn spawn_camera(
     update_camera_transform(&mut transform, &orbit);
 
     let window = windows.single().ok();
-    let (target, view) =
+    let (target, image_node) =
         scene_target(&mut commands, &mut images, &mut materials, window, &settings);
     // Only the pointer over the scene steers the orbit, so anything drawn on top of the scene,
     // such as the settings panel, keeps its scrolls and drags to itself.
-    commands.entity(view).observe(orbit::on_pan).observe(orbit::on_orbit).observe(orbit::on_zoom);
+    commands
+        .entity(image_node)
+        .observe(orbit::on_pan)
+        .observe(orbit::on_orbit)
+        .observe(orbit::on_zoom);
+    let view = commands
+        .spawn((Name::new("Scene view"), SceneView, orbit, Following::default(), transform))
+        .id();
     commands.spawn((
         Name::new("Scene camera"),
         SceneCamera,
         Camera3d::default(),
-        orbit,
-        Following::default(),
-        transform,
         target,
+        ChildOf(view),
     ));
 }
 
 // Back to the orbit camera, placed where the new suite says, whenever a suite is shown.
 fn reset_view(
     suite: Res<ActiveSuite>,
-    camera: Single<(&mut OrbitCamera, &mut Transform, &mut Projection, &mut Following)>,
+    view: Single<(&mut OrbitCamera, &mut Transform, &mut Following), With<SceneView>>,
+    mut cameras: Query<&mut Projection, With<SceneCamera>>,
 ) {
-    let (mut orbit, mut transform, mut projection, mut following) = camera.into_inner();
+    let (mut orbit, mut transform, mut following) = view.into_inner();
     *orbit = orbit_for(Some(&suite.camera));
     update_camera_transform(&mut transform, &orbit);
-    *projection = Projection::default();
     *following = Following::default();
+    for mut projection in &mut cameras {
+        *projection = Projection::default();
+    }
 }
 
 fn orbit_for(view: Option<&charpaper_suite::Camera>) -> OrbitCamera {
@@ -112,10 +125,11 @@ fn orbit_for(view: Option<&charpaper_suite::Camera>) -> OrbitCamera {
 // blending them in would leave a ghost of it for a moment.
 fn reset_history(
     shown: Res<ShownEnvironment>,
-    mut cameras: Query<(&mut TemporalAntiAliasing, Ref<Following>)>,
+    following: Single<Ref<Following>, With<SceneView>>,
+    mut cameras: Query<&mut TemporalAntiAliasing>,
 ) {
-    for (mut taa, following) in &mut cameras {
-        if following.is_changed() || shown.is_changed() {
+    if following.is_changed() || shown.is_changed() {
+        for mut taa in &mut cameras {
             taa.reset = true;
         }
     }

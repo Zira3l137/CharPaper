@@ -1,6 +1,6 @@
-// One real camera does all the rendering. Each exported camera is loaded as a rig whose
-// own Camera is switched off; the real camera copies the rig's transform and projection.
-// Only the rig in use is loaded.
+// Our own cameras do all the rendering. Each exported camera is loaded as a rig whose own
+// Camera is switched off; the scene view copies the rig's transform, and every camera under
+// it the rig's projection. Only the rig in use is loaded.
 
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
@@ -10,6 +10,8 @@ use charpaper_suite::ExportedCamera;
 use charpaper_suite::ORBIT_CAMERA;
 
 use crate::assets::asset_path;
+use crate::camera::SceneCamera;
+use crate::camera::SceneView;
 use crate::camera::focus::FocusTarget;
 use crate::camera::orbit::OrbitCamera;
 use crate::camera::orbit::update_camera_transform;
@@ -189,46 +191,52 @@ pub(crate) fn on_rig_ready(
     info!("camera {:?} ready, looping its clip", rig.name);
 }
 
-// GlobalTransform is written too, because propagation already ran this frame. The
-// projection is copied only on a switch: assigning it makes Bevy refit the aspect ratio.
+// GlobalTransform is written too, the cameras' as well as the view's, because propagation
+// already ran this frame. The projection is copied only on a switch or to a new camera:
+// assigning it makes Bevy refit the aspect ratio.
 pub(crate) fn follow_selected(
     state: Res<CharacterState>,
     rigs: Query<(&CameraRig, &Lens)>,
-    lenses: Query<(&GlobalTransform, &Projection), Without<OrbitCamera>>,
-    mut viewer: Query<(
-        &mut Transform,
-        &mut GlobalTransform,
-        &mut Projection,
-        &OrbitCamera,
-        &mut Following,
-    )>,
+    lenses: Query<(&GlobalTransform, &Projection), (Without<SceneView>, Without<SceneCamera>)>,
+    view: Single<
+        (&mut Transform, &mut GlobalTransform, &OrbitCamera, &mut Following),
+        With<SceneView>,
+    >,
+    mut cameras: Query<
+        (Ref<SceneCamera>, &mut GlobalTransform, &mut Projection),
+        Without<SceneView>,
+    >,
 ) {
-    let Ok((mut transform, mut global, mut projection, orbit, mut following)) = viewer.single_mut()
-    else {
-        return;
-    };
+    let (mut transform, mut global, orbit, mut following) = view.into_inner();
 
     let wanted = state.camera.as_deref();
     let lens = wanted
         .and_then(|name| rigs.iter().find(|(rig, _)| rig.name == name))
         .and_then(|(_, lens)| lenses.get(lens.0).ok());
 
-    match lens {
+    let (wanted_projection, switched) = match lens {
         Some((lens_global, lens_projection)) => {
-            if following.0.as_deref() != wanted {
-                *projection = lens_projection.clone();
+            let switched = following.0.as_deref() != wanted;
+            if switched {
                 following.0 = wanted.map(str::to_string);
             }
             *transform = lens_global.compute_transform();
             *global = *lens_global;
+            (lens_projection.clone(), switched)
         }
         // A rig still loading keeps the last view instead of flashing the orbit camera.
         None if wanted.is_none() && following.0.is_some() => {
-            *projection = Projection::default();
             update_camera_transform(&mut transform, orbit);
             *global = GlobalTransform::from(*transform);
             following.0 = None;
+            (Projection::default(), true)
         }
-        None => {}
+        None => return,
+    };
+    for (camera, mut camera_global, mut projection) in &mut cameras {
+        *camera_global = *global;
+        if switched || camera.is_added() {
+            *projection = wanted_projection.clone();
+        }
     }
 }

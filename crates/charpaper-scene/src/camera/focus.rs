@@ -6,6 +6,7 @@ use bevy::post_process::dof::DepthOfFieldMode;
 use bevy::prelude::*;
 
 use crate::camera::SceneCamera;
+use crate::camera::SceneView;
 use crate::camera::orbit::OrbitCamera;
 use crate::camera::rig::CameraRig;
 use crate::camera::rig::Following;
@@ -35,17 +36,15 @@ pub(crate) fn focus_lens(
     mut commands: Commands,
     settings: Res<RenderSettings>,
     suite: Option<Res<ActiveSuite>>,
-    viewer: Single<
-        (Entity, &GlobalTransform, &OrbitCamera, &Following, Option<&mut DepthOfField>),
-        With<SceneCamera>,
-    >,
+    view: Single<(&GlobalTransform, &OrbitCamera, &Following), With<SceneView>>,
+    mut cameras: Query<(Entity, Option<&mut DepthOfField>), With<SceneCamera>>,
     mut rigs: Query<(Entity, &CameraRig, &mut FocusTarget)>,
     armature: Query<Entity, With<Armature>>,
     children: Query<&Children>,
     names: Query<&Name>,
     globals: Query<&GlobalTransform>,
 ) {
-    let (camera, eye, orbit, following, depth_of_field) = viewer.into_inner();
+    let (eye, orbit, following) = view.into_inner();
 
     let lens = match following.name() {
         None => suite.as_ref().and_then(|s| s.camera.f_stop).map(|f_stop| Lens {
@@ -91,8 +90,10 @@ pub(crate) fn focus_lens(
         DepthOfFieldQuality::Bokeh => Some(DepthOfFieldMode::Bokeh),
     };
     let (Some(lens), Some(mode)) = (lens, mode) else {
-        if depth_of_field.is_some() {
-            commands.entity(camera).remove::<DepthOfField>();
+        for (camera, depth_of_field) in &cameras {
+            if depth_of_field.is_some() {
+                commands.entity(camera).remove::<DepthOfField>();
+            }
         }
         return;
     };
@@ -106,10 +107,12 @@ pub(crate) fn focus_lens(
         max_circle_of_confusion_diameter: MAX_BLUR_PX * settings.scale_percent() as f32 / 100.0,
         max_depth: SKY_DEPTH,
     };
-    match depth_of_field {
-        Some(mut depth_of_field) => *depth_of_field = wanted,
-        None => {
-            commands.entity(camera).insert(wanted);
+    for (camera, depth_of_field) in &mut cameras {
+        match depth_of_field {
+            Some(mut depth_of_field) => *depth_of_field = wanted,
+            None => {
+                commands.entity(camera).insert(wanted);
+            }
         }
     }
 }
