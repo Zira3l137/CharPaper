@@ -80,6 +80,10 @@ value-ultra = Ультра
 
 ## System tab
 
+section-display = ЭКРАН
+label-monitor = Монитор
+monitor-primary = Основной
+monitor-missing = Не подключён
 section-sound = ЗВУК
 label-master-volume = Громкость
 label-music-volume = Музыка
@@ -129,6 +133,7 @@ help-fog-dithering = Убирает полосы в тумане мелким ш
 help-pause-fullscreen = Останавливает картинку и звук, пока приложение, например игра, открыто на весь экран.
 help-pause-covered = Останавливает картинку и звук, пока окна закрывают весь рабочий стол.
 help-pause-battery = Останавливает картинку и звук, пока компьютер работает от батареи.
+help-monitor = Монитор, на котором показываются обои. «Основной» следует главному монитору системы. Отключённый монитор остаётся выбранным, а пока его нет, обои показывает основной.
 help-master-volume = Общая громкость всех звуков CharPaper.
 help-music-volume = Музыка окружения.
 help-ambience-volume = Фоновые звуки окружения, например дождь или ветер.

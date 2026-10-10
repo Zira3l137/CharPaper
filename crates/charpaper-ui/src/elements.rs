@@ -34,6 +34,7 @@ pub(crate) enum Section {
     Quality,
     Fog,
     Pause,
+    Display,
     Sound,
     Interface,
 }
@@ -57,6 +58,7 @@ impl Section {
             Section::Quality => "quality",
             Section::Fog => "fog",
             Section::Pause => "pause",
+            Section::Display => "display",
             Section::Sound => "sound",
             Section::Interface => "interface",
         }
@@ -111,6 +113,7 @@ pub(crate) enum Cycler {
     PauseFullscreen,
     PauseCovered,
     PauseBattery,
+    Monitor,
     MasterVolume,
     MusicVolume,
     AmbienceVolume,
