@@ -235,6 +235,29 @@ fn listing_a_file_replaces_its_discovered_clips() {
 }
 
 #[test]
+fn cues_name_sounds_in_the_sounds_folder() {
+    let manifest = r#"
+        schema = 1
+        [animations.walk]
+        file = "animations/idle.gltf"
+        cues = [{ at = 0.5, sound = "step" }, { at = 0.0, sound = "theme" }]
+    "#;
+    let fixture = Fixture::new("cues", manifest);
+    fixture.write("sounds/step.ogg", "step");
+    fixture.write("sounds/theme.ogg", "theme");
+    let suite = fixture.load().unwrap();
+
+    let ClipSet::Listed(bindings) = &suite.animations[0].clips else { panic!("listed") };
+    let cues: Vec<(f32, &Path)> =
+        bindings[0].cues.iter().map(|c| (c.at, c.sound.as_path())).collect();
+    assert_eq!(cues, [(0.5, Path::new("sounds/step.ogg")), (0.0, Path::new("sounds/theme.ogg"))]);
+
+    fixture.write("suite.toml", manifest.replace("\"step\"", "\"stomp\""));
+    let err = fixture.load().unwrap_err();
+    assert!(matches!(&err, SuiteError::Missing(p) if p.ends_with("stomp.ogg")), "{err}");
+}
+
+#[test]
 fn renamed_armature_is_reported() {
     let fixture = Fixture::new("renamed", "schema = 1");
     fixture.write("animations/idle.gltf", &animation("Rig", "Idle"));

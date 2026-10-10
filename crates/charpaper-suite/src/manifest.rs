@@ -87,6 +87,21 @@ pub struct ClipEntry {
     /// Defaults to true. Turn it off where she has to look somewhere on
     /// purpose, like a dance or a sleeping pose.
     pub gaze: Option<bool>,
+    /// Sounds to play as the clip passes given moments. A looping clip plays
+    /// them again on every loop. They all stop when another animation starts.
+    #[serde(default)]
+    pub cues: Vec<Cue>,
+}
+
+/// A sound played at a moment of an animation.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Cue {
+    /// Seconds from the start of the clip.
+    #[schemars(range(min = 0.0))]
+    pub at: f32,
+    /// A file name in `sounds/` without its `.ogg` extension.
+    pub sound: String,
 }
 
 /// Looking towards the mouse cursor. The eyes turn first; the head and neck

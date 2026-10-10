@@ -26,6 +26,7 @@ const ANIMATIONS_DIR: &str = "animations";
 const SKINS_DIR: &str = "skins";
 const CAMERAS_DIR: &str = "cameras";
 const LUTS_DIR: &str = "luts";
+const SOUNDS_DIR: &str = "sounds";
 
 pub const ORBIT_CAMERA: &str = "orbit";
 const ENVIRONMENT_DIR: &str = "environment";
@@ -78,6 +79,13 @@ pub struct ClipBinding {
     pub clip: Option<String>,
     pub mode: PlayMode,
     pub gaze: bool,
+    pub cues: Vec<ClipCue>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClipCue {
+    pub at: f32,
+    pub sound: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -305,11 +313,20 @@ pub fn discover(dir: impl AsRef<Path>) -> Result<Vec<PathBuf>, SuiteError> {
 fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationFile>, SuiteError> {
     let mut listed: BTreeMap<PathBuf, Vec<ClipBinding>> = BTreeMap::new();
     for (name, entry) in &manifest.animations {
+        let cues = entry
+            .cues
+            .iter()
+            .map(|cue| {
+                let file = Path::new(SOUNDS_DIR).join(format!("{}.ogg", cue.sound));
+                Ok(ClipCue { at: cue.at, sound: existing(root, &file)? })
+            })
+            .collect::<Result<_, SuiteError>>()?;
         let binding = ClipBinding {
             name: name.clone(),
             clip: entry.clip.clone(),
             mode: entry.mode,
             gaze: entry.gaze.unwrap_or(true),
+            cues,
         };
         listed.entry(existing(root, &entry.file)?).or_default().push(binding);
     }

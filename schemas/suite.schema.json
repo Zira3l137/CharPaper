@@ -204,6 +204,13 @@
             "null"
           ]
         },
+        "cues": {
+          "description": "Sounds to play as the clip passes given moments. A looping clip plays\nthem again on every loop. They all stop when another animation starts.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Cue"
+          }
+        },
         "file": {
           "description": "Path to the file holding the clip, relative to this file.",
           "type": "string"
@@ -222,6 +229,27 @@
       "additionalProperties": false,
       "required": [
         "file"
+      ]
+    },
+    "Cue": {
+      "description": "A sound played at a moment of an animation.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "Seconds from the start of the clip.",
+          "type": "number",
+          "format": "float",
+          "minimum": 0.0
+        },
+        "sound": {
+          "description": "A file name in `sounds/` without its `.ogg` extension.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "sound"
       ]
     },
     "EnvironmentEntry": {

@@ -19,6 +19,7 @@ clip = "Idle_Breathing"
 file = "animations/gestures.glb"
 clip = "Wave"
 mode = "once"
+cues = [{ at = 0.0, sound = "wave_song" }, { at = 0.8, sound = "giggle" }]
 
 [environment]
 default = "room"
