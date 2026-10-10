@@ -115,7 +115,14 @@ impl DesktopPointer {
             }
         };
 
-        if is_shell { Target::Desktop } else { Target::Elsewhere }
+        // The icon view spans every monitor, but only the part over our window is ours.
+        if is_shell && self.covers(screen) { Target::Desktop } else { Target::Elsewhere }
+    }
+
+    fn covers(&self, screen: sys::Point) -> bool {
+        sys::window_rect(self.window).is_some_and(|r| {
+            (r.left..r.right).contains(&screen.x) && (r.top..r.bottom).contains(&screen.y)
+        })
     }
 
     fn moved_to(&self, screen: sys::Point) -> PointerEvent {
