@@ -86,6 +86,9 @@ value-ultra = Ultra
 section-display = DISPLAY
 # After the name of a chosen monitor that is unplugged.
 monitor-missing = not connected
+label-layout = Layout
+layout-mirror = Mirror
+layout-span = Span
 section-sound = SOUND
 label-master-volume = Volume
 label-music-volume = Music
@@ -137,6 +140,7 @@ help-fog-dithering = Hides banding in the fog with fine noise.
 help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
 help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
 help-pause-battery = Stops the picture and sound while the computer runs on battery.
+help-layout = Mirror shows the whole scene on every monitor. Span spreads one wide view across them, as if they were a single screen.
 help-master-volume = How loud all of CharPaper's sound is.
 help-music-volume = The environment's music.
 help-ambience-volume = The environment's background sounds, such as rain or wind.

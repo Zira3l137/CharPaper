@@ -82,6 +82,9 @@ value-ultra = Ультра
 
 section-display = ЭКРАН
 monitor-missing = не подключён
+label-layout = Раскладка
+layout-mirror = Зеркало
+layout-span = Панорама
 section-sound = ЗВУК
 label-master-volume = Громкость
 label-music-volume = Музыка
@@ -131,6 +134,7 @@ help-fog-dithering = Убирает полосы в тумане мелким ш
 help-pause-fullscreen = Останавливает картинку и звук, пока приложение, например игра, открыто на весь экран.
 help-pause-covered = Останавливает картинку и звук, пока окна закрывают весь рабочий стол.
 help-pause-battery = Останавливает картинку и звук, пока компьютер работает от батареи.
+help-layout = «Зеркало» показывает всю сцену на каждом мониторе. «Панорама» растягивает один широкий вид на все мониторы, будто это один экран.
 help-master-volume = Общая громкость всех звуков CharPaper.
 help-music-volume = Музыка окружения.
 help-ambience-volume = Фоновые звуки окружения, например дождь или ветер.

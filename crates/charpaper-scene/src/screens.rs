@@ -10,6 +10,11 @@ pub struct Screen {
     pub window: Entity,
 }
 
+// Where a Screen's window sits on the desktop, in physical pixels. The app keeps it current;
+// span mode cuts the one wide picture up by it.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct ScreenPlace(pub IRect);
+
 // Nobody can see this Screen now, so its camera rests while the others go on.
 #[derive(Component, Debug)]
 pub struct Unseen;
@@ -29,6 +34,8 @@ pub struct ScreenUi(pub Entity);
 pub struct ScreenSettings {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub monitors: Vec<ChosenMonitor>,
+    // One wide picture across the monitors, rather than the whole picture on each.
+    pub span: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

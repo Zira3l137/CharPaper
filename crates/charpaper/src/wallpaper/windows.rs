@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use charpaper_scene::Screen;
+use charpaper_scene::ScreenPlace;
 use charpaper_wallpaper::DesktopMonitor;
 
 use crate::wallpaper::Backend;
@@ -23,7 +24,8 @@ pub(crate) struct WindowsPlugin;
 impl Plugin for WindowsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, adopt_primary_window)
-            .add_systems(Update, assign_windows.run_if(resource_changed::<Targets>));
+            .add_systems(Update, assign_windows.run_if(resource_changed::<Targets>))
+            .add_systems(Update, place_screens.after(assign_windows));
     }
 }
 
@@ -91,6 +93,26 @@ pub(crate) fn assign_windows(
     }
     for monitor in free {
         spawn_window(&mut commands, template, monitor);
+    }
+}
+
+// Tells the scene where each screen is, for span mode.
+fn place_screens(
+    mut commands: Commands,
+    screens: Query<(Entity, &Screen, Option<&ScreenPlace>)>,
+    windows: Query<&OnMonitor>,
+) {
+    for (entity, screen, place) in &screens {
+        let Ok(on) = windows.get(screen.window) else {
+            continue;
+        };
+        let area = on.0.area;
+        let corner = IVec2::new(area.x, area.y);
+        let size = UVec2::new(area.width, area.height).as_ivec2();
+        let wanted = ScreenPlace(IRect::from_corners(corner, corner + size));
+        if place != Some(&wanted) {
+            commands.entity(entity).insert(wanted);
+        }
     }
 }
 

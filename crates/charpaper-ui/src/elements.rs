@@ -114,6 +114,7 @@ pub(crate) enum Cycler {
     PauseFullscreen,
     PauseCovered,
     PauseBattery,
+    Layout,
     MasterVolume,
     MusicVolume,
     AmbienceVolume,

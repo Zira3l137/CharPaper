@@ -36,7 +36,7 @@ impl Plugin for SystemTabPlugin {
                         .or_eager(new_panel),
                 ),
                 show_volumes.run_if(resource_changed::<Volumes>.or_eager(new_panel)),
-                (fill_monitors, show_monitors).chain().run_if(
+                (fill_monitors, show_monitors, show_layout).chain().run_if(
                     resource_changed::<ScreenSettings>
                         .or_eager(resource_changed::<Monitors>)
                         .or_eager(resource_changed::<Locale>)
@@ -52,11 +52,18 @@ pub(crate) fn page() -> impl Bundle {
         shown_section(
             |l| fl!(l, "section-display"),
             Section::Display,
-            (
-                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default() },
-                Pickable::IGNORE,
-                UiContainer::MonitorList,
-            ),
+            rows(children![
+                (
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Val::Px(4.0),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                    UiContainer::MonitorList,
+                ),
+                segments(|l| fl!(l, "label-layout"), Cycler::Layout),
+            ]),
         ),
         shown_section(
             |l| fl!(l, "section-sound"),
@@ -161,6 +168,23 @@ fn show_monitors(
     }
 }
 
+// Only with the wallpaper on two monitors or more.
+fn show_layout(
+    screen: Res<ScreenSettings>,
+    monitors: Res<Monitors>,
+    locale: Res<Locale>,
+    mut nodes: Query<(&UiContainer, &mut Node)>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
+) {
+    let several = monitors.0.iter().filter(|m| m.shown).count() > 1;
+    show_container(&mut nodes, UiContainer::Row(Cycler::Layout), several);
+    let label = |span: &bool| match span {
+        false => fl!(locale, "layout-mirror"),
+        true => fl!(locale, "layout-span"),
+    };
+    show(&mut rows, Cycler::Layout, choice(&[false, true], &screen.span, label));
+}
+
 // An unplugged monitor counts as on while it is chosen: switching it off unchooses it.
 fn shows_on(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> bool {
     match monitors.get(id) {
@@ -223,9 +247,14 @@ fn on_step(
     event: On<Step>,
     languages: Res<Languages>,
     mut ui: ResMut<UiState>,
+    mut screen: ResMut<ScreenSettings>,
     mut volumes: ResMut<Volumes>,
 ) {
     let volume = match event.cycler {
+        Cycler::Layout => {
+            screen.span = flip(screen.span, &event);
+            return;
+        }
         Cycler::Language => {
             let options = options(&languages);
             if let Some(next) = step(&options, &ui.language, &event) {

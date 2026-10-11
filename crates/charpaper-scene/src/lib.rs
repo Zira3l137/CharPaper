@@ -11,6 +11,7 @@ mod render;
 mod screens;
 mod shadows;
 mod soundscape;
+mod span;
 mod state;
 mod suite;
 
@@ -43,6 +44,7 @@ pub use screens::MonitorEntry;
 pub use screens::Monitors;
 pub use screens::Screen;
 pub use screens::ScreenSettings;
+pub use screens::ScreenPlace;
 pub use screens::ScreenUi;
 pub use screens::Unseen;
 pub use state::CharacterState;
@@ -90,6 +92,7 @@ impl Plugin for ScenePlugin {
                 shadows::ShadowsPlugin,
                 gaze::GazePlugin,
                 soundscape::SoundscapePlugin,
+                span::SpanPlugin,
             ));
     }
 }
