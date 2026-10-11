@@ -284,6 +284,26 @@ pub fn place(hwnd: Hwnd, parent: Hwnd, area: ScreenArea) -> Result<(), Wallpaper
     Ok(())
 }
 
+// Windows 10 leaves the last frame of a window that left the WorkerW behind the icons on screen,
+// until something repaints the desktop: often not before the next sign-in. Hiding the window
+// first, then setting the wallpaper again to what it already is, makes Explorer repaint. With
+// no file given, it reads the wallpaper back from the user's settings, slideshow and solid
+// color included; Lively Wallpaper refreshes the same way. Newer Windows 11's raised desktop
+// has no such ghost, and there this would tear the WorkerW down instead.
+pub fn leave(windows: &[Hwnd]) {
+    for &hwnd in windows {
+        unsafe { sys::ShowWindow(hwnd, sys::SW_HIDE) };
+    }
+    if windows.is_empty() || find_shell_windows().raised_desktop {
+        return;
+    }
+    let null = std::ptr::null_mut();
+    let ok = unsafe {
+        sys::SystemParametersInfoW(sys::SPI_SETDESKWALLPAPER, 0, null, sys::SPIF_UPDATEINIFILE)
+    };
+    debug!("repainted the desktop behind {} window(s) (ok={})", windows.len(), ok != 0);
+}
+
 pub fn dump_window_tree() -> Vec<String> {
     let mut out = vec!["--- desktop window tree ---".to_string()];
 

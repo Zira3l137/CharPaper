@@ -41,7 +41,8 @@ pub(crate) struct AttachPlugin;
 impl Plugin for AttachPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, probe_desktop)
-            .add_systems(Update, (attach_windows, place_windows).chain().after(assign_windows));
+            .add_systems(Update, (attach_windows, place_windows).chain().after(assign_windows))
+            .add_systems(Last, leave_desktop);
     }
 }
 
@@ -147,6 +148,17 @@ fn place_windows(
             continue;
         }
         match_scale(&mut settings, on.0.scale);
+    }
+}
+
+// In the frame that quits, before the windows close.
+fn leave_desktop(
+    _main_thread: NonSendMarker,
+    mut exits: MessageReader<AppExit>,
+    mut backend: ResMut<Backend>,
+) {
+    if exits.read().count() > 0 {
+        backend.0.release();
     }
 }
 

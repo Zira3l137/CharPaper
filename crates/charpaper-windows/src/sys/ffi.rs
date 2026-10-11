@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use std::ffi::c_void;
+
 // Raw Win32 declarations, written by hand: types, constants and imported functions.
 // Nothing here is safe to call directly; mod.rs wraps what the backend needs.
 
@@ -238,6 +240,10 @@ pub const DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME: u32 = 1;
 pub const DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME: u32 = 2;
 pub const ERROR_INSUFFICIENT_BUFFER: i32 = 122;
 
+pub const SW_HIDE: i32 = 0;
+pub const SPI_SETDESKWALLPAPER: u32 = 0x0014;
+pub const SPIF_UPDATEINIFILE: u32 = 0x0001;
+
 pub const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 
@@ -326,6 +332,9 @@ unsafe extern "system" {
     pub fn GetWindowLongW(hwnd: Hwnd, index: i32) -> i32;
     #[cfg(target_pointer_width = "32")]
     pub fn SetWindowLongW(hwnd: Hwnd, index: i32, value: i32) -> i32;
+
+    pub fn ShowWindow(hwnd: Hwnd, command: i32) -> Bool;
+    pub fn SystemParametersInfoW(action: u32, param: u32, data: *mut c_void, flags: u32) -> Bool;
 
     pub fn GetForegroundWindow() -> Hwnd;
     pub fn IsWindowVisible(hwnd: Hwnd) -> Bool;

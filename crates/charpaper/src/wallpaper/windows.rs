@@ -1,3 +1,4 @@
+use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use charpaper_scene::Screen;
@@ -38,6 +39,7 @@ fn adopt_primary_window(mut commands: Commands, window: Single<Entity, With<Prim
 // nothing. A window whose monitor is gone takes one nobody has, and the rest are closed or
 // made.
 pub(crate) fn assign_windows(
+    _main_thread: NonSendMarker,
     mut commands: Commands,
     mut backend: ResMut<Backend>,
     config: Res<WallpaperSettings>,

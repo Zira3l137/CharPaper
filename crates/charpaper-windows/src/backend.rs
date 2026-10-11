@@ -103,7 +103,17 @@ impl WallpaperBackend for WindowsBackend {
     }
 
     fn detach(&mut self, window: WindowKey) {
-        self.attached.list().retain(|(key, _)| *key != window);
+        let mut list = self.attached.list();
+        let gone: Vec<sys::Hwnd> =
+            list.iter().filter(|(key, _)| *key == window).map(|&(_, hwnd)| hwnd).collect();
+        list.retain(|(key, _)| *key != window);
+        drop(list);
+        desktop::leave(&gone);
+    }
+
+    fn release(&mut self) {
+        let gone: Vec<sys::Hwnd> = self.attached.list().drain(..).map(|(_, hwnd)| hwnd).collect();
+        desktop::leave(&gone);
     }
 
     fn monitors(&mut self) -> Vec<DesktopMonitor> {

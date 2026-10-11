@@ -84,8 +84,12 @@ pub trait WallpaperBackend: Send + Sync + 'static {
         Ok(())
     }
 
-    // The window is closing: forget it.
+    // The window is about to close: take it off the desktop and forget it.
     fn detach(&mut self, _window: WindowKey) {}
+
+    // The app is quitting: take every window off the desktop and leave it as it was. Called
+    // while the windows still exist. A process that is killed or crashes never gets here.
+    fn release(&mut self) {}
 
     // Every monitor, freshly read. Polled about once a second. Empty when the backend can't
     // tell, which leaves the app to Bevy's own list: it has no lasting ids and can miss a
