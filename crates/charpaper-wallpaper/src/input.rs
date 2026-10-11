@@ -1,8 +1,10 @@
+use crate::backend::WindowKey;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PointerEvent {
     Entered,
     Left,
-    // Physical pixels from the top-left of our window.
+    // Physical pixels from the top-left of the window the event is for.
     Moved {
         x: f64,
         y: f64,
@@ -29,7 +31,8 @@ pub enum PointerButton {
 
 // Only Send: the natural implementation wraps a channel receiver, which isn't Sync.
 pub trait PointerSource: Send + 'static {
-    fn drain(&mut self, out: &mut Vec<PointerEvent>);
+    // Each event with the window it is for.
+    fn drain(&mut self, out: &mut Vec<(WindowKey, PointerEvent)>);
 }
 
 // Given to the backend to call from its own input thread when a press or wheel turn comes in.

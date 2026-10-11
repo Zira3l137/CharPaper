@@ -14,7 +14,6 @@ use bevy::prelude::*;
 use bevy::window::CursorEntered;
 use bevy::window::CursorLeft;
 use bevy::window::CursorMoved;
-use bevy::window::PrimaryWindow;
 use bevy::window::WindowEvent;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy::winit::WinitUserEvent;
@@ -22,6 +21,9 @@ use charpaper_wallpaper::PointerButton;
 use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::Wake;
+use charpaper_wallpaper::WindowKey;
+
+use crate::wallpaper::window_of;
 
 pub(crate) struct InputPlugin;
 
@@ -80,27 +82,29 @@ struct WindowInputWriters<'w> {
     wheel: MessageWriter<'w, MouseWheel>,
 }
 
-// Replays forwarded input as if winit had delivered it.
+// Replays forwarded input as if winit had delivered it to the window it is for.
 //
 // Window::cursor_position is never touched: bevy_winit takes a change to it as a request
 // to move the real cursor. So it stays None here; use picking events instead.
 fn replay_forwarded_pointer(
     mut source: ResMut<PointerSourceResource>,
-    windows: Query<(Entity, &Window), With<PrimaryWindow>>,
+    windows: Query<&Window>,
     mut writers: WindowInputWriters,
     on_desktop: Res<PointerOnDesktop>,
-    mut pending: Local<Vec<PointerEvent>>,
-    mut last_position: Local<Option<Vec2>>,
+    mut pending: Local<Vec<(WindowKey, PointerEvent)>>,
+    mut last_position: Local<Option<(Entity, Vec2)>>,
 ) {
-    // Drained even without a window, so the backend's queue can't back up.
+    // Drained every frame, events for a window that is gone included, so the backend's queue
+    // can't back up.
     source.0.get().drain(&mut pending);
-    let Ok((window, settings)) = windows.single() else {
-        pending.clear();
-        return;
-    };
-    let scale = settings.scale_factor() as f64;
 
-    for event in pending.drain(..) {
+    for (key, event) in pending.drain(..) {
+        let Some((window, settings)) =
+            window_of(key).and_then(|window| Some((window, windows.get(window).ok()?)))
+        else {
+            continue;
+        };
+        let scale = settings.scale_factor() as f64;
         let w = &mut writers;
         match event {
             PointerEvent::Entered => {
@@ -114,8 +118,10 @@ fn replay_forwarded_pointer(
             }
             PointerEvent::Moved { x, y } => {
                 let position = Vec2::new((x / scale) as f32, (y / scale) as f32);
-                let delta = last_position.map(|last| position - last);
-                *last_position = Some(position);
+                let delta = last_position
+                    .filter(|(last_window, _)| *last_window == window)
+                    .map(|(_, last)| position - last);
+                *last_position = Some((window, position));
                 write(&mut w.moved, &mut w.all, CursorMoved { window, position, delta });
             }
             PointerEvent::Button { button, pressed } => {

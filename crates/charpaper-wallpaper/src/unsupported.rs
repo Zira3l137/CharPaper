@@ -4,6 +4,7 @@ use crate::backend::AttachOutcome;
 use crate::backend::DesktopProbe;
 use crate::backend::ScreenArea;
 use crate::backend::WallpaperBackend;
+use crate::backend::WindowKey;
 use crate::config::WallpaperConfig;
 use crate::error::WallpaperError;
 
@@ -27,6 +28,7 @@ impl WallpaperBackend for UnsupportedBackend {
 
     fn attach(
         &mut self,
+        _window: WindowKey,
         _handle: RawWindowHandle,
         _area: ScreenArea,
         _config: &WallpaperConfig,

@@ -10,11 +10,13 @@ use charpaper_wallpaper::ScreenArea;
 use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
+use charpaper_wallpaper::WindowKey;
 
 use crate::wallpaper::Backend;
 use crate::wallpaper::WallpaperSettings;
 use crate::wallpaper::input::PointerOnDesktop;
 use crate::wallpaper::input::PointerSourceResource;
+use crate::wallpaper::key;
 use crate::wallpaper::monitors::Layout;
 use crate::wallpaper::monitors::Target;
 
@@ -63,7 +65,7 @@ fn attach_window(
     mut backend: ResMut<Backend>,
     config: Res<WallpaperSettings>,
     mut state: ResMut<AttachState>,
-    mut windows: Query<(Option<&RawHandleWrapper>, &mut Window), With<PrimaryWindow>>,
+    mut windows: Query<(Entity, Option<&RawHandleWrapper>, &mut Window), With<PrimaryWindow>>,
     target: Res<Target>,
     on_desktop: Res<PointerOnDesktop>,
     proxy: Option<Res<EventLoopProxyWrapper>>,
@@ -77,11 +79,13 @@ fn attach_window(
         return;
     }
 
-    let handle =
-        windows.single().ok().and_then(|(handle, _)| handle.map(|h| h.get_window_handle()));
+    let Ok((window, handle, _)) = windows.single() else {
+        return;
+    };
+    let handle = handle.map(RawHandleWrapper::get_window_handle);
     let area = target.0.as_ref().map(|monitor| monitor.area);
     let wake = on_desktop.waker(proxy.as_deref());
-    let step = decide(&mut backend.0, &config, handle, area, wake);
+    let step = decide(&mut backend.0, &config, key(window), handle, area, wake);
 
     // Shown on failure too: an invisible process with no way to close it is worse.
     let mut reveal = false;
@@ -110,7 +114,7 @@ fn attach_window(
         }
     }
 
-    let Ok((_, mut window)) = windows.single_mut() else {
+    let Ok((_, _, mut window)) = windows.single_mut() else {
         return;
     };
     if let Some(monitor) = target.0.as_ref().filter(|_| state.attached) {
@@ -130,18 +134,17 @@ fn follow_target(
     state: Res<AttachState>,
     mut backend: ResMut<Backend>,
     target: Res<Target>,
-    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+    window: Single<(Entity, &mut Window), With<PrimaryWindow>>,
 ) {
     let Some(monitor) = target.0.as_ref().filter(|_| state.attached) else {
         return;
     };
-    if let Err(err) = backend.0.place(monitor.area) {
+    let (entity, mut window) = window.into_inner();
+    if let Err(err) = backend.0.place(key(entity), monitor.area) {
         warn!("cannot move the wallpaper to {}: {:#}", monitor.name, anyhow::Error::new(err));
         return;
     }
-    if let Ok(mut window) = windows.single_mut() {
-        match_scale(&mut window, monitor.scale);
-    }
+    match_scale(&mut window, monitor.scale);
 }
 
 // Windows tells only top-level windows about a monitor's scaling, never an attached one, so
@@ -162,6 +165,7 @@ enum Step {
 fn decide(
     backend: &mut Box<dyn WallpaperBackend>,
     config: &WallpaperConfig,
+    window: WindowKey,
     handle: Option<RawWindowHandle>,
     area: Option<ScreenArea>,
     wake: Wake,
@@ -187,7 +191,7 @@ fn decide(
         return Step::Done { message, input: None, attached: false };
     }
 
-    match backend.attach(raw, area, config) {
+    match backend.attach(window, raw, area, config) {
         Ok(outcome) => {
             let how =
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));

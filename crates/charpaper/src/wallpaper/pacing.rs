@@ -58,7 +58,7 @@ fn poll_activity(
         Some("nobody is at the screen")
     } else if settings.pause_when_fullscreen && activity.fullscreen_app {
         Some("an app is fullscreen")
-    } else if settings.pause_when_covered && activity.covered {
+    } else if settings.pause_when_covered && !activity.covered.is_empty() {
         Some("the desktop is covered")
     } else if settings.pause_on_battery && activity.on_battery {
         Some("running on battery")

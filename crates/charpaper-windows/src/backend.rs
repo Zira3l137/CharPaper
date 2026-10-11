@@ -1,3 +1,8 @@
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
+use std::sync::PoisonError;
+
 use charpaper_wallpaper::AttachOutcome;
 use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::DesktopActivity;
@@ -10,6 +15,7 @@ use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WallpaperError;
+use charpaper_wallpaper::WindowKey;
 
 use tracing::debug;
 
@@ -19,9 +25,24 @@ use crate::monitors;
 use crate::pointer::DesktopPointer;
 use crate::sys;
 
+// Shared with the pointer, which has to know about windows attached after it started too.
+#[derive(Clone, Default)]
+pub(crate) struct AttachedWindows(Arc<Mutex<Vec<(WindowKey, sys::Hwnd)>>>);
+
+impl AttachedWindows {
+    // Only the app's main thread locks it, so it never waits.
+    pub fn list(&self) -> MutexGuard<'_, Vec<(WindowKey, sys::Hwnd)>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn get(&self, window: WindowKey) -> Option<sys::Hwnd> {
+        self.list().iter().find(|(key, _)| *key == window).map(|&(_, hwnd)| hwnd)
+    }
+}
+
 #[derive(Default)]
 pub struct WindowsBackend {
-    attached_hwnd: Option<sys::Hwnd>,
+    attached: AttachedWindows,
 }
 
 impl WindowsBackend {
@@ -53,6 +74,7 @@ impl WallpaperBackend for WindowsBackend {
 
     fn attach(
         &mut self,
+        window: WindowKey,
         handle: RawWindowHandle,
         area: ScreenArea,
         config: &WallpaperConfig,
@@ -65,17 +87,23 @@ impl WallpaperBackend for WindowsBackend {
         debug!("our window HWND = {hwnd:#x}, going to {area:?}");
         let strategy = desktop::attach(hwnd, area, config)?;
         if strategy != AttachStrategy::None {
-            self.attached_hwnd = Some(hwnd);
+            let mut list = self.attached.list();
+            list.retain(|(key, _)| *key != window);
+            list.push((window, hwnd));
         }
 
         Ok(AttachOutcome { strategy_used: Some(strategy) })
     }
 
-    fn place(&mut self, area: ScreenArea) -> Result<(), WallpaperError> {
-        match self.attached_hwnd {
+    fn place(&mut self, window: WindowKey, area: ScreenArea) -> Result<(), WallpaperError> {
+        match self.attached.get(window) {
             Some(hwnd) => desktop::place(hwnd, sys::parent(hwnd), area),
             None => Ok(()),
         }
+    }
+
+    fn detach(&mut self, window: WindowKey) {
+        self.attached.list().retain(|(key, _)| *key != window);
     }
 
     fn monitors(&mut self) -> Vec<DesktopMonitor> {
@@ -86,19 +114,18 @@ impl WallpaperBackend for WindowsBackend {
         &mut self,
         wake: Wake,
     ) -> Result<Option<Box<dyn PointerSource>>, WallpaperError> {
-        let Some(hwnd) = self.attached_hwnd else {
+        if self.attached.list().is_empty() {
             return Ok(None);
-        };
-        Ok(Some(Box::new(DesktopPointer::new(hwnd, wake)?)))
+        }
+        Ok(Some(Box::new(DesktopPointer::new(self.attached.clone(), wake)?)))
     }
 
     fn activity(&mut self) -> DesktopActivity {
-        activity::desktop_activity(self.attached_hwnd)
+        activity::desktop_activity(&self.attached.list())
     }
 
-    fn cursor_position(&mut self) -> Option<[f32; 2]> {
-        let point = sys::screen_to_client(self.attached_hwnd?, sys::cursor_pos()?)?;
-        Some([point.x as f32, point.y as f32])
+    fn cursor_position(&mut self) -> Option<[i32; 2]> {
+        sys::cursor_pos().map(|point| [point.x, point.y])
     }
 }
 

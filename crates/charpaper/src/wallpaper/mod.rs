@@ -11,6 +11,7 @@ use charpaper_scene::Screen;
 use charpaper_scene::ScreenSettings;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
+use charpaper_wallpaper::WindowKey;
 
 pub(crate) use pacing::Paused;
 pub use platform::inspect_report;
@@ -42,6 +43,16 @@ impl Plugin for WallpaperPlugin {
 // For now the one window is the one screen the scene shows on.
 fn spawn_screen(mut commands: Commands, window: Single<Entity, With<PrimaryWindow>>) {
     commands.spawn((Name::new("Screen"), Screen { window: *window }));
+}
+
+// The backend knows our windows by these: the window entity's bits, so turning one back into
+// the other needs no table.
+fn key(window: Entity) -> WindowKey {
+    WindowKey(window.to_bits())
+}
+
+fn window_of(key: WindowKey) -> Option<Entity> {
+    Entity::try_from_bits(key.0)
 }
 
 // WallpaperConfig lives in a Bevy-free crate, so it can't derive Resource itself.

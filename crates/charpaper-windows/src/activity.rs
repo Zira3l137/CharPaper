@@ -1,4 +1,5 @@
 use charpaper_wallpaper::DesktopActivity;
+use charpaper_wallpaper::WindowKey;
 
 use crate::sys;
 use crate::sys::Hwnd;
@@ -7,13 +8,12 @@ use crate::sys::Rect;
 const SHELL_CLASSES: [&str; 4] = ["Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"];
 
 // Every check leans towards not pausing: a wallpaper frozen while visible looks broken.
-// `window` is ours once attached; until then the primary monitor stands in for it.
-pub fn desktop_activity(window: Option<Hwnd>) -> DesktopActivity {
+pub fn desktop_activity(windows: &[(WindowKey, Hwnd)]) -> DesktopActivity {
     let state = notification_state();
     DesktopActivity {
         away: state == Some(sys::QUNS_NOT_PRESENT),
         fullscreen_app: fullscreen_app(state),
-        covered: covered(window),
+        covered: covered(windows),
         on_battery: on_battery(),
     }
 }
@@ -48,19 +48,28 @@ fn fullscreen_app(state: Option<i32>) -> bool {
     }
 }
 
-fn covered(window: Option<Hwnd>) -> bool {
-    let monitor = match window {
-        Some(hwnd) => unsafe { sys::MonitorFromWindow(hwnd, sys::MONITOR_DEFAULTTONEAREST) },
-        None => unsafe {
-            sys::MonitorFromPoint(sys::Point { x: 0, y: 0 }, sys::MONITOR_DEFAULTTOPRIMARY)
-        },
-    };
-    let Some(info) = monitor_info(monitor) else {
-        return false;
-    };
-    sys::top_level_windows().into_iter().any(|hwnd| {
-        is_ordinary(hwnd) && sys::window_rect(hwnd).is_some_and(|r| contains(&r, &info.rc_work))
-    })
+// Each of our windows by the part of its monitor that the taskbar leaves free.
+fn covered(windows: &[(WindowKey, Hwnd)]) -> Vec<WindowKey> {
+    let work_areas: Vec<(WindowKey, Rect)> = windows
+        .iter()
+        .filter_map(|&(key, hwnd)| {
+            let monitor = unsafe { sys::MonitorFromWindow(hwnd, sys::MONITOR_DEFAULTTONEAREST) };
+            Some((key, monitor_info(monitor)?.rc_work))
+        })
+        .collect();
+    if work_areas.is_empty() {
+        return Vec::new();
+    }
+    let shown: Vec<Rect> = sys::top_level_windows()
+        .into_iter()
+        .filter(|&hwnd| is_ordinary(hwnd))
+        .filter_map(sys::window_rect)
+        .collect();
+    work_areas
+        .into_iter()
+        .filter(|(_, work)| shown.iter().any(|window| contains(window, work)))
+        .map(|(key, _)| key)
+        .collect()
 }
 
 fn on_battery() -> bool {

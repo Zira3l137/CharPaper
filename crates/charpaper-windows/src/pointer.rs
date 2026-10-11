@@ -3,7 +3,9 @@ use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperError;
+use charpaper_wallpaper::WindowKey;
 
+use crate::backend::AttachedWindows;
 use crate::hook::MouseHook;
 use crate::hook::RawMouseEvent;
 use crate::sys;
@@ -11,66 +13,80 @@ use crate::sys::Hwnd;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Target {
-    Desktop,
-    // Our window really is under the cursor, so winit already delivers these.
+    // The desktop, over the part of it one of our windows covers.
+    Desktop(WindowKey, Hwnd),
+    // One of our windows really is under the cursor, so winit already delivers these.
     OwnWindow,
     Elsewhere,
 }
 
 pub struct DesktopPointer {
     hook: MouseHook,
-    window: Hwnd,
-    inside: bool,
+    windows: AttachedWindows,
+    // The window whose part of the desktop the pointer is on.
+    inside: Option<(WindowKey, Hwnd)>,
     // One bit per PointerButton pressed over the desktop.
     held: u8,
     // Asking for a class name on every event adds up on a 1000 Hz mouse.
     last_root: Option<(Hwnd, bool)>,
 }
 
+type Out = Vec<(WindowKey, PointerEvent)>;
+
 impl DesktopPointer {
-    pub fn new(window: Hwnd, wake: Wake) -> Result<Self, WallpaperError> {
+    pub fn new(windows: AttachedWindows, wake: Wake) -> Result<Self, WallpaperError> {
         let hook = MouseHook::install(wake)?;
-        Ok(Self { hook, window, inside: false, held: 0, last_root: None })
+        Ok(Self { hook, windows, inside: None, held: 0, last_root: None })
     }
 
-    fn translate(&mut self, raw: RawMouseEvent, out: &mut Vec<PointerEvent>) {
-        // Like native mouse capture: a drag belongs to whoever saw the press until every button
-        // is up. Otherwise a release over another window never reaches Bevy.
-        let target = if self.held != 0 { Target::Desktop } else { self.target_at(raw.screen) };
+    fn translate(&mut self, raw: RawMouseEvent, out: &mut Out) {
+        // Like native mouse capture: a drag belongs to the window that saw the press until every
+        // button is up, even across other windows and monitors. Otherwise a release elsewhere
+        // never reaches Bevy.
+        let target = match self.inside {
+            Some((key, hwnd)) if self.held != 0 => Target::Desktop(key, hwnd),
+            _ => self.target_at(raw.screen),
+        };
 
-        if target != Target::Desktop {
-            if self.inside {
-                self.inside = false;
-                if target == Target::Elsewhere {
-                    out.push(PointerEvent::Left);
-                }
+        let Target::Desktop(key, hwnd) = target else {
+            if let Some((key, _)) = self.inside.take()
+                && target == Target::Elsewhere
+            {
+                out.push((key, PointerEvent::Left));
             }
             return;
+        };
+        // Straight from one window's part of the desktop onto another's.
+        if let Some((left, _)) = self.inside.filter(|(inside, _)| *inside != key) {
+            out.push((left, PointerEvent::Left));
+            self.inside = None;
         }
 
-        let moved = self.moved_to(raw.screen);
+        let moved = moved_to(hwnd, raw.screen);
         // A click can be the first event we see, e.g. when a window closes under a still cursor.
-        if !self.inside {
-            self.inside = true;
-            out.push(PointerEvent::Entered);
-            out.push(moved);
+        if self.inside.is_none() {
+            self.inside = Some((key, hwnd));
+            out.push((key, PointerEvent::Entered));
+            out.push((key, moved));
             if raw.message == sys::WM_MOUSEMOVE {
                 return;
             }
         }
 
         match raw.message {
-            sys::WM_MOUSEMOVE => out.push(moved),
+            sys::WM_MOUSEMOVE => out.push((key, moved)),
             sys::WM_MOUSEWHEEL => {
-                out.push(PointerEvent::Wheel { x: 0.0, y: wheel_notches(raw.mouse_data) })
+                let wheel = PointerEvent::Wheel { x: 0.0, y: wheel_notches(raw.mouse_data) };
+                out.push((key, wheel));
             }
             // Negated to match winit's sign convention.
             sys::WM_MOUSEHWHEEL => {
-                out.push(PointerEvent::Wheel { x: -wheel_notches(raw.mouse_data), y: 0.0 })
+                let wheel = PointerEvent::Wheel { x: -wheel_notches(raw.mouse_data), y: 0.0 };
+                out.push((key, wheel));
             }
             message => {
                 if let Some((button, pressed)) = button_change(message, raw.mouse_data) {
-                    self.press_or_release(button, pressed, out);
+                    self.press_or_release(key, button, pressed, out);
                 }
             }
         }
@@ -78,9 +94,10 @@ impl DesktopPointer {
 
     fn press_or_release(
         &mut self,
+        key: WindowKey,
         button: PointerButton,
         pressed: bool,
-        out: &mut Vec<PointerEvent>,
+        out: &mut Out,
     ) {
         let bit = 1 << button as u8;
         if pressed {
@@ -91,7 +108,7 @@ impl DesktopPointer {
             // Pressed somewhere else, released here: not ours.
             return;
         }
-        out.push(PointerEvent::Button { button, pressed });
+        out.push((key, PointerEvent::Button { button, pressed }));
     }
 
     fn target_at(&mut self, screen: sys::Point) -> Target {
@@ -99,7 +116,8 @@ impl DesktopPointer {
         if hit == 0 {
             return Target::Elsewhere;
         }
-        if hit == self.window {
+        let windows = self.windows.list();
+        if windows.iter().any(|&(_, hwnd)| hwnd == hit) {
             return Target::OwnWindow;
         }
 
@@ -114,25 +132,31 @@ impl DesktopPointer {
                 is_shell
             }
         };
+        if !is_shell {
+            return Target::Elsewhere;
+        }
 
-        // The icon view spans every monitor, but only the part over our window is ours.
-        if is_shell && self.covers(screen) { Target::Desktop } else { Target::Elsewhere }
-    }
-
-    fn covers(&self, screen: sys::Point) -> bool {
-        sys::window_rect(self.window).is_some_and(|r| {
-            (r.left..r.right).contains(&screen.x) && (r.top..r.bottom).contains(&screen.y)
-        })
-    }
-
-    fn moved_to(&self, screen: sys::Point) -> PointerEvent {
-        let client = sys::screen_to_client(self.window, screen).unwrap_or(screen);
-        PointerEvent::Moved { x: client.x as f64, y: client.y as f64 }
+        // The icon view spans every monitor, but only the parts over our windows are ours.
+        windows
+            .iter()
+            .find(|&&(_, hwnd)| covers(hwnd, screen))
+            .map_or(Target::Elsewhere, |&(key, hwnd)| Target::Desktop(key, hwnd))
     }
 }
 
+fn covers(hwnd: Hwnd, screen: sys::Point) -> bool {
+    sys::window_rect(hwnd).is_some_and(|r| {
+        (r.left..r.right).contains(&screen.x) && (r.top..r.bottom).contains(&screen.y)
+    })
+}
+
+fn moved_to(hwnd: Hwnd, screen: sys::Point) -> PointerEvent {
+    let client = sys::screen_to_client(hwnd, screen).unwrap_or(screen);
+    PointerEvent::Moved { x: client.x as f64, y: client.y as f64 }
+}
+
 impl PointerSource for DesktopPointer {
-    fn drain(&mut self, out: &mut Vec<PointerEvent>) {
+    fn drain(&mut self, out: &mut Out) {
         while let Some(raw) = self.hook.try_recv() {
             self.translate(raw, out);
         }
