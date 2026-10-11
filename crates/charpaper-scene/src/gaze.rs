@@ -1,4 +1,5 @@
 use bevy::app::AnimationSystems;
+use bevy::ecs::system::SystemParam;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
@@ -16,6 +17,7 @@ use crate::config::SceneConfig;
 use crate::render::RenderSettings;
 use crate::render::ScreenParts;
 use crate::screens::Screen;
+use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
 
@@ -32,13 +34,9 @@ pub(crate) struct GazePlugin;
 impl Plugin for GazePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CursorPosition>()
-            .init_resource::<GazeRig>()
             .add_observer(build_rig)
             .add_systems(Update, reset_rig.in_set(SceneSet::Fill))
-            .add_systems(
-                Update,
-                find_shape_keys.run_if(resource_changed::<SkinObjects>).in_set(SceneSet::Run),
-            )
+            .add_systems(Update, find_shape_keys.in_set(SceneSet::Run))
             .add_systems(
                 PostUpdate,
                 aim.after(AnimationSystems).before(TransformSystems::Propagate),
@@ -46,7 +44,7 @@ impl Plugin for GazePlugin {
     }
 }
 
-#[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Component, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GazeSettings {
     pub follow_cursor: bool,
@@ -111,7 +109,7 @@ struct Part {
     written: Quat,
 }
 
-#[derive(Resource, Default)]
+#[derive(Component, Default)]
 pub(crate) struct GazeRig {
     armature: Option<Entity>,
     neck: Option<Part>,
@@ -127,8 +125,10 @@ pub(crate) struct GazeRig {
     keys_written: bool,
 }
 
-fn reset_rig(mut rig: ResMut<GazeRig>) {
-    *rig = default();
+fn reset_rig(mut stages: Query<&mut GazeRig, Added<ActiveSuite>>) {
+    for mut rig in &mut stages {
+        *rig = default();
+    }
 }
 
 // Runs as the armature spawns, before any animation has touched it, so the bones still hold
@@ -136,20 +136,23 @@ fn reset_rig(mut rig: ResMut<GazeRig>) {
 fn build_rig(
     ready: On<WorldInstanceReady>,
     armatures: Query<(), With<Armature>>,
-    suite: Option<Res<ActiveSuite>>,
+    stage_of: StageOf,
+    mut stages: Query<(Option<&ActiveSuite>, &mut GazeRig)>,
     children: Query<&Children>,
     names: Query<&Name>,
     parents: Query<&ChildOf>,
     transforms: Query<&Transform>,
-    mut rig: ResMut<GazeRig>,
 ) {
     let armature = ready.entity;
     if !armatures.contains(armature) {
         return;
     }
+    let Some((suite, mut rig)) = stage_of.get(armature).and_then(|s| stages.get_mut(s).ok()) else {
+        return;
+    };
     let keys = std::mem::take(&mut rig.keys);
     *rig = GazeRig { keys, ..default() };
-    let Some(gaze) = suite.as_ref().and_then(|s| s.gaze.clone()) else {
+    let Some(gaze) = suite.and_then(|s| s.gaze.clone()) else {
         return;
     };
 
@@ -202,15 +205,25 @@ fn build_rig(
 // Which meshes of the worn skin carry the shape keys that follow the eyes. Bevy keeps no
 // shape key names for GPU-only meshes, so they are read from the skin's file.
 fn find_shape_keys(
-    suite: Option<Res<ActiveSuite>>,
-    shown: Res<ShownSkin>,
-    objects: Res<SkinObjects>,
-    mut rig: ResMut<GazeRig>,
+    mut stages: Query<
+        (Option<&ActiveSuite>, &ShownSkin, &SkinObjects, &mut GazeRig),
+        Changed<SkinObjects>,
+    >,
 ) {
-    rig.keys = default();
-    let Some(suite) = suite else {
-        return;
-    };
+    for (suite, shown, objects, mut rig) in &mut stages {
+        rig.keys = default();
+        if let Some(suite) = suite {
+            find_stage_shape_keys(suite, shown, objects, &mut rig);
+        }
+    }
+}
+
+fn find_stage_shape_keys(
+    suite: &ActiveSuite,
+    shown: &ShownSkin,
+    objects: &SkinObjects,
+    rig: &mut GazeRig,
+) {
     let (Some(gaze), Some(name)) = (&suite.gaze, &shown.name) else {
         return;
     };
@@ -241,35 +254,76 @@ fn find_shape_keys(
     }
 }
 
+// The bones the gaze reads and turns, and the shape keys it sets.
+#[derive(SystemParam)]
+struct Bones<'w, 's> {
+    globals: Query<'w, 's, &'static GlobalTransform>,
+    parents: Query<'w, 's, &'static ChildOf>,
+    transforms: Query<'w, 's, &'static mut Transform>,
+    morphs: Query<'w, 's, &'static mut MorphWeights>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn aim(
     time: Res<Time>,
     config: Res<SceneConfig>,
-    settings: Res<GazeSettings>,
     render: Res<RenderSettings>,
     cursor: Res<CursorPosition>,
-    state: Res<CharacterState>,
-    clips: Option<Res<CharacterClips>>,
+    mut stages: Query<(
+        Entity,
+        &GazeSettings,
+        &CharacterState,
+        Option<&CharacterClips>,
+        &mut GazeRig,
+    )>,
     screens: Query<(&Screen, &ScreenParts)>,
     cameras: Query<(&Camera, &GlobalTransform), With<SceneCamera>>,
-    globals: Query<&GlobalTransform>,
-    parents: Query<&ChildOf>,
-    mut transforms: Query<&mut Transform>,
-    mut morphs: Query<&mut MorphWeights>,
-    mut rig: ResMut<GazeRig>,
+    stage_of: StageOf,
+    mut bones: Bones,
 ) {
-    let rig = &mut *rig;
+    for (stage, settings, state, clips, mut rig) in &mut stages {
+        // Through the camera of the screen the cursor is measured from, if that screen shows
+        // this stage.
+        let seen = cursor.0.and_then(|at| {
+            let (_, parts) = screens.iter().find(|(screen, _)| screen.window == at.window)?;
+            if stage_of.get(parts.camera) != Some(stage) {
+                return None;
+            }
+            Some((at.position, cameras.get(parts.camera).ok()?))
+        });
+        let watched = Watched { cursor: cursor.0, seen, settings, state, clips };
+        aim_stage(&time, &config, &render, watched, &mut rig, &mut bones);
+    }
+}
+
+// What the character watches: the cursor, and how it looks through the stage's camera.
+struct Watched<'a> {
+    cursor: Option<CursorAt>,
+    seen: Option<(Vec2, (&'a Camera, &'a GlobalTransform))>,
+    settings: &'a GazeSettings,
+    state: &'a CharacterState,
+    clips: Option<&'a CharacterClips>,
+}
+
+fn aim_stage(
+    time: &Time,
+    config: &SceneConfig,
+    render: &RenderSettings,
+    Watched { cursor, seen, settings, state, clips }: Watched,
+    rig: &mut GazeRig,
+    bones: &mut Bones,
+) {
     let Some(armature) = rig.armature else {
         return;
     };
-    let Ok(armature_global) = globals.get(armature) else {
+    let Ok(armature_global) = bones.globals.get(armature) else {
         return;
     };
     let tuning = &config.gaze_tuning;
     let dt = time.delta_secs();
 
-    if cursor.0.is_some() && cursor.0 != rig.last_cursor {
-        rig.last_cursor = cursor.0;
+    if cursor.is_some() && cursor != rig.last_cursor {
+        rig.last_cursor = cursor;
         rig.still_secs = 0.0;
     } else {
         rig.still_secs += dt;
@@ -279,17 +333,15 @@ fn aim(
         .as_deref()
         .and_then(|name| clips.as_ref()?.get(name))
         .is_none_or(|clip| clip.gaze);
-    let wanted = settings.follow_cursor
-        && cursor.0.is_some()
-        && allowed
-        && rig.still_secs < tuning.idle_secs;
+    let wanted =
+        settings.follow_cursor && cursor.is_some() && allowed && rig.still_secs < tuning.idle_secs;
     let step = if tuning.fade_secs > 0.0 { dt / tuning.fade_secs } else { 1.0 };
     let goal = if wanted { 1.0 } else { 0.0 };
     rig.weight += (goal - rig.weight).clamp(-step, step);
 
     let parts = rig.neck.iter_mut().chain(rig.head.iter_mut()).chain(rig.eyes.iter_mut());
     for part in parts {
-        let Ok(mut transform) = transforms.get_mut(part.bone) else {
+        let Ok(mut transform) = bones.transforms.get_mut(part.bone) else {
             return;
         };
         if transform.rotation == part.written {
@@ -308,15 +360,11 @@ fn aim(
     let reference = rig.head.as_ref().or(rig.neck.as_ref()).unwrap_or(&rig.eyes[0]);
     let (reference_bone, reference_forward) = (reference.bone, reference.forward);
     let to_model = armature_global.affine().inverse();
-    // Through the camera of the screen the cursor is measured from.
-    let seen = cursor.0.and_then(|at| {
-        let (_, parts) = screens.iter().find(|(screen, _)| screen.window == at.window)?;
-        Some((at.position, cameras.get(parts.camera).ok()?))
-    });
     if let Some((at, (camera, camera_global))) = seen {
         let scale = render.scale_percent() as f32 / 100.0;
         if let Ok(ray) = camera.viewport_to_world(camera_global, at * scale) {
-            let head = pose(reference_bone, armature, &parents, &transforms.as_readonly());
+            let head =
+                pose(reference_bone, armature, &bones.parents, &bones.transforms.as_readonly());
             let head_world = armature_global.transform_point(head.translation);
             let distance = (head_world - ray.origin).dot(*ray.direction).max(0.0);
             let point = ray.origin + *ray.direction * distance * tuning.target_depth;
@@ -327,7 +375,7 @@ fn aim(
         return;
     };
 
-    let face = pose(reference_bone, armature, &parents, &transforms.as_readonly());
+    let face = pose(reference_bone, armature, &bones.parents, &bones.transforms.as_readonly());
     let face_forward = face.rotation * reference_forward;
     let total = difference(angles(target - face.translation), angles(face_forward));
     let eye_limits = rig.eyes[0].limits;
@@ -348,18 +396,18 @@ fn aim(
         if let Some(part) = part {
             part.angles = follow(part.angles, goal.clamp(-part.limits, part.limits), secs, dt);
             let by = part.angles * weight;
-            turn(part, by, face_forward, armature, &parents, &mut transforms);
+            turn(part, by, face_forward, armature, &bones.parents, &mut bones.transforms);
         }
     }
 
     let mut eye_angles = Vec2::ZERO;
     for eye in &mut rig.eyes {
-        let eye_pose = pose(eye.bone, armature, &parents, &transforms.as_readonly());
+        let eye_pose = pose(eye.bone, armature, &bones.parents, &bones.transforms.as_readonly());
         let forward = eye_pose.rotation * eye.forward;
         let goal = difference(angles(target - eye_pose.translation), angles(forward));
         eye.angles = follow(eye.angles, goal.clamp(-eye.limits, eye.limits), tuning.eye_secs, dt);
         let by = eye.angles * weight;
-        turn(eye, by, forward, armature, &parents, &mut transforms);
+        turn(eye, by, forward, armature, &bones.parents, &mut bones.transforms);
         eye_angles += by;
     }
     eye_angles /= rig.eyes.len() as f32;
@@ -374,7 +422,7 @@ fn aim(
     ];
     for (targets, value) in rig.keys.iter().zip(values) {
         for &(mesh, index) in targets {
-            if let Ok(mut morph) = morphs.get_mut(mesh)
+            if let Ok(mut morph) = bones.morphs.get_mut(mesh)
                 && let Some(slot) = morph.weights_mut().get_mut(index)
             {
                 *slot = value;

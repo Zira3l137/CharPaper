@@ -9,9 +9,10 @@ use bevy::prelude::*;
 
 pub use animation::CharacterClips;
 pub(crate) use animation::PendingClips;
+pub(crate) use cues::CueClock;
 pub use expression::Expressions;
-pub use skin::SkinObjects;
 pub(crate) use skin::ShownSkin;
+pub use skin::SkinObjects;
 
 use crate::SceneSet;
 use crate::assets::load_armature;
@@ -25,11 +26,7 @@ pub(crate) struct CharacterPlugin;
 
 impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ShownSkin>()
-            .init_resource::<SkinObjects>()
-            .init_resource::<cues::CueClock>()
-            .init_resource::<Expressions>()
-            .add_observer(binding::mark_ready)
+        app.add_observer(binding::mark_ready)
             .add_systems(Update, (spawn_character, animation::load_clips).in_set(SceneSet::Fill))
             .add_systems(
                 Update,
@@ -46,10 +43,7 @@ impl Plugin for CharacterPlugin {
                         correctives::bind_correctives,
                         binding::bind_skins,
                         skin::list_skin_objects,
-                        skin::apply_hidden_objects.run_if(
-                            resource_changed::<CharacterState>
-                                .or_eager(resource_changed::<SkinObjects>),
-                        ),
+                        skin::apply_hidden_objects,
                     )
                         .chain(),
                     (skin::switch_skin, expression::spawn_skin_scenes).chain(),
@@ -60,7 +54,8 @@ impl Plugin for CharacterPlugin {
     }
 }
 
-// Parent of everything spawned for the suite's character, so it goes in one despawn.
+// Parent of everything spawned for a stage's character, so it goes in one despawn. A child
+// of its stage.
 #[derive(Component)]
 pub struct Character;
 
@@ -69,37 +64,34 @@ pub(crate) struct Armature;
 
 pub(crate) fn spawn_character(
     mut commands: Commands,
-    suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
-    remembered: Res<Remembered>,
-    mut state: ResMut<CharacterState>,
+    mut stages: Query<(Entity, &ActiveSuite, &Remembered, &mut CharacterState), Added<ActiveSuite>>,
 ) {
-    let Some(suite) = suite else {
-        return;
-    };
+    for (stage, suite, remembered, mut state) in &mut stages {
+        let character = commands
+            .spawn((
+                Name::new(format!("Character {}", suite.name)),
+                Character,
+                Transform::default(),
+                Visibility::default(),
+                ChildOf(stage),
+            ))
+            .id();
 
-    let character = commands
-        .spawn((
-            Name::new(format!("Character {}", suite.name)),
-            Character,
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .id();
+        commands.spawn((
+            Name::new("Suite armature"),
+            Armature,
+            ChildOf(character),
+            WorldAssetRoot(load_armature(&assets, suite)),
+        ));
 
-    commands.spawn((
-        Name::new("Suite armature"),
-        Armature,
-        ChildOf(character),
-        WorldAssetRoot(load_armature(&assets, &suite)),
-    ));
-
-    let picks = suite.remembered(&remembered);
-    state.hidden = picks.hidden;
-    state.expressions = picks.expressions;
-    state.skin = prefer(
-        picks.skin,
-        |skin| suite.skins.iter().any(|s| s.name == skin),
-        suite.default_skin.clone(),
-    );
+        let picks = suite.remembered(remembered);
+        state.hidden = picks.hidden;
+        state.expressions = picks.expressions;
+        state.skin = prefer(
+            picks.skin,
+            |skin| suite.skins.iter().any(|s| s.name == skin),
+            suite.default_skin.clone(),
+        );
+    }
 }

@@ -21,6 +21,7 @@ use crate::look::ActiveLook;
 use crate::look::Resolved;
 use crate::look::look_needs_applying;
 use crate::render::RenderSettings;
+use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
 pub(crate) struct FogPlugin;
@@ -42,16 +43,16 @@ impl Plugin for FogPlugin {
 fn spawn_fog(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
-    shown: Res<ShownEnvironment>,
-    suite: Option<Res<ActiveSuite>>,
+    stages: Query<(&ShownEnvironment, Option<&ActiveSuite>)>,
     children: Query<&Children>,
     names: Query<&Name>,
     bounds: Query<&Aabb, With<Mesh3d>>,
 ) {
-    if shown.root != Some(ready.entity) {
+    let Some((shown, suite)) = stages.iter().find(|(shown, _)| shown.root == Some(ready.entity))
+    else {
         return;
-    }
-    let Some(environment) = shown_environment(suite.as_deref(), &shown) else {
+    };
+    let Some(environment) = shown_environment(suite, shown) else {
         return;
     };
 
@@ -108,40 +109,69 @@ fn volume(fog: &Fog) -> FogVolume {
     }
 }
 
+type FogLights<'w, 's> = Query<
+    'w,
+    's,
+    Has<DirectionalLight>,
+    Or<(With<DirectionalLight>, With<PointLight>, With<SpotLight>)>,
+>;
+
 fn light_fog(
     mut commands: Commands,
     settings: Res<RenderSettings>,
-    look: Option<Res<ActiveLook>>,
-    shown: Res<ShownEnvironment>,
-    suite: Option<Res<ActiveSuite>>,
+    stages: Query<(Entity, Option<&ActiveLook>, &ShownEnvironment, Option<&ActiveSuite>)>,
     cameras: Query<Entity, With<SceneCamera>>,
+    stage_of: StageOf,
     volumes: Query<(), With<FogVolume>>,
     children: Query<&Children>,
     parents: Query<&ChildOf>,
     names: Query<&Name>,
-    lights: Query<
-        Has<DirectionalLight>,
-        Or<(With<DirectionalLight>, With<PointLight>, With<SpotLight>)>,
-    >,
+    lights: FogLights,
 ) {
-    let on = settings.fog && !volumes.is_empty();
-    for camera in &cameras {
-        if on {
-            // No ambient: Bevy adds it evenly whatever the density, which no Blender fog does.
-            commands.entity(camera).insert(VolumetricFog { ambient_intensity: 0.0, ..default() });
-        } else {
-            commands.entity(camera).remove::<VolumetricFog>();
+    for (stage, look, shown, suite) in &stages {
+        // Only this stage's fog counts: the fog boxes are under its environment.
+        let has_fog = shown
+            .root
+            .is_some_and(|root| children.iter_descendants(root).any(|e| volumes.contains(e)));
+        let on = settings.fog && has_fog;
+        for camera in cameras.iter().filter(|&camera| stage_of.get(camera) == Some(stage)) {
+            if on {
+                // No ambient: Bevy adds it evenly whatever the density, which no Blender fog does.
+                commands
+                    .entity(camera)
+                    .insert(VolumetricFog { ambient_intensity: 0.0, ..default() });
+            } else {
+                commands.entity(camera).remove::<VolumetricFog>();
+            }
         }
+        let Some(root) = shown.root else {
+            continue;
+        };
+        let look = look.map(|l| l.0.clone()).unwrap_or_default();
+        let shadows = Resolved::new(&look, shown.name.as_deref()).shadows;
+        let skipped = shown_environment(suite, shown)
+            .map(|e| e.settings.no_volume_scatter.clone())
+            .unwrap_or_default();
+        let lit = Lit { on, shadows, skipped: &skipped };
+        light_volumes(&mut commands, root, lit, &children, &parents, &names, &lights);
     }
+}
 
-    let Some(root) = shown.root else {
-        return;
-    };
-    let look = look.map(|l| l.0.clone()).unwrap_or_default();
-    let shadows = Resolved::new(&look, shown.name.as_deref()).shadows;
-    let skipped = shown_environment(suite.as_deref(), &shown)
-        .map(|e| e.settings.no_volume_scatter.clone())
-        .unwrap_or_default();
+struct Lit<'a> {
+    on: bool,
+    shadows: bool,
+    skipped: &'a [String],
+}
+
+fn light_volumes(
+    commands: &mut Commands,
+    root: Entity,
+    Lit { on, shadows, skipped }: Lit,
+    children: &Query<&Children>,
+    parents: &Query<&ChildOf>,
+    names: &Query<&Name>,
+    lights: &FogLights,
+) {
     // glTF puts a light on a child of its object, named after the light data.
     let named = |e: Entity| names.get(e).is_ok_and(|n| skipped.iter().any(|s| s == n.as_str()));
 

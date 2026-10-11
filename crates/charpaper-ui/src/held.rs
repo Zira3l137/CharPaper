@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use charpaper_scene::CharacterState;
+use charpaper_scene::FocusedMut;
 
 use crate::elements::Cycler;
 use crate::elements::Step;
@@ -53,7 +54,14 @@ impl Held {
     }
 }
 
-fn apply_settled(time: Res<Time<Real>>, mut held: ResMut<Held>, mut state: ResMut<CharacterState>) {
+fn apply_settled(
+    time: Res<Time<Real>>,
+    mut held: ResMut<Held>,
+    mut state: FocusedMut<CharacterState>,
+) {
+    let Some(mut state) = state.get_mut() else {
+        return;
+    };
     // Read first: touching `held` mutably would mark it changed every frame.
     if held.0.is_empty() {
         return;

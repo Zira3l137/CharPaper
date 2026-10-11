@@ -5,10 +5,11 @@ use crate::character::Character;
 use crate::character::binding::Bound;
 use crate::character::binding::SkinPart;
 use crate::character::expression::Expressions;
+use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
 
-#[derive(Resource, Default, Debug)]
+#[derive(Component, Default, Debug)]
 pub struct SkinObjects(pub(crate) Vec<(String, Entity)>);
 
 impl SkinObjects {
@@ -20,7 +21,7 @@ impl SkinObjects {
 #[derive(Component)]
 pub(crate) struct ObjectsListed;
 
-#[derive(Resource, Default)]
+#[derive(Component, Default)]
 pub(crate) struct ShownSkin {
     pub name: Option<String>,
     pub root: Option<Entity>,
@@ -38,48 +39,55 @@ pub(crate) struct SkinRoot {
 // moved onto the armature are no longer under its root, so they go separately.
 pub(crate) fn switch_skin(
     mut commands: Commands,
-    state: Res<CharacterState>,
-    suite: Option<Res<ActiveSuite>>,
     assets: Res<AssetServer>,
-    mut shown: ResMut<ShownSkin>,
-    mut objects: ResMut<SkinObjects>,
-    mut expressions: ResMut<Expressions>,
-    character: Query<Entity, With<Character>>,
+    mut stages: Query<(
+        Entity,
+        &CharacterState,
+        Option<&ActiveSuite>,
+        &mut ShownSkin,
+        &mut SkinObjects,
+        &mut Expressions,
+    )>,
+    characters: Query<(Entity, &ChildOf), With<Character>>,
     parts: Query<(Entity, &SkinPart)>,
 ) {
-    if shown.name == state.skin {
-        return;
-    }
-    let (Some(suite), Ok(character)) = (suite, character.single()) else {
-        return;
-    };
-
-    if let Some(old) = shown.root.take() {
-        for (part, _) in parts.iter().filter(|(_, part)| part.0 == old) {
-            commands.entity(part).despawn();
+    for (stage, state, suite, mut shown, mut objects, mut expressions) in &mut stages {
+        if shown.name == state.skin {
+            continue;
         }
-        commands.entity(old).despawn();
-    }
-    shown.name = state.skin.clone();
-    objects.0.clear();
-    expressions.0.clear();
+        let character =
+            characters.iter().find(|(_, parent)| parent.parent() == stage).map(|(c, _)| c);
+        let (Some(suite), Some(character)) = (suite, character) else {
+            continue;
+        };
 
-    let Some(skin) =
-        state.skin.as_ref().and_then(|name| suite.skins.iter().find(|s| &s.name == name))
-    else {
-        return;
-    };
-    let root = commands
-        .spawn((
-            Name::new(format!("Skin {}", skin.name)),
-            SkinRoot { name: skin.name.clone() },
-            SkinFile(load_gltf(&assets, &suite, &skin.file)),
-            ChildOf(character),
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .id();
-    shown.root = Some(root);
+        if let Some(old) = shown.root.take() {
+            for (part, _) in parts.iter().filter(|(_, part)| part.0 == old) {
+                commands.entity(part).despawn();
+            }
+            commands.entity(old).despawn();
+        }
+        shown.name = state.skin.clone();
+        objects.0.clear();
+        expressions.0.clear();
+
+        let Some(skin) =
+            state.skin.as_ref().and_then(|name| suite.skins.iter().find(|s| &s.name == name))
+        else {
+            continue;
+        };
+        let root = commands
+            .spawn((
+                Name::new(format!("Skin {}", skin.name)),
+                SkinRoot { name: skin.name.clone() },
+                SkinFile(load_gltf(&assets, suite, &skin.file)),
+                ChildOf(character),
+                Transform::default(),
+                Visibility::default(),
+            ))
+            .id();
+        shown.root = Some(root);
+    }
 }
 
 // A mesh object is a node with mesh primitives below it: what Blender calls an object.
@@ -90,9 +98,14 @@ pub(crate) fn list_skin_objects(
     children: Query<&Children>,
     names: Query<&Name>,
     meshes: Query<(), With<Mesh3d>>,
-    mut objects: ResMut<SkinObjects>,
+    stage_of: StageOf,
+    mut stages: Query<&mut SkinObjects>,
 ) {
     for (root, skin) in &skins {
+        let Some(mut objects) = stage_of.get(root).and_then(|stage| stages.get_mut(stage).ok())
+        else {
+            continue;
+        };
         let branches = std::iter::once(root)
             .chain(parts.iter().filter(|(_, part)| part.0 == root).map(|(entity, _)| entity));
         let mut found: Vec<(String, Entity)> = branches
@@ -110,17 +123,21 @@ pub(crate) fn list_skin_objects(
 }
 
 pub(crate) fn apply_hidden_objects(
-    state: Res<CharacterState>,
-    objects: Res<SkinObjects>,
+    stages: Query<
+        (&CharacterState, &SkinObjects),
+        Or<(Changed<CharacterState>, Changed<SkinObjects>)>,
+    >,
     mut visibility: Query<&mut Visibility>,
 ) {
-    let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
-    for (name, entity) in &objects.0 {
-        if let Ok(mut visibility) = visibility.get_mut(*entity) {
-            visibility.set_if_neq(match hidden.is_some_and(|h| h.contains(name)) {
-                true => Visibility::Hidden,
-                false => Visibility::Inherited,
-            });
+    for (state, objects) in &stages {
+        let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
+        for (name, entity) in &objects.0 {
+            if let Ok(mut visibility) = visibility.get_mut(*entity) {
+                visibility.set_if_neq(match hidden.is_some_and(|h| h.contains(name)) {
+                    true => Visibility::Hidden,
+                    false => Visibility::Inherited,
+                });
+            }
         }
     }
 }

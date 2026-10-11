@@ -22,15 +22,14 @@ use crate::assets::asset_path;
 use crate::look::ActiveLook;
 use crate::render::SceneImage;
 use crate::render::ScreenParts;
+use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
 pub(crate) struct LutPlugin;
 
 impl Plugin for LutPlugin {
     fn build(&self, app: &mut App) {
-        app.register_asset_loader(CubeLoader)
-            .init_resource::<ShownLut>()
-            .add_systems(Update, apply_lut.in_set(SceneSet::Run));
+        app.register_asset_loader(CubeLoader).add_systems(Update, apply_lut.in_set(SceneSet::Run));
     }
 }
 
@@ -76,7 +75,7 @@ fn lut_image(lut: &CubeLut) -> Image {
 }
 
 // By path rather than name: two suites can each have a LUT of the same name.
-#[derive(Resource, Default)]
+#[derive(Component, Default)]
 pub(crate) struct ShownLut {
     path: Option<AssetPath<'static>>,
     loading: Option<Handle<Image>>,
@@ -84,15 +83,41 @@ pub(crate) struct ShownLut {
 
 // Every frame, since it has to notice a load finishing. Cheap when nothing changes.
 fn apply_lut(
-    look: Option<Res<ActiveLook>>,
-    suite: Option<Res<ActiveSuite>>,
+    mut stages: Query<(Entity, Option<&ActiveLook>, Option<&ActiveSuite>, &mut ShownLut)>,
     screens: Query<&ScreenParts>,
+    stage_of: StageOf,
     assets: Res<AssetServer>,
-    mut shown: ResMut<ShownLut>,
     mut materials: ResMut<Assets<SceneImage>>,
 ) {
+    for (stage, look, suite, mut shown) in &mut stages {
+        let Some((lut, strength)) = loaded_lut(look, suite, &assets, &mut shown) else {
+            continue;
+        };
+        for parts in &screens {
+            if stage_of.get(parts.camera) != Some(stage) {
+                continue;
+            }
+            if materials
+                .get(&parts.material)
+                .is_some_and(|m| m.lut != lut || m.settings.lut_strength != strength)
+                && let Some(mut material) = materials.get_mut(&parts.material)
+            {
+                material.lut = lut.clone();
+                material.settings.lut_strength = strength;
+            }
+        }
+    }
+}
+
+// The LUT the stage's look picks and how strongly, or None while it is still loading.
+fn loaded_lut(
+    look: Option<&ActiveLook>,
+    suite: Option<&ActiveSuite>,
+    assets: &AssetServer,
+    shown: &mut ShownLut,
+) -> Option<(Option<Handle<Image>>, f32)> {
     let lut = look.map(|l| l.post.lut.clone()).unwrap_or_default();
-    let wanted = suite.as_ref().and_then(|suite| {
+    let wanted = suite.and_then(|suite| {
         let name = lut.name()?;
         let file = suite.luts.iter().find(|l| l.name == name)?;
         Some(asset_path(suite, &file.file))
@@ -111,18 +136,9 @@ fn apply_lut(
                 shown.loading = None;
                 None
             }
-            _ => return,
+            _ => return None,
         },
     };
     let strength = if ready.is_some() { lut.strength() } else { 0.0 };
-    for parts in &screens {
-        if materials
-            .get(&parts.material)
-            .is_some_and(|m| m.lut != ready || m.settings.lut_strength != strength)
-            && let Some(mut material) = materials.get_mut(&parts.material)
-        {
-            material.lut = ready.clone();
-            material.settings.lut_strength = strength;
-        }
-    }
+    Some((ready, strength))
 }

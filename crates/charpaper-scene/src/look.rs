@@ -20,6 +20,7 @@ use crate::environment::ShownEnvironment;
 use crate::environment::spawn_environment_scenes;
 use crate::render::SceneImage;
 use crate::render::ScreenParts;
+use crate::stage::StageOf;
 
 // Applies the look, the settings the viewer can change while the app runs, to the camera
 // and the environment's lights. Recomputed whole on every change, so no value is kept twice.
@@ -27,7 +28,7 @@ pub(crate) struct LookPlugin;
 
 impl Plugin for LookPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<LookBackup>().add_message::<RestoreLook>().add_systems(
+        app.add_message::<RestoreLook>().add_systems(
             Update,
             (apply_look, apply_grain)
                 .run_if(look_needs_applying)
@@ -44,10 +45,10 @@ pub const DEFAULT_CHROMATIC_ABERRATION: f32 = 0.0;
 pub const DEFAULT_BRIGHTNESS: f32 = 1000.0;
 pub const DEFAULT_SHADOWS: bool = true;
 
-#[derive(Resource, Deref, DerefMut, Clone, Debug, Default)]
+#[derive(Component, Deref, DerefMut, Clone, Debug, Default)]
 pub struct ActiveLook(pub Look);
 
-#[derive(Resource, Default, Debug)]
+#[derive(Component, Default, Debug)]
 pub struct LookBackup {
     pub exists: bool,
 }
@@ -100,21 +101,52 @@ impl Resolved {
     }
 }
 
+type LookedCameras<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, Option<&'static mut Skybox>, Option<&'static mut EnvironmentMapLight>),
+    With<SceneCamera>,
+>;
+type LookedLights<'w, 's> = Query<
+    'w,
+    's,
+    AnyOf<(&'static mut DirectionalLight, &'static mut PointLight, &'static mut SpotLight)>,
+>;
+
 pub(crate) fn apply_look(
     mut commands: Commands,
-    look: Option<Res<ActiveLook>>,
-    shown: Res<ShownEnvironment>,
-    mut cameras: Query<
-        (Entity, Option<&mut Skybox>, Option<&mut EnvironmentMapLight>),
-        With<SceneCamera>,
-    >,
+    stages: Query<(Entity, Option<&ActiveLook>, &ShownEnvironment)>,
+    mut cameras: LookedCameras,
+    stage_of: StageOf,
     children: Query<&Children>,
-    mut lights: Query<AnyOf<(&mut DirectionalLight, &mut PointLight, &mut SpotLight)>>,
+    mut lights: LookedLights,
 ) {
-    let look = look.map(|l| l.0.clone()).unwrap_or_default();
-    let resolved = Resolved::new(&look, shown.name.as_deref());
+    for (stage, look, shown) in &stages {
+        let look = look.map(|l| l.0.clone()).unwrap_or_default();
+        let mine: Vec<Entity> = cameras
+            .iter()
+            .map(|(camera, ..)| camera)
+            .filter(|&c| stage_of.get(c) == Some(stage))
+            .collect();
+        apply_stage_look(&mut commands, &look, shown, &mine, &mut cameras, &children, &mut lights);
+    }
+}
 
-    for (entity, skybox, environment_light) in &mut cameras {
+fn apply_stage_look(
+    commands: &mut Commands,
+    look: &Look,
+    shown: &ShownEnvironment,
+    mine: &[Entity],
+    cameras: &mut LookedCameras,
+    children: &Query<&Children>,
+    lights: &mut LookedLights,
+) {
+    let resolved = Resolved::new(look, shown.name.as_deref());
+
+    for &camera in mine {
+        let Ok((entity, skybox, environment_light)) = cameras.get_mut(camera) else {
+            continue;
+        };
         // A higher EV100 is darker; a higher look exposure is brighter.
         let ev100 = Exposure::EV100_BLENDER - resolved.exposure;
         commands.entity(entity).insert((to_bevy(resolved.tonemapping), Exposure { ev100 }));
@@ -144,7 +176,7 @@ pub(crate) fn apply_look(
         } else {
             commands.entity(entity).remove::<effect_stack::Vignette>();
         }
-        commands.entity(entity).insert(color_grading(&look));
+        commands.entity(entity).insert(color_grading(look));
         if let Some(mut skybox) = skybox {
             skybox.brightness = resolved.brightness;
         }
@@ -204,14 +236,16 @@ fn color_grading(look: &Look) -> ColorGrading {
 }
 
 pub(crate) fn apply_grain(
-    look: Option<Res<ActiveLook>>,
     screens: Query<&ScreenParts>,
+    stage_of: StageOf,
+    looks: Query<&ActiveLook>,
     mut materials: ResMut<Assets<SceneImage>>,
 ) {
-    let grain = look.map(|l| l.post.grain.clone()).unwrap_or_default();
-    let colored = if grain.colored() { 1.0 } else { 0.0 };
-    let wanted = Vec4::new(grain.intensity(), grain.size(), colored, 0.0);
     for parts in &screens {
+        let look = stage_of.get(parts.camera).and_then(|stage| looks.get(stage).ok());
+        let grain = look.map(|l| l.post.grain.clone()).unwrap_or_default();
+        let colored = if grain.colored() { 1.0 } else { 0.0 };
+        let wanted = Vec4::new(grain.intensity(), grain.size(), colored, 0.0);
         // Only on a real change: every change rebuilds the material on the GPU.
         if materials.get(&parts.material).is_some_and(|m| m.settings.grain != wanted)
             && let Some(mut material) = materials.get_mut(&parts.material)
@@ -223,15 +257,11 @@ pub(crate) fn apply_grain(
 
 // A new camera, for a screen added while the app runs, needs the whole look too.
 pub(crate) fn look_needs_applying(
-    look: Option<Res<ActiveLook>>,
-    shown: Res<ShownEnvironment>,
+    stages: Query<(), Or<(Changed<ActiveLook>, Changed<ShownEnvironment>)>>,
     ready: Query<(), Added<EnvironmentReady>>,
     new_cameras: Query<(), Added<SceneCamera>>,
 ) -> bool {
-    look.is_some_and(|l| l.is_changed())
-        || shown.is_changed()
-        || !ready.is_empty()
-        || !new_cameras.is_empty()
+    !stages.is_empty() || !ready.is_empty() || !new_cameras.is_empty()
 }
 
 fn to_bevy(from: SuiteTonemapping) -> Tonemapping {

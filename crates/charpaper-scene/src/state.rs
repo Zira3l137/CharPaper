@@ -6,9 +6,9 @@ use charpaper_suite::ORBIT_CAMERA;
 use serde::Deserialize;
 use serde::Serialize;
 
-// What the viewer asked for. Systems compare it with what is shown and catch up, so
-// writing here is how the UI switches things.
-#[derive(Resource, Default, Debug)]
+// What the viewer asked for on a stage. Systems compare it with what is shown and catch up,
+// so writing here is how the UI switches things.
+#[derive(Component, Default, Debug)]
 pub struct CharacterState {
     pub suite: Option<String>,
     pub skin: Option<String>,

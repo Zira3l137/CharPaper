@@ -10,6 +10,7 @@ use bevy::prelude::*;
 use crate::character::Armature;
 use crate::character::animation::kids;
 use crate::character::binding::InstanceReady;
+use crate::character::binding::armature_beside;
 use crate::character::expression::SkinClips;
 use crate::character::skin::SkinRoot;
 
@@ -19,16 +20,19 @@ pub(crate) struct CorrectivesBound;
 // Runs before binding moves branches: target ids hash the node paths as they are in the file.
 pub(crate) fn bind_correctives(
     mut commands: Commands,
-    skins: Query<(Entity, &SkinRoot, &SkinClips), (With<InstanceReady>, Without<CorrectivesBound>)>,
-    armature: Query<Entity, With<Armature>>,
+    skins: Query<
+        (Entity, &SkinRoot, &SkinClips, &ChildOf),
+        (With<InstanceReady>, Without<CorrectivesBound>),
+    >,
+    armatures: Query<(Entity, &ChildOf), With<Armature>>,
     children: Query<&Children>,
     names: Query<&Name>,
     morphs: Query<(), With<MorphWeights>>,
 ) {
-    let Ok(armature) = armature.single() else {
-        return;
-    };
-    for (root, skin, clips) in &skins {
+    for (root, skin, clips, parent) in &skins {
+        let Some(armature) = armature_beside(parent, &armatures) else {
+            continue;
+        };
         let mut pending: Vec<(Entity, Vec<&str>)> = Vec::new();
         for &scene_root in kids(&children, root) {
             pending.extend(kids(&children, scene_root).iter().map(|&node| (node, Vec::new())));

@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::camera::SceneView;
@@ -19,32 +20,51 @@ pub(crate) struct OrbitCamera {
     pub pitch: f32,
 }
 
-pub(crate) fn on_zoom(
-    event: On<Pointer<Scroll>>,
-    mut query: Single<(&mut Transform, &mut OrbitCamera), With<SceneView>>,
-    state: Res<CharacterState>,
-) {
-    if state.camera.is_some() {
-        return;
-    }
-    let (camera, orbit) = &mut *query;
-    orbit.radius = (orbit.radius * ZOOM_PER_NOTCH.powf(event.y)).clamp(1.0, 100.0);
-    update_camera_transform(camera, orbit);
+// On a screen's scene image: the view a drag or scroll over it steers.
+#[derive(Component)]
+pub(crate) struct Steers(pub Entity);
+
+// The view under the pointer, while its stage looks through the orbit rather than an exported
+// camera.
+#[derive(SystemParam)]
+pub(crate) struct Steered<'w, 's> {
+    images: Query<'w, 's, &'static Steers>,
+    views: Query<
+        'w,
+        's,
+        (&'static mut Transform, &'static mut OrbitCamera, &'static ChildOf),
+        With<SceneView>,
+    >,
+    stages: Query<'w, 's, &'static CharacterState>,
 }
 
-pub(crate) fn on_pan(
-    event: On<Pointer<Drag>>,
-    mut query: Single<(&mut Transform, &mut OrbitCamera), With<SceneView>>,
-    state: Res<CharacterState>,
-) {
-    if state.camera.is_some() {
-        return;
+impl Steered<'_, '_> {
+    fn free(&mut self, image: Entity) -> Option<(Mut<'_, Transform>, Mut<'_, OrbitCamera>)> {
+        let view = self.images.get(image).ok()?.0;
+        let stage = self.views.get(view).ok()?.2.parent();
+        if self.stages.get(stage).ok()?.camera.is_some() {
+            return None;
+        }
+        let (transform, orbit, _) = self.views.get_mut(view).ok()?;
+        Some((transform, orbit))
     }
+}
+
+pub(crate) fn on_zoom(event: On<Pointer<Scroll>>, mut steered: Steered) {
+    let Some((mut camera, mut orbit)) = steered.free(event.entity) else {
+        return;
+    };
+    orbit.radius = (orbit.radius * ZOOM_PER_NOTCH.powf(event.y)).clamp(1.0, 100.0);
+    update_camera_transform(&mut camera, &orbit);
+}
+
+pub(crate) fn on_pan(event: On<Pointer<Drag>>, mut steered: Steered) {
     if !matches!(event.button, PointerButton::Middle) {
         return;
     }
-
-    let (camera, orbit) = &mut *query;
+    let Some((mut camera, mut orbit)) = steered.free(event.entity) else {
+        return;
+    };
 
     let delta = event.delta;
     let right = camera.right().as_vec3();
@@ -54,28 +74,22 @@ pub(crate) fn on_pan(
     let world_delta = (-right * delta.x + up * delta.y) * pan_speed;
 
     orbit.focus += world_delta;
-    update_camera_transform(camera, orbit);
+    update_camera_transform(&mut camera, &orbit);
 }
 
-pub(crate) fn on_orbit(
-    event: On<Pointer<Drag>>,
-    mut query: Single<(&mut Transform, &mut OrbitCamera), With<SceneView>>,
-    state: Res<CharacterState>,
-) {
-    if state.camera.is_some() {
-        return;
-    }
+pub(crate) fn on_orbit(event: On<Pointer<Drag>>, mut steered: Steered) {
     if !matches!(event.button, PointerButton::Secondary) {
         return;
     }
-
-    let (transform, orbit) = &mut *query;
+    let Some((mut transform, mut orbit)) = steered.free(event.entity) else {
+        return;
+    };
     let delta = event.delta;
 
     orbit.yaw -= delta.x * BASE_SENSITIVITY;
     orbit.pitch = (orbit.pitch - delta.y * BASE_SENSITIVITY).clamp(-PITCH_LIMIT, PITCH_LIMIT);
 
-    update_camera_transform(transform, orbit);
+    update_camera_transform(&mut transform, &orbit);
 }
 
 pub(crate) fn update_camera_transform(transform: &mut Transform, orbit: &OrbitCamera) {

@@ -8,10 +8,12 @@ use bevy::prelude::*;
 use charpaper_audio::Volumes;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterState;
+use charpaper_scene::Focused;
 use charpaper_scene::GazeSettings;
 use charpaper_scene::Picks;
 use charpaper_scene::RenderSettings;
 use charpaper_scene::ScreenSettings;
+use charpaper_scene::focused_changed;
 use charpaper_ui::UiState;
 use serde::Deserialize;
 use serde::Serialize;
@@ -86,11 +88,11 @@ impl Plugin for StatePlugin {
             Last,
             (
                 note_change.run_if(
-                    resource_changed::<CharacterState>
+                    focused_changed::<CharacterState>
                         .or_eager(resource_changed::<UiState>)
                         .or_eager(resource_changed::<RenderSettings>)
                         .or_eager(resource_changed::<ScreenSettings>)
-                        .or_eager(resource_changed::<GazeSettings>)
+                        .or_eager(focused_changed::<GazeSettings>)
                         .or_eager(resource_changed::<Volumes>),
                 ),
                 save_settled,
@@ -123,11 +125,14 @@ fn note_change(
     ui: Res<UiState>,
     render: Res<RenderSettings>,
     screen: Res<ScreenSettings>,
-    gaze: Res<GazeSettings>,
+    gaze: Focused<GazeSettings>,
     volumes: Res<Volumes>,
-    character: Res<CharacterState>,
-    suite: Option<Res<ActiveSuite>>,
+    character: Focused<CharacterState>,
+    suite: Focused<ActiveSuite>,
 ) {
+    let (Some(gaze), Some(character)) = (gaze.get(), character.get()) else {
+        return;
+    };
     let unsaved = file.unsaved.take();
     let mut next = unsaved.map_or_else(|| file.saved.clone(), |unsaved| unsaved.value);
     next.ui = ui.clone();
@@ -138,7 +143,7 @@ fn note_change(
     if character.suite.is_some() {
         next.suite = character.suite.clone();
     }
-    if let Some(suite) = suite {
+    if let Some(suite) = suite.get() {
         next.suites.entry(suite.folder()).or_default().merge(Picks::from_state(&character));
     }
     if next != file.saved {

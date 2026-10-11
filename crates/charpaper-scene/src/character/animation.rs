@@ -15,12 +15,13 @@ use crate::assets::asset_path;
 use crate::character::Armature;
 use crate::character::binding::InstanceReady;
 use crate::config::SceneConfig;
+use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
 
-#[derive(Resource, Default)]
+#[derive(Component, Default)]
 pub struct CharacterClips {
     clips: BTreeMap<String, Clip>,
 }
@@ -45,7 +46,7 @@ impl CharacterClips {
 #[derive(Component, Default)]
 pub(crate) struct Playing(pub Option<String>);
 
-#[derive(Resource)]
+#[derive(Component)]
 pub(crate) struct PendingClips(Vec<(Handle<Gltf>, AnimationFile)>);
 
 #[derive(Component)]
@@ -60,17 +61,24 @@ pub(crate) struct Animatable;
 // nodes.
 pub(crate) fn make_armature_animatable(
     mut commands: Commands,
-    armature: Query<Entity, (With<Armature>, With<InstanceReady>, Without<Animatable>)>,
+    armatures: Query<Entity, (With<Armature>, With<InstanceReady>, Without<Animatable>)>,
     children: Query<&Children>,
     names: Query<&Name>,
 ) {
-    let Ok(armature) = armature.single() else {
-        return;
-    };
+    for armature in &armatures {
+        make_animatable(&mut commands, armature, &children, &names);
+    }
+}
 
+fn make_animatable(
+    commands: &mut Commands,
+    armature: Entity,
+    children: &Query<&Children>,
+    names: &Query<&Name>,
+) {
     let mut pending: Vec<(Entity, Vec<&str>)> = Vec::new();
-    for &scene_root in kids(&children, armature) {
-        pending.extend(kids(&children, scene_root).iter().map(|&node| (node, Vec::new())));
+    for &scene_root in kids(children, armature) {
+        pending.extend(kids(children, scene_root).iter().map(|&node| (node, Vec::new())));
     }
 
     let mut targets = 0;
@@ -83,7 +91,7 @@ pub(crate) fn make_armature_animatable(
             .entity(node)
             .insert((AnimationTargetId::from_iter(path.iter()), AnimatedBy(armature)));
         targets += 1;
-        pending.extend(kids(&children, node).iter().map(|&child| (child, path.clone())));
+        pending.extend(kids(children, node).iter().map(|&child| (child, path.clone())));
     }
 
     commands.entity(armature).insert((
@@ -96,24 +104,23 @@ pub(crate) fn make_armature_animatable(
 
 pub(crate) fn load_clips(
     mut commands: Commands,
-    suite: Option<Res<ActiveSuite>>,
+    stages: Query<(Entity, &ActiveSuite), Added<ActiveSuite>>,
     assets: Res<AssetServer>,
 ) {
-    let Some(suite) = suite else {
-        return;
-    };
-    let files = suite
-        .animations
-        .iter()
-        .map(|file| {
-            let handle = assets
-                .load_builder()
-                .with_settings(clips_only)
-                .load(asset_path(&suite, &file.path));
-            (handle, file.clone())
-        })
-        .collect();
-    commands.insert_resource(PendingClips(files));
+    for (stage, suite) in &stages {
+        let files = suite
+            .animations
+            .iter()
+            .map(|file| {
+                let handle = assets
+                    .load_builder()
+                    .with_settings(clips_only)
+                    .load(asset_path(suite, &file.path));
+                (handle, file.clone())
+            })
+            .collect();
+        commands.entity(stage).insert(PendingClips(files));
+    }
 }
 
 // An animation file may carry the meshes its correctives key; only its clips are wanted.
@@ -126,27 +133,48 @@ fn clips_only(settings: &mut GltfLoaderSettings) {
 
 pub(crate) fn build_graph(
     mut commands: Commands,
-    pending: Option<Res<PendingClips>>,
-    armature: Query<Entity, (With<Animatable>, Without<AnimationGraphHandle>)>,
+    armatures: Query<Entity, (With<Animatable>, Without<AnimationGraphHandle>)>,
+    stage_of: StageOf,
+    mut stages: Query<(&PendingClips, &ActiveSuite, &Remembered, &mut CharacterState)>,
     assets: Res<AssetServer>,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
-    suite: Option<Res<ActiveSuite>>,
-    remembered: Res<Remembered>,
-    mut state: ResMut<CharacterState>,
 ) {
-    let (Some(pending), Some(suite)) = (pending, suite) else {
-        return;
-    };
-    let Ok(armature) = armature.single() else {
-        return;
-    };
+    for armature in &armatures {
+        let Some(stage) = stage_of.get(armature) else {
+            continue;
+        };
+        let Ok((pending, suite, remembered, mut state)) = stages.get_mut(stage) else {
+            continue;
+        };
+        let clips = build_clips(pending, suite, &assets, &gltfs, &mut graphs);
+        let Some((graph, clips)) = clips else {
+            continue;
+        };
+        state.animation = prefer(
+            suite.remembered(remembered).animation,
+            |name| clips.contains_key(name),
+            suite.default_animation.clone(),
+        );
+        commands.entity(armature).insert((AnimationGraphHandle(graph), Playing::default()));
+        commands.entity(stage).insert(CharacterClips { clips }).remove::<PendingClips>();
+    }
+}
+
+// None while a file is still loading.
+fn build_clips(
+    pending: &PendingClips,
+    suite: &ActiveSuite,
+    assets: &AssetServer,
+    gltfs: &Assets<Gltf>,
+    graphs: &mut Assets<AnimationGraph>,
+) -> Option<(Handle<AnimationGraph>, BTreeMap<String, Clip>)> {
     let loading = pending
         .0
         .iter()
         .any(|(h, _)| gltfs.get(h).is_none() && !assets.load_state(h.id()).is_failed());
     if loading {
-        return;
+        return None;
     }
 
     let mut graph = AnimationGraph::new();
@@ -165,63 +193,67 @@ pub(crate) fn build_graph(
     }
 
     info!("{} animation(s): {:?}", clips.len(), clips.keys().collect::<Vec<_>>());
-    if let Some(default) = &suite.default_animation {
-        if !clips.contains_key(default) {
-            warn!("default animation {default:?} is not among them");
-        }
+    if let Some(default) = &suite.default_animation
+        && !clips.contains_key(default)
+    {
+        warn!("default animation {default:?} is not among them");
     }
-
-    state.animation = prefer(
-        suite.remembered(&remembered).animation,
-        |name| clips.contains_key(name),
-        suite.default_animation.clone(),
-    );
-    commands.entity(armature).insert((AnimationGraphHandle(graphs.add(graph)), Playing::default()));
-    commands.insert_resource(CharacterClips { clips });
-    commands.remove_resource::<PendingClips>();
+    Some((graphs.add(graph), clips))
 }
 
 pub(crate) fn finish_once(
-    mut state: ResMut<CharacterState>,
-    clips: Option<Res<CharacterClips>>,
-    suite: Option<Res<ActiveSuite>>,
-    armature: Query<(&AnimationPlayer, &Playing)>,
+    armatures: Query<(Entity, &AnimationPlayer, &Playing)>,
+    stage_of: StageOf,
+    mut stages: Query<(&mut CharacterState, &CharacterClips, &ActiveSuite)>,
 ) {
-    let (Some(clips), Some(suite)) = (clips, suite) else {
-        return;
-    };
-    let Ok((player, Playing(Some(name)))) = armature.single() else {
-        return;
-    };
-    let Some(clip) = clips.get(name) else {
-        return;
-    };
-    if clip.mode != PlayMode::Once || suite.default_animation.as_ref() == Some(name) {
-        return;
-    }
-    if player.animation(clip.node).is_some_and(|active| active.is_finished()) {
-        state.animation = suite.default_animation.clone();
+    for (armature, player, playing) in &armatures {
+        let Some(name) = &playing.0 else {
+            continue;
+        };
+        let Some(stage) = stage_of.get(armature) else {
+            continue;
+        };
+        let Ok((mut state, clips, suite)) = stages.get_mut(stage) else {
+            continue;
+        };
+        let Some(clip) = clips.get(name) else {
+            continue;
+        };
+        if clip.mode != PlayMode::Once || suite.default_animation.as_ref() == Some(name) {
+            continue;
+        }
+        if player.animation(clip.node).is_some_and(|active| active.is_finished()) {
+            state.animation = suite.default_animation.clone();
+        }
     }
 }
 
 // Runs every frame, since a request can arrive before the graph exists.
 pub(crate) fn play_selected(
-    state: Res<CharacterState>,
-    clips: Option<Res<CharacterClips>>,
     config: Res<SceneConfig>,
-    mut armature: Query<(&mut AnimationPlayer, &mut AnimationTransitions, &mut Playing)>,
+    mut armatures: Query<(Entity, &mut AnimationPlayer, &mut AnimationTransitions, &mut Playing)>,
+    stage_of: StageOf,
+    stages: Query<(&CharacterState, &CharacterClips)>,
 ) {
-    let Some(clips) = clips else {
-        return;
-    };
-    let Ok((mut player, mut transitions, mut playing)) = armature.single_mut() else {
-        return;
-    };
-    if playing.0 == state.animation {
-        return;
+    for (armature, mut player, mut transitions, mut playing) in &mut armatures {
+        let Some((state, clips)) = stage_of.get(armature).and_then(|s| stages.get(s).ok()) else {
+            continue;
+        };
+        if playing.0 == state.animation {
+            continue;
+        }
+        playing.0 = state.animation.clone();
+        play(&config, &mut player, &mut transitions, state, clips);
     }
-    playing.0 = state.animation.clone();
+}
 
+fn play(
+    config: &SceneConfig,
+    player: &mut AnimationPlayer,
+    transitions: &mut AnimationTransitions,
+    state: &CharacterState,
+    clips: &CharacterClips,
+) {
     let Some(name) = &state.animation else {
         player.stop_all();
         return;
@@ -232,7 +264,7 @@ pub(crate) fn play_selected(
     };
 
     let fade = Duration::from_secs_f32(config.animation_crossfade_secs.max(0.0));
-    let active = transitions.play(&mut player, clip.node, fade);
+    let active = transitions.play(player, clip.node, fade);
     match clip.mode {
         PlayMode::Loop => {
             active.repeat();

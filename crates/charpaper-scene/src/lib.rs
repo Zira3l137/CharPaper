@@ -12,6 +12,7 @@ mod screens;
 mod shadows;
 mod soundscape;
 mod span;
+mod stage;
 mod state;
 mod suite;
 
@@ -43,17 +44,24 @@ pub use screens::ChosenMonitor;
 pub use screens::MonitorEntry;
 pub use screens::Monitors;
 pub use screens::Screen;
-pub use screens::ScreenSettings;
 pub use screens::ScreenPlace;
+pub use screens::ScreenSettings;
 pub use screens::ScreenUi;
 pub use screens::Unseen;
+pub use stage::Focused;
+pub use stage::FocusedMut;
+pub use stage::FocusedStage;
+pub use stage::Stage;
+pub use stage::focused_added;
+pub use stage::focused_changed;
+pub use stage::focused_has;
 pub use state::CharacterState;
 pub use state::Picks;
 pub use suite::ActiveSuite;
 pub use suite::AvailableSuites;
 
-// Every frame, in this order: swap the suite if another one was picked, fill in a suite
-// that was just loaded, then let every part catch up with CharacterState.
+// Every frame, in this order: swap a stage's suite if another one was picked, fill in a suite
+// that was just loaded, then let every part catch up with the stage's CharacterState.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum SceneSet {
     Switch,
@@ -72,15 +80,12 @@ impl Plugin for ScenePlugin {
 
         app.insert_resource(config.clone())
             .insert_resource(config.render.clone())
-            .insert_resource(config.gaze.clone())
-            .insert_resource(suite::Remembered(config.remembered.clone()))
             .insert_resource(ClearColor(Color::srgb(r, g, b)))
             // No built-in lighting: only what the environment ships lights the character.
             .insert_resource(GlobalAmbientLight::NONE)
-            .init_resource::<CharacterState>()
             .configure_sets(Update, (SceneSet::Switch, SceneSet::Fill, SceneSet::Run).chain())
-            .configure_sets(Update, SceneSet::Fill.run_if(resource_added::<ActiveSuite>))
             .add_plugins((
+                stage::StagePlugin,
                 suite::SuitePlugin,
                 character::CharacterPlugin,
                 camera::CameraPlugin,

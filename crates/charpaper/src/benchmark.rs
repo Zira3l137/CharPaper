@@ -14,6 +14,8 @@ use charpaper_scene::AntiAliasing;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::DepthOfFieldQuality;
+use charpaper_scene::Focused;
+use charpaper_scene::FocusedMut;
 use charpaper_scene::FogQuality;
 use charpaper_scene::FpsLimit;
 use charpaper_scene::RENDER_SCALES;
@@ -93,9 +95,9 @@ struct Measured {
 
 #[derive(SystemParam)]
 struct Shown<'w, 's> {
-    suite: Option<Res<'w, ActiveSuite>>,
-    clips: Option<Res<'w, CharacterClips>>,
-    state: Res<'w, CharacterState>,
+    suite: Focused<'w, 's, ActiveSuite>,
+    clips: Focused<'w, 's, CharacterClips>,
+    state: Focused<'w, 's, CharacterState>,
     fog: Query<'w, 's, (), With<FogVolume>>,
     lights: Query<'w, 's, (), Or<(With<DirectionalLight>, With<PointLight>, With<SpotLight>)>>,
     window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
@@ -106,7 +108,7 @@ fn run(
     time: Res<Time<Real>>,
     mut bench: ResMut<Benchmark>,
     mut settings: ResMut<RenderSettings>,
-    mut look: Option<ResMut<ActiveLook>>,
+    mut look: FocusedMut<ActiveLook>,
     paused: Res<Paused>,
     scene: Shown,
     mut exit: MessageWriter<AppExit>,
@@ -126,14 +128,14 @@ fn run(
         Phase::Loading => {
             bench.waited += delta;
             // The clips are ready once the armature and every animation file have loaded.
-            let ready = scene.suite.is_some() && scene.clips.is_some();
+            let ready = scene.suite.get().is_some() && scene.clips.get().is_some();
             if ready {
                 bench.elapsed += delta;
             }
             if ready && bench.elapsed >= WARM_UP {
-                let saved_look = look.as_deref().map(|l| l.0.clone()).unwrap_or_default();
+                let saved_look = look.get().map(|l| l.0.clone()).unwrap_or_default();
                 start(bench, &settings, saved_look, &scene);
-                apply(bench, &mut settings, look.as_deref_mut());
+                apply(bench, &mut settings, look.get_mut().as_deref_mut());
             } else if bench.waited >= LOAD_LIMIT {
                 error!("benchmark: the suite did not finish loading within a minute");
                 exit.write(AppExit::error());
@@ -160,7 +162,7 @@ fn run(
             bench.measured.push(Measured { label: row.label.clone(), median, slow });
             bench.next += 1;
             if bench.next < bench.rows.len() {
-                apply(bench, &mut settings, look.as_deref_mut());
+                apply(bench, &mut settings, look.get_mut().as_deref_mut());
             } else {
                 finish(bench);
                 exit.write(AppExit::Success);
@@ -172,7 +174,7 @@ fn run(
 }
 
 fn start(bench: &mut Benchmark, saved: &RenderSettings, look: Look, scene: &Shown) {
-    let environment = scene.state.environment.clone();
+    let environment = scene.state.get().and_then(|state| state.environment.clone());
     let shadows = Resolved::new(&look, environment.as_deref()).shadows;
     let lit = !scene.lights.is_empty();
     bench.rows = plan(saved, !scene.fog.is_empty(), lit.then_some(shadows));
@@ -256,14 +258,16 @@ fn changed(
 
 fn header(scene: &Shown) -> String {
     let mut text = String::from("charpaper benchmark\n");
-    if let Some(suite) = &scene.suite {
+    if let Some(suite) = scene.suite.get() {
         let _ = write!(text, "suite {:?}", suite.name);
     }
-    let state = &scene.state;
-    if let Some(environment) = &state.environment {
-        let _ = write!(text, ", environment {environment:?}");
+    if let Some(state) = scene.state.get() {
+        if let Some(environment) = &state.environment {
+            let _ = write!(text, ", environment {environment:?}");
+        }
+        let _ = write!(text, ", camera {:?}", state.camera.as_deref().unwrap_or("orbit"));
     }
-    let _ = writeln!(text, ", camera {:?}", state.camera.as_deref().unwrap_or("orbit"));
+    text.push('\n');
     if let Some(adapter) = &scene.adapter {
         let _ = writeln!(text, "GPU {} ({:?})", adapter.name, adapter.backend);
     }

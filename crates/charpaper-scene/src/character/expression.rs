@@ -9,10 +9,11 @@ use crate::character::binding::InstanceReady;
 use crate::character::skin::SkinFile;
 use crate::character::skin::SkinRoot;
 use crate::config::SceneConfig;
+use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
 
-#[derive(Resource, Default, Debug)]
+#[derive(Component, Default, Debug)]
 pub struct Expressions(pub Vec<String>);
 
 #[derive(Component)]
@@ -33,15 +34,17 @@ pub(crate) struct ExpressionPlayers {
 pub(crate) fn spawn_skin_scenes(
     mut commands: Commands,
     skins: Query<(Entity, &SkinRoot, &SkinFile), Without<WorldAssetRoot>>,
-    suite: Option<Res<ActiveSuite>>,
+    stage_of: StageOf,
+    mut stages: Query<(&ActiveSuite, &mut Expressions)>,
     gltfs: Res<Assets<Gltf>>,
     assets: Res<AssetServer>,
-    mut expressions: ResMut<Expressions>,
 ) {
-    let Some(suite) = suite else {
-        return;
-    };
     for (entity, skin, file) in &skins {
+        let Some((suite, mut expressions)) =
+            stage_of.get(entity).and_then(|stage| stages.get_mut(stage).ok())
+        else {
+            continue;
+        };
         if assets.load_state(file.0.id()).is_failed() {
             warn!("skin {:?}: its file failed to load", skin.name);
             commands.entity(entity).remove::<SkinFile>();
@@ -136,14 +139,18 @@ pub(crate) fn setup_expressions(
 
 pub(crate) fn play_expression(
     time: Res<Time>,
-    state: Res<CharacterState>,
     config: Res<SceneConfig>,
-    mut skins: Query<&mut ExpressionPlayers>,
+    mut skins: Query<(Entity, &mut ExpressionPlayers)>,
+    stage_of: StageOf,
+    stages: Query<&CharacterState>,
     mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     mut morphs: Query<&mut MorphWeights>,
 ) {
     let fade = Duration::from_secs_f32(config.expression_fade_secs.max(0.0));
-    for mut skin in &mut skins {
+    for (entity, mut skin) in &mut skins {
+        let Some(state) = stage_of.get(entity).and_then(|stage| stages.get(stage).ok()) else {
+            continue;
+        };
         let skin = &mut *skin;
         let wanted = state.expression().filter(|name| skin.nodes.contains_key(*name));
 

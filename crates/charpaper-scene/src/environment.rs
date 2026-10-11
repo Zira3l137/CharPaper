@@ -21,6 +21,7 @@ use crate::assets::GPU_ONLY;
 use crate::assets::asset_path;
 use crate::camera::SceneCamera;
 use crate::config::SceneConfig;
+use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
 use crate::suite::ActiveSuite;
@@ -30,9 +31,7 @@ pub(crate) struct EnvironmentPlugin;
 
 impl Plugin for EnvironmentPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ShownEnvironment>()
-            .init_resource::<Baking>()
-            .add_observer(on_environment_ready)
+        app.add_observer(on_environment_ready)
             .add_observer(point_sized_spots)
             .add_systems(Update, choose_environment.in_set(SceneSet::Fill))
             .add_systems(
@@ -44,7 +43,7 @@ impl Plugin for EnvironmentPlugin {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Component, Default)]
 pub(crate) struct ShownEnvironment {
     pub name: Option<String>,
     pub root: Option<Entity>,
@@ -59,87 +58,93 @@ pub(crate) struct EnvironmentRoot {
 #[derive(Component)]
 pub(crate) struct AwaitingScene;
 
-#[derive(Resource, Default)]
+#[derive(Component, Default)]
 pub(crate) struct Baking(pub HashMap<String, Task<Result<(), String>>>);
 
 #[derive(Component)]
 pub(crate) struct EnvironmentReady;
 
 pub(crate) fn choose_environment(
-    suite: Option<Res<ActiveSuite>>,
-    remembered: Res<Remembered>,
-    mut state: ResMut<CharacterState>,
+    mut stages: Query<(&ActiveSuite, &Remembered, &mut CharacterState), Added<ActiveSuite>>,
 ) {
-    let Some(suite) = suite else {
-        return;
-    };
-    state.environment = prefer(
-        suite.remembered(&remembered).environment,
-        |name| suite.environments.iter().any(|e| e.name == name),
-        suite.default_environment.clone(),
-    );
+    for (suite, remembered, mut state) in &mut stages {
+        state.environment = prefer(
+            suite.remembered(remembered).environment,
+            |name| suite.environments.iter().any(|e| e.name == name),
+            suite.default_environment.clone(),
+        );
+    }
 }
 
 pub(crate) fn switch_environment(
     mut commands: Commands,
-    state: Res<CharacterState>,
-    suite: Option<Res<ActiveSuite>>,
     config: Res<SceneConfig>,
     assets: Res<AssetServer>,
-    mut shown: ResMut<ShownEnvironment>,
-    mut baking: ResMut<Baking>,
+    mut stages: Query<(
+        Entity,
+        &CharacterState,
+        Option<&ActiveSuite>,
+        &mut ShownEnvironment,
+        &mut Baking,
+    )>,
     cameras: Query<Entity, With<SceneCamera>>,
+    stage_of: StageOf,
 ) {
-    if shown.name == state.environment {
-        return;
-    }
-    let Some(suite) = suite else {
-        return;
-    };
+    for (stage, state, suite, mut shown, mut baking) in &mut stages {
+        if shown.name == state.environment {
+            continue;
+        }
+        let Some(suite) = suite else {
+            continue;
+        };
+        let cameras: Vec<Entity> =
+            cameras.iter().filter(|&camera| stage_of.get(camera) == Some(stage)).collect();
 
-    if let Some(root) = shown.root.take() {
-        commands.entity(root).despawn();
-    }
-    for camera in &cameras {
-        commands.entity(camera).remove::<(Skybox, EnvironmentMapLight)>();
-    }
-    shown.name = state.environment.clone();
+        if let Some(root) = shown.root.take() {
+            commands.entity(root).despawn();
+        }
+        for &camera in &cameras {
+            commands.entity(camera).remove::<(Skybox, EnvironmentMapLight)>();
+        }
+        shown.name = state.environment.clone();
 
-    let Some(environment) = state
-        .environment
-        .as_ref()
-        .and_then(|name| suite.environments.iter().find(|e| &e.name == name))
-    else {
-        return;
-    };
+        let Some(environment) = state
+            .environment
+            .as_ref()
+            .and_then(|name| suite.environments.iter().find(|e| &e.name == name))
+        else {
+            continue;
+        };
 
-    for camera in &cameras {
-        attach_maps(&mut commands, camera, &assets, &suite, environment);
+        for &camera in &cameras {
+            attach_maps(&mut commands, camera, &assets, suite, environment);
+        }
+        if environment.needs_baking() && !baking.0.contains_key(&environment.name) {
+            start_bake(&mut baking, suite, environment, &config);
+        }
+        if let Some(scene) = &environment.scene {
+            let file = assets
+                .load_builder()
+                .with_settings(|s: &mut GltfLoaderSettings| {
+                    s.load_cameras = false;
+                    s.load_meshes = GPU_ONLY;
+                    s.load_materials = GPU_ONLY;
+                })
+                .load(asset_path(suite, scene));
+            let root = commands
+                .spawn((
+                    Name::new(format!("Environment {}", environment.name)),
+                    EnvironmentRoot { file, clips: Vec::new() },
+                    AwaitingScene,
+                    Transform::default(),
+                    Visibility::default(),
+                    ChildOf(stage),
+                ))
+                .id();
+            shown.root = Some(root);
+        }
+        info!("environment {:?}", environment.name);
     }
-    if environment.needs_baking() && !baking.0.contains_key(&environment.name) {
-        start_bake(&mut baking, &suite, environment, &config);
-    }
-    if let Some(scene) = &environment.scene {
-        let file = assets
-            .load_builder()
-            .with_settings(|s: &mut GltfLoaderSettings| {
-                s.load_cameras = false;
-                s.load_meshes = GPU_ONLY;
-                s.load_materials = GPU_ONLY;
-            })
-            .load(asset_path(&suite, scene));
-        let root = commands
-            .spawn((
-                Name::new(format!("Environment {}", environment.name)),
-                EnvironmentRoot { file, clips: Vec::new() },
-                AwaitingScene,
-                Transform::default(),
-                Visibility::default(),
-            ))
-            .id();
-        shown.root = Some(root);
-    }
-    info!("environment {:?}", environment.name);
 }
 
 // Brightness starts at 0; apply_look sets it right after.
@@ -184,41 +189,41 @@ fn start_bake(baking: &mut Baking, suite: &Suite, environment: &Environment, con
 
 pub(crate) fn finish_bakes(
     mut commands: Commands,
-    mut baking: ResMut<Baking>,
-    suite: Option<ResMut<ActiveSuite>>,
     assets: Res<AssetServer>,
-    mut shown: ResMut<ShownEnvironment>,
+    mut stages: Query<(Entity, &mut Baking, &mut ActiveSuite, &mut ShownEnvironment)>,
     cameras: Query<Entity, With<SceneCamera>>,
+    stage_of: StageOf,
 ) {
-    let Some(mut suite) = suite else {
-        return;
-    };
-    let mut finished = Vec::new();
-    for (name, task) in &mut baking.0 {
-        if let Some(result) = block_on(poll_once(task)) {
-            finished.push((name.clone(), result));
-        }
-    }
-
-    for (name, result) in finished {
-        baking.0.remove(&name);
-        if let Err(err) = result {
-            warn!("cannot bake the maps of environment {name:?}: {err}");
-            continue;
-        }
-        let root = suite.root.clone();
-        let Some(environment) = suite.0.environments.iter_mut().find(|e| e.name == name) else {
-            continue;
-        };
-        environment.find_maps(&root);
-        info!("environment {name:?}: maps baked");
-
-        if shown.name.as_deref() == Some(name.as_str()) {
-            let environment = environment.clone();
-            for camera in &cameras {
-                attach_maps(&mut commands, camera, &assets, &suite, &environment);
+    for (stage, mut baking, mut suite, mut shown) in &mut stages {
+        let mut finished = Vec::new();
+        for (name, task) in &mut baking.0 {
+            if let Some(result) = block_on(poll_once(task)) {
+                finished.push((name.clone(), result));
             }
-            shown.set_changed();
+        }
+
+        for (name, result) in finished {
+            baking.0.remove(&name);
+            if let Err(err) = result {
+                warn!("cannot bake the maps of environment {name:?}: {err}");
+                continue;
+            }
+            let root = suite.root.clone();
+            let Some(environment) = suite.0.environments.iter_mut().find(|e| e.name == name) else {
+                continue;
+            };
+            environment.find_maps(&root);
+            info!("environment {name:?}: maps baked");
+
+            if shown.name.as_deref() == Some(name.as_str()) {
+                let environment = environment.clone();
+                for camera in &cameras {
+                    if stage_of.get(camera) == Some(stage) {
+                        attach_maps(&mut commands, camera, &assets, &suite, &environment);
+                    }
+                }
+                shown.set_changed();
+            }
         }
     }
 }
@@ -226,21 +231,22 @@ pub(crate) fn finish_bakes(
 // A camera that comes later, for a screen added while the app runs, gets the maps too.
 fn equip_new_cameras(
     mut commands: Commands,
-    suite: Option<Res<ActiveSuite>>,
-    shown: Res<ShownEnvironment>,
+    stages: Query<(&ActiveSuite, &ShownEnvironment)>,
     assets: Res<AssetServer>,
     cameras: Query<Entity, Added<SceneCamera>>,
+    stage_of: StageOf,
 ) {
-    let Some(suite) = suite else {
-        return;
-    };
-    let shown =
-        shown.name.as_ref().and_then(|name| suite.environments.iter().find(|e| &e.name == name));
-    let Some(environment) = shown else {
-        return;
-    };
     for camera in &cameras {
-        attach_maps(&mut commands, camera, &assets, &suite, environment);
+        let Some((suite, shown)) = stage_of.get(camera).and_then(|s| stages.get(s).ok()) else {
+            continue;
+        };
+        let shown = shown
+            .name
+            .as_ref()
+            .and_then(|name| suite.environments.iter().find(|e| &e.name == name));
+        if let Some(environment) = shown {
+            attach_maps(&mut commands, camera, &assets, suite, environment);
+        }
     }
 }
 

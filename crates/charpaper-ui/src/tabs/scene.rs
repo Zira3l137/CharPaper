@@ -2,9 +2,14 @@ use bevy::prelude::*;
 use charpaper_scene::ActiveLook;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterState;
+use charpaper_scene::Focused;
+use charpaper_scene::FocusedMut;
 use charpaper_scene::LookBackup;
 use charpaper_scene::Resolved;
 use charpaper_scene::RestoreLook;
+use charpaper_scene::focused_added;
+use charpaper_scene::focused_changed;
+use charpaper_scene::focused_has;
 use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
 use i18n_embed_fl::fl;
@@ -54,24 +59,24 @@ impl Plugin for SceneTabPlugin {
             Update,
             (
                 show_tab.run_if(
-                    resource_added::<ActiveSuite>
-                        .or_eager(new_panel.and_eager(resource_exists::<ActiveSuite>)),
+                    focused_added::<ActiveSuite>
+                        .or_eager(new_panel.and_eager(focused_has::<ActiveSuite>)),
                 ),
                 // Baking new maps changes the suite, which can make the Brightness row relevant.
                 show_rows.run_if(
-                    resource_changed::<CharacterState>
-                        .or_eager(resource_exists_and_changed::<ActiveSuite>)
+                    focused_changed::<CharacterState>
+                        .or_eager(focused_changed::<ActiveSuite>)
                         .or_eager(new_panel),
                 ),
                 show_values.run_if(
-                    resource_changed::<CharacterState>
-                        .or_eager(resource_exists_and_changed::<ActiveLook>)
+                    focused_changed::<CharacterState>
+                        .or_eager(focused_changed::<ActiveLook>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(resource_changed::<Held>)
-                        .or_eager(resource_exists_and_changed::<ActiveSuite>)
+                        .or_eager(focused_changed::<ActiveSuite>)
                         .or_eager(new_panel),
                 ),
-                show_restore.run_if(resource_changed::<LookBackup>.or_eager(new_panel)),
+                show_restore.run_if(focused_changed::<LookBackup>.or_eager(new_panel)),
             )
                 .chain(),
         );
@@ -133,7 +138,13 @@ pub(crate) fn page() -> impl Bundle {
 }
 
 // With a suite there is always something here: at least the image section.
-fn show_tab(suite: Res<ActiveSuite>, nodes: Query<(&mut Node, AnyOf<(&UiContainer, &UiButton)>)>) {
+fn show_tab(
+    suite: Focused<ActiveSuite>,
+    nodes: Query<(&mut Node, AnyOf<(&UiContainer, &UiButton)>)>,
+) {
+    let Some(suite) = suite.get() else {
+        return;
+    };
     for (mut node, element) in nodes {
         let shown = match element {
             (Some(UiContainer::Section(Section::Camera)), _) => !suite.cameras.is_empty(),
@@ -148,11 +159,11 @@ fn show_tab(suite: Res<ActiveSuite>, nodes: Query<(&mut Node, AnyOf<(&UiContaine
 
 // A row only shows when it would do something for the environment on screen.
 fn show_rows(
-    suite: Option<Res<ActiveSuite>>,
-    state: Res<CharacterState>,
+    suite: Focused<ActiveSuite>,
+    state: Focused<CharacterState>,
     mut nodes: Query<(&UiContainer, &mut Node)>,
 ) {
-    let Some(suite) = suite else {
+    let (Some(suite), Some(state)) = (suite.get(), state.get()) else {
         return;
     };
     let environment = state
@@ -171,7 +182,10 @@ fn show_rows(
     show_container(&mut nodes, UiContainer::Row(Cycler::LutStrength), luts);
 }
 
-fn show_restore(backup: Res<LookBackup>, buttons: Query<(&UiButton, &mut Node)>) {
+fn show_restore(backup: Focused<LookBackup>, buttons: Query<(&UiButton, &mut Node)>) {
+    let Some(backup) = backup.get() else {
+        return;
+    };
     for (button, mut node) in buttons {
         if *button == UiButton::RestoreLook {
             node.display = display(backup.exists);
@@ -180,17 +194,17 @@ fn show_restore(backup: Res<LookBackup>, buttons: Query<(&UiButton, &mut Node)>)
 }
 
 fn show_values(
-    suite: Option<Res<ActiveSuite>>,
-    state: Res<CharacterState>,
+    suite: Focused<ActiveSuite>,
+    state: Focused<CharacterState>,
     held: Res<Held>,
-    look: Option<Res<ActiveLook>>,
+    look: Focused<ActiveLook>,
     locale: Res<Locale>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
-    let Some(suite) = suite else {
+    let (Some(suite), Some(state)) = (suite.get(), state.get()) else {
         return;
     };
-    let look = look.map(|l| l.0.clone()).unwrap_or_default();
+    let look = look.get().map(|l| l.0.clone()).unwrap_or_default();
     let resolved = Resolved::new(&look, state.environment.as_deref());
     let orbit = fl!(locale, "camera-orbit");
     let off = on_off(&locale, false);
@@ -206,13 +220,13 @@ fn show_values(
         let next = match cycler {
             Cycler::Camera => {
                 let camera = held.current(Cycler::Camera, &state.camera);
-                choice(&camera_options(&suite), &camera, |camera| {
+                choice(&camera_options(suite), &camera, |camera| {
                     camera.clone().unwrap_or_else(|| orbit.clone())
                 })
             }
             Cycler::Environment => {
                 let environment = held.current(Cycler::Environment, &state.environment);
-                choice(&environment_options(&suite), &environment, name)
+                choice(&environment_options(suite), &environment, name)
             }
             // The stops look evenly spaced, so the bar follows them on a log scale too.
             Cycler::Brightness => {
@@ -256,7 +270,7 @@ fn show_values(
             }
             Cycler::Lut => {
                 let lut = look.post.lut.name().map(str::to_string);
-                choice(&lut_options(&suite), &lut, |lut| lut.clone().unwrap_or_else(|| off.clone()))
+                choice(&lut_options(suite), &lut, |lut| lut.clone().unwrap_or_else(|| off.clone()))
             }
             Cycler::LutStrength => {
                 number(percent(resolved.lut_strength), resolved.lut_strength, 0.0, 1.0)
@@ -295,16 +309,17 @@ fn on_step(
     event: On<Step>,
     time: Res<Time<Real>>,
     mut held: ResMut<Held>,
-    suite: Option<Res<ActiveSuite>>,
-    look: Option<ResMut<ActiveLook>>,
-    mut state: ResMut<CharacterState>,
+    suite: Focused<ActiveSuite>,
+    mut look: FocusedMut<ActiveLook>,
+    mut state: FocusedMut<CharacterState>,
 ) {
-    let Some(suite) = suite else {
+    let (Some(suite), Some(mut state)) = (suite.get(), state.get_mut()) else {
         return;
     };
+    let look = look.get_mut();
     match event.cycler {
         Cycler::Camera => {
-            let options = camera_options(&suite);
+            let options = camera_options(suite);
             let current = held.current(Cycler::Camera, &state.camera);
             if let Some(next) = step(&options, &current, &event) {
                 if let Some(choice) = held.hold(&event, next, time.elapsed()) {
@@ -313,7 +328,7 @@ fn on_step(
             }
         }
         Cycler::Environment => {
-            let options = environment_options(&suite);
+            let options = environment_options(suite);
             let current = held.current(Cycler::Environment, &state.environment);
             if let Some(next) = step(&options, &current, &event) {
                 if let Some(choice) = held.hold(&event, next, time.elapsed()) {
@@ -323,7 +338,7 @@ fn on_step(
         }
         Cycler::Lut => {
             if let Some(mut look) = look {
-                let options = lut_options(&suite);
+                let options = lut_options(suite);
                 let current = look.post.lut.name().map(str::to_string);
                 if let Some(next) = step(&options, &current, &event) {
                     look.post.lut.name = Some(next.unwrap_or_else(|| NO_LUT.to_string()));

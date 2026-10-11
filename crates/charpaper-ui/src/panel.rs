@@ -2,7 +2,10 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::percent;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
+use charpaper_scene::Focused;
 use charpaper_scene::ScreenUi;
+use charpaper_scene::focused_added;
+use charpaper_scene::focused_has;
 use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
@@ -36,8 +39,8 @@ impl Plugin for PanelPlugin {
             .add_systems(
                 Update,
                 show_suite_name.run_if(
-                    resource_added::<ActiveSuite>
-                        .or_eager(new_panel.and_eager(resource_exists::<ActiveSuite>)),
+                    focused_added::<ActiveSuite>
+                        .or_eager(new_panel.and_eager(focused_has::<ActiveSuite>)),
                 ),
             )
             .add_observer(on_click);
@@ -332,7 +335,10 @@ fn track_hover(parts: Query<&Hovered>, mut panel: ResMut<PanelHovered>) {
     panel.set_if_neq(PanelHovered(parts.iter().any(Hovered::get)));
 }
 
-fn show_suite_name(suite: Res<ActiveSuite>, mut status: Query<&mut Text, With<StatusText>>) {
+fn show_suite_name(suite: Focused<ActiveSuite>, mut status: Query<&mut Text, With<StatusText>>) {
+    let Some(suite) = suite.get() else {
+        return;
+    };
     for mut text in &mut status {
         text.0 = suite.name.clone();
     }

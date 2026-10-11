@@ -4,8 +4,12 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use charpaper_scene::ActiveLook;
 use charpaper_scene::ActiveSuite;
+use charpaper_scene::Focused;
+use charpaper_scene::FocusedMut;
 use charpaper_scene::LookBackup;
 use charpaper_scene::RestoreLook;
+use charpaper_scene::focused_added;
+use charpaper_scene::focused_changed;
 use charpaper_suite::Look;
 use charpaper_suite::Suite;
 
@@ -18,15 +22,10 @@ pub struct LookFilePlugin;
 impl Plugin for LookFilePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<UnsavedLook>()
-            .add_systems(Update, find_backup.run_if(resource_added::<ActiveSuite>))
+            .add_systems(Update, find_backup.run_if(focused_added::<ActiveSuite>))
             .add_systems(
                 Last,
-                (
-                    restore,
-                    note_change.run_if(resource_exists_and_changed::<ActiveLook>),
-                    save_settled,
-                )
-                    .chain(),
+                (restore, note_change.run_if(focused_changed::<ActiveLook>), save_settled).chain(),
             );
     }
 }
@@ -36,17 +35,23 @@ impl Plugin for LookFilePlugin {
 #[derive(Resource, Default)]
 struct UnsavedLook(Option<Unsaved<(PathBuf, Look)>>);
 
-fn find_backup(suite: Res<ActiveSuite>, mut backup: ResMut<LookBackup>) {
+fn find_backup(suite: Focused<ActiveSuite>, mut backup: FocusedMut<LookBackup>) {
+    let Some(suite) = suite.get() else {
+        return;
+    };
+    let Some(mut backup) = backup.get_mut() else {
+        return;
+    };
     backup.exists = charpaper_suite::has_backup(&suite.root);
 }
 
 fn note_change(
     time: Res<Time<Real>>,
-    suite: Option<Res<ActiveSuite>>,
-    look: Res<ActiveLook>,
+    suite: Focused<ActiveSuite>,
+    look: Focused<ActiveLook>,
     mut unsaved: ResMut<UnsavedLook>,
 ) {
-    let Some(suite) = suite else {
+    let (Some(suite), Some(look)) = (suite.get(), look.get()) else {
         return;
     };
     if let Some(left) = unsaved.0.take_if(|u| u.value.0 != suite.root) {
@@ -59,9 +64,9 @@ fn note_change(
 fn save_settled(
     time: Res<Time<Real>>,
     mut exits: MessageReader<AppExit>,
-    suite: Option<Res<ActiveSuite>>,
+    suite: Focused<ActiveSuite>,
     mut unsaved: ResMut<UnsavedLook>,
-    mut backup: ResMut<LookBackup>,
+    mut backup: FocusedMut<LookBackup>,
 ) {
     let quitting = exits.read().count() > 0;
     let now = time.elapsed();
@@ -69,7 +74,10 @@ fn save_settled(
         return;
     };
     let (root, look) = &due.value;
-    if write(root, look) && suite.is_some_and(|suite| &suite.root == root) {
+    if write(root, look)
+        && suite.get().is_some_and(|suite| &suite.root == root)
+        && let Some(mut backup) = backup.get_mut()
+    {
         backup.exists = true;
     }
 }
@@ -92,14 +100,16 @@ fn write(root: &Path, look: &Look) -> bool {
 
 fn restore(
     mut requests: MessageReader<RestoreLook>,
-    suite: Option<Res<ActiveSuite>>,
-    look: Option<ResMut<ActiveLook>>,
-    mut backup: ResMut<LookBackup>,
+    suite: Focused<ActiveSuite>,
+    mut look: FocusedMut<ActiveLook>,
+    mut backup: FocusedMut<LookBackup>,
 ) {
     if requests.read().count() == 0 {
         return;
     }
-    let (Some(suite), Some(mut look)) = (suite, look) else {
+    let (Some(suite), Some(mut look), Some(mut backup)) =
+        (suite.get(), look.get_mut(), backup.get_mut())
+    else {
         return;
     };
     if let Err(err) = charpaper_suite::restore_look(&suite.root) {

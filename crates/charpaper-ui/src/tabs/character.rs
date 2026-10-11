@@ -4,8 +4,13 @@ use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
+use charpaper_scene::Focused;
+use charpaper_scene::FocusedMut;
 use charpaper_scene::GazeSettings;
 use charpaper_scene::SkinObjects;
+use charpaper_scene::focused_added;
+use charpaper_scene::focused_changed;
+use charpaper_scene::focused_has;
 use i18n_embed_fl::fl;
 
 use crate::elements::Cycler;
@@ -30,40 +35,40 @@ impl Plugin for CharacterTabPlugin {
             Update,
             (
                 fill_outfits.run_if(
-                    resource_added::<ActiveSuite>
-                        .or_eager(new_panel.and_eager(resource_exists::<ActiveSuite>)),
+                    focused_added::<ActiveSuite>
+                        .or_eager(new_panel.and_eager(focused_has::<ActiveSuite>)),
                 ),
                 show_suite.run_if(
-                    resource_changed::<CharacterState>
+                    focused_changed::<CharacterState>
                         .or_eager(resource_changed::<AvailableSuites>)
                         .or_eager(resource_changed::<Held>)
                         .or_eager(new_panel),
                 ),
-                style_outfits.run_if(resource_changed::<CharacterState>.or_eager(new_panel)),
-                fill_objects.run_if(resource_changed::<SkinObjects>.or_eager(new_panel)),
+                style_outfits.run_if(focused_changed::<CharacterState>.or_eager(new_panel)),
+                fill_objects.run_if(focused_changed::<SkinObjects>.or_eager(new_panel)),
                 show_expression.run_if(
-                    resource_changed::<CharacterState>
-                        .or_eager(resource_changed::<Expressions>)
+                    focused_changed::<CharacterState>
+                        .or_eager(focused_changed::<Expressions>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(new_panel),
                 ),
                 show_gaze.run_if(
-                    resource_changed::<CharacterState>
-                        .or_eager(resource_changed::<GazeSettings>)
+                    focused_changed::<CharacterState>
+                        .or_eager(focused_changed::<GazeSettings>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(new_panel),
                 ),
                 show_objects.run_if(
-                    resource_changed::<CharacterState>
-                        .or_eager(resource_changed::<SkinObjects>)
+                    focused_changed::<CharacterState>
+                        .or_eager(focused_changed::<SkinObjects>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(new_panel),
                 ),
                 // or_eager keeps resource_added evaluated every frame. Skipped on a frame with a
                 // change, it would report the clips as new once more on the next one.
                 show_animation.run_if(
-                    resource_changed::<CharacterState>
-                        .or_eager(resource_added::<CharacterClips>)
+                    focused_changed::<CharacterState>
+                        .or_eager(focused_added::<CharacterClips>)
                         .or_eager(new_panel),
                 ),
             )
@@ -134,9 +139,12 @@ pub(crate) fn page() -> impl Bundle {
 // One tile per skin, rebuilt for each suite.
 fn fill_outfits(
     mut commands: Commands,
-    suite: Res<ActiveSuite>,
+    suite: Focused<ActiveSuite>,
     containers: Query<(Entity, &UiContainer, &mut Node)>,
 ) {
+    let Some(suite) = suite.get() else {
+        return;
+    };
     for (entity, container, mut node) in containers {
         match container {
             UiContainer::Section(Section::Outfit) => {
@@ -160,9 +168,12 @@ fn fill_outfits(
 }
 
 fn style_outfits(
-    state: Res<CharacterState>,
+    state: Focused<CharacterState>,
     tiles: Query<(&UiButton, &mut BaseBackground, &mut BackgroundColor, &mut BorderColor)>,
 ) {
+    let Some(state) = state.get() else {
+        return;
+    };
     for (button, mut base, mut background, mut border) in tiles {
         let UiButton::Skin(name) = button else {
             continue;
@@ -175,12 +186,15 @@ fn style_outfits(
 
 // Only with two or more suites to pick from.
 fn show_suite(
-    state: Res<CharacterState>,
+    state: Focused<CharacterState>,
     held: Res<Held>,
     available: Res<AvailableSuites>,
     mut sections: Query<(&UiContainer, &mut Node)>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
+    let Some(state) = state.get() else {
+        return;
+    };
     show_container(&mut sections, UiContainer::Section(Section::Suite), available.0.len() > 1);
     let options: Vec<Option<String>> = available.0.iter().cloned().map(Some).collect();
     let current = held.current(Cycler::Suite, &state.suite);
@@ -189,15 +203,21 @@ fn show_suite(
 
 // Expressions arrive with the worn skin's file, so this follows every skin change.
 fn show_expression(
-    state: Res<CharacterState>,
-    expressions: Res<Expressions>,
+    state: Focused<CharacterState>,
+    expressions: Focused<Expressions>,
     locale: Res<Locale>,
     mut sections: Query<(&UiContainer, &mut Node)>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
+    let Some(state) = state.get() else {
+        return;
+    };
+    let Some(expressions) = expressions.get() else {
+        return;
+    };
     let shown = !expressions.0.is_empty();
     show_container(&mut sections, UiContainer::Section(Section::Expression), shown);
-    let options = expression_options(&expressions);
+    let options = expression_options(expressions);
     let current = state.expression().unwrap_or_default().to_string();
     let neutral = fl!(locale, "expression-neutral");
     let label = |name: &String| if name.is_empty() { neutral.clone() } else { name.clone() };
@@ -211,25 +231,31 @@ fn expression_options(expressions: &Expressions) -> Vec<String> {
 
 // Only for a suite whose suite.toml says which bones follow the cursor.
 fn show_gaze(
-    suite: Option<Res<ActiveSuite>>,
-    settings: Res<GazeSettings>,
+    suite: Focused<ActiveSuite>,
+    settings: Focused<GazeSettings>,
     locale: Res<Locale>,
     mut sections: Query<(&UiContainer, &mut Node)>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
-    let shown = suite.is_some_and(|suite| suite.gaze.is_some());
+    let Some(settings) = settings.get() else {
+        return;
+    };
+    let shown = suite.get().is_some_and(|suite| suite.gaze.is_some());
     show_container(&mut sections, UiContainer::Section(Section::Gaze), shown);
     show(&mut rows, Cycler::FollowCursor, switch(&locale, settings.follow_cursor));
 }
 
 // Clips arrive a moment after the suite, once their files have loaded.
 fn show_animation(
-    state: Res<CharacterState>,
-    clips: Option<Res<CharacterClips>>,
+    state: Focused<CharacterState>,
+    clips: Focused<CharacterClips>,
     mut sections: Query<(&UiContainer, &mut Node)>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
-    let options = clips.as_deref().map(animation_options).unwrap_or_default();
+    let Some(state) = state.get() else {
+        return;
+    };
+    let options = clips.get().map(animation_options).unwrap_or_default();
     show_container(&mut sections, UiContainer::Section(Section::Animation), !options.is_empty());
     show(&mut rows, Cycler::Animation, choice(&options, &state.animation, name));
 }
@@ -241,12 +267,15 @@ fn animation_options(clips: &CharacterClips) -> Vec<Option<String>> {
 // One row per mesh object of the worn skin, in every panel.
 fn fill_objects(
     mut commands: Commands,
-    objects: Res<SkinObjects>,
+    objects: Focused<SkinObjects>,
     containers: Query<(Entity, &UiContainer)>,
 ) {
+    let Some(objects) = objects.get() else {
+        return;
+    };
     for (list, container) in &containers {
         if *container == UiContainer::ObjectList {
-            fill_object_list(&mut commands, list, &objects);
+            fill_object_list(&mut commands, list, objects);
         }
     }
 }
@@ -279,13 +308,19 @@ fn fill_object_list(commands: &mut Commands, list: Entity, objects: &SkinObjects
 
 // Only with two or more objects: switching off a skin's only object is switching off the skin.
 fn show_objects(
-    state: Res<CharacterState>,
-    objects: Res<SkinObjects>,
+    state: Focused<CharacterState>,
+    objects: Focused<SkinObjects>,
     locale: Res<Locale>,
     mut nodes: Query<(&UiContainer, &mut Node)>,
     buttons: Query<(&UiButton, &Children)>,
     mut texts: Query<&mut Text>,
 ) {
+    let Some(state) = state.get() else {
+        return;
+    };
+    let Some(objects) = objects.get() else {
+        return;
+    };
     let several = objects.names().count() > 1;
     show_container(&mut nodes, UiContainer::Section(Section::Parts), several);
 
@@ -306,8 +341,11 @@ fn show_objects(
 fn on_click(
     event: On<Pointer<Click>>,
     buttons: Query<&UiButton>,
-    mut state: ResMut<CharacterState>,
+    mut state: FocusedMut<CharacterState>,
 ) {
+    let Some(mut state) = state.get_mut() else {
+        return;
+    };
     let Ok(button) = buttons.get(event.entity) else {
         return;
     };
@@ -330,12 +368,18 @@ fn on_step(
     event: On<Step>,
     time: Res<Time<Real>>,
     mut held: ResMut<Held>,
-    clips: Option<Res<CharacterClips>>,
+    clips: Focused<CharacterClips>,
     available: Res<AvailableSuites>,
-    expressions: Res<Expressions>,
-    mut state: ResMut<CharacterState>,
-    mut gaze: ResMut<GazeSettings>,
+    expressions: Focused<Expressions>,
+    mut state: FocusedMut<CharacterState>,
+    mut gaze: FocusedMut<GazeSettings>,
 ) {
+    let (Some(expressions), Some(mut state), Some(mut gaze)) =
+        (expressions.get(), state.get_mut(), gaze.get_mut())
+    else {
+        return;
+    };
+    let clips = clips.get();
     match event.cycler {
         Cycler::FollowCursor => gaze.follow_cursor = flip(gaze.follow_cursor, &event),
         Cycler::Suite => {
@@ -351,7 +395,7 @@ fn on_step(
             let Some(skin) = state.skin.clone() else {
                 return;
             };
-            let options = expression_options(&expressions);
+            let options = expression_options(expressions);
             let current = state.expression().unwrap_or_default().to_string();
             if let Some(next) = step(&options, &current, &event) {
                 state.expressions.insert(skin, next);
@@ -361,7 +405,7 @@ fn on_step(
             let Some(clips) = clips else {
                 return;
             };
-            let options = animation_options(&clips);
+            let options = animation_options(clips);
             if let Some(next) = step(&options, &state.animation, &event) {
                 state.animation = next;
             }

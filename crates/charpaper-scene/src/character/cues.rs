@@ -13,10 +13,11 @@ use crate::assets::asset_path;
 use crate::character::CharacterClips;
 use crate::character::animation::Playing;
 use crate::config::SceneConfig;
+use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
-// The clip being followed, and how far it had got when last looked at.
-#[derive(Resource, Default)]
+// The clip a stage's character plays, and how far it had got when last looked at.
+#[derive(Component, Default)]
 pub(crate) struct CueClock {
     clip: Option<String>,
     // Its seek time and completed loops, or None before its first frame.
@@ -25,34 +26,67 @@ pub(crate) struct CueClock {
     sounds: BTreeMap<PathBuf, Handle<AudioSource>>,
 }
 
+// A sound one of a stage's clips played, by that stage.
 #[derive(Component)]
-pub(crate) struct CueSound;
+pub(crate) struct CueSound(Entity);
 
 // Follows the selected clip itself rather than using Bevy's animation events: those fire for
 // a clip fading out too, which would double every footstep during a crossfade.
 pub(crate) fn play_cues(
     mut commands: Commands,
-    suite: Option<Res<ActiveSuite>>,
-    clips: Option<Res<CharacterClips>>,
-    armature: Query<(&AnimationPlayer, &Playing)>,
+    mut stages: Query<(Entity, Option<&ActiveSuite>, Option<&CharacterClips>, &mut CueClock)>,
+    armatures: Query<(Entity, &AnimationPlayer, &Playing)>,
+    stage_of: StageOf,
     config: Res<SceneConfig>,
     hush: Res<Hush>,
     assets: Res<AssetServer>,
-    playing: Query<Entity, (With<CueSound>, Without<FadeOut>)>,
-    mut clock: ResMut<CueClock>,
+    playing: Query<(Entity, &CueSound), Without<FadeOut>>,
 ) {
-    let armature = armature.single().ok();
+    for (stage, suite, clips, mut clock) in &mut stages {
+        let armature =
+            armatures.iter().find(|(armature, ..)| stage_of.get(*armature) == Some(stage));
+        let armature = armature.map(|(_, player, playing)| (player, playing));
+        play_stage_cues(
+            &mut commands,
+            stage,
+            (suite, clips, armature),
+            &config,
+            &hush,
+            &assets,
+            &playing,
+            &mut clock,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn play_stage_cues(
+    commands: &mut Commands,
+    stage: Entity,
+    (suite, clips, armature): (
+        Option<&ActiveSuite>,
+        Option<&CharacterClips>,
+        Option<(&AnimationPlayer, &Playing)>,
+    ),
+    config: &SceneConfig,
+    hush: &Hush,
+    assets: &AssetServer,
+    playing: &Query<(Entity, &CueSound), Without<FadeOut>>,
+    clock: &mut CueClock,
+) {
     let current = armature.and_then(|(_, Playing(name))| name.clone());
-    let clip = current.as_deref().and_then(|name| clips.as_ref()?.get(name));
+    let clip = current.as_deref().and_then(|name| clips?.get(name));
 
     if clock.clip != current {
         // Every sound stops with the clip that played it, fading out with the animation.
         let fade = Duration::from_secs_f32(config.animation_crossfade_secs.max(0.0));
-        for entity in &playing {
-            commands.entity(entity).insert(FadeOut(fade));
+        for (entity, sound) in playing {
+            if sound.0 == stage {
+                commands.entity(entity).insert(FadeOut(fade));
+            }
         }
         *clock = CueClock { clip: current, ..default() };
-        if let (Some(clip), Some(suite)) = (clip, &suite) {
+        if let (Some(clip), Some(suite)) = (clip, suite) {
             for cue in &clip.cues {
                 let handle = assets.load(asset_path(suite, &cue.sound));
                 clock.sounds.insert(cue.sound.clone(), handle);
@@ -80,7 +114,7 @@ pub(crate) fn play_cues(
                 continue;
             };
             commands.spawn((
-                CueSound,
+                CueSound(stage),
                 Sound {
                     source: source.clone(),
                     layer: Layer::Character,

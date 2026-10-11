@@ -31,30 +31,34 @@ pub(crate) fn mark_ready(
     }
 }
 
+// A skin and its armature are both children of the same character.
+pub(crate) fn armature_beside<'a>(
+    skin: &ChildOf,
+    armatures: impl IntoIterator<Item = (Entity, &'a ChildOf)>,
+) -> Option<Entity> {
+    armatures.into_iter().find(|(_, parent)| parent.parent() == skin.parent()).map(|(a, _)| a)
+}
+
 pub(crate) fn bind_skins(
     mut commands: Commands,
-    armature: Query<Entity, (With<Armature>, With<InstanceReady>)>,
-    skins: Query<(Entity, &SkinRoot), (With<InstanceReady>, Without<Bound>)>,
+    armatures: Query<(Entity, &ChildOf), (With<Armature>, With<InstanceReady>)>,
+    skins: Query<(Entity, &SkinRoot, &ChildOf), (With<InstanceReady>, Without<Bound>)>,
     children: Query<&Children>,
     parents: Query<&ChildOf>,
     names: Query<&Name>,
     meshes: Query<(), With<Mesh3d>>,
     mut skinned: Query<&mut SkinnedMesh>,
 ) {
-    let Ok(armature) = armature.single() else {
-        return;
-    };
-    if skins.is_empty() {
-        return;
-    }
+    for (skin_root, skin, skin_parent) in &skins {
+        let Some(armature) = armature_beside(skin_parent, &armatures) else {
+            continue;
+        };
+        let bones: HashMap<&str, Entity> = children
+            .iter_descendants(armature)
+            .filter(|&e| !meshes.contains(e))
+            .filter_map(|e| names.get(e).ok().map(|name| (name.as_str(), e)))
+            .collect();
 
-    let bones: HashMap<&str, Entity> = children
-        .iter_descendants(armature)
-        .filter(|&e| !meshes.contains(e))
-        .filter_map(|e| names.get(e).ok().map(|name| (name.as_str(), e)))
-        .collect();
-
-    for (skin_root, skin) in &skins {
         let mut rebound = 0;
         let mut branches: HashMap<Entity, Entity> = HashMap::new();
 
