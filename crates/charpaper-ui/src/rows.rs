@@ -11,6 +11,7 @@ use crate::elements::Shown;
 use crate::elements::Step;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
+use crate::panel::new_panel;
 use crate::widgets::*;
 
 // Draws each row from what its tab says it shows. After Update, where the tabs work that out,
@@ -21,7 +22,11 @@ impl Plugin for RowsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<OpenPicker>().add_observer(on_click).add_systems(
             PostUpdate,
-            (draw_rows, draw_choices, show_open_list.run_if(resource_changed::<OpenPicker>))
+            (
+                draw_rows,
+                draw_choices,
+                show_open_list.run_if(resource_changed::<OpenPicker>.or_eager(new_panel)),
+            )
                 .before(UiSystems::Prepare),
         );
     }
@@ -62,32 +67,34 @@ fn draw_rows(
 
 // Segment buttons and list items are made again whenever the choices or the current one change.
 // They are a handful of buttons, and making them anew is simpler than working out which to
-// relabel or restyle.
+// relabel or restyle. Each row fills only the bar and list inside it: every panel has its own.
 fn draw_choices(
     mut commands: Commands,
-    rows: Query<(&UiContainer, &Shown), Changed<Shown>>,
-    bars: Query<(Entity, &SegmentBar)>,
-    lists: Query<(Entity, &PickerList)>,
+    rows: Query<(Entity, &UiContainer, &Shown), Changed<Shown>>,
+    children: Query<&Children>,
+    bars: Query<(), With<SegmentBar>>,
+    lists: Query<(), With<PickerList>>,
 ) {
-    for (container, shown) in &rows {
+    for (row, container, shown) in &rows {
         let (&UiContainer::Row(cycler), Shown::Choice { labels, current }) = (container, shown)
         else {
             continue;
         };
         let current = *current;
-        if let Some((bar, _)) = bars.iter().find(|(_, bar)| bar.0 == cycler) {
-            commands.entity(bar).despawn_children().with_children(|bar| {
-                for (index, label) in labels.iter().enumerate() {
-                    bar.spawn(option_button(label, cycler, index, current == Some(index)));
-                }
-            });
-        }
-        if let Some((list, _)) = lists.iter().find(|(_, list)| list.0 == cycler) {
-            commands.entity(list).despawn_children().with_children(|list| {
-                for (index, label) in labels.iter().enumerate() {
-                    list.spawn(list_item(label, cycler, index, current == Some(index)));
-                }
-            });
+        for part in children.iter_descendants(row) {
+            if bars.contains(part) {
+                commands.entity(part).despawn_children().with_children(|bar| {
+                    for (index, label) in labels.iter().enumerate() {
+                        bar.spawn(option_button(label, cycler, index, current == Some(index)));
+                    }
+                });
+            } else if lists.contains(part) {
+                commands.entity(part).despawn_children().with_children(|list| {
+                    for (index, label) in labels.iter().enumerate() {
+                        list.spawn(list_item(label, cycler, index, current == Some(index)));
+                    }
+                });
+            }
         }
     }
 }

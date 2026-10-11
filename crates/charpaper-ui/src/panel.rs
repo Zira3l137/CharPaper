@@ -2,6 +2,7 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::percent;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
+use charpaper_scene::ScreenUi;
 use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
@@ -17,28 +18,79 @@ use crate::theme::*;
 use crate::widgets::*;
 
 // The frame around the tabs: the button that brings the panel back, the header, the tab
-// bar and the footer.
+// bar and the footer. Every screen has a panel of its own. They all show and change the same
+// settings, and share which tab is open and what is folded.
 pub(crate) struct PanelPlugin;
 
 impl Plugin for PanelPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PanelHovered>()
-            .add_systems(Startup, spawn_panel)
+            .add_systems(PreUpdate, spawn_panels)
+            .add_observer(despawn_panel)
             .add_systems(Update, track_hover)
             .add_systems(
                 Update,
-                (show_panel, style_tabs, show_folds).run_if(resource_changed::<UiState>),
+                (show_panel, style_tabs, show_folds)
+                    .run_if(resource_changed::<UiState>.or_eager(new_panel)),
             )
-            .add_systems(Update, show_suite_name.run_if(resource_added::<ActiveSuite>))
+            .add_systems(
+                Update,
+                show_suite_name.run_if(
+                    resource_added::<ActiveSuite>
+                        .or_eager(new_panel.and(resource_exists::<ActiveSuite>)),
+                ),
+            )
             .add_observer(on_click);
     }
 }
 
-fn spawn_panel(mut commands: Commands, ui: Res<UiState>) {
+// The root of the panel on one screen.
+#[derive(Component)]
+pub(crate) struct Panel {
+    screen: Entity,
+}
+
+// For the systems that fill in what a panel shows. Each only runs on a change of what it
+// shows, which a panel made later, for a monitor switched on, would otherwise wait for.
+pub(crate) fn new_panel(panels: Query<(), Added<Panel>>) -> bool {
+    !panels.is_empty()
+}
+
+fn spawn_panels(
+    mut commands: Commands,
+    ui: Res<UiState>,
+    screens: Query<(Entity, &ScreenUi)>,
+    panels: Query<&Panel>,
+) {
+    for (screen, camera) in &screens {
+        if !panels.iter().any(|root| root.screen == screen) {
+            spawn_panel(&mut commands, &ui, screen, camera.0);
+        }
+    }
+}
+
+// Along with the screen, so the panel never outlives the camera it draws through.
+fn despawn_panel(
+    removed: On<Remove, ScreenUi>,
+    panels: Query<(Entity, &Panel)>,
+    mut commands: Commands,
+) {
+    for (panel, root) in &panels {
+        if root.screen == removed.entity {
+            commands.entity(panel).despawn();
+        }
+    }
+}
+
+fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: Entity) {
     // Spans the screen only to lay the panel out, so it lets the pointer through to the scene.
-    let screen =
-        (Node { width: percent(100), height: percent(100), ..default() }, Pickable::IGNORE);
-    commands.spawn(screen).with_children(|root| {
+    let root = (
+        Node { width: percent(100), height: percent(100), ..default() },
+        Pickable::IGNORE,
+        UiTargetCamera(camera),
+        Panel { screen },
+    );
+    commands.spawn(root).with_children(|root| {
         root.spawn((reveal_button(ui.is_menu_closed), Hovered::default())).with_hover_feedback();
         root.spawn(main_menu(ui.is_menu_closed))
             .with_children(|panel| {

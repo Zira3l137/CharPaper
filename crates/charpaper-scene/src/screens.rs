@@ -10,6 +10,10 @@ pub struct Screen {
     pub window: Entity,
 }
 
+// The camera a Screen's UI draws through, added once the scene has made it.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ScreenUi(pub Entity);
+
 // What the panel needs to show and change where the wallpaper is. The app fills these in and
 // acts on them; they live here only so the panel, which can't see the app, can reach them.
 

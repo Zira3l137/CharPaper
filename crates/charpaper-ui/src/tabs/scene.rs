@@ -18,6 +18,7 @@ use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::held::Held;
 use crate::locale::Locale;
+use crate::panel::new_panel;
 use crate::widgets::percent;
 use crate::widgets::*;
 
@@ -52,20 +53,25 @@ impl Plugin for SceneTabPlugin {
         app.add_observer(on_click).add_observer(on_step).add_systems(
             Update,
             (
-                show_tab.run_if(resource_added::<ActiveSuite>),
+                show_tab.run_if(
+                    resource_added::<ActiveSuite>
+                        .or_eager(new_panel.and(resource_exists::<ActiveSuite>)),
+                ),
                 // Baking new maps changes the suite, which can make the Brightness row relevant.
                 show_rows.run_if(
                     resource_changed::<CharacterState>
-                        .or_eager(resource_exists_and_changed::<ActiveSuite>),
+                        .or_eager(resource_exists_and_changed::<ActiveSuite>)
+                        .or_eager(new_panel),
                 ),
                 show_values.run_if(
                     resource_changed::<CharacterState>
                         .or_eager(resource_exists_and_changed::<ActiveLook>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(resource_changed::<Held>)
-                        .or_eager(resource_exists_and_changed::<ActiveSuite>),
+                        .or_eager(resource_exists_and_changed::<ActiveSuite>)
+                        .or_eager(new_panel),
                 ),
-                show_restore.run_if(resource_changed::<LookBackup>),
+                show_restore.run_if(resource_changed::<LookBackup>.or_eager(new_panel)),
             )
                 .chain(),
         );

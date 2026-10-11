@@ -16,6 +16,7 @@ use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::held::Held;
 use crate::locale::Locale;
+use crate::panel::new_panel;
 use crate::theme::*;
 use crate::widgets::*;
 
@@ -28,33 +29,42 @@ impl Plugin for CharacterTabPlugin {
         app.add_observer(on_click).add_observer(on_step).add_systems(
             Update,
             (
-                fill_outfits.run_if(resource_added::<ActiveSuite>),
+                fill_outfits.run_if(
+                    resource_added::<ActiveSuite>
+                        .or_eager(new_panel.and(resource_exists::<ActiveSuite>)),
+                ),
                 show_suite.run_if(
                     resource_changed::<CharacterState>
                         .or_eager(resource_changed::<AvailableSuites>)
-                        .or_eager(resource_changed::<Held>),
+                        .or_eager(resource_changed::<Held>)
+                        .or_eager(new_panel),
                 ),
-                style_outfits.run_if(resource_changed::<CharacterState>),
-                fill_objects.run_if(resource_changed::<SkinObjects>),
+                style_outfits.run_if(resource_changed::<CharacterState>.or_eager(new_panel)),
+                fill_objects.run_if(resource_changed::<SkinObjects>.or_eager(new_panel)),
                 show_expression.run_if(
                     resource_changed::<CharacterState>
                         .or_eager(resource_changed::<Expressions>)
-                        .or_eager(resource_changed::<Locale>),
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
                 ),
                 show_gaze.run_if(
                     resource_changed::<CharacterState>
                         .or_eager(resource_changed::<GazeSettings>)
-                        .or_eager(resource_changed::<Locale>),
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
                 ),
                 show_objects.run_if(
                     resource_changed::<CharacterState>
                         .or_eager(resource_changed::<SkinObjects>)
-                        .or_eager(resource_changed::<Locale>),
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
                 ),
                 // or_eager keeps resource_added evaluated every frame. Skipped on a frame with a
                 // change, it would report the clips as new once more on the next one.
                 show_animation.run_if(
-                    resource_changed::<CharacterState>.or_eager(resource_added::<CharacterClips>),
+                    resource_changed::<CharacterState>
+                        .or_eager(resource_added::<CharacterClips>)
+                        .or_eager(new_panel),
                 ),
             )
                 .chain(),
@@ -228,15 +238,20 @@ fn animation_options(clips: &CharacterClips) -> Vec<Option<String>> {
     clips.names().map(|name| Some(name.to_string())).collect()
 }
 
-// One row per mesh object of the worn skin.
+// One row per mesh object of the worn skin, in every panel.
 fn fill_objects(
     mut commands: Commands,
     objects: Res<SkinObjects>,
     containers: Query<(Entity, &UiContainer)>,
 ) {
-    let Some((list, _)) = containers.iter().find(|(_, c)| **c == UiContainer::ObjectList) else {
-        return;
-    };
+    for (list, container) in &containers {
+        if *container == UiContainer::ObjectList {
+            fill_object_list(&mut commands, list, &objects);
+        }
+    }
+}
+
+fn fill_object_list(commands: &mut Commands, list: Entity, objects: &SkinObjects) {
     commands.entity(list).despawn_children().with_children(|rows| {
         for name in objects.names() {
             rows.spawn((

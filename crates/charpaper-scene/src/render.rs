@@ -186,7 +186,7 @@ impl FogQuality {
 #[derive(Component)]
 pub(crate) struct ScreenParts {
     pub camera: Entity,
-    display: Entity,
+    pub display: Entity,
     pub image_node: Entity,
     image: Handle<Image>,
     pub material: Handle<SceneImage>,
@@ -231,7 +231,6 @@ pub(crate) fn screen_parts(
     materials: &mut Assets<SceneImage>,
     screen: &Screen,
     window: &Window,
-    primary: bool,
     settings: &RenderSettings,
 ) -> (impl Bundle, ScreenParts) {
     let size = scaled(window, settings);
@@ -240,19 +239,16 @@ pub(crate) fn screen_parts(
     let material =
         materials.add(SceneImage { image: image.clone(), settings: default(), lut: None });
 
-    let mut display = commands.spawn((
-        Name::new("Display camera"),
-        Camera2d,
-        Camera { order: 1, ..default() },
-        RenderTarget::Window(WindowRef::Entity(screen.window)),
-        Msaa::Off,
-        Tonemapping::None,
-    ));
-    // The panel draws through the camera marked default.
-    if primary {
-        display.insert(IsDefaultUiCamera);
-    }
-    let display = display.id();
+    let display = commands
+        .spawn((
+            Name::new("Display camera"),
+            Camera2d,
+            Camera { order: 1, ..default() },
+            RenderTarget::Window(WindowRef::Entity(screen.window)),
+            Msaa::Off,
+            Tonemapping::None,
+        ))
+        .id();
     let image_node = commands
         .spawn((
             Name::new("Scene image"),

@@ -13,6 +13,7 @@ use crate::elements::Shown;
 use crate::elements::Step;
 use crate::elements::UiContainer;
 use crate::locale::Locale;
+use crate::panel::new_panel;
 use crate::widgets::*;
 
 // How often and how finely the scene is drawn, and when to stop drawing it. Edits
@@ -23,8 +24,11 @@ impl Plugin for RenderTabPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_step).add_systems(
             Update,
-            show_values
-                .run_if(resource_changed::<RenderSettings>.or_eager(resource_changed::<Locale>)),
+            show_values.run_if(
+                resource_changed::<RenderSettings>
+                    .or_eager(resource_changed::<Locale>)
+                    .or_eager(new_panel),
+            ),
         );
     }
 }

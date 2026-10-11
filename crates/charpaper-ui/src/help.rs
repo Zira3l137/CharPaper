@@ -21,9 +21,11 @@ impl Plugin for HelpPlugin {
 fn show_help(
     locale: Res<Locale>,
     rows: Query<(&UiContainer, Ref<Hovered>)>,
+    new_lines: Query<(), Added<HelpText>>,
     mut lines: Query<&mut Text, With<HelpText>>,
 ) {
-    if !locale.is_changed() && !rows.iter().any(|(_, hovered)| hovered.is_changed()) {
+    let hover_moved = rows.iter().any(|(_, hovered)| hovered.is_changed());
+    if !locale.is_changed() && !hover_moved && new_lines.is_empty() {
         return;
     }
     let hovered = rows.iter().find_map(|(container, hovered)| match container {

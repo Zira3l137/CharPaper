@@ -14,6 +14,7 @@ use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::locale::Languages;
 use crate::locale::Locale;
+use crate::panel::new_panel;
 use crate::theme::*;
 use crate::widgets::percent;
 use crate::widgets::*;
@@ -29,13 +30,17 @@ impl Plugin for SystemTabPlugin {
         app.add_observer(on_step).add_observer(on_click).add_systems(
             Update,
             (
-                show_language
-                    .run_if(resource_changed::<UiState>.or_eager(resource_changed::<Locale>)),
-                show_volumes.run_if(resource_changed::<Volumes>),
+                show_language.run_if(
+                    resource_changed::<UiState>
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
+                ),
+                show_volumes.run_if(resource_changed::<Volumes>.or_eager(new_panel)),
                 (fill_monitors, show_monitors).chain().run_if(
                     resource_changed::<ScreenSettings>
                         .or_eager(resource_changed::<Monitors>)
-                        .or_eager(resource_changed::<Locale>),
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
                 ),
             ),
         );

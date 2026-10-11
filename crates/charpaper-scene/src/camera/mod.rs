@@ -6,7 +6,6 @@ use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
-use bevy::window::PrimaryWindow;
 
 pub(crate) use rig::ShownRig;
 pub(crate) use rig::follow_selected;
@@ -22,6 +21,7 @@ use crate::render::SceneImage;
 use crate::render::ScreenParts;
 use crate::render::screen_parts;
 use crate::screens::Screen;
+use crate::screens::ScreenUi;
 use crate::suite::ActiveSuite;
 
 const ORBIT_FOCUS: [f32; 3] = [0.0, 1.0, 0.0];
@@ -79,21 +79,14 @@ fn spawn_screen_cameras(
     mut materials: ResMut<Assets<SceneImage>>,
     view: Single<Entity, With<SceneView>>,
     screens: Query<(Entity, &Screen), Without<ScreenParts>>,
-    windows: Query<(&Window, Has<PrimaryWindow>)>,
+    windows: Query<&Window>,
 ) {
     for (entity, screen) in &screens {
-        let Ok((window, primary)) = windows.get(screen.window) else {
+        let Ok(window) = windows.get(screen.window) else {
             continue;
         };
-        let (target, mut parts) = screen_parts(
-            &mut commands,
-            &mut images,
-            &mut materials,
-            screen,
-            window,
-            primary,
-            &settings,
-        );
+        let (target, mut parts) =
+            screen_parts(&mut commands, &mut images, &mut materials, screen, window, &settings);
         // Only the pointer over the scene steers the orbit, so anything drawn on top of the
         // scene, such as the settings panel, keeps its scrolls and drags to itself.
         commands
@@ -110,7 +103,7 @@ fn spawn_screen_cameras(
                 ChildOf(*view),
             ))
             .id();
-        commands.entity(entity).insert(parts);
+        commands.entity(entity).insert((ScreenUi(parts.display), parts));
     }
 }
 
