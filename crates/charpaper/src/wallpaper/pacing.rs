@@ -6,9 +6,12 @@ use bevy::winit::UpdateMode;
 use bevy::winit::WinitSettings;
 use charpaper_audio::Hush;
 use charpaper_scene::RenderSettings;
+use charpaper_scene::Screen;
+use charpaper_scene::Unseen;
 use charpaper_ui::PanelHovered;
 
 use crate::wallpaper::Backend;
+use crate::wallpaper::key;
 
 const PAUSED_WAKE: Duration = Duration::from_secs(1);
 const ACTIVITY_POLL: Duration = Duration::from_secs(1);
@@ -39,8 +42,12 @@ impl Plugin for PacingPlugin {
     }
 }
 
+// A covered monitor's screen rests on its own; only when every one is covered does the whole
+// app pause.
 fn poll_activity(
     _main_thread: NonSendMarker,
+    mut commands: Commands,
+    screens: Query<(Entity, &Screen, Has<Unseen>)>,
     time: Res<Time<Real>>,
     mut since: Local<Duration>,
     mut backend: ResMut<Backend>,
@@ -54,11 +61,22 @@ fn poll_activity(
     *since = Duration::ZERO;
 
     let activity = backend.0.activity();
+    let mut all_covered = !screens.is_empty();
+    for (entity, screen, was_unseen) in &screens {
+        let unseen = settings.pause_when_covered && activity.covered.contains(&key(screen.window));
+        all_covered &= unseen;
+        if unseen != was_unseen {
+            match unseen {
+                true => commands.entity(entity).insert(Unseen),
+                false => commands.entity(entity).remove::<Unseen>(),
+            };
+        }
+    }
     let reason = if activity.away {
         Some("nobody is at the screen")
     } else if settings.pause_when_fullscreen && activity.fullscreen_app {
         Some("an app is fullscreen")
-    } else if settings.pause_when_covered && !activity.covered.is_empty() {
+    } else if all_covered {
         Some("the desktop is covered")
     } else if settings.pause_on_battery && activity.on_battery {
         Some("running on battery")

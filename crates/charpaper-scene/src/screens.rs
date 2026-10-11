@@ -10,6 +10,10 @@ pub struct Screen {
     pub window: Entity,
 }
 
+// Nobody can see this Screen now, so its camera rests while the others go on.
+#[derive(Component, Debug)]
+pub struct Unseen;
+
 // The camera a Screen's UI draws through, added once the scene has made it.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct ScreenUi(pub Entity);

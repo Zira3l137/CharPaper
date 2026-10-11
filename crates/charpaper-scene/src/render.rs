@@ -19,6 +19,7 @@ use serde::Serialize;
 use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::screens::Screen;
+use crate::screens::Unseen;
 
 pub(crate) struct RenderPlugin;
 
@@ -31,6 +32,7 @@ impl Plugin for RenderPlugin {
             .add_systems(
                 Update,
                 (
+                    rest_unseen,
                     fit_scene_targets,
                     apply_anti_aliasing
                         .run_if(resource_changed::<RenderSettings>.or_eager(new_camera)),
@@ -310,6 +312,25 @@ pub(crate) fn fit_scene_targets(
         }
         if let Some(material) = materials.get_mut(&parts.material) {
             let _ = material.into_inner();
+        }
+    }
+}
+
+fn rest_unseen(
+    screens: Query<(&ScreenParts, Has<Unseen>)>,
+    mut cameras: Query<(&mut Camera, Option<&mut TemporalAntiAliasing>), With<SceneCamera>>,
+) {
+    for (parts, unseen) in &screens {
+        let Ok((mut camera, taa)) = cameras.get_mut(parts.camera) else {
+            continue;
+        };
+        if camera.is_active != unseen {
+            continue;
+        }
+        camera.is_active = !unseen;
+        // Its past frames show the scene as it was before it rested.
+        if !unseen && let Some(mut taa) = taa {
+            taa.reset = true;
         }
     }
 }

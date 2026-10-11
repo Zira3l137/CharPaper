@@ -44,6 +44,7 @@ pub use screens::Monitors;
 pub use screens::Screen;
 pub use screens::ScreenSettings;
 pub use screens::ScreenUi;
+pub use screens::Unseen;
 pub use state::CharacterState;
 pub use state::Picks;
 pub use suite::ActiveSuite;
