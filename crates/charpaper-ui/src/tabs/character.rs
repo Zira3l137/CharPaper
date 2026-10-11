@@ -31,7 +31,7 @@ impl Plugin for CharacterTabPlugin {
             (
                 fill_outfits.run_if(
                     resource_added::<ActiveSuite>
-                        .or_eager(new_panel.and(resource_exists::<ActiveSuite>)),
+                        .or_eager(new_panel.and_eager(resource_exists::<ActiveSuite>)),
                 ),
                 show_suite.run_if(
                     resource_changed::<CharacterState>

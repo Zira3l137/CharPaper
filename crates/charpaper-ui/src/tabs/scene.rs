@@ -55,7 +55,7 @@ impl Plugin for SceneTabPlugin {
             (
                 show_tab.run_if(
                     resource_added::<ActiveSuite>
-                        .or_eager(new_panel.and(resource_exists::<ActiveSuite>)),
+                        .or_eager(new_panel.and_eager(resource_exists::<ActiveSuite>)),
                 ),
                 // Baking new maps changes the suite, which can make the Brightness row relevant.
                 show_rows.run_if(

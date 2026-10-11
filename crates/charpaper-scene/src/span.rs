@@ -1,5 +1,4 @@
 use bevy::anti_alias::taa::TemporalAntiAliasing;
-use bevy::camera::CameraProjection;
 use bevy::camera::SubCameraView;
 use bevy::camera::primitives::Frustum;
 use bevy::camera::visibility::VisibilitySystems;
