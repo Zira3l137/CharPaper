@@ -39,6 +39,13 @@ pub struct WallpaperConfig {
     pub frames_between_attempts: u32,
 }
 
+impl WallpaperConfig {
+    // Whether windows go behind the desktop icons at all, rather than staying ordinary ones.
+    pub fn attaches(&self) -> bool {
+        self.enabled && !self.dry_run && self.strategy != AttachStrategy::None
+    }
+}
+
 impl Default for WallpaperConfig {
     fn default() -> Self {
         Self {

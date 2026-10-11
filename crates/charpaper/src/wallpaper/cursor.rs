@@ -5,7 +5,7 @@ use charpaper_scene::CursorAt;
 use charpaper_scene::CursorPosition;
 
 use crate::wallpaper::Backend;
-use crate::wallpaper::monitors::Target;
+use crate::wallpaper::windows::OnMonitor;
 
 pub(crate) struct CursorPlugin;
 
@@ -16,22 +16,38 @@ impl Plugin for CursorPlugin {
 }
 
 // The backend knows where the cursor is anywhere on screen. Bevy knows only while it is over
-// the window, and never once the window is attached, since the desktop keeps its input.
+// one of the windows, and never once they are attached, since the desktop keeps their input.
 fn track_cursor(
     _main_thread: NonSendMarker,
     mut backend: ResMut<Backend>,
-    windows: Query<(Entity, &Window), With<PrimaryWindow>>,
-    target: Res<Target>,
+    windows: Query<(Entity, &Window, Option<&OnMonitor>)>,
+    primary: Query<Entity, With<PrimaryWindow>>,
+    mut last: Local<Option<Entity>>,
     mut cursor: ResMut<CursorPosition>,
 ) {
-    let Ok((window, settings)) = windows.single() else {
-        cursor.set_if_neq(CursorPosition(None));
-        return;
+    let at = match backend.0.cursor_position() {
+        Some(at) => {
+            let placed = |window: Entity| windows.get(window).ok()?.2.map(|on| on.0.area);
+            let over = windows
+                .iter()
+                .find(|(_, _, on)| on.is_some_and(|on| on.0.area.contains(at)))
+                .map(|(window, _, _)| window);
+            // Off our monitors, measured from the window it was over last, so the character
+            // keeps looking that way.
+            let window = over
+                .or(*last)
+                .filter(|&window| placed(window).is_some())
+                .or_else(|| primary.iter().next());
+            *last = window;
+            window.and_then(|window| {
+                let area = placed(window)?;
+                let position = IVec2::from_array(at) - IVec2::new(area.x, area.y);
+                Some(CursorAt { window, position: position.as_vec2() })
+            })
+        }
+        None => windows.iter().find_map(|(window, settings, _)| {
+            Some(CursorAt { window, position: settings.physical_cursor_position()? })
+        }),
     };
-    let on_screen = backend.0.cursor_position().zip(target.0.as_ref()).map(|(at, monitor)| {
-        let corner = IVec2::new(monitor.area.x, monitor.area.y);
-        (IVec2::from_array(at) - corner).as_vec2()
-    });
-    let position = on_screen.or_else(|| settings.physical_cursor_position());
-    cursor.set_if_neq(CursorPosition(position.map(|position| CursorAt { window, position })));
+    cursor.set_if_neq(CursorPosition(at));
 }

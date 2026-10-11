@@ -13,16 +13,24 @@ pub struct Screen {
 // What the panel needs to show and change where the wallpaper is. The app fills these in and
 // acts on them; they live here only so the panel, which can't see the app, can reach them.
 
-// Where the wallpaper goes. None is the primary monitor, whichever one that is at the time.
-// A chosen monitor that is unplugged stays chosen: the primary one stands in until it is back.
+// Which monitors the wallpaper shows on. None chosen is the primary monitor alone, whichever
+// one that is at the time. A chosen monitor that is unplugged stays chosen and comes back with
+// its monitor; while none of the chosen ones is connected, the primary one stands in.
 #[derive(Resource, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ScreenSettings {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub monitor: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub monitors: Vec<ChosenMonitor>,
 }
 
-// The monitors connected now.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChosenMonitor {
+    pub id: String,
+    // Only to name it in the panel while it is unplugged.
+    pub name: String,
+}
+
+// The monitors connected now, in the order they sit on the desk, left to right.
 #[derive(Resource, Default, Debug, Clone, PartialEq)]
 pub struct Monitors(pub Vec<MonitorEntry>);
 
@@ -32,6 +40,8 @@ pub struct MonitorEntry {
     pub name: String,
     pub width: u32,
     pub height: u32,
+    // The wallpaper is on it now.
+    pub shown: bool,
 }
 
 impl Monitors {

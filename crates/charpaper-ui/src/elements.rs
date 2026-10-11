@@ -12,6 +12,7 @@ pub(crate) enum UiContainer {
     Body(Section),
     OutfitGrid,
     ObjectList,
+    MonitorList,
     // The row a cycler sits in, so a single row can be hidden.
     Row(Cycler),
 }
@@ -113,7 +114,6 @@ pub(crate) enum Cycler {
     PauseFullscreen,
     PauseCovered,
     PauseBattery,
-    Monitor,
     MasterVolume,
     MusicVolume,
     AmbienceVolume,
@@ -161,6 +161,8 @@ pub(crate) enum UiButton {
     Open(Cycler),
     Skin(String),
     Object(String),
+    // Shows the wallpaper on the monitor with this id, or stops showing it there.
+    Monitor(String),
     Previous(Cycler),
     Next(Cycler),
     RestoreLook,

@@ -51,6 +51,13 @@ pub struct DesktopMonitor {
     pub primary: bool,
 }
 
+impl ScreenArea {
+    pub fn contains(&self, [x, y]: [i32; 2]) -> bool {
+        let (right, bottom) = (self.x + self.width as i32, self.y + self.height as i32);
+        (self.x..right).contains(&x) && (self.y..bottom).contains(&y)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct AttachOutcome {
     pub strategy_used: Option<AttachStrategy>,

@@ -19,9 +19,10 @@ const POLL: Duration = Duration::from_secs(1);
 #[derive(Resource, Default, PartialEq)]
 pub(crate) struct Layout(pub Vec<DesktopMonitor>);
 
-// The monitor the wallpaper belongs on. None only while no monitor is known yet.
+// The monitors the wallpaper belongs on, the primary one first when it is among them. Empty
+// only while no monitor is known yet.
 #[derive(Resource, Default, PartialEq)]
-pub(crate) struct Target(pub Option<DesktopMonitor>);
+pub(crate) struct Targets(pub Vec<DesktopMonitor>);
 
 pub(crate) struct MonitorsPlugin {
     pub screen: ScreenSettings,
@@ -32,12 +33,12 @@ impl Plugin for MonitorsPlugin {
         app.insert_resource(self.screen.clone())
             .init_resource::<Monitors>()
             .init_resource::<Layout>()
-            .init_resource::<Target>()
+            .init_resource::<Targets>()
             .add_systems(
                 PreUpdate,
                 (
                     read_layout,
-                    pick_target.run_if(
+                    pick_targets.run_if(
                         resource_changed::<Layout>.or_eager(resource_changed::<ScreenSettings>),
                     ),
                 )
@@ -53,7 +54,6 @@ fn read_layout(
     mut backend: ResMut<Backend>,
     bevy_monitors: Query<(&Monitor, Has<PrimaryMonitor>)>,
     mut layout: ResMut<Layout>,
-    mut listed: ResMut<Monitors>,
 ) {
     let now = time.elapsed();
     // Every frame until something is found: attaching waits on it.
@@ -67,16 +67,7 @@ fn read_layout(
         monitors =
             bevy_monitors.iter().map(|(monitor, primary)| from_bevy(monitor, primary)).collect();
     }
-    let entries = monitors
-        .iter()
-        .map(|m| MonitorEntry {
-            id: m.id.clone(),
-            name: m.name.clone(),
-            width: m.area.width,
-            height: m.area.height,
-        })
-        .collect();
-    listed.set_if_neq(Monitors(entries));
+    monitors.sort_by_key(|m| (m.area.x, m.area.y));
     layout.set_if_neq(Layout(monitors));
 }
 
@@ -98,18 +89,42 @@ fn from_bevy(monitor: &Monitor, primary: bool) -> DesktopMonitor {
     }
 }
 
-fn pick_target(layout: Res<Layout>, screen: Res<ScreenSettings>, mut target: ResMut<Target>) {
-    let chosen = screen.monitor.as_deref().and_then(|id| layout.0.iter().find(|m| m.id == id));
-    let primary = || layout.0.iter().find(|m| m.primary).or(layout.0.first());
-    let next = chosen.or_else(primary).cloned();
-
-    let id = |monitor: &Option<DesktopMonitor>| monitor.as_ref().map(|m| m.id.clone());
-    if let Some(monitor) = next.as_ref().filter(|_| id(&next) != id(&target.0)) {
-        let area = monitor.area;
-        info!("the wallpaper goes on {} ({}×{})", monitor.name, area.width, area.height);
-        if screen.monitor.is_some() && chosen.is_none() {
-            info!("the chosen monitor isn't connected; the primary one stands in until it is");
+fn pick_targets(
+    layout: Res<Layout>,
+    screen: Res<ScreenSettings>,
+    mut targets: ResMut<Targets>,
+    mut listed: ResMut<Monitors>,
+) {
+    let chosen = |m: &&DesktopMonitor| screen.monitors.iter().any(|c| c.id == m.id);
+    let mut next: Vec<DesktopMonitor> = layout.0.iter().filter(chosen).cloned().collect();
+    if next.is_empty() {
+        next.extend(layout.0.iter().find(|m| m.primary).or(layout.0.first()).cloned());
+        if !screen.monitors.is_empty() && !next.is_empty() {
+            info!("none of the chosen monitors is connected; the primary one stands in");
         }
     }
-    target.set_if_neq(Target(next));
+    // The primary window goes first, so it stays where it is for as long as it can.
+    next.sort_by_key(|m| !m.primary);
+
+    let ids = |list: &[DesktopMonitor]| list.iter().map(|m| m.id.clone()).collect::<Vec<_>>();
+    if ids(&next) != ids(&targets.0) {
+        let names: Vec<String> = next
+            .iter()
+            .map(|m| format!("{} ({}×{})", m.name, m.area.width, m.area.height))
+            .collect();
+        info!("the wallpaper shows on {}", names.join(", "));
+    }
+    let entries = layout
+        .0
+        .iter()
+        .map(|m| MonitorEntry {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            width: m.area.width,
+            height: m.area.height,
+            shown: next.iter().any(|t| t.id == m.id),
+        })
+        .collect();
+    listed.set_if_neq(Monitors(entries));
+    targets.set_if_neq(Targets(next));
 }

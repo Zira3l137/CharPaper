@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use charpaper_audio::Volumes;
+use charpaper_scene::ChosenMonitor;
 use charpaper_scene::Monitors;
 use charpaper_scene::ScreenSettings;
 use i18n_embed_fl::fl;
@@ -9,9 +10,11 @@ use crate::elements::Cycler;
 use crate::elements::Section;
 use crate::elements::Shown;
 use crate::elements::Step;
+use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::locale::Languages;
 use crate::locale::Locale;
+use crate::theme::*;
 use crate::widgets::percent;
 use crate::widgets::*;
 
@@ -23,13 +26,13 @@ pub(crate) struct SystemTabPlugin;
 
 impl Plugin for SystemTabPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_step).add_systems(
+        app.add_observer(on_step).add_observer(on_click).add_systems(
             Update,
             (
                 show_language
                     .run_if(resource_changed::<UiState>.or_eager(resource_changed::<Locale>)),
                 show_volumes.run_if(resource_changed::<Volumes>),
-                show_monitor.run_if(
+                (fill_monitors, show_monitors).chain().run_if(
                     resource_changed::<ScreenSettings>
                         .or_eager(resource_changed::<Monitors>)
                         .or_eager(resource_changed::<Locale>),
@@ -44,7 +47,11 @@ pub(crate) fn page() -> impl Bundle {
         shown_section(
             |l| fl!(l, "section-display"),
             Section::Display,
-            picker(|l| fl!(l, "label-monitor"), Cycler::Monitor),
+            (
+                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default() },
+                Pickable::IGNORE,
+                UiContainer::MonitorList,
+            ),
         ),
         shown_section(
             |l| fl!(l, "section-sound"),
@@ -75,29 +82,118 @@ fn show_volumes(volumes: Res<Volumes>, mut rows: Query<(&UiContainer, &mut Shown
     }
 }
 
-fn show_monitor(
+// One row per connected monitor, left to right as they stand, and one for each chosen monitor
+// that is unplugged, so it can be switched off while it is away. Made again only when the rows
+// themselves change, or for a list still empty; switching one on or off only relabels its
+// button.
+fn fill_monitors(
+    mut commands: Commands,
     screen: Res<ScreenSettings>,
     monitors: Res<Monitors>,
     locale: Res<Locale>,
-    mut rows: Query<(&UiContainer, &mut Shown)>,
+    lists: Query<(Entity, &UiContainer, Option<&Children>)>,
+    mut made: Local<Vec<(String, String)>>,
 ) {
-    let label = |option: &Option<String>| match option {
-        None => fl!(locale, "monitor-primary"),
-        Some(id) => match monitors.get(id) {
-            Some(m) => format!("{} · {}×{}", m.name, m.width, m.height),
-            None => fl!(locale, "monitor-missing"),
-        },
-    };
-    let options = monitor_options(&monitors, &screen);
-    show(&mut rows, Cycler::Monitor, choice(&options, &screen.monitor, label));
+    let missing = fl!(locale, "monitor-missing");
+    let connected =
+        monitors.0.iter().map(|m| (m.id.clone(), format!("{} · {}×{}", m.name, m.width, m.height)));
+    let unplugged = screen
+        .monitors
+        .iter()
+        .filter(|chosen| monitors.get(&chosen.id).is_none())
+        .map(|chosen| (chosen.id.clone(), format!("{} · {missing}", chosen.name)));
+    let rows: Vec<(String, String)> = connected.chain(unplugged).collect();
+    let changed = *made != rows;
+    for (list, container, children) in &lists {
+        let filled = children.is_some_and(|c| !c.is_empty());
+        if *container != UiContainer::MonitorList || (filled && !changed) {
+            continue;
+        }
+        commands.entity(list).despawn_children().with_children(|list| {
+            for (id, label_text) in &rows {
+                list.spawn((
+                    Node {
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(12.0),
+                        height: Val::Px(32.0),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                    children![
+                        (
+                            Node { flex_grow: 1.0, min_width: Val::ZERO, ..default() },
+                            Pickable::IGNORE,
+                            children![label(label_text, BODY_SIZE, TEXT_LABEL)],
+                        ),
+                        button("-")
+                            .node(|n| n.width = Val::Px(56.0))
+                            .build(UiButton::Monitor(id.clone())),
+                    ],
+                ));
+            }
+        });
+    }
+    *made = rows;
 }
 
-// The primary monitor first, then every connected one. A chosen monitor that is unplugged
-// comes last, so the row still shows it was chosen.
-fn monitor_options(monitors: &Monitors, screen: &ScreenSettings) -> Vec<Option<String>> {
-    let connected = monitors.0.iter().map(|m| Some(m.id.clone()));
-    let missing = screen.monitor.clone().filter(|id| monitors.get(id).is_none());
-    std::iter::once(None).chain(connected).chain(missing.map(Some)).collect()
+fn show_monitors(
+    screen: Res<ScreenSettings>,
+    monitors: Res<Monitors>,
+    locale: Res<Locale>,
+    buttons: Query<(&UiButton, &Children)>,
+    mut texts: Query<&mut Text>,
+) {
+    for (button, children) in &buttons {
+        let UiButton::Monitor(id) = button else {
+            continue;
+        };
+        let text = on_off(&locale, shows_on(&screen, &monitors, id));
+        for &child in &**children {
+            if let Ok(mut label) = texts.get_mut(child) {
+                label.0.clone_from(&text);
+            }
+        }
+    }
+}
+
+// An unplugged monitor counts as on while it is chosen: switching it off unchooses it.
+fn shows_on(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> bool {
+    match monitors.get(id) {
+        Some(monitor) => monitor.shown,
+        None => screen.monitors.iter().any(|chosen| chosen.id == id),
+    }
+}
+
+fn on_click(
+    event: On<Pointer<Click>>,
+    buttons: Query<&UiButton>,
+    monitors: Res<Monitors>,
+    mut screen: ResMut<ScreenSettings>,
+) {
+    let Ok(UiButton::Monitor(id)) = buttons.get(event.entity) else {
+        return;
+    };
+    // Nothing chosen yet means the monitors showing it now, so the first click builds on them.
+    let mut chosen: Vec<ChosenMonitor> = match screen.monitors.is_empty() {
+        true => monitors
+            .0
+            .iter()
+            .filter(|m| m.shown)
+            .map(|m| ChosenMonitor { id: m.id.clone(), name: m.name.clone() })
+            .collect(),
+        false => screen.monitors.clone(),
+    };
+    if shows_on(&screen, &monitors, id) {
+        chosen.retain(|c| &c.id != id);
+        // The last connected monitor showing it stays on: a wallpaper on no monitor is none.
+        let connected_left = chosen.iter().any(|c| monitors.get(&c.id).is_some());
+        if monitors.get(id).is_some() && !connected_left {
+            return;
+        }
+    } else if let Some(monitor) = monitors.get(id) {
+        chosen.push(ChosenMonitor { id: monitor.id.clone(), name: monitor.name.clone() });
+    }
+    screen.monitors = chosen;
 }
 
 fn show_language(
@@ -121,19 +217,10 @@ fn options(languages: &Languages) -> Vec<Option<String>> {
 fn on_step(
     event: On<Step>,
     languages: Res<Languages>,
-    monitors: Res<Monitors>,
-    mut screen: ResMut<ScreenSettings>,
     mut ui: ResMut<UiState>,
     mut volumes: ResMut<Volumes>,
 ) {
     let volume = match event.cycler {
-        Cycler::Monitor => {
-            let options = monitor_options(&monitors, &screen);
-            if let Some(next) = step(&options, &screen.monitor, &event) {
-                screen.set_if_neq(ScreenSettings { monitor: next });
-            }
-            return;
-        }
         Cycler::Language => {
             let options = options(&languages);
             if let Some(next) = step(&options, &ui.language, &event) {

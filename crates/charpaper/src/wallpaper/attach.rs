@@ -1,6 +1,5 @@
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use bevy::window::RawHandleWrapper;
 use bevy::winit::EventLoopProxyWrapper;
 use charpaper_wallpaper::AttachStrategy;
@@ -18,24 +17,31 @@ use crate::wallpaper::input::PointerOnDesktop;
 use crate::wallpaper::input::PointerSourceResource;
 use crate::wallpaper::key;
 use crate::wallpaper::monitors::Layout;
-use crate::wallpaper::monitors::Target;
+use crate::wallpaper::windows::OnMonitor;
+use crate::wallpaper::windows::assign_windows;
 
-#[derive(Resource, Default)]
-struct AttachState {
-    finished: bool,
-    attached: bool,
-    attempts: u32,
-    countdown: u32,
+// How far attaching a window got.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Attachment {
+    Pending { attempts: u32, countdown: u32 },
+    // Behind the desktop icons.
+    Attached,
+    // An ordinary window, because attaching is off or kept failing.
+    Loose,
+}
+
+impl Default for Attachment {
+    fn default() -> Self {
+        Self::Pending { attempts: 0, countdown: 0 }
+    }
 }
 
 pub(crate) struct AttachPlugin;
 
 impl Plugin for AttachPlugin {
     fn build(&self, app: &mut App) {
-        let moved = resource_changed::<Target>.or_eager(resource_changed::<Layout>);
-        app.init_resource::<AttachState>()
-            .add_systems(Startup, probe_desktop)
-            .add_systems(Update, (attach_window, follow_target.run_if(moved)).chain());
+        app.add_systems(Startup, probe_desktop)
+            .add_systems(Update, (attach_windows, place_windows).chain().after(assign_windows));
     }
 }
 
@@ -57,94 +63,91 @@ fn probe_desktop(
     }
 }
 
-// Retried every few frames: the window handle doesn't exist on the first frame, and
-// Explorer may still be starting up right after login.
-fn attach_window(
+// Retried every few frames: a window's handle doesn't exist on its first frame, and Explorer
+// may still be starting up right after login.
+fn attach_windows(
     _main_thread: NonSendMarker,
     mut commands: Commands,
     mut backend: ResMut<Backend>,
     config: Res<WallpaperSettings>,
-    mut state: ResMut<AttachState>,
-    mut windows: Query<(Entity, Option<&RawHandleWrapper>, &mut Window), With<PrimaryWindow>>,
-    target: Res<Target>,
+    mut windows: Query<(
+        Entity,
+        &OnMonitor,
+        &mut Attachment,
+        Option<&RawHandleWrapper>,
+        &mut Window,
+    )>,
     on_desktop: Res<PointerOnDesktop>,
     proxy: Option<Res<EventLoopProxyWrapper>>,
+    mut forwarding_started: Local<bool>,
 ) {
-    if state.finished {
-        return;
-    }
+    for (window, on, mut attachment, handle, mut settings) in &mut windows {
+        let Attachment::Pending { attempts, countdown } = *attachment else {
+            continue;
+        };
+        if countdown > 0 {
+            *attachment = Attachment::Pending { attempts, countdown: countdown - 1 };
+            continue;
+        }
 
-    if state.countdown > 0 {
-        state.countdown -= 1;
-        return;
-    }
-
-    let Ok((window, handle, _)) = windows.single() else {
-        return;
-    };
-    let handle = handle.map(RawHandleWrapper::get_window_handle);
-    let area = target.0.as_ref().map(|monitor| monitor.area);
-    let wake = on_desktop.waker(proxy.as_deref());
-    let step = decide(&mut backend.0, &config, key(window), handle, area, wake);
-
-    // Shown on failure too: an invisible process with no way to close it is worse.
-    let mut reveal = false;
-
-    match step {
-        Step::Wait(reason) => {
-            state.attempts += 1;
-            if state.attempts >= config.max_attempts {
-                warn!("giving up after {} attempts: {reason}", state.attempts);
+        let handle = handle.map(RawHandleWrapper::get_window_handle);
+        match decide(&mut backend.0, &config, key(window), handle, on.0.area) {
+            Step::Wait(reason) if attempts + 1 < config.max_attempts => {
+                debug!("attempt {} on {} not ready: {reason}", attempts + 1, on.0.name);
+                let countdown = config.frames_between_attempts;
+                *attachment = Attachment::Pending { attempts: attempts + 1, countdown };
+                continue;
+            }
+            Step::Wait(reason) => {
+                warn!("giving up on {} after {} attempts: {reason}", on.0.name, attempts + 1);
                 warn!("continuing as an ordinary window");
-                state.finished = true;
-                reveal = true;
-            } else {
-                debug!("attempt {} not ready: {reason}", state.attempts);
-                state.countdown = config.frames_between_attempts;
+                *attachment = Attachment::Loose;
+            }
+            Step::Done { message, attached } => {
+                info!("{message}");
+                if attached {
+                    *attachment = Attachment::Attached;
+                    match_scale(&mut settings, on.0.scale);
+                } else {
+                    *attachment = Attachment::Loose;
+                }
             }
         }
-        Step::Done { message, input, attached } => {
-            info!("{message}");
-            if let Some(source) = input {
-                commands.insert_resource(PointerSourceResource::new(source));
-            }
-            state.finished = true;
-            state.attached = attached;
-            reveal = true;
+        // Shown on failure too: an invisible process with no way to close it is worse.
+        if config.show_window_after_attach && !settings.visible {
+            settings.visible = true;
         }
     }
 
-    let Ok((_, _, mut window)) = windows.single_mut() else {
-        return;
-    };
-    if let Some(monitor) = target.0.as_ref().filter(|_| state.attached) {
-        match_scale(&mut window, monitor.scale);
-    }
-    if reveal && config.show_window_after_attach && !window.visible {
-        window.visible = true;
+    // One source covers every window, those attached later included.
+    if !*forwarding_started && windows.iter().any(|(_, _, a, _, _)| *a == Attachment::Attached) {
+        *forwarding_started = true;
+        let wake = on_desktop.waker(proxy.as_deref());
+        if let Some(source) = start_forwarding(&mut backend.0, &config, wake) {
+            commands.insert_resource(PointerSourceResource::new(source));
+        }
     }
 }
 
-// After attaching, the window follows its monitor: to another one when the choice changes,
-// and back into place when the layout shifts. A monitor added left of the primary one moves
-// the desktop's corner that the window's position counts from, so even an unchanged area
-// needs placing again.
-fn follow_target(
+// An attached window follows its monitor: to another one when it is given one, and back into
+// place when the layout shifts. A monitor added left of the primary one moves the desktop's
+// corner that a window's position counts from, so even an unchanged area needs placing again.
+fn place_windows(
     _main_thread: NonSendMarker,
-    state: Res<AttachState>,
     mut backend: ResMut<Backend>,
-    target: Res<Target>,
-    window: Single<(Entity, &mut Window), With<PrimaryWindow>>,
+    layout: Res<Layout>,
+    mut windows: Query<(Entity, Ref<OnMonitor>, &Attachment, &mut Window)>,
 ) {
-    let Some(monitor) = target.0.as_ref().filter(|_| state.attached) else {
-        return;
-    };
-    let (entity, mut window) = window.into_inner();
-    if let Err(err) = backend.0.place(key(entity), monitor.area) {
-        warn!("cannot move the wallpaper to {}: {:#}", monitor.name, anyhow::Error::new(err));
-        return;
+    for (window, on, attachment, mut settings) in &mut windows {
+        if *attachment != Attachment::Attached || !(on.is_changed() || layout.is_changed()) {
+            continue;
+        }
+        if let Err(err) = backend.0.place(key(window), on.0.area) {
+            warn!("cannot move a window to {}: {:#}", on.0.name, anyhow::Error::new(err));
+            continue;
+        }
+        match_scale(&mut settings, on.0.scale);
     }
-    match_scale(&mut window, monitor.scale);
 }
 
 // Windows tells only top-level windows about a monitor's scaling, never an attached one, so
@@ -159,7 +162,7 @@ fn match_scale(window: &mut Window, scale: f64) {
 
 enum Step {
     Wait(String),
-    Done { message: String, input: Option<Box<dyn PointerSource>>, attached: bool },
+    Done { message: String, attached: bool },
 }
 
 fn decide(
@@ -167,19 +170,15 @@ fn decide(
     config: &WallpaperConfig,
     window: WindowKey,
     handle: Option<RawWindowHandle>,
-    area: Option<ScreenArea>,
-    wake: Wake,
+    area: ScreenArea,
 ) -> Step {
     if !config.enabled || config.strategy == AttachStrategy::None {
         let message = "wallpaper attach disabled".to_string();
-        return Step::Done { message, input: None, attached: false };
+        return Step::Done { message, attached: false };
     }
 
     let Some(raw) = handle else {
         return Step::Wait("window handle not ready".to_string());
-    };
-    let Some(area) = area else {
-        return Step::Wait("no monitor known yet".to_string());
     };
 
     if config.dry_run {
@@ -188,16 +187,16 @@ fn decide(
             debug!("[dry-run] would then ask the backend to forward pointer input");
         }
         let message = "dry run: no windows were modified".to_string();
-        return Step::Done { message, input: None, attached: false };
+        return Step::Done { message, attached: false };
     }
 
     match backend.attach(window, raw, area, config) {
         Ok(outcome) => {
             let how =
                 outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
-            let message = format!("attached to desktop using {how}");
+            let message = format!("attached to desktop using {how}, over {area:?}");
             let attached = outcome.strategy_used.is_some_and(|s| s != AttachStrategy::None);
-            Step::Done { message, input: start_forwarding(backend, config, wake), attached }
+            Step::Done { message, attached }
         }
         Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
     }
@@ -216,11 +215,11 @@ fn start_forwarding(
 
     match backend.forward_input(wake) {
         Ok(Some(source)) => {
-            info!("forwarding desktop pointer input to the window");
+            info!("forwarding desktop pointer input to the windows");
             Some(source)
         }
         Ok(None) => {
-            debug!("backend reports the window receives input on its own");
+            debug!("backend reports the windows receive input on their own");
             None
         }
         Err(err) => {
