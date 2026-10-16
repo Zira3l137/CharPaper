@@ -5,6 +5,7 @@ use rodio::Player;
 
 use crate::AudioSource;
 use crate::FadeOut;
+use crate::Fader;
 use crate::Sound;
 use crate::SoundFailed;
 use crate::Volumes;
@@ -16,6 +17,8 @@ use crate::output::Output;
 pub(crate) struct Voice {
     player: Player,
     envelope: Envelope,
+    // Follows the Fader of the entity the sound hangs under, if it has one.
+    group: Envelope,
     // See Output::generation.
     generation: u32,
     // Where in the file the player began. A player counts its position from there.
@@ -29,12 +32,13 @@ pub(crate) fn start_sounds(
     assets: Res<AssetServer>,
     sources: Res<Assets<AudioSource>>,
     volumes: Res<Volumes>,
-    queued: Query<(Entity, &Sound), (Without<Voice>, Without<FadeOut>)>,
+    queued: Query<(Entity, &Sound, Option<&ChildOf>), (Without<Voice>, Without<FadeOut>)>,
+    faders: Query<&Fader>,
 ) {
     let Some(device) = output.device() else {
         return;
     };
-    for (entity, sound) in &queued {
+    for (entity, sound, parent) in &queued {
         let Some(source) = sources.get(&sound.source) else {
             // The asset server has said why already.
             if assets.load_state(sound.source.id()).is_failed() {
@@ -43,12 +47,15 @@ pub(crate) fn start_sounds(
             continue;
         };
         let envelope = Envelope::fading_in(sound.fade_in);
-        match device.play(source.clone(), sound.looped, Duration::ZERO, &envelope) {
+        let fader = parent.and_then(|parent| faders.get(parent.parent()).ok());
+        let group = Envelope::new(fader.map_or(1.0, |fader| fader.level));
+        match device.play(source.clone(), sound.looped, Duration::ZERO, (&envelope, &group)) {
             Ok(player) => {
                 player.set_volume(volumes.of(sound.layer));
                 commands.entity(entity).insert(Voice {
                     player,
                     envelope,
+                    group,
                     generation: output.generation,
                     offset: Duration::ZERO,
                 });
@@ -80,9 +87,10 @@ pub(crate) fn move_to_new_device(
             true => Duration::ZERO,
             false => voice.offset + voice.player.get_pos(),
         };
-        let played = sources
-            .get(&sound.source)
-            .map(|source| device.play(source.clone(), sound.looped, from, &voice.envelope));
+        let played = sources.get(&sound.source).map(|source| {
+            let envelopes = (&voice.envelope, &voice.group);
+            device.play(source.clone(), sound.looped, from, envelopes)
+        });
         match played {
             Some(Ok(player)) => {
                 player.set_volume(volumes.of(sound.layer));
@@ -105,6 +113,17 @@ pub(crate) fn apply_volumes(
     }
     for (sound, voice) in &voices {
         voice.player.set_volume(volumes.of(sound.layer));
+    }
+}
+
+pub(crate) fn follow_faders(
+    faders: Query<(Entity, &Fader), Changed<Fader>>,
+    voices: Query<(&Voice, &ChildOf)>,
+) {
+    for (group, fader) in &faders {
+        for (voice, _) in voices.iter().filter(|(_, parent)| parent.parent() == group) {
+            voice.group.fade_to(fader.level, fader.over);
+        }
     }
 }
 

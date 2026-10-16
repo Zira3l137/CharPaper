@@ -9,6 +9,7 @@ use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::component::Mutable;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use charpaper_audio::Fader;
 use charpaper_suite::LookEdits;
 use serde::Deserialize;
 use serde::Serialize;
@@ -68,7 +69,8 @@ const STAGE_SPACING: f32 = 5_000.0;
     Baking,
     ShownLut,
     Soundscape,
-    GazeRig
+    GazeRig,
+    Fader
 )]
 pub struct Stage;
 

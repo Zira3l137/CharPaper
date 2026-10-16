@@ -26,9 +26,9 @@ pub(crate) struct CueClock {
     sounds: BTreeMap<PathBuf, Handle<AudioSource>>,
 }
 
-// A sound one of a stage's clips played, by that stage.
+// A sound one of a stage's clips played, as a child of that stage.
 #[derive(Component)]
-pub(crate) struct CueSound(Entity);
+pub(crate) struct CueSound;
 
 // Follows the selected clip itself rather than using Bevy's animation events: those fire for
 // a clip fading out too, which would double every footstep during a crossfade.
@@ -40,7 +40,7 @@ pub(crate) fn play_cues(
     config: Res<SceneConfig>,
     hush: Res<Hush>,
     assets: Res<AssetServer>,
-    playing: Query<(Entity, &CueSound), Without<FadeOut>>,
+    playing: Query<(Entity, &ChildOf), (With<CueSound>, Without<FadeOut>)>,
 ) {
     for (stage, suite, clips, mut clock) in &mut stages {
         let armature =
@@ -71,7 +71,7 @@ fn play_stage_cues(
     config: &SceneConfig,
     hush: &Hush,
     assets: &AssetServer,
-    playing: &Query<(Entity, &CueSound), Without<FadeOut>>,
+    playing: &Query<(Entity, &ChildOf), (With<CueSound>, Without<FadeOut>)>,
     clock: &mut CueClock,
 ) {
     let current = armature.and_then(|(_, Playing(name))| name.clone());
@@ -80,8 +80,8 @@ fn play_stage_cues(
     if clock.clip != current {
         // Every sound stops with the clip that played it, fading out with the animation.
         let fade = Duration::from_secs_f32(config.animation_crossfade_secs.max(0.0));
-        for (entity, sound) in playing {
-            if sound.0 == stage {
+        for (entity, parent) in playing {
+            if parent.parent() == stage {
                 commands.entity(entity).insert(FadeOut(fade));
             }
         }
@@ -114,7 +114,8 @@ fn play_stage_cues(
                 continue;
             };
             commands.spawn((
-                CueSound(stage),
+                CueSound,
+                ChildOf(stage),
                 Sound {
                     source: source.clone(),
                     layer: Layer::Character,

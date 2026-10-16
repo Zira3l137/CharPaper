@@ -3,12 +3,17 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use charpaper_audio::FadeOut;
+use charpaper_audio::Fader;
 use charpaper_audio::Layer;
 use charpaper_audio::Sound;
 use charpaper_audio::SoundFailed;
 
 use crate::SceneSet;
 use crate::assets::asset_path;
+use crate::screens::ShowsStage;
+use crate::screens::Unseen;
+use crate::stage::FocusedStage;
+use crate::stage::StageKey;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
 
@@ -16,12 +21,19 @@ use crate::suite::ActiveSuite;
 // plays its tracks in order and starts over after the last one; ambience loops.
 const CROSSFADE: Duration = Duration::from_secs(2);
 
+// Only the stage under the cursor is heard. The cursor has to stay on its monitors this long
+// before the sound goes over to it, so sweeping across a monitor on the way to another changes
+// nothing; a stage left behind keeps playing, silently, and is where it would be on coming back.
+const LINGER: Duration = Duration::from_millis(300);
+const HANDOVER: Duration = Duration::from_millis(1500);
+
 pub(crate) struct SoundscapePlugin;
 
 impl Plugin for SoundscapePlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(skip_broken_track)
-            .add_systems(Update, (follow_environment, next_track).chain().in_set(SceneSet::Run));
+            .add_systems(Update, (follow_environment, next_track).chain().in_set(SceneSet::Run))
+            .add_systems(Update, listen.in_set(SceneSet::Run));
     }
 }
 
@@ -35,15 +47,15 @@ pub(crate) struct Soundscape {
     track: Option<(Entity, usize)>,
 }
 
-// A sound of a stage's environment, by that stage.
+// A sound of a stage's environment, as a child of that stage.
 #[derive(Component)]
-struct EnvironmentSound(Entity);
+struct EnvironmentSound;
 
 fn follow_environment(
     mut commands: Commands,
     mut stages: Query<(Entity, Option<&ActiveSuite>, &CharacterState, &mut Soundscape)>,
     assets: Res<AssetServer>,
-    playing: Query<(Entity, &EnvironmentSound), Without<FadeOut>>,
+    playing: Query<(Entity, &ChildOf), (With<EnvironmentSound>, Without<FadeOut>)>,
 ) {
     for (stage, suite, state, mut scape) in &mut stages {
         let wanted = suite.zip(state.environment.as_ref());
@@ -51,8 +63,8 @@ fn follow_environment(
         if scape.shown == wanted {
             continue;
         }
-        for (entity, sound) in &playing {
-            if sound.0 == stage {
+        for (entity, parent) in &playing {
+            if parent.parent() == stage {
                 commands.entity(entity).insert(FadeOut(CROSSFADE));
             }
         }
@@ -66,7 +78,8 @@ fn follow_environment(
         };
         if let Some(ambience) = &environment.ambience {
             commands.spawn((
-                EnvironmentSound(stage),
+                EnvironmentSound,
+                ChildOf(stage),
                 Sound {
                     source: assets.load(asset_path(suite, ambience)),
                     layer: Layer::Ambience,
@@ -109,7 +122,8 @@ fn play_next(
     debug!("music: {}", path.display());
     let track = commands
         .spawn((
-            EnvironmentSound(stage),
+            EnvironmentSound,
+            ChildOf(stage),
             Sound {
                 source: assets.load(asset_path(suite, path)),
                 layer: Layer::Music,
@@ -119,6 +133,50 @@ fn play_next(
         ))
         .id();
     scape.track = Some((track, index));
+}
+
+#[derive(Default)]
+struct Listening {
+    heard: Option<Entity>,
+    // The stage the cursor moved to, and when.
+    coming: Option<(Entity, Duration)>,
+}
+
+// A stage nobody can see, with every monitor showing it covered, is silent too.
+fn listen(
+    time: Res<Time<Real>>,
+    focused: Res<FocusedStage>,
+    mut listening: Local<Listening>,
+    mut stages: Query<(Entity, &StageKey, &mut Fader)>,
+    screens: Query<(&ShowsStage, Has<Unseen>)>,
+) {
+    let now = time.elapsed();
+    let heard = listening.heard.filter(|&stage| stages.contains(stage));
+    let next = match (focused.0, heard) {
+        (Some(focused), Some(heard)) if focused != heard => {
+            let since = match listening.coming {
+                Some((coming, since)) if coming == focused => since,
+                _ => now,
+            };
+            listening.coming = Some((focused, since));
+            if now.saturating_sub(since) < LINGER { Some(heard) } else { Some(focused) }
+        }
+        // The first stage is heard at once, and so is the next when the one heard goes away.
+        (focused, None) => focused,
+        (_, heard) => {
+            listening.coming = None;
+            heard
+        }
+    };
+    listening.heard = next;
+
+    for (stage, key, mut fader) in &mut stages {
+        let seen = screens.iter().any(|(shows, unseen)| shows.0 == key.0 && !unseen);
+        let level = if Some(stage) == next && seen { 1.0 } else { 0.0 };
+        if fader.level != level {
+            *fader = Fader { level, over: HANDOVER };
+        }
+    }
 }
 
 // Dropped for as long as the environment is shown, so a folder of broken files doesn't

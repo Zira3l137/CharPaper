@@ -57,6 +57,19 @@ impl Envelope {
             .periodic_access(TICK, move |amplified| amplified.set_factor(envelope.step()))
     }
 
+    // Under a second envelope too, such as the one a whole group of sounds fades by. Each
+    // envelope is stepped by one source only, so a shared level would move too fast; a group's
+    // level is copied into an envelope of each sound's own.
+    pub fn apply_under<S>(&self, group: &Envelope, source: S) -> impl Source + Send + 'static
+    where
+        S: Source + Send + 'static,
+    {
+        let (own, group) = (self.clone(), group.clone());
+        source
+            .amplify(gain(own.level()) * gain(group.level()))
+            .periodic_access(TICK, move |amplified| amplified.set_factor(own.step() * group.step()))
+    }
+
     fn step(&self) -> f32 {
         let now = self.level();
         let target = f32::from_bits(self.0.target.load(Relaxed));

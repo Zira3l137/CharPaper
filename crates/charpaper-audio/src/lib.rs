@@ -33,6 +33,7 @@ impl Plugin for SoundPlugin {
                     voice::move_to_new_device,
                     voice::start_sounds,
                     voice::apply_volumes.run_if(resource_changed::<Volumes>),
+                    voice::follow_faders,
                     voice::fade_out,
                     voice::despawn_finished,
                 )
@@ -43,7 +44,7 @@ impl Plugin for SoundPlugin {
 
 // Spawning an entity with this plays a sound, as soon as its file has loaded. A sound that
 // doesn't loop despawns its entity when it ends. Despawning the entity stops the sound at
-// once; inserting FadeOut fades it out first.
+// once; inserting FadeOut fades it out first. Under an entity with a Fader, it follows that too.
 #[derive(Component, Clone, Debug)]
 pub struct Sound {
     pub source: Handle<AudioSource>,
@@ -54,6 +55,21 @@ pub struct Sound {
 
 #[derive(Component, Clone, Copy, Debug)]
 pub struct FadeOut(pub Duration);
+
+// On an entity whose child sounds rise and fall together, such as everything one scene plays:
+// they go to `level`, from 0 (silent) to 1 (as set), and a change takes `over` across the whole
+// range. A sound starting under it starts at its level.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Fader {
+    pub level: f32,
+    pub over: Duration,
+}
+
+impl Default for Fader {
+    fn default() -> Self {
+        Self { level: 1.0, over: Duration::ZERO }
+    }
+}
 
 // Sounds are grouped by what they are, and each group has its own volume.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

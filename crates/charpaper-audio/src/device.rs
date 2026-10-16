@@ -76,7 +76,7 @@ impl Device {
         bytes: B,
         looped: bool,
         from: Duration,
-        envelope: &Envelope,
+        (own, group): (&Envelope, &Envelope),
     ) -> Result<Player, DecoderError>
     where
         B: AsRef<[u8]> + Send + Sync + 'static,
@@ -84,14 +84,14 @@ impl Device {
         let len = bytes.as_ref().len() as u64;
         let decoder = Decoder::builder().with_byte_len(len).with_data(Cursor::new(bytes));
         if looped {
-            return Ok(self.connect(envelope.apply(decoder.build_looped()?)));
+            return Ok(self.connect(own.apply_under(group, decoder.build_looped()?)));
         }
         let mut decoder = decoder.build()?;
         if !from.is_zero() {
             // Coming up short only means starting from an earlier point.
             let _ = decoder.try_seek(from);
         }
-        Ok(self.connect(envelope.apply(decoder)))
+        Ok(self.connect(own.apply_under(group, decoder)))
     }
 
     fn connect(&self, source: impl Source + Send + 'static) -> Player {
