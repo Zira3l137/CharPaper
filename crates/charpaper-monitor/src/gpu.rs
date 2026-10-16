@@ -285,7 +285,9 @@ fn begin_frame(
     frame.started = Instant::now();
     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
     frame.mark(&mut encoder, FRAME_START);
-    pending.push_encoder(encoder);
+    // Finished, not handed over as an encoder: Bevy submits encoders after every finished
+    // buffer, which would put this mark after the whole frame.
+    pending.push([encoder.finish()]);
 }
 
 // Runs once for each view Bevy draws. Shadow maps are views too, but have no camera.
@@ -314,7 +316,7 @@ fn end_frame(
     let count = frame.marks.len() as u32;
     encoder.resolve_query_set(&frame.queries, 0..count, &frame.resolved, 0);
     encoder.copy_buffer_to_buffer(&frame.resolved, 0, &frame.readable, 0, u64::from(count) * 8);
-    pending.push_encoder(encoder);
+    pending.push([encoder.finish()]);
 }
 
 // Only once the frame's commands are submitted may the buffer they fill be mapped.
