@@ -8,6 +8,7 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::component::Mutable;
 use bevy::ecs::system::SystemParam;
+use bevy::light::cluster::GlobalClusterSettings;
 use bevy::prelude::*;
 use charpaper_audio::Fader;
 use charpaper_suite::LookEdits;
@@ -108,7 +109,18 @@ impl Plugin for StagePlugin {
                 PropagateSet::<RenderLayers>::default().before(VisibilitySystems::CheckVisibility),
             )
             .add_observer(remember_stage)
+            .add_systems(Startup, cluster_on_cpu)
             .add_systems(PreUpdate, (sync_stages, follow_cursor).chain().in_set(ScreenSync));
+    }
+}
+
+// Bevy can sort lights into each camera's clusters on the GPU or the CPU, and picks the GPU
+// where it can. In Bevy 0.19 only the CPU's way checks render layers: on the GPU, every
+// stage's lamps would light, and shadow, every other stage. CharPaper's scenes have a handful
+// of lights, which the CPU sorts in no time.
+fn cluster_on_cpu(settings: Option<ResMut<GlobalClusterSettings>>) {
+    if let Some(mut settings) = settings {
+        settings.gpu_clustering = None;
     }
 }
 
