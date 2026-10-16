@@ -31,7 +31,7 @@ pub use gaze::CursorPosition;
 pub use gaze::GazeSettings;
 pub use gaze::GazeTuning;
 pub use look::ActiveLook;
-pub use look::LookBackup;
+pub use look::LookEdited;
 pub use look::Resolved;
 pub use look::RestoreLook;
 pub use render::AntiAliasing;

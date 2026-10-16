@@ -82,8 +82,6 @@ toml = { version = "1.1", default-features = false, features = ["std", "serde", 
 i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
 i18n-embed-fl = "0.10"
 image = { version = "0.25", default-features = false, features = ["hdr", "exr"] }
-# The version bevy_macro_utils builds, plus writing.
-toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
 # A subset of what bevy_gltf enables, so the full build compiles it once.
 gltf = { version = "1.4", default-features = false, features = ["names", "KHR_lights_punctual", "extras"] }
 schemars = { version = "1.2", default-features = false, features = ["std", "derive"] }

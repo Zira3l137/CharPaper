@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use bevy::camera::Exposure;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::EnvironmentMapLight;
@@ -11,6 +13,8 @@ use bevy::render::view::ColorGradingGlobal;
 use bevy::render::view::ColorGradingSection;
 use charpaper_suite::GradingSection;
 use charpaper_suite::Look;
+use charpaper_suite::LookEdits;
+use charpaper_suite::Suite;
 use charpaper_suite::Tonemapping as SuiteTonemapping;
 
 use crate::SceneSet;
@@ -20,21 +24,29 @@ use crate::environment::ShownEnvironment;
 use crate::environment::spawn_environment_scenes;
 use crate::render::SceneImage;
 use crate::render::ScreenParts;
+use crate::stage::FocusedStage;
 use crate::stage::StageOf;
+use crate::suite::ActiveSuite;
+use crate::suite::folder_of;
 
 // Applies the look, the settings the viewer can change while the app runs, to the camera
 // and the environment's lights. Recomputed whole on every change, so no value is kept twice.
+//
+// Each stage has a look of its own: the author's from suite.toml, with that stage's edits on
+// top. Edits never touch suite.toml; the app saves them with the stage.
 pub(crate) struct LookPlugin;
 
 impl Plugin for LookPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<RestoreLook>().add_systems(
-            Update,
-            (apply_look, apply_grain)
-                .run_if(look_needs_applying)
-                .in_set(SceneSet::Run)
-                .after(spawn_environment_scenes),
-        );
+        app.add_message::<RestoreLook>()
+            .add_systems(Update, (restore_look, note_edits).chain().in_set(SceneSet::Run))
+            .add_systems(
+                Update,
+                (apply_look, apply_grain)
+                    .run_if(look_needs_applying)
+                    .in_set(SceneSet::Run)
+                    .after(spawn_environment_scenes),
+            );
     }
 }
 
@@ -48,13 +60,60 @@ pub const DEFAULT_SHADOWS: bool = true;
 #[derive(Component, Deref, DerefMut, Clone, Debug, Default)]
 pub struct ActiveLook(pub Look);
 
-#[derive(Component, Default, Debug)]
-pub struct LookBackup {
-    pub exists: bool,
-}
+// Whether the look shown differs from the author's, which is when there is something to
+// restore.
+#[derive(Component, Default, Debug, PartialEq)]
+pub struct LookEdited(pub bool);
 
+// Takes the focused stage's look back to the suite's own.
 #[derive(Message, Debug)]
 pub struct RestoreLook;
+
+// A stage's edits to each suite's look, by the suite's folder, for the suites it is not
+// showing. The one shown is in ActiveLook.
+#[derive(Component, Default, Debug)]
+pub(crate) struct EditedLooks(pub BTreeMap<String, LookEdits>);
+
+impl EditedLooks {
+    pub fn look_for(&self, suite: &Suite) -> Look {
+        let mut look = suite.look();
+        if let Some(edits) = self.0.get(&folder_of(suite)) {
+            edits.apply(&mut look);
+        }
+        look
+    }
+
+    pub fn keep(&mut self, suite: &Suite, look: &Look) {
+        let edits = LookEdits::between(&suite.look(), look);
+        match edits.is_empty() {
+            true => self.0.remove(&folder_of(suite)),
+            false => self.0.insert(folder_of(suite), edits),
+        };
+    }
+}
+
+fn note_edits(
+    mut stages: Query<(&ActiveSuite, &ActiveLook, &mut LookEdited), Changed<ActiveLook>>,
+) {
+    for (suite, look, mut edited) in &mut stages {
+        edited.set_if_neq(LookEdited(look.0 != suite.look()));
+    }
+}
+
+fn restore_look(
+    mut requests: MessageReader<RestoreLook>,
+    focused: Res<FocusedStage>,
+    mut stages: Query<(&ActiveSuite, &mut ActiveLook)>,
+) {
+    if requests.read().count() == 0 {
+        return;
+    }
+    let Some((suite, mut look)) = focused.0.and_then(|stage| stages.get_mut(stage).ok()) else {
+        return;
+    };
+    look.0 = suite.look();
+    info!("the look of suite {:?} is the author's again", suite.name);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Resolved {

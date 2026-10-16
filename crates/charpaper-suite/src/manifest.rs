@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
+use serde::Serialize;
 
 // Doc comments in this file become the hover text of the generated JSON Schema, so they
 // are written for suite authors. `deny_unknown_fields` everywhere: a misspelt key that
@@ -418,7 +419,7 @@ impl Grain {
 
 // Mirrors Bevy's Tonemapping so this crate doesn't need Bevy.
 /// How bright colors are squeezed into what the screen can show.
-#[derive(Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Tonemapping {
     None,

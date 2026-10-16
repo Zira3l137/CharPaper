@@ -51,13 +51,6 @@ pub enum SuiteError {
     #[error("{folder:?} holds several panoramas ({found}); keep one")]
     SeveralPanoramas { folder: PathBuf, found: String },
 
-    #[error("{path} cannot be edited")]
-    Edit {
-        path: PathBuf,
-        #[source]
-        source: toml_edit::TomlError,
-    },
-
     #[error("settings are given for {kind} {name:?}, which the suite does not have")]
     UnknownEntry { kind: &'static str, name: String },
 }

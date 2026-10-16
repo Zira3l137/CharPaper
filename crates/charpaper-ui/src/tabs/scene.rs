@@ -4,7 +4,7 @@ use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedMut;
-use charpaper_scene::LookBackup;
+use charpaper_scene::LookEdited;
 use charpaper_scene::Resolved;
 use charpaper_scene::RestoreLook;
 use charpaper_scene::focused_added;
@@ -49,8 +49,8 @@ const GRADING_STEP: f32 = 0.05;
 const SATURATIONS: (f32, f32) = (0.0, 2.0);
 const CONTRASTS: (f32, f32) = (0.5, 1.5);
 
-// Which camera and environment, and how the picture is finished. Look edits go to
-// ActiveLook, which the app writes back into the suite's suite.toml.
+// Which camera and environment, and how the picture is finished. Look edits go to the
+// stage's ActiveLook, which the app saves with the stage.
 pub(crate) struct SceneTabPlugin;
 
 impl Plugin for SceneTabPlugin {
@@ -76,7 +76,7 @@ impl Plugin for SceneTabPlugin {
                         .or_eager(focused_changed::<ActiveSuite>)
                         .or_eager(new_panel),
                 ),
-                show_restore.run_if(focused_changed::<LookBackup>.or_eager(new_panel)),
+                show_restore.run_if(focused_changed::<LookEdited>.or_eager(new_panel)),
             )
                 .chain(),
         );
@@ -182,13 +182,13 @@ fn show_rows(
     show_container(&mut nodes, UiContainer::Row(Cycler::LutStrength), luts);
 }
 
-fn show_restore(backup: Focused<LookBackup>, buttons: Query<(&UiButton, &mut Node)>) {
-    let Some(backup) = backup.get() else {
+fn show_restore(edited: Focused<LookEdited>, buttons: Query<(&UiButton, &mut Node)>) {
+    let Some(edited) = edited.get() else {
         return;
     };
     for (button, mut node) in buttons {
         if *button == UiButton::RestoreLook {
-            node.display = display(backup.exists);
+            node.display = display(edited.0);
         }
     }
 }

@@ -44,7 +44,7 @@ impl SavedState {
         let (suite, gaze, suites) =
             (self.suite.take(), self.gaze.take(), std::mem::take(&mut self.suites));
         if self.stages.is_empty() && (suite.is_some() || gaze.is_some() || !suites.is_empty()) {
-            let seed = StageSeed { suite, gaze: gaze.unwrap_or_default(), suites };
+            let seed = StageSeed { suite, gaze: gaze.unwrap_or_default(), suites, ..default() };
             self.stages.insert(StageId::FIRST, seed);
         }
         self

@@ -20,7 +20,6 @@ use crate::config::AppConfig;
 use crate::config::WindowConfig;
 use crate::logging;
 use crate::save;
-use crate::save::LookFilePlugin;
 use crate::save::StatePlugin;
 use crate::wallpaper::WallpaperPlugin;
 
@@ -74,7 +73,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     if config.benchmark {
         app.add_plugins(BenchmarkPlugin { results: exe_dir.join(benchmark::RESULTS_FILE) });
     } else {
-        app.add_plugins((LookFilePlugin, StatePlugin { path: state_path, loaded }));
+        app.add_plugins(StatePlugin { path: state_path, loaded });
     }
     let exit = app.run();
 

@@ -21,6 +21,7 @@ use crate::config::SceneConfig;
 use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
 use crate::look::ActiveLook;
+use crate::look::EditedLooks;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::Picks;
@@ -41,9 +42,13 @@ impl Plugin for SuitePlugin {
 #[derive(Component, Deref)]
 pub struct ActiveSuite(pub Suite);
 
+pub(crate) fn folder_of(suite: &Suite) -> String {
+    suite.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
 impl ActiveSuite {
     pub fn folder(&self) -> String {
-        self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+        folder_of(self)
     }
 
     pub(crate) fn remembered(&self, remembered: &Remembered) -> Picks {
@@ -107,17 +112,22 @@ pub(crate) fn switch_suite(
         &mut LoadedSuite,
         &mut CharacterState,
         Option<&ActiveSuite>,
+        Option<&ActiveLook>,
         &mut Remembered,
+        &mut EditedLooks,
     )>,
     mut teardown: Teardown,
 ) {
-    for (stage, mut loaded, mut state, active, mut remembered) in &mut stages {
+    for (stage, mut loaded, mut state, active, look, mut remembered, mut edited) in &mut stages {
         if loaded.0 == state.suite {
             continue;
         }
 
         if let Some(old) = active {
             remembered.0.entry(old.folder()).or_default().merge(Picks::from_state(&state));
+            if let Some(look) = look {
+                edited.keep(old, look);
+            }
             teardown.run(&mut commands, stage);
             info!("left suite {:?}", old.name);
         }
@@ -145,7 +155,8 @@ pub(crate) fn switch_suite(
         }
 
         info!("showing suite {:?} from {}", suite.name, root.display());
-        commands.entity(stage).insert((ActiveLook(suite.look()), ActiveSuite(suite)));
+        let look = edited.look_for(&suite);
+        commands.entity(stage).insert((ActiveLook(look), ActiveSuite(suite)));
     }
 }
 

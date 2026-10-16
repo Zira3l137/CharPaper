@@ -9,6 +9,7 @@ use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::component::Mutable;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use charpaper_suite::LookEdits;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -25,7 +26,9 @@ use crate::environment::ShownEnvironment;
 use crate::gaze::CursorPosition;
 use crate::gaze::GazeRig;
 use crate::gaze::GazeSettings;
-use crate::look::LookBackup;
+use crate::look::ActiveLook;
+use crate::look::EditedLooks;
+use crate::look::LookEdited;
 use crate::lut::ShownLut;
 use crate::screens::Screen;
 use crate::screens::ShowsStage;
@@ -54,7 +57,8 @@ const STAGE_SPACING: f32 = 5_000.0;
     GazeSettings,
     Remembered,
     LoadedSuite,
-    LookBackup,
+    LookEdited,
+    EditedLooks,
     ShownSkin,
     SkinObjects,
     Expressions,
@@ -86,6 +90,9 @@ pub struct StageSeed {
     // The picks per suite, by the suite's folder.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub suites: BTreeMap<String, Picks>,
+    // The edits to each suite's look, by the suite's folder.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub looks: BTreeMap<String, LookEdits>,
 }
 
 // Every stage's seed, filled from state.toml and brought up to date as a stage goes away.
@@ -138,6 +145,7 @@ pub(crate) fn sync_stages(
                 CharacterState { suite, ..default() },
                 seed.gaze,
                 Remembered(seed.suites),
+                EditedLooks(seed.looks),
                 Transform::from_translation(Vec3::X * STAGE_SPACING * id.index() as f32),
                 // Layer 0 is everything outside the stages, which no stage camera sees.
                 Propagate(RenderLayers::layer(id.index() + 1)),
@@ -154,8 +162,8 @@ fn remember_stage(
     stages: Query<StageMemory>,
     mut seeds: ResMut<StageSeeds>,
 ) {
-    if let Ok((key, state, gaze, remembered, suite)) = stages.get(removed.entity) {
-        seeds.0.insert(key.0, seed_of(state, gaze, remembered, suite));
+    if let Ok(memory) = stages.get(removed.entity) {
+        seeds.0.insert(memory.0.0, seed_of(memory));
     }
 }
 
@@ -164,20 +172,27 @@ type StageMemory = (
     &'static CharacterState,
     &'static GazeSettings,
     &'static Remembered,
-    Option<&'static ActiveSuite>,
+    &'static EditedLooks,
+    Option<(&'static ActiveSuite, &'static ActiveLook)>,
 );
 
 fn seed_of(
-    state: &CharacterState,
-    gaze: &GazeSettings,
-    remembered: &Remembered,
-    suite: Option<&ActiveSuite>,
+    (_, state, gaze, remembered, edited, shown): (
+        &StageKey,
+        &CharacterState,
+        &GazeSettings,
+        &Remembered,
+        &EditedLooks,
+        Option<(&ActiveSuite, &ActiveLook)>,
+    ),
 ) -> StageSeed {
     let mut suites = remembered.0.clone();
-    if let Some(suite) = suite {
+    let mut looks = EditedLooks(edited.0.clone());
+    if let Some((suite, look)) = shown {
         suites.entry(suite.folder()).or_default().merge(Picks::from_state(state));
+        looks.keep(suite, look);
     }
-    StageSeed { suite: state.suite.clone(), gaze: gaze.clone(), suites }
+    StageSeed { suite: state.suite.clone(), gaze: gaze.clone(), suites, looks: looks.0 }
 }
 
 // What the app saves: every stage's seed, running or not.
@@ -190,8 +205,8 @@ pub struct StageMemories<'w, 's> {
 impl StageMemories<'_, '_> {
     pub fn all(&self) -> BTreeMap<StageId, StageSeed> {
         let mut all = self.seeds.0.clone();
-        for (key, state, gaze, remembered, suite) in &self.stages {
-            all.insert(key.0, seed_of(state, gaze, remembered, suite));
+        for memory in &self.stages {
+            all.insert(memory.0.0, seed_of(memory));
         }
         all
     }
@@ -204,7 +219,12 @@ pub fn stage_memory_changed(
         (
             With<Stage>,
             // Remembered only changes along with CharacterState, on a switch of suite.
-            Or<(Changed<CharacterState>, Changed<GazeSettings>, Added<ActiveSuite>)>,
+            Or<(
+                Changed<CharacterState>,
+                Changed<GazeSettings>,
+                Added<ActiveSuite>,
+                Changed<ActiveLook>,
+            )>,
         ),
     >,
 ) -> bool {
