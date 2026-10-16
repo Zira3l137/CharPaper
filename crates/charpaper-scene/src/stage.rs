@@ -43,10 +43,6 @@ use crate::suite::LoadedSuite;
 use crate::suite::Remembered;
 use crate::suite::starting_suite;
 
-// Stages stand this far apart, so a fog box of one, which every camera draws, is a speck far
-// out of the others' sight. Lights and meshes keep to their own stage by render layer.
-const STAGE_SPACING: f32 = 5_000.0;
-
 // One scene running on its own: a suite with its character, environment and view, and what
 // the viewer picked for them. Everything a stage spawns hangs under it, so despawning it takes
 // all of that away. A stage runs while a screen shows it.
@@ -148,8 +144,12 @@ pub(crate) fn sync_stages(
                 seed.gaze,
                 Remembered(seed.suites),
                 EditedLooks(seed.looks),
-                Transform::from_translation(Vec3::X * STAGE_SPACING * id.index() as f32),
-                // Layer 0 is everything outside the stages, which no stage camera sees.
+                // Every stage stands at the origin, overlapping the others, and only its render
+                // layer keeps it apart. Placed far away instead, its positions would lose the
+                // fraction of a millimetre that layered meshes keep between them, and they would
+                // flicker through each other. Layer 0 is everything outside the stages, which no
+                // stage camera sees. Bevy's light probes and clustered decals ignore layers, so a
+                // stage can't use them yet.
                 Propagate(RenderLayers::layer(id.index() + 1)),
             ))
             .id();
