@@ -855,6 +855,25 @@ no_volume_scatter = ["Spot"]
 }
 
 #[test]
+fn lights_listed_in_no_shadows_cost_no_shadow_passes() {
+    let manifest = r#"schema = 1
+[environments.stage]
+no_shadows = ["Lamp", "Sun", "Ghost"]
+[environments.stage.fog.Mist]
+"#;
+    let fixture = Fixture::new("no-shadows", manifest);
+    fixture.write("environment/stage.gltf", &furnished_scene());
+    let suite = fixture.load().unwrap();
+    let cost = charpaper_suite::costs(&suite).remove(0);
+    assert_eq!(cost.shadow_passes(), 1);
+    // A sun without shadows can't light fog; the point light still does, evenly.
+    assert!(cost.to_string().contains("up to 1 shadow passes a frame"), "{cost}");
+    assert!(cost.to_string().contains("lit by 2 lights (1 point, 1 spot)"), "{cost}");
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(warnings.iter().any(|w| w.contains("`no_shadows` names \"Ghost\"")), "{warnings:#?}");
+}
+
+#[test]
 fn a_sun_gets_as_many_cascades_as_the_depth_needs() {
     use charpaper_suite::sun_cascades;
     let cases = [(0.0, 1), (5.0, 1), (10.0, 1), (11.0, 2), (24.0, 2), (25.0, 3), (60.0, 3)];

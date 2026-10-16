@@ -325,6 +325,7 @@ def _check_environment(entry, add):
     if cameras:
         add(Finding(f"environment {entry.name!r}: cameras are left out, use Cameras: {_examples(cameras)}", severity="INFO"))
     _check_fog(entry.name, objects, add)
+    _check_shadows(entry.name, objects, add)
 
 
 def _check_fog(name, objects, add):
@@ -362,6 +363,29 @@ def _check_fog(name, objects, add):
         add(Finding(
             f"environment {name!r} has fog but no light that lights it, so the fog never shows; "
             "the sky does not light fog",
+        ))
+    dark_suns = [o.name for o in lights if o.data.type == "SUN" and not o.data.use_shadow and o.data.volume_factor > 0.0]
+    if fog and dark_suns:
+        add(Finding(
+            f"environment {name!r}: a sun lights fog through its shadows, so with Shadow off "
+            f"it doesn't: {_examples(dark_suns)}",
+            severity="INFO",
+        ))
+
+
+# Above this many, the app's frame rate is usually held back by shadows.
+MANY_SHADOWED_POINTS = 2
+
+
+def _check_shadows(name, objects, add):
+    """Each point light with Shadow on draws the scene six more times every frame."""
+    shadowed = [o.name for o in objects if o.type == "LIGHT" and o.data.type == "POINT" and o.data.use_shadow]
+    if len(shadowed) > MANY_SHADOWED_POINTS:
+        add(Finding(
+            f"environment {name!r}: {len(shadowed)} point lights cast shadows, and each draws the "
+            "scene 6 more times a frame. Untick Light > Shadow on lamps that don't need it: "
+            f"{_examples(shadowed)}",
+            severity="INFO",
         ))
 
 

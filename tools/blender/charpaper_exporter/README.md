@@ -41,6 +41,10 @@ saved in the `.blend`.
   app fills its bounding box with fog set up like its Principled Volume: Color, Density,
   Anisotropy and Absorption Color. Only lights light fog, not the sky: a light whose
   *Influence > Volume Scatter* is 0 doesn't, and a sun only does while it casts shadows.
+- **Shadows** are cast by every light whose *Light > Shadow* is ticked. Untick it on lamps
+  whose shadows nobody would miss: each point light with shadows draws the scene six more
+  times a frame, and a few of them are usually what holds the frame rate down. A light
+  without shadows still lights the scene and the fog, just evenly, with no light shafts.
 - **Lights** reach as far as they do in EEVEE: their *Light > Custom Distance* when it's
   ticked, otherwise the distance where they fade below *Render Properties > Sampling >
   Advanced > Light Threshold*. Every exported point and spot light carries that distance, so
@@ -67,8 +71,8 @@ Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.
 - An empty field leaves the matching key in the file alone.
 - Each exported camera's `[cameras.<name>]` is rewritten from its Depth of Field panel, and
   removed when depth of field is off.
-- Each exported environment's fog and `no_volume_scatter` are rewritten from the scene; its
-  brightness, shadows and exposure are kept.
+- Each exported environment's fog, `no_volume_scatter` and `no_shadows` are rewritten from
+  the scene; its brightness, shadows and exposure are kept.
 - Clips of files that weren't exported this time, `[post]`, environments that weren't
   exported, and the orbit camera settings are kept as they are.
 

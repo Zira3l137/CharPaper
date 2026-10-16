@@ -117,14 +117,20 @@ fn check_fog(environment: &Environment, scene: &Path, gltf: &Gltf, report: &mut 
         .filter_map(|n| Some((gltf.names[n.index()].as_str(), n.light()?.name())))
         .collect();
     let skipped = |name: &str| settings.no_volume_scatter.iter().any(|s| s == name);
-    for listed in &settings.no_volume_scatter {
-        if !lights.iter().any(|&(object, data)| object == listed || data == Some(listed.as_str())) {
-            let message = format!(
-                "environment {name:?}: `no_volume_scatter` names {listed:?}, which is not a light \
-                 in {}",
-                scene.display()
-            );
-            report.push(Severity::Warning, manifest, message);
+    let lists =
+        [("no_volume_scatter", &settings.no_volume_scatter), ("no_shadows", &settings.no_shadows)];
+    for (key, list) in lists {
+        for listed in list {
+            if !lights
+                .iter()
+                .any(|&(object, data)| object == listed || data == Some(listed.as_str()))
+            {
+                let message = format!(
+                    "environment {name:?}: `{key}` names {listed:?}, which is not a light in {}",
+                    scene.display()
+                );
+                report.push(Severity::Warning, manifest, message);
+            }
         }
     }
 

@@ -64,6 +64,26 @@ pub(crate) struct Baking(pub HashMap<String, Task<Result<(), String>>>);
 #[derive(Component)]
 pub(crate) struct EnvironmentReady;
 
+pub(crate) fn shown_environment<'a>(
+    suite: Option<&'a ActiveSuite>,
+    shown: &ShownEnvironment,
+) -> Option<&'a Environment> {
+    let name = shown.name.as_deref()?;
+    suite?.environments.iter().find(|e| e.name == name)
+}
+
+// Whether suite.toml lists a light, by its object's name or its light data's: glTF puts a
+// light on a child of its object, named after the data.
+pub(crate) fn light_listed(
+    list: &[String],
+    light: Entity,
+    names: &Query<&Name>,
+    parents: &Query<&ChildOf>,
+) -> bool {
+    let named = |e: Entity| names.get(e).is_ok_and(|n| list.iter().any(|s| s == n.as_str()));
+    named(light) || parents.get(light).is_ok_and(|p| named(p.parent()))
+}
+
 pub(crate) fn choose_environment(
     mut stages: Query<(&ActiveSuite, &Remembered, &mut CharacterState), Added<ActiveSuite>>,
 ) {

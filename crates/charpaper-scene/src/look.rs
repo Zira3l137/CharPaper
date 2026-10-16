@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use bevy::camera::Exposure;
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::ecs::system::SystemParam;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::Skybox;
 use bevy::post_process::bloom::Bloom;
@@ -21,6 +22,8 @@ use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::environment::EnvironmentReady;
 use crate::environment::ShownEnvironment;
+use crate::environment::light_listed;
+use crate::environment::shown_environment;
 use crate::environment::spawn_environment_scenes;
 use crate::render::SceneImage;
 use crate::render::ScreenParts;
@@ -174,21 +177,32 @@ type LookedLights<'w, 's> = Query<
 
 pub(crate) fn apply_look(
     mut commands: Commands,
-    stages: Query<(Entity, Option<&ActiveLook>, &ShownEnvironment)>,
+    stages: Query<(Entity, Option<&ActiveLook>, &ShownEnvironment, Option<&ActiveSuite>)>,
     mut cameras: LookedCameras,
     stage_of: StageOf,
-    children: Query<&Children>,
+    tree: LightTree,
     mut lights: LookedLights,
 ) {
-    for (stage, look, shown) in &stages {
+    for (stage, look, shown, suite) in &stages {
         let look = look.map(|l| l.0.clone()).unwrap_or_default();
         let mine: Vec<Entity> = cameras
             .iter()
             .map(|(camera, ..)| camera)
             .filter(|&c| stage_of.get(c) == Some(stage))
             .collect();
-        apply_stage_look(&mut commands, &look, shown, &mine, &mut cameras, &children, &mut lights);
+        let unshadowed = shown_environment(suite, shown)
+            .map(|e| e.settings.no_shadows.as_slice())
+            .unwrap_or_default();
+        let lit = (unshadowed, &tree, &mut lights);
+        apply_stage_look(&mut commands, &look, shown, &mine, &mut cameras, lit);
     }
+}
+
+#[derive(SystemParam)]
+pub(crate) struct LightTree<'w, 's> {
+    children: Query<'w, 's, &'static Children>,
+    parents: Query<'w, 's, &'static ChildOf>,
+    names: Query<'w, 's, &'static Name>,
 }
 
 fn apply_stage_look(
@@ -197,8 +211,7 @@ fn apply_stage_look(
     shown: &ShownEnvironment,
     mine: &[Entity],
     cameras: &mut LookedCameras,
-    children: &Query<&Children>,
-    lights: &mut LookedLights,
+    (unshadowed, tree, lights): (&[String], &LightTree, &mut LookedLights),
 ) {
     let resolved = Resolved::new(look, shown.name.as_deref());
 
@@ -244,25 +257,28 @@ fn apply_stage_look(
         }
     }
 
-    // glTF can't say whether a light casts shadows, so the look decides for all of them.
+    // glTF can't say whether a light casts shadows. The look decides for all of them, and
+    // suite.toml can leave some out, as Blender's per-light Shadow does.
     let Some(root) = shown.root else {
         return;
     };
-    for entity in children.iter_descendants(root) {
+    for entity in tree.children.iter_descendants(root) {
         let Ok((directional, point, spot)) = lights.get_mut(entity) else {
             continue;
         };
+        let shadows =
+            resolved.shadows && !light_listed(unshadowed, entity, &tree.names, &tree.parents);
         if let Some(mut light) = directional {
-            light.shadow_maps_enabled = resolved.shadows;
-            light.contact_shadows_enabled = resolved.shadows;
+            light.shadow_maps_enabled = shadows;
+            light.contact_shadows_enabled = shadows;
         }
         if let Some(mut light) = point {
-            light.shadow_maps_enabled = resolved.shadows;
-            light.contact_shadows_enabled = resolved.shadows;
+            light.shadow_maps_enabled = shadows;
+            light.contact_shadows_enabled = shadows;
         }
         if let Some(mut light) = spot {
-            light.shadow_maps_enabled = resolved.shadows;
-            light.contact_shadows_enabled = resolved.shadows;
+            light.shadow_maps_enabled = shadows;
+            light.contact_shadows_enabled = shadows;
         }
     }
 }

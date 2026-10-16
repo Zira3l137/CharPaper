@@ -279,6 +279,14 @@
             "$ref": "#/$defs/Fog"
           }
         },
+        "no_shadows": {
+          "description": "Lights that cast no shadows, by object name, like a Blender light whose\nShadow is off. Every other light does while `shadows` is on. A light\nwithout shadows costs far less: a point light draws the scene six\ntimes a frame for its shadows. A sun without shadows doesn't light fog.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
         "no_volume_scatter": {
           "description": "Lights that do not light the fog, by object name, like a Blender light\nwhose Volume Scatter is 0. Every other light does. A sun only lights\nfog while it casts shadows.",
           "type": "array",

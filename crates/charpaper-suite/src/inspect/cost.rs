@@ -21,6 +21,8 @@ pub struct Cost {
     pub environment: String,
     pub lights: Lights,
     pub shadows: bool,
+    // Those not listed in `no_shadows`.
+    pub shadowed: Lights,
     // At most: the scene's diagonal stands in for how deep the camera can see into it.
     pub sun_cascades: usize,
     pub fog_boxes: usize,
@@ -43,7 +45,8 @@ impl Cost {
         if !self.shadows {
             return 0;
         }
-        self.lights.point * 6 + self.lights.spot + self.lights.sun * self.sun_cascades
+        let lights = &self.shadowed;
+        lights.point * 6 + lights.spot + lights.sun * self.sun_cascades
     }
 }
 
@@ -124,10 +127,17 @@ fn cost(suite: &Suite, environment: &Environment) -> Cost {
         if let Some(light) = node.light() {
             let kind = light.kind();
             cost.lights.add(&kind);
-            let skipped = |n: &str| settings.no_volume_scatter.iter().any(|s| s == n);
-            let scatters = !(skipped(name) || light.name().is_some_and(skipped));
+            let listed = |list: &[String]| {
+                let named = |n: &str| list.iter().any(|s| s == n);
+                named(name) || light.name().is_some_and(named)
+            };
+            let shadowed = cost.shadows && !listed(&settings.no_shadows);
+            if shadowed {
+                cost.shadowed.add(&kind);
+            }
+            let scatters = !listed(&settings.no_volume_scatter);
             // A sun lights fog through its shadow map.
-            if scatters && (cost.shadows || !matches!(kind, Kind::Directional)) {
+            if scatters && (shadowed || !matches!(kind, Kind::Directional)) {
                 cost.fog_lights.add(&kind);
             }
         }

@@ -227,6 +227,12 @@ pub struct EnvironmentEntry {
     /// fog while it casts shadows.
     #[serde(default)]
     pub no_volume_scatter: Vec<String>,
+    /// Lights that cast no shadows, by object name, like a Blender light whose
+    /// Shadow is off. Every other light does while `shadows` is on. A light
+    /// without shadows costs far less: a point light draws the scene six
+    /// times a frame for its shadows. A sun without shadows doesn't light fog.
+    #[serde(default)]
+    pub no_shadows: Vec<String>,
 }
 
 /// A box of fog, set up like Blender's Principled Volume. Colors are linear,

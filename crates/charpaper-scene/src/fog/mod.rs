@@ -11,12 +11,13 @@ use bevy::light::VolumetricLight;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy::world_serialization::WorldInstanceReady;
-use charpaper_suite::Environment;
 use charpaper_suite::Fog;
 
 use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::environment::ShownEnvironment;
+use crate::environment::light_listed;
+use crate::environment::shown_environment;
 use crate::environment::spawn_environment_scenes;
 use crate::fog::pass::SceneFog;
 use crate::look::ActiveLook;
@@ -155,10 +156,10 @@ fn light_fog(
         };
         let look = look.map(|l| l.0.clone()).unwrap_or_default();
         let shadows = Resolved::new(&look, shown.name.as_deref()).shadows;
-        let skipped = shown_environment(suite, shown)
-            .map(|e| e.settings.no_volume_scatter.clone())
-            .unwrap_or_default();
-        let lit = Lit { on, shadows, skipped: &skipped };
+        let settings = shown_environment(suite, shown).map(|e| &e.settings);
+        let skipped = settings.map(|s| s.no_volume_scatter.as_slice()).unwrap_or_default();
+        let unshadowed = settings.map(|s| s.no_shadows.as_slice()).unwrap_or_default();
+        let lit = Lit { on, shadows, skipped, unshadowed };
         light_volumes(&mut commands, root, lit, &children, &parents, &names, &lights);
     }
 }
@@ -167,40 +168,31 @@ struct Lit<'a> {
     on: bool,
     shadows: bool,
     skipped: &'a [String],
+    unshadowed: &'a [String],
 }
 
 fn light_volumes(
     commands: &mut Commands,
     root: Entity,
-    Lit { on, shadows, skipped }: Lit,
+    Lit { on, shadows, skipped, unshadowed }: Lit,
     children: &Query<&Children>,
     parents: &Query<&ChildOf>,
     names: &Query<&Name>,
     lights: &FogLights,
 ) {
-    // glTF puts a light on a child of its object, named after the light data.
-    let named = |e: Entity| names.get(e).is_ok_and(|n| skipped.iter().any(|s| s == n.as_str()));
-
     for entity in children.iter_descendants(root) {
         let Ok(directional) = lights.get(entity) else {
             continue;
         };
-        let skip = named(entity) || parents.get(entity).is_ok_and(|p| named(p.parent()));
+        let skip = light_listed(skipped, entity, names, parents);
+        let shadowed = shadows && !light_listed(unshadowed, entity, names, parents);
         // A sun lights fog through its shadow map, so without shadows it can't.
-        if on && !skip && (shadows || !directional) {
+        if on && !skip && (shadowed || !directional) {
             commands.entity(entity).insert(VolumetricLight);
         } else {
             commands.entity(entity).remove::<VolumetricLight>();
         }
     }
-}
-
-fn shown_environment<'a>(
-    suite: Option<&'a ActiveSuite>,
-    shown: &ShownEnvironment,
-) -> Option<&'a Environment> {
-    let name = shown.name.as_deref()?;
-    suite?.environments.iter().find(|e| e.name == name)
 }
 
 // Every frame, once transforms are final, since fog boxes can move and scale.
