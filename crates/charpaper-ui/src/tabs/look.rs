@@ -14,7 +14,6 @@ use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
 use i18n_embed_fl::fl;
 
-use crate::Tab;
 use crate::elements::Cycler;
 use crate::elements::Section;
 use crate::elements::Shown;
@@ -49,11 +48,11 @@ const GRADING_STEP: f32 = 0.05;
 const SATURATIONS: (f32, f32) = (0.0, 2.0);
 const CONTRASTS: (f32, f32) = (0.5, 1.5);
 
-// Which camera and environment, and how the picture is finished. Look edits go to the
-// stage's ActiveLook, which the app saves with the stage.
-pub(crate) struct SceneTabPlugin;
+// Which camera and environment, in the Scene tab, and how the picture is finished, in the
+// Graphics tab. Look edits go to the stage's ActiveLook, which the app saves with the stage.
+pub(crate) struct LookPlugin;
 
-impl Plugin for SceneTabPlugin {
+impl Plugin for LookPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_click).add_observer(on_step).add_systems(
             Update,
@@ -83,78 +82,87 @@ impl Plugin for SceneTabPlugin {
     }
 }
 
-pub(crate) fn page() -> impl Bundle {
-    children![
-        section(
-            |l| fl!(l, "section-camera"),
-            Section::Camera,
-            picker(|l| fl!(l, "label-camera"), Cycler::Camera),
-        ),
-        section(
-            |l| fl!(l, "section-environment"),
-            Section::Environment,
-            rows(children![
-                picker(|l| fl!(l, "label-environment"), Cycler::Environment),
-                stepper(|l| fl!(l, "label-brightness"), Cycler::Brightness),
-                segments(|l| fl!(l, "label-shadows"), Cycler::Shadows),
-            ]),
-        ),
-        section(
-            |l| fl!(l, "section-image"),
-            Section::Image,
-            rows(children![
-                picker(|l| fl!(l, "label-tonemapping"), Cycler::Tonemapping),
-                stepper(|l| fl!(l, "label-exposure"), Cycler::Exposure),
-                stepper(|l| fl!(l, "label-bloom"), Cycler::Bloom),
-                stepper(|l| fl!(l, "label-chromatic-aberration"), Cycler::ChromaticAberration),
-            ]),
-        ),
-        section(
-            |l| fl!(l, "section-color"),
-            Section::Color,
-            rows(children![
-                stepper(|l| fl!(l, "label-warmth"), Cycler::Warmth),
-                stepper(|l| fl!(l, "label-tint"), Cycler::Tint),
-                stepper(|l| fl!(l, "label-saturation"), Cycler::Saturation),
-                stepper(|l| fl!(l, "label-contrast"), Cycler::Contrast),
-                picker(|l| fl!(l, "label-lut"), Cycler::Lut),
-                stepper(|l| fl!(l, "label-lut-strength"), Cycler::LutStrength),
-            ]),
-        ),
-        section(
-            |l| fl!(l, "section-film"),
-            Section::Film,
-            rows(children![
-                stepper(|l| fl!(l, "label-vignette"), Cycler::Vignette),
-                stepper(|l| fl!(l, "label-vignette-size"), Cycler::VignetteSize),
-                stepper(|l| fl!(l, "label-grain"), Cycler::Grain),
-                stepper(|l| fl!(l, "label-grain-size"), Cycler::GrainSize),
-            ]),
-        ),
-        translated_button(|l| fl!(l, "restore-look"))
-            .node(|n| n.display = Display::None)
-            .build(UiButton::RestoreLook),
-    ]
+pub(crate) fn camera() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-camera"),
+        Section::Camera,
+        picker(|l| fl!(l, "label-camera"), Cycler::Camera),
+    )
 }
 
-// With a suite there is always something here: at least the image section.
-fn show_tab(
-    suite: Focused<ActiveSuite>,
-    nodes: Query<(&mut Node, AnyOf<(&UiContainer, &UiButton)>)>,
-) {
+pub(crate) fn environment() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-environment"),
+        Section::Environment,
+        rows(children![
+            picker(|l| fl!(l, "label-environment"), Cycler::Environment),
+            stepper(|l| fl!(l, "label-brightness"), Cycler::Brightness),
+            segments(|l| fl!(l, "label-shadows"), Cycler::Shadows),
+        ]),
+    )
+}
+
+// Image, color and film, each folding on its own inside.
+pub(crate) fn post_processing() -> impl Bundle {
+    shown_section(
+        |l| fl!(l, "section-post-processing"),
+        Section::PostProcessing,
+        (
+            Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(12.0), ..default() },
+            Pickable::IGNORE,
+            children![
+                shown_section(
+                    |l| fl!(l, "section-image"),
+                    Section::Image,
+                    rows(children![
+                        picker(|l| fl!(l, "label-tonemapping"), Cycler::Tonemapping),
+                        stepper(|l| fl!(l, "label-exposure"), Cycler::Exposure),
+                        stepper(|l| fl!(l, "label-bloom"), Cycler::Bloom),
+                        stepper(
+                            |l| fl!(l, "label-chromatic-aberration"),
+                            Cycler::ChromaticAberration
+                        ),
+                    ]),
+                ),
+                shown_section(
+                    |l| fl!(l, "section-color"),
+                    Section::Color,
+                    rows(children![
+                        stepper(|l| fl!(l, "label-warmth"), Cycler::Warmth),
+                        stepper(|l| fl!(l, "label-tint"), Cycler::Tint),
+                        stepper(|l| fl!(l, "label-saturation"), Cycler::Saturation),
+                        stepper(|l| fl!(l, "label-contrast"), Cycler::Contrast),
+                        picker(|l| fl!(l, "label-lut"), Cycler::Lut),
+                        stepper(|l| fl!(l, "label-lut-strength"), Cycler::LutStrength),
+                    ]),
+                ),
+                shown_section(
+                    |l| fl!(l, "section-film"),
+                    Section::Film,
+                    rows(children![
+                        stepper(|l| fl!(l, "label-vignette"), Cycler::Vignette),
+                        stepper(|l| fl!(l, "label-vignette-size"), Cycler::VignetteSize),
+                        stepper(|l| fl!(l, "label-grain"), Cycler::Grain),
+                        stepper(|l| fl!(l, "label-grain-size"), Cycler::GrainSize),
+                    ]),
+                ),
+                translated_button(|l| fl!(l, "restore-look"))
+                    .node(|n| n.display = Display::None)
+                    .build(UiButton::RestoreLook),
+            ],
+        ),
+    )
+}
+
+// Only for what the suite has.
+fn show_tab(suite: Focused<ActiveSuite>, mut sections: Query<(&UiContainer, &mut Node)>) {
     let Some(suite) = suite.get() else {
         return;
     };
-    for (mut node, element) in nodes {
-        let shown = match element {
-            (Some(UiContainer::Section(Section::Camera)), _) => !suite.cameras.is_empty(),
-            (Some(UiContainer::Section(Section::Environment)), _) => !suite.environments.is_empty(),
-            (Some(UiContainer::Section(Section::Image | Section::Color | Section::Film)), _)
-            | (_, Some(UiButton::Tab(Tab::Scene))) => true,
-            _ => continue,
-        };
-        node.display = display(shown);
-    }
+    let cameras = !suite.cameras.is_empty();
+    show_container(&mut sections, UiContainer::Section(Section::Camera), cameras);
+    let environments = !suite.environments.is_empty();
+    show_container(&mut sections, UiContainer::Section(Section::Environment), environments);
 }
 
 // A row only shows when it would do something for the environment on screen.

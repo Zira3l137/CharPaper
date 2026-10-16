@@ -94,9 +94,9 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
             .with_children(|panel| {
                 panel.spawn(header());
                 panel.spawn(tab_bar());
-                panel.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
-                panel.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
-                panel.spawn(page(Tab::Render, ui.tab, tabs::render::page()));
+                panel.spawn(page(Tab::Scene, ui.tab, tabs::scene_page()));
+                panel.spawn(page(Tab::Graphics, ui.tab, tabs::graphics_page()));
+                panel.spawn(page(Tab::Sound, ui.tab, tabs::sound::page()));
                 panel.spawn(page(Tab::System, ui.tab, tabs::system::page()));
                 panel.spawn(footer());
             })
@@ -194,10 +194,6 @@ fn tab_bar() -> impl Bundle {
             .node(|n| {
                 n.flex_grow = 1.0;
                 n.flex_basis = Val::ZERO;
-                // Hidden until a suite gives it something to show.
-                if tab == Tab::Scene {
-                    n.display = Display::None;
-                }
             })
             .build(UiButton::Tab(tab))
     };
@@ -211,7 +207,7 @@ fn tab_bar() -> impl Bundle {
         },
         BorderColor::all(BORDER),
         Pickable::IGNORE,
-        children![tab(Tab::Character), tab(Tab::Scene), tab(Tab::Render), tab(Tab::System)],
+        children![tab(Tab::Scene), tab(Tab::Graphics), tab(Tab::Sound), tab(Tab::System)],
     )
 }
 

@@ -25,11 +25,11 @@ use crate::panel::new_panel;
 use crate::theme::*;
 use crate::widgets::*;
 
-// Which suite, skin, animation and expression. Clicks write to CharacterState and the
-// widgets restyle themselves from it, so nothing here keeps a copy.
-pub(crate) struct CharacterTabPlugin;
+// Which suite, skin, animation and expression, in the Scene tab. Clicks write to
+// CharacterState and the widgets restyle themselves from it, so nothing here keeps a copy.
+pub(crate) struct CharacterPlugin;
 
-impl Plugin for CharacterTabPlugin {
+impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_click).add_observer(on_step).add_systems(
             Update,
@@ -77,63 +77,73 @@ impl Plugin for CharacterTabPlugin {
     }
 }
 
-pub(crate) fn page() -> impl Bundle {
-    children![
-        section(
-            |l| fl!(l, "section-suite"),
-            Section::Suite,
-            picker(|l| fl!(l, "label-suite"), Cycler::Suite),
-        ),
-        section(
-            |l| fl!(l, "section-outfit"),
-            Section::Outfit,
-            (
-                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
-                Pickable::IGNORE,
-                children![
+pub(crate) fn suite() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-suite"),
+        Section::Suite,
+        picker(|l| fl!(l, "label-suite"), Cycler::Suite),
+    )
+}
+
+pub(crate) fn outfit() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-outfit"),
+        Section::Outfit,
+        (
+            Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(8.0), ..default() },
+            Pickable::IGNORE,
+            children![
+                (
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: vec![RepeatedGridTrack::flex(3, 1.0)],
+                        row_gap: Val::Px(8.0),
+                        column_gap: Val::Px(8.0),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                    UiContainer::OutfitGrid,
+                ),
+                section(
+                    |l| fl!(l, "section-parts"),
+                    Section::Parts,
                     (
                         Node {
-                            display: Display::Grid,
-                            grid_template_columns: vec![RepeatedGridTrack::flex(3, 1.0)],
-                            row_gap: Val::Px(8.0),
-                            column_gap: Val::Px(8.0),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(4.0),
                             ..default()
                         },
                         Pickable::IGNORE,
-                        UiContainer::OutfitGrid,
+                        UiContainer::ObjectList,
                     ),
-                    section(
-                        |l| fl!(l, "section-parts"),
-                        Section::Parts,
-                        (
-                            Node {
-                                flex_direction: FlexDirection::Column,
-                                row_gap: Val::Px(4.0),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                            UiContainer::ObjectList,
-                        ),
-                    ),
-                ],
-            ),
+                ),
+            ],
         ),
-        section(
-            |l| fl!(l, "section-animation"),
-            Section::Animation,
-            picker(|l| fl!(l, "label-animation"), Cycler::Animation),
-        ),
-        section(
-            |l| fl!(l, "section-expression"),
-            Section::Expression,
-            picker(|l| fl!(l, "label-expression"), Cycler::Expression),
-        ),
-        section(
-            |l| fl!(l, "section-gaze"),
-            Section::Gaze,
-            segments(|l| fl!(l, "label-follow-cursor"), Cycler::FollowCursor),
-        ),
-    ]
+    )
+}
+
+pub(crate) fn animation() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-animation"),
+        Section::Animation,
+        picker(|l| fl!(l, "label-animation"), Cycler::Animation),
+    )
+}
+
+pub(crate) fn expression() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-expression"),
+        Section::Expression,
+        picker(|l| fl!(l, "label-expression"), Cycler::Expression),
+    )
+}
+
+pub(crate) fn gaze() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-gaze"),
+        Section::Gaze,
+        segments(|l| fl!(l, "label-follow-cursor"), Cycler::FollowCursor),
+    )
 }
 
 // One tile per skin, rebuilt for each suite.

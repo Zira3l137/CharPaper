@@ -1,8 +1,9 @@
 use bevy::prelude::*;
-use charpaper_audio::Volumes;
 use charpaper_scene::ChosenMonitor;
 use charpaper_scene::Focused;
+use charpaper_scene::FpsLimit;
 use charpaper_scene::Monitors;
+use charpaper_scene::RenderSettings;
 use charpaper_scene::ScreenSettings;
 use charpaper_scene::StageId;
 use charpaper_scene::StageKey;
@@ -20,13 +21,10 @@ use crate::locale::Languages;
 use crate::locale::Locale;
 use crate::panel::new_panel;
 use crate::theme::*;
-use crate::widgets::percent;
 use crate::widgets::*;
 
-const VOLUME_STEP: f32 = 0.05;
-
 // Settings of the app itself rather than of what it shows: which monitors it is on and which
-// stage each shows, how loud it is, and the panel's language.
+// stage each shows, how often it draws and when it stops, and the panel's language.
 pub(crate) struct SystemTabPlugin;
 
 impl Plugin for SystemTabPlugin {
@@ -34,12 +32,12 @@ impl Plugin for SystemTabPlugin {
         app.add_observer(on_step).add_observer(on_click).add_systems(
             Update,
             (
-                show_language.run_if(
+                show_settings.run_if(
                     resource_changed::<UiState>
+                        .or_eager(resource_changed::<RenderSettings>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(new_panel),
                 ),
-                show_volumes.run_if(resource_changed::<Volumes>.or_eager(new_panel)),
                 (fill_monitors, show_monitors, show_layout).chain().run_if(
                     resource_changed::<ScreenSettings>
                         .or_eager(resource_changed::<Monitors>)
@@ -71,13 +69,20 @@ pub(crate) fn page() -> impl Bundle {
             ]),
         ),
         shown_section(
-            |l| fl!(l, "section-sound"),
-            Section::Sound,
+            |l| fl!(l, "section-frame-rate"),
+            Section::FrameRate,
             rows(children![
-                stepper(|l| fl!(l, "label-master-volume"), Cycler::MasterVolume),
-                stepper(|l| fl!(l, "label-music-volume"), Cycler::MusicVolume),
-                stepper(|l| fl!(l, "label-ambience-volume"), Cycler::AmbienceVolume),
-                stepper(|l| fl!(l, "label-character-volume"), Cycler::CharacterVolume),
+                segments(|l| fl!(l, "label-fps-limit"), Cycler::FpsLimit),
+                segments(|l| fl!(l, "label-monitor"), Cycler::Monitor),
+            ]),
+        ),
+        shown_section(
+            |l| fl!(l, "section-pause"),
+            Section::Pause,
+            rows(children![
+                segments(|l| fl!(l, "label-pause-fullscreen"), Cycler::PauseFullscreen),
+                segments(|l| fl!(l, "label-pause-covered"), Cycler::PauseCovered),
+                segments(|l| fl!(l, "label-pause-battery"), Cycler::PauseBattery),
             ]),
         ),
         shown_section(
@@ -86,17 +91,6 @@ pub(crate) fn page() -> impl Bundle {
             picker(|l| fl!(l, "label-language"), Cycler::Language),
         ),
     ]
-}
-
-fn show_volumes(volumes: Res<Volumes>, mut rows: Query<(&UiContainer, &mut Shown)>) {
-    for (cycler, volume) in [
-        (Cycler::MasterVolume, volumes.master),
-        (Cycler::MusicVolume, volumes.music),
-        (Cycler::AmbienceVolume, volumes.ambience),
-        (Cycler::CharacterVolume, volumes.character),
-    ] {
-        show(&mut rows, cycler, number(percent(volume), volume, 0.0, 1.0));
-    }
 }
 
 // One row per connected monitor, left to right as they stand, and one for each chosen monitor
@@ -250,12 +244,22 @@ fn on_click(
     screen.monitors = chosen;
 }
 
-fn show_language(
+fn show_settings(
     ui: Res<UiState>,
+    settings: Res<RenderSettings>,
     locale: Res<Locale>,
     languages: Res<Languages>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
+    let fps = choice(&FpsLimit::ALL, &settings.fps_limit, |limit| match limit.per_second() {
+        Some(fps) => format!("{fps:.0}"),
+        None => fl!(locale, "value-max"),
+    });
+    show(&mut rows, Cycler::FpsLimit, fps);
+    show(&mut rows, Cycler::Monitor, switch(&locale, ui.performance_monitor));
+    show(&mut rows, Cycler::PauseFullscreen, switch(&locale, settings.pause_when_fullscreen));
+    show(&mut rows, Cycler::PauseCovered, switch(&locale, settings.pause_when_covered));
+    show(&mut rows, Cycler::PauseBattery, switch(&locale, settings.pause_on_battery));
     let label = |tag: &Option<String>| match tag {
         None => fl!(locale, "language-system"),
         Some(tag) => languages.name(tag).unwrap_or(tag).to_string(),
@@ -273,10 +277,10 @@ fn on_step(
     languages: Res<Languages>,
     mut ui: ResMut<UiState>,
     mut screen: ResMut<ScreenSettings>,
+    mut settings: ResMut<RenderSettings>,
     stage: Focused<StageKey>,
-    mut volumes: ResMut<Volumes>,
 ) {
-    let volume = match event.cycler {
+    match event.cycler {
         Cycler::Layout => {
             let Some(stage) = stage.get().map(|key| key.0) else {
                 return;
@@ -286,22 +290,28 @@ fn on_step(
             } else {
                 screen.spanned.remove(&stage);
             }
-            return;
         }
         Cycler::Language => {
             let options = options(&languages);
             if let Some(next) = step(&options, &ui.language, &event) {
                 ui.language = next;
             }
-            return;
         }
-        Cycler::MasterVolume => &mut volumes.master,
-        Cycler::MusicVolume => &mut volumes.music,
-        Cycler::AmbienceVolume => &mut volumes.ambience,
-        Cycler::CharacterVolume => &mut volumes.character,
-        _ => return,
-    };
-    // Rounded so that repeated steps land on whole percents rather than drifting off them.
-    let next = (*volume + event.by() as f32 * VOLUME_STEP).clamp(0.0, 1.0);
-    *volume = (next * 100.0).round() / 100.0;
+        Cycler::FpsLimit => {
+            if let Some(next) = step(&FpsLimit::ALL, &settings.fps_limit, &event) {
+                settings.fps_limit = next;
+            }
+        }
+        Cycler::Monitor => ui.performance_monitor = flip(ui.performance_monitor, &event),
+        Cycler::PauseFullscreen => {
+            settings.pause_when_fullscreen = flip(settings.pause_when_fullscreen, &event);
+        }
+        Cycler::PauseCovered => {
+            settings.pause_when_covered = flip(settings.pause_when_covered, &event);
+        }
+        Cycler::PauseBattery => {
+            settings.pause_on_battery = flip(settings.pause_on_battery, &event);
+        }
+        _ => {}
+    }
 }

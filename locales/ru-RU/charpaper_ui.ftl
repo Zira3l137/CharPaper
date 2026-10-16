@@ -5,13 +5,13 @@ language-name = Русский
 
 ## Panel
 
-tab-character = Персонаж
 tab-scene = Сцена
-tab-render = Графика
+tab-graphics = Графика
+tab-sound = Звук
 tab-system = Система
 quit = Выход
 
-## Character tab
+## Scene tab
 
 section-suite = ПЕРСОНАЖ
 label-suite = Персонаж
@@ -24,15 +24,27 @@ label-expression = Мимика
 section-gaze = ВЗГЛЯД
 label-follow-cursor = За курсором
 expression-neutral = Нейтрально
-
-## Scene tab
-
 section-camera = КАМЕРА
 label-camera = Камера
+camera-orbit = Орбита
 section-environment = ОКРУЖЕНИЕ
 label-environment = Окружение
 label-brightness = Яркость
 label-shadows = Тени
+
+## Graphics tab
+
+section-quality = КАЧЕСТВО
+label-render-scale = Масштаб
+label-anti-aliasing = Сглаживание
+label-depth-of-field = Глубина резкости
+label-shadow-quality = Качество теней
+section-fog = ТУМАН
+label-fog = Туман
+label-fog-quality = Качество
+label-fog-dithering = Дизеринг
+label-fog-resolution = Разрешение
+section-post-processing = ПОСТОБРАБОТКА
 section-image = ИЗОБРАЖЕНИЕ
 label-tonemapping = Тонмаппинг
 label-exposure = Экспозиция
@@ -51,28 +63,6 @@ label-vignette-size = Размер виньетки
 label-grain = Зерно
 label-grain-size = Размер зерна
 restore-look = Сбросить настройки
-camera-orbit = Орбита
-
-## Render tab
-
-section-frame-rate = ЧАСТОТА КАДРОВ
-label-fps-limit = Лимит FPS
-label-monitor = Монитор производительности
-section-quality = КАЧЕСТВО
-label-render-scale = Масштаб
-label-anti-aliasing = Сглаживание
-label-depth-of-field = Глубина резкости
-label-shadow-quality = Качество теней
-section-fog = ТУМАН
-label-fog = Туман
-label-fog-quality = Качество
-label-fog-dithering = Дизеринг
-label-fog-resolution = Разрешение
-section-pause = ПАУЗА, КОГДА
-label-pause-fullscreen = Полный экран
-label-pause-covered = Стол закрыт
-label-pause-battery = От батареи
-value-max = Макс.
 value-blur = Размытие
 value-bokeh = Боке
 value-very-low = Очень низкое
@@ -83,6 +73,14 @@ value-ultra = Ультра
 value-full = Полное
 value-half = Половина
 
+## Sound tab
+
+section-sound = ЗВУК
+label-master-volume = Громкость
+label-music-volume = Музыка
+label-ambience-volume = Атмосфера
+label-character-volume = Персонаж
+
 ## System tab
 
 section-display = ЭКРАН
@@ -91,11 +89,14 @@ monitor-missing = не подключён
 label-layout = Раскладка
 layout-mirror = Зеркало
 layout-span = Панорама
-section-sound = ЗВУК
-label-master-volume = Громкость
-label-music-volume = Музыка
-label-ambience-volume = Атмосфера
-label-character-volume = Персонаж
+section-frame-rate = ЧАСТОТА КАДРОВ
+label-fps-limit = Лимит FPS
+label-monitor = Монитор производительности
+value-max = Макс.
+section-pause = ПАУЗА, КОГДА
+label-pause-fullscreen = Полный экран
+label-pause-covered = Стол закрыт
+label-pause-battery = От батареи
 section-interface = ИНТЕРФЕЙС
 label-language = Язык
 language-system = Системный
@@ -170,7 +171,7 @@ help-monitor = Показывает вверху экрана, сколько к
 help-render-scale = Рисует сцену в меньшем разрешении ради экономии энергии. Панель остаётся чёткой.
 help-anti-aliasing = Сглаживает зубчатые края. TAA сглаживает лучше всех, но может оставлять след за движением.
 help-depth-of-field = Размывает то, что не в фокусе, как объектив. Боке выглядит лучше, размытие быстрее.
-help-shadow-quality = Насколько чёткие тени. Низкое быстрее всего, но края жёсткие. Высокое занимает намного больше видеопамяти.
+help-shadow-quality = Насколько чёткие тени, на всех сценах. Низкое быстрее всего, но края жёсткие. Высокое занимает намного больше видеопамяти.
 help-fog = Туман и лучи света, если они есть в окружении.
 help-fog-quality = Насколько подробно рисуется туман. Чем выше, тем дороже.
 help-fog-dithering = Убирает полосы в тумане мелким шумом.

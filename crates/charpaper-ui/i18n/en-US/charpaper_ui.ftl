@@ -8,13 +8,13 @@ language-name = English
 
 ## Panel
 
-tab-character = Character
 tab-scene = Scene
-tab-render = Render
+tab-graphics = Graphics
+tab-sound = Sound
 tab-system = System
 quit = Quit
 
-## Character tab
+## Scene tab
 
 section-suite = CHARACTER
 label-suite = Character
@@ -27,15 +27,27 @@ label-expression = Expression
 section-gaze = GAZE
 label-follow-cursor = Follow cursor
 expression-neutral = Neutral
-
-## Scene tab
-
 section-camera = CAMERA
 label-camera = Camera
+camera-orbit = Orbit
 section-environment = ENVIRONMENT
 label-environment = Environment
 label-brightness = Brightness
 label-shadows = Shadows
+
+## Graphics tab
+
+section-quality = QUALITY
+label-render-scale = Render scale
+label-anti-aliasing = Anti-aliasing
+label-depth-of-field = Depth of field
+label-shadow-quality = Shadow quality
+section-fog = FOG
+label-fog = Fog
+label-fog-quality = Quality
+label-fog-dithering = Dithering
+label-fog-resolution = Resolution
+section-post-processing = POST PROCESSING
 section-image = IMAGE
 label-tonemapping = Tonemapping
 label-exposure = Exposure
@@ -54,28 +66,6 @@ label-vignette-size = Vignette size
 label-grain = Grain
 label-grain-size = Grain size
 restore-look = Restore defaults
-camera-orbit = Orbit
-
-## Render tab
-
-section-frame-rate = FRAME RATE
-label-fps-limit = FPS limit
-label-monitor = Performance monitor
-section-quality = QUALITY
-label-render-scale = Render scale
-label-anti-aliasing = Anti-aliasing
-label-depth-of-field = Depth of field
-label-shadow-quality = Shadow quality
-section-fog = FOG
-label-fog = Fog
-label-fog-quality = Quality
-label-fog-dithering = Dithering
-label-fog-resolution = Resolution
-section-pause = PAUSE WHEN
-label-pause-fullscreen = App fullscreen
-label-pause-covered = Desktop covered
-label-pause-battery = On battery
-value-max = Max
 value-blur = Blur
 value-bokeh = Bokeh
 value-very-low = Very low
@@ -85,6 +75,14 @@ value-high = High
 value-ultra = Ultra
 value-full = Full
 value-half = Half
+
+## Sound tab
+
+section-sound = SOUND
+label-master-volume = Volume
+label-music-volume = Music
+label-ambience-volume = Ambience
+label-character-volume = Character
 
 ## System tab
 
@@ -96,11 +94,14 @@ monitor-missing = not connected
 label-layout = Layout
 layout-mirror = Mirror
 layout-span = Span
-section-sound = SOUND
-label-master-volume = Volume
-label-music-volume = Music
-label-ambience-volume = Ambience
-label-character-volume = Character
+section-frame-rate = FRAME RATE
+label-fps-limit = FPS limit
+label-monitor = Performance monitor
+value-max = Max
+section-pause = PAUSE WHEN
+label-pause-fullscreen = App fullscreen
+label-pause-covered = Desktop covered
+label-pause-battery = On battery
 section-interface = INTERFACE
 label-language = Language
 # The choice that follows the system's languages instead of naming one.
@@ -177,7 +178,7 @@ help-monitor = Shows at the top of the screen what drawing each frame costs the 
 help-render-scale = Draws the scene at a lower resolution to save power. The panel stays sharp.
 help-anti-aliasing = Smooths jagged edges. TAA is smoothest but can trail behind movement.
 help-depth-of-field = Blurs what's out of focus, like a camera lens. Bokeh looks best, Blur is faster.
-help-shadow-quality = How sharp shadows are. Low is fastest, with hard edges. High takes much more video memory.
+help-shadow-quality = How sharp shadows are, on every stage. Low is fastest, with hard edges. High takes much more video memory.
 help-fog = Fog and light shafts, where the environment has them.
 help-fog-quality = How finely the fog is drawn. Higher costs more.
 help-fog-dithering = Hides banding in the fog with fine noise.

@@ -28,19 +28,22 @@ use crate::locale::Tr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Tab {
+    // Under the names of the tabs they replaced, so the panel reopens where it was left.
     #[default]
-    Character,
+    #[serde(alias = "character")]
     Scene,
-    Render,
+    #[serde(alias = "render")]
+    Graphics,
+    Sound,
     System,
 }
 
 impl Tab {
     pub(crate) fn title(self) -> Tr {
         match self {
-            Tab::Character => |l| fl!(l, "tab-character"),
             Tab::Scene => |l| fl!(l, "tab-scene"),
-            Tab::Render => |l| fl!(l, "tab-render"),
+            Tab::Graphics => |l| fl!(l, "tab-graphics"),
+            Tab::Sound => |l| fl!(l, "tab-sound"),
             Tab::System => |l| fl!(l, "tab-system"),
         }
     }
@@ -102,9 +105,10 @@ impl Plugin for SettingsPanelPlugin {
             .add_plugins((
                 panel::PanelPlugin,
                 overlay::OverlayPlugin,
-                tabs::character::CharacterTabPlugin,
-                tabs::scene::SceneTabPlugin,
-                tabs::render::RenderTabPlugin,
+                tabs::character::CharacterPlugin,
+                tabs::look::LookPlugin,
+                tabs::graphics::GraphicsPlugin,
+                tabs::sound::SoundPlugin,
                 tabs::system::SystemTabPlugin,
                 wheel::WheelPlugin,
                 held::HeldPlugin,
