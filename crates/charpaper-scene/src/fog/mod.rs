@@ -22,6 +22,7 @@ use crate::fog::pass::SceneFog;
 use crate::look::ActiveLook;
 use crate::look::Resolved;
 use crate::look::look_needs_applying;
+use crate::render::FogResolution;
 use crate::render::RenderSettings;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
@@ -139,8 +140,7 @@ fn light_fog(
         let on = settings.fog && has_fog;
         for camera in cameras.iter().filter(|&camera| stage_of.get(camera) == Some(stage)) {
             if on {
-                let steps = settings.fog_quality.steps();
-                commands.entity(camera).insert(SceneFog { steps, jitter: 0.0 });
+                commands.entity(camera).insert(scene_fog(&settings, 0.0));
             } else {
                 commands.entity(camera).remove::<SceneFog>();
             }
@@ -211,6 +211,14 @@ fn sample_fog(
     let longest = volumes.iter().map(|v| v.scale().length()).fold(0.0, f32::max);
     let jitter = if settings.fog_dithering { longest / steps as f32 } else { 0.0 };
     for mut fog in &mut fogs {
-        fog.set_if_neq(SceneFog { steps, jitter });
+        fog.set_if_neq(scene_fog(&settings, jitter));
+    }
+}
+
+fn scene_fog(settings: &RenderSettings, jitter: f32) -> SceneFog {
+    SceneFog {
+        steps: settings.fog_quality.steps(),
+        jitter,
+        half_resolution: settings.fog_resolution == FogResolution::Half,
     }
 }

@@ -66,6 +66,7 @@ section-fog = ТУМАН
 label-fog = Туман
 label-fog-quality = Качество
 label-fog-dithering = Дизеринг
+label-fog-resolution = Разрешение
 section-pause = ПАУЗА, КОГДА
 label-pause-fullscreen = Полный экран
 label-pause-covered = Стол закрыт
@@ -78,6 +79,8 @@ value-low = Низкое
 value-medium = Среднее
 value-high = Высокое
 value-ultra = Ультра
+value-full = Полное
+value-half = Половина
 
 ## System tab
 
@@ -169,6 +172,7 @@ help-depth-of-field = Размывает то, что не в фокусе, ка
 help-fog = Туман и лучи света, если они есть в окружении.
 help-fog-quality = Насколько подробно рисуется туман. Чем выше, тем дороже.
 help-fog-dithering = Убирает полосы в тумане мелким шумом.
+help-fog-resolution = В половинном разрешении туман рисуется в четыре раза быстрее. Он мягкий, поэтому разница почти не видна.
 help-pause-fullscreen = Останавливает картинку и звук, пока приложение, например игра, открыто на весь экран.
 help-pause-covered = Останавливает картинку и звук, пока окна закрывают весь рабочий стол.
 help-pause-battery = Останавливает картинку и звук, пока компьютер работает от батареи.

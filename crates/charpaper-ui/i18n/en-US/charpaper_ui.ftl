@@ -69,6 +69,7 @@ section-fog = FOG
 label-fog = Fog
 label-fog-quality = Quality
 label-fog-dithering = Dithering
+label-fog-resolution = Resolution
 section-pause = PAUSE WHEN
 label-pause-fullscreen = App fullscreen
 label-pause-covered = Desktop covered
@@ -81,6 +82,8 @@ value-low = Low
 value-medium = Medium
 value-high = High
 value-ultra = Ultra
+value-full = Full
+value-half = Half
 
 ## System tab
 
@@ -176,6 +179,7 @@ help-depth-of-field = Blurs what's out of focus, like a camera lens. Bokeh looks
 help-fog = Fog and light shafts, where the environment has them.
 help-fog-quality = How finely the fog is drawn. Higher costs more.
 help-fog-dithering = Hides banding in the fog with fine noise.
+help-fog-resolution = Half draws the fog four times faster. It is soft, so this rarely shows.
 help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
 help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
 help-pause-battery = Stops the picture and sound while the computer runs on battery.

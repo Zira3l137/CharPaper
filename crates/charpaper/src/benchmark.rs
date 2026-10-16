@@ -17,6 +17,7 @@ use charpaper_scene::DepthOfFieldQuality;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedMut;
 use charpaper_scene::FogQuality;
+use charpaper_scene::FogResolution;
 use charpaper_scene::FpsLimit;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
@@ -220,6 +221,19 @@ fn plan(saved: &RenderSettings, fog: bool, shadows: Option<bool>) -> Vec<Row> {
             rows.push(changed(saved, format!("fog {}", fog_name(quality)), |s| {
                 s.fog = true;
                 s.fog_quality = quality;
+            }));
+        }
+        for resolution in FogResolution::ALL {
+            if saved.fog && saved.fog_resolution == resolution {
+                continue;
+            }
+            let label = match resolution {
+                FogResolution::Full => "fog full resolution",
+                FogResolution::Half => "fog half resolution",
+            };
+            rows.push(changed(saved, label, |s| {
+                s.fog = true;
+                s.fog_resolution = resolution;
             }));
         }
     }

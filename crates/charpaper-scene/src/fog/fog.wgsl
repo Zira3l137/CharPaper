@@ -5,6 +5,9 @@
 // Each fog box is drawn as a cube, or as a plane over the whole screen while the camera is
 // inside it. Every pixel it covers marches a ray from the box's near side to its far side or
 // the first surface, adding up the light each lamp scatters toward the camera at every step.
+//
+// At half resolution each fog pixel marches the ray of the top-left screen pixel of the 2×2
+// it covers, which fog_upsample.wgsl relies on.
 
 #import bevy_pbr::mesh_view_bindings::{globals, lights, view, clustered_lights}
 #import bevy_pbr::mesh_view_types::{
@@ -86,6 +89,17 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
     return fog_box.clip_from_local * vec4<f32>(local, 1.0);
 }
 
+// The screen pixel whose ray this fragment marches.
+fn screen_coord(position: vec4<f32>) -> vec4<f32> {
+#ifdef HALF_RESOLUTION
+    let screen = vec2<i32>(textureDimensions(depth_texture));
+    let pixel = min(vec2<i32>(floor(position.xy)) * 2, screen - 1);
+    return vec4(vec2<f32>(pixel) + 0.5, position.zw);
+#else
+    return position;
+#endif
+}
+
 // Henyey-Greenstein: how much light goes on toward the viewer rather than away, which makes
 // light shafts fade in and out as the view turns toward the light.
 fn henyey_greenstein(neg_LdotV: f32) -> f32 {
@@ -107,7 +121,7 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let jitter_strength = fog_box.jitter_strength;
     let exposure = view.exposure;
 
-    let frag_coord = position;
+    let frag_coord = screen_coord(position);
 
     // With MSAA, the first sample's depth: approximate but good enough.
     let depth = textureLoad(depth_texture, vec2<i32>(frag_coord.xy), 0);
@@ -153,7 +167,7 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     }
     let step_size_world = ray_length_view / f32(step_count);
 
-    let Rd_ndc = vec3(frag_coord_to_ndc(position).xy, 1.0);
+    let Rd_ndc = vec3(frag_coord_to_ndc(frag_coord).xy, 1.0);
     let Rd_view = normalize(position_ndc_to_view(Rd_ndc));
     var Ro_world = position_view_to_world(view_start_pos.xyz);
     let Rd_world = normalize(position_ndc_to_world(Rd_ndc) - view.world_position);

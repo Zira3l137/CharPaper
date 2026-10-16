@@ -73,6 +73,7 @@ fn help(cycler: Cycler, l: &FluentLanguageLoader) -> String {
         Cycler::Fog => fl!(l, "help-fog"),
         Cycler::FogQuality => fl!(l, "help-fog-quality"),
         Cycler::FogDithering => fl!(l, "help-fog-dithering"),
+        Cycler::FogResolution => fl!(l, "help-fog-resolution"),
         Cycler::PauseFullscreen => fl!(l, "help-pause-fullscreen"),
         Cycler::PauseCovered => fl!(l, "help-pause-covered"),
         Cycler::PauseBattery => fl!(l, "help-pause-battery"),

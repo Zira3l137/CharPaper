@@ -53,6 +53,7 @@ pub struct RenderSettings {
     pub fog: bool,
     pub fog_quality: FogQuality,
     pub fog_dithering: bool,
+    pub fog_resolution: FogResolution,
     pub pause_when_fullscreen: bool,
     pub pause_when_covered: bool,
     pub pause_on_battery: bool,
@@ -68,6 +69,7 @@ impl Default for RenderSettings {
             fog: true,
             fog_quality: FogQuality::default(),
             fog_dithering: false,
+            fog_resolution: FogResolution::default(),
             pause_when_fullscreen: true,
             pause_when_covered: true,
             pause_on_battery: false,
@@ -182,6 +184,21 @@ impl FogQuality {
             FogQuality::Ultra => 256,
         }
     }
+}
+
+// Fog is soft, so one fog pixel can stand for a few on screen. Half draws one for every four,
+// about four times cheaper, and spreads it back out without blurring across the edges of
+// what's in front of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FogResolution {
+    Full,
+    #[default]
+    Half,
+}
+
+impl FogResolution {
+    pub const ALL: [FogResolution; 2] = [FogResolution::Full, FogResolution::Half];
 }
 
 // What the scene added to a Screen to draw on it. Despawned along with the screen.

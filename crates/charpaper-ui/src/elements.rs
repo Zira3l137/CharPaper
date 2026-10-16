@@ -112,6 +112,7 @@ pub(crate) enum Cycler {
     Fog,
     FogQuality,
     FogDithering,
+    FogResolution,
     PauseFullscreen,
     PauseCovered,
     PauseBattery,

@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use charpaper_scene::AntiAliasing;
 use charpaper_scene::DepthOfFieldQuality;
 use charpaper_scene::FogQuality;
+use charpaper_scene::FogResolution;
 use charpaper_scene::FpsLimit;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
@@ -67,6 +68,7 @@ pub(crate) fn page() -> impl Bundle {
                 segments(|l| fl!(l, "label-fog"), Cycler::Fog),
                 picker(|l| fl!(l, "label-fog-quality"), Cycler::FogQuality),
                 segments(|l| fl!(l, "label-fog-dithering"), Cycler::FogDithering),
+                segments(|l| fl!(l, "label-fog-resolution"), Cycler::FogResolution),
             ]),
         ),
         shown_section(
@@ -127,6 +129,13 @@ fn show_values(
                 })
             }
             Cycler::FogDithering => switch(&locale, settings.fog_dithering),
+            Cycler::FogResolution => {
+                choice(&FogResolution::ALL, &settings.fog_resolution, |resolution| match resolution
+                {
+                    FogResolution::Full => fl!(locale, "value-full"),
+                    FogResolution::Half => fl!(locale, "value-half"),
+                })
+            }
             Cycler::PauseFullscreen => switch(&locale, settings.pause_when_fullscreen),
             Cycler::PauseCovered => switch(&locale, settings.pause_when_covered),
             Cycler::PauseBattery => switch(&locale, settings.pause_on_battery),
@@ -174,6 +183,11 @@ fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>, mut ui: ResMut
             }
         }
         Cycler::FogDithering => settings.fog_dithering = flip(settings.fog_dithering, &event),
+        Cycler::FogResolution => {
+            if let Some(next) = step(&FogResolution::ALL, &settings.fog_resolution, &event) {
+                settings.fog_resolution = next;
+            }
+        }
         Cycler::PauseFullscreen => {
             settings.pause_when_fullscreen = flip(settings.pause_when_fullscreen, &event)
         }
