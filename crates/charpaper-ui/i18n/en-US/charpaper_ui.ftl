@@ -121,6 +121,14 @@ monitor-cores = { $busy } of { $total } cores busy
 monitor-main-thread = Main thread
 monitor-render-thread = Render thread
 monitor-recording = { $time } writing GPU commands
+monitor-stage-assets = Assets
+monitor-stage-specialize = Shader variants
+monitor-stage-views = Views, screen
+monitor-stage-views-note = waits here while the GPU or vsync is slower
+monitor-stage-queue = Sorting draws
+monitor-stage-prepare = GPU buffers
+monitor-stage-render = Commands
+monitor-stage-cleanup = Cleanup
 monitor-memory = Memory
 monitor-graphics = Graphics
 monitor-discrete = discrete
@@ -141,6 +149,9 @@ monitor-display = Screen, panel
 monitor-scene = Scene
 monitor-lights = { $count } lights
 monitor-light-details = with shadows: { $shadowed }, in fog: { $fog }, fog boxes: { $boxes }
+monitor-meshes = Meshes
+# How many times a frame meshes are drawn: by the cameras, and into the lights' shadow maps.
+monitor-mesh-details = drawn by cameras: { $drawn }, into shadow maps: { $shadows }
 
 ## Values shown in controls
 

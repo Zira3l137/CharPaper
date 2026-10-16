@@ -163,6 +163,10 @@ fn part(label: String) -> String {
     format!("    {label}")
 }
 
+fn subpart(label: String) -> String {
+    format!("        {label}")
+}
+
 fn rows(r: &Readings, l: &FluentLanguageLoader) -> Vec<Row> {
     let ms = |value: f32| fl!(l, "monitor-ms", value = format!("{value:.1}"));
     let maybe_ms = |value: Option<f32>| value.map(ms).unwrap_or_else(|| "-".into());
@@ -191,21 +195,34 @@ fn rows(r: &Readings, l: &FluentLanguageLoader) -> Vec<Row> {
                 .unwrap_or_default(),
         ),
         row(part(fl!(l, "monitor-main-thread")), maybe_ms(r.main_thread_ms), none()),
-        row(
-            part(fl!(l, "monitor-render-thread")),
-            maybe_ms(r.render_thread_ms),
-            r.recording_ms
-                .map(|time| fl!(l, "monitor-recording", time = ms(time)))
-                .unwrap_or_default(),
-        ),
-        row(
-            fl!(l, "monitor-memory"),
-            r.memory_mb
-                .map(|mb| fl!(l, "monitor-mb", value = format!("{mb:.0}")))
-                .unwrap_or_else(|| "-".into()),
-            none(),
-        ),
+        row(part(fl!(l, "monitor-render-thread")), maybe_ms(r.render_thread_ms), none()),
     ];
+    if let Some(stages) = r.render_stages {
+        let recording = r
+            .recording_ms
+            .map(|time| fl!(l, "monitor-recording", time = ms(time)))
+            .unwrap_or_default();
+        rows.extend([
+            row(subpart(fl!(l, "monitor-stage-assets")), ms(stages.assets), none()),
+            row(subpart(fl!(l, "monitor-stage-specialize")), ms(stages.specialize), none()),
+            row(
+                subpart(fl!(l, "monitor-stage-views")),
+                ms(stages.views),
+                fl!(l, "monitor-stage-views-note"),
+            ),
+            row(subpart(fl!(l, "monitor-stage-queue")), ms(stages.queue), none()),
+            row(subpart(fl!(l, "monitor-stage-prepare")), ms(stages.prepare), none()),
+            row(subpart(fl!(l, "monitor-stage-render")), ms(stages.render), recording),
+            row(subpart(fl!(l, "monitor-stage-cleanup")), ms(stages.cleanup), none()),
+        ]);
+    }
+    rows.extend([row(
+        fl!(l, "monitor-memory"),
+        r.memory_mb
+            .map(|mb| fl!(l, "monitor-mb", value = format!("{mb:.0}")))
+            .unwrap_or_else(|| "-".into()),
+        none(),
+    )]);
 
     if let Some(adapter) = &r.adapter {
         let kind = match adapter.kind {
@@ -261,6 +278,16 @@ fn rows(r: &Readings, l: &FluentLanguageLoader) -> Vec<Row> {
             shadowed = r.lights.shadowed.to_string(),
             fog = r.lights.in_fog.to_string(),
             boxes = r.fog_boxes.to_string()
+        ),
+    ));
+    rows.push(row(
+        part(fl!(l, "monitor-meshes")),
+        r.meshes.total.to_string(),
+        fl!(
+            l,
+            "monitor-mesh-details",
+            drawn = r.meshes.drawn.to_string(),
+            shadows = r.meshes.in_shadow_maps.to_string()
         ),
     ));
     rows

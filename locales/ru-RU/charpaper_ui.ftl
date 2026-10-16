@@ -115,6 +115,14 @@ monitor-cores = занято ядер: { $busy } из { $total }
 monitor-main-thread = Основной поток
 monitor-render-thread = Поток отрисовки
 monitor-recording = { $time } на запись команд GPU
+monitor-stage-assets = Ресурсы
+monitor-stage-specialize = Варианты шейдеров
+monitor-stage-views = Виды, экран
+monitor-stage-views-note = здесь ждёт, если GPU или вертикальная синхронизация медленнее
+monitor-stage-queue = Сортировка отрисовки
+monitor-stage-prepare = Буферы GPU
+monitor-stage-render = Команды
+monitor-stage-cleanup = Очистка
 monitor-memory = Память
 monitor-graphics = Видеокарта
 monitor-discrete = дискретная
@@ -135,6 +143,9 @@ monitor-display = Экран, панель
 monitor-scene = Сцена
 monitor-lights = источников света: { $count }
 monitor-light-details = с тенями: { $shadowed }, в тумане: { $fog }, объёмов тумана: { $boxes }
+monitor-meshes = Меши
+# How many times a frame meshes are drawn: by the cameras, and into the lights' shadow maps.
+monitor-mesh-details = отрисовок камерами: { $drawn }, в карты теней: { $shadows }
 
 ## Values shown in controls
 

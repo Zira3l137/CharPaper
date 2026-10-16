@@ -9,12 +9,17 @@ mod gpu;
 mod process;
 mod threads;
 
+use std::any::TypeId;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::PoisonError;
 use std::time::Duration;
 
+use bevy::camera::visibility::CascadesVisibleEntities;
+use bevy::camera::visibility::CubemapVisibleEntities;
+use bevy::camera::visibility::VisibleEntities;
+use bevy::camera::visibility::VisibleMeshEntities;
 use bevy::ecs::system::SystemParam;
 use bevy::light::FogVolume;
 use bevy::light::VolumetricLight;
@@ -68,6 +73,7 @@ pub struct Readings {
     // Getting each frame ready for the GPU, on a thread of its own, while the main thread
     // works on the next one.
     pub render_thread_ms: Option<f32>,
+    pub render_stages: Option<RenderStages>,
     // The part of the render thread's time spent writing out the GPU's commands.
     pub recording_ms: Option<f32>,
     // Of the whole machine, as Task Manager counts it.
@@ -79,6 +85,7 @@ pub struct Readings {
     // Point light faces and spot lights drawn into shadow maps each frame.
     pub shadow_maps: Option<f32>,
     pub lights: LightCounts,
+    pub meshes: MeshCounts,
     pub fog_boxes: usize,
 }
 
@@ -124,6 +131,37 @@ pub struct GpuTimes {
     pub display: f32,
 }
 
+// The render thread's time by the stages of Bevy's Render schedule, in the order they run.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RenderStages {
+    // Meshes, textures and materials that changed, and which views there are.
+    pub assets: f32,
+    // Checking that every mesh in every view has the shader variant it needs.
+    pub specialize: f32,
+    // Each view's data, and the screen's image to draw into, which is waited for here when
+    // the GPU or vsync can't keep up.
+    pub views: f32,
+    // Sorting what each view draws into batches.
+    pub queue: f32,
+    // Filling the GPU's buffers and bind groups.
+    pub prepare: f32,
+    // Writing out the GPU's commands, handing them over, and showing the frame.
+    pub render: f32,
+    pub cleanup: f32,
+}
+
+impl RenderStages {
+    pub(crate) const COUNT: usize = 7;
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MeshCounts {
+    pub total: usize,
+    // Over every camera, and over every shadow map: a mesh in three maps counts three times.
+    pub drawn: usize,
+    pub in_shadow_maps: usize,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct LightCounts {
     pub total: usize,
@@ -157,6 +195,30 @@ pub(crate) struct GpuMeans {
     fog: Mean,
     effects: Mean,
     display: Mean,
+}
+
+#[derive(Default, Clone, Copy, Debug)]
+pub(crate) struct StageMeans([Mean; RenderStages::COUNT]);
+
+impl StageMeans {
+    pub(crate) fn add(&mut self, stages: &[f64; RenderStages::COUNT]) {
+        for (mean, &time) in self.0.iter_mut().zip(stages) {
+            mean.add(time);
+        }
+    }
+
+    fn get(self) -> Option<RenderStages> {
+        let [assets, specialize, views, queue, prepare, render, cleanup] = self.0.map(Mean::get);
+        Some(RenderStages {
+            assets: assets?,
+            specialize: specialize?,
+            views: views?,
+            queue: queue?,
+            prepare: prepare?,
+            render: render?,
+            cleanup: cleanup?,
+        })
+    }
 }
 
 impl GpuMeans {
@@ -197,6 +259,7 @@ impl Samples {
 #[derive(Default)]
 pub(crate) struct RenderSamples {
     pub render_thread: Mean,
+    pub render_stages: StageMeans,
     pub recording: Mean,
     pub shadow_maps: Mean,
     pub gpu: GpuMeans,
@@ -218,9 +281,48 @@ struct SceneCounts<'w, 's> {
     suns: Query<'w, 's, &'static DirectionalLight>,
     in_fog: Query<'w, 's, (), With<VolumetricLight>>,
     fog: Query<'w, 's, (), With<FogVolume>>,
+    meshes: Query<'w, 's, &'static InheritedVisibility, With<Mesh3d>>,
+    cameras: Query<'w, 's, (&'static Camera, &'static VisibleEntities)>,
+    cube_maps: Query<'w, 's, (&'static PointLight, &'static CubemapVisibleEntities)>,
+    spot_maps: Query<'w, 's, (&'static SpotLight, &'static VisibleMeshEntities)>,
+    sun_maps: Query<'w, 's, (&'static DirectionalLight, &'static CascadesVisibleEntities)>,
 }
 
 impl SceneCounts<'_, '_> {
+    // What Bevy's visibility checks found this frame, which is what the render thread works
+    // through.
+    fn meshes(&self) -> MeshCounts {
+        let mesh = TypeId::of::<Mesh3d>();
+        let drawn = self
+            .cameras
+            .iter()
+            .filter(|(camera, _)| camera.is_active)
+            .map(|(_, visible)| visible.len(mesh))
+            .sum();
+        let cubes = self
+            .cube_maps
+            .iter()
+            .filter(|(light, _)| light.shadow_maps_enabled)
+            .flat_map(|(_, faces)| faces.iter())
+            .map(|face| face.entities.len());
+        let spots = self
+            .spot_maps
+            .iter()
+            .filter(|(light, _)| light.shadow_maps_enabled)
+            .map(|(_, visible)| visible.entities.len());
+        let suns = self
+            .sun_maps
+            .iter()
+            .filter(|(light, _)| light.shadow_maps_enabled)
+            .flat_map(|(_, views)| views.entities.values().flatten())
+            .map(|cascade| cascade.entities.len());
+        MeshCounts {
+            total: self.meshes.iter().filter(|visible| visible.get()).count(),
+            drawn,
+            in_shadow_maps: cubes.chain(spots).chain(suns).sum(),
+        }
+    }
+
     fn lights(&self) -> LightCounts {
         let shadowed = self.points.iter().filter(|l| l.shadow_maps_enabled).count()
             + self.spots.iter().filter(|l| l.shadow_maps_enabled).count()
@@ -268,6 +370,7 @@ fn publish(
         frame_ms: seconds * 1000.0 / gathered.frames as f32,
         main_thread_ms: gathered.main_thread.get(),
         render_thread_ms: render.render_thread.get(),
+        render_stages: render.render_stages.get(),
         recording_ms: render.recording.get(),
         cpu_percent: usage.cpu_percent,
         cores: process.cores(),
@@ -289,6 +392,7 @@ fn publish(
         },
         shadow_maps: render.shadow_maps.get(),
         lights: scene.lights(),
+        meshes: scene.meshes(),
         fog_boxes: scene.fog.iter().len(),
     };
 }
