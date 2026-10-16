@@ -57,6 +57,7 @@ camera-orbit = Орбита
 
 section-frame-rate = ЧАСТОТА КАДРОВ
 label-fps-limit = Лимит FPS
+label-monitor = Монитор производительности
 section-quality = КАЧЕСТВО
 label-render-scale = Масштаб
 label-anti-aliasing = Сглаживание
@@ -95,6 +96,41 @@ section-interface = ИНТЕРФЕЙС
 label-language = Язык
 language-system = Системный
 
+## Performance monitor, shown at the top of the screen. Units after numbers.
+
+monitor-title = ПРОИЗВОДИТЕЛЬНОСТЬ
+monitor-ms = { $value } мс
+monitor-mb = { $value } МБ
+monitor-frame-rate = Частота кадров
+monitor-fps = { $value } к/с
+monitor-frame-time = { $time } на кадр
+monitor-cpu = Процессор
+# How many of the computer's cores CharPaper keeps busy, on average.
+monitor-cores = занято ядер: { $busy } из { $total }
+monitor-main-thread = Основной поток
+monitor-render-thread = Поток отрисовки
+monitor-recording = { $time } на запись команд GPU
+monitor-memory = Память
+monitor-graphics = Видеокарта
+monitor-discrete = дискретная
+monitor-integrated = встроенная
+monitor-software = без GPU, рисует процессор
+monitor-other-gpu = другая
+monitor-gpu = GPU
+monitor-busy = { $percent } времени
+monitor-waiting = идёт замер…
+monitor-unsupported = эта видеокарта не умеет замерять время
+monitor-light-shadows = Тени ламп
+monitor-shadow-maps = карт теней: { $count }
+monitor-prepass = Предпроход, тени солнца
+monitor-main-pass = Основной проход
+monitor-fog = Туман
+monitor-effects = Эффекты
+monitor-display = Экран, панель
+monitor-scene = Сцена
+monitor-lights = источников света: { $count }
+monitor-light-details = с тенями: { $shadowed }, в тумане: { $fog }, объёмов тумана: { $boxes }
+
 ## Values shown in controls
 
 value-on = Вкл
@@ -126,6 +162,7 @@ help-contrast = Насколько сильно разведены тёмное 
 help-lut = Готовая цветокоррекция из папки luts персонажа.
 help-lut-strength = Насколько сильно применять цветокоррекцию.
 help-fps-limit = Сколько кадров в секунду рисовать. Меньше кадров — меньше расход энергии.
+help-monitor = Показывает вверху экрана, сколько каждый этап отрисовки кадра стоит процессору и видеокарте.
 help-render-scale = Рисует сцену в меньшем разрешении ради экономии энергии. Панель остаётся чёткой.
 help-anti-aliasing = Сглаживает зубчатые края. TAA сглаживает лучше всех, но может оставлять след за движением.
 help-depth-of-field = Размывает то, что не в фокусе, как объектив. Боке выглядит лучше, размытие быстрее.

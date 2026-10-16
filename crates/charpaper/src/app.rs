@@ -9,6 +9,7 @@ use bevy::window::PresentMode;
 use bevy::window::WindowLevel;
 use bevy::window::WindowResolution;
 use charpaper_audio::SoundPlugin;
+use charpaper_monitor::MonitorPlugin;
 use charpaper_scene::ARMATURE_SOURCE;
 use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
@@ -62,6 +63,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
         )
         .add_plugins((
             SoundPlugin { volumes: loaded.state.audio.clone() },
+            MonitorPlugin,
             WallpaperPlugin {
                 config: config.wallpaper.clone(),
                 screen: loaded.state.screen.clone(),
@@ -69,6 +71,9 @@ pub fn run(mut config: AppConfig) -> Result<()> {
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() },
         ));
+    // GPU time of each of Bevy's render passes, which Tracy shows beside the CPU's.
+    #[cfg(feature = "profile")]
+    app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
     // The benchmark changes settings and the look as it goes, none of which may be saved.
     if config.benchmark {
         app.add_plugins(BenchmarkPlugin { results: exe_dir.join(benchmark::RESULTS_FILE) });

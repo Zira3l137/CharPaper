@@ -66,6 +66,7 @@ fn help(cycler: Cycler, l: &FluentLanguageLoader) -> String {
         Cycler::Lut => fl!(l, "help-lut"),
         Cycler::LutStrength => fl!(l, "help-lut-strength"),
         Cycler::FpsLimit => fl!(l, "help-fps-limit"),
+        Cycler::Monitor => fl!(l, "help-monitor"),
         Cycler::RenderScale => fl!(l, "help-render-scale"),
         Cycler::AntiAliasing => fl!(l, "help-anti-aliasing"),
         Cycler::DepthOfField => fl!(l, "help-depth-of-field"),

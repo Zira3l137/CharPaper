@@ -105,6 +105,7 @@ pub(crate) enum Cycler {
     Lut,
     LutStrength,
     FpsLimit,
+    Monitor,
     RenderScale,
     AntiAliasing,
     DepthOfField,

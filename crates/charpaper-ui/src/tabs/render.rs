@@ -7,6 +7,7 @@ use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
 use i18n_embed_fl::fl;
 
+use crate::UiState;
 use crate::elements::Cycler;
 use crate::elements::Section;
 use crate::elements::Shown;
@@ -24,10 +25,17 @@ impl Plugin for RenderTabPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_step).add_systems(
             Update,
-            show_values.run_if(
-                resource_changed::<RenderSettings>
-                    .or_eager(resource_changed::<Locale>)
-                    .or_eager(new_panel),
+            (
+                show_values.run_if(
+                    resource_changed::<RenderSettings>
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
+                ),
+                show_monitor.run_if(
+                    resource_changed::<UiState>
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
+                ),
             ),
         );
     }
@@ -38,7 +46,10 @@ pub(crate) fn page() -> impl Bundle {
         shown_section(
             |l| fl!(l, "section-frame-rate"),
             Section::FrameRate,
-            segments(|l| fl!(l, "label-fps-limit"), Cycler::FpsLimit),
+            rows(children![
+                segments(|l| fl!(l, "label-fps-limit"), Cycler::FpsLimit),
+                segments(|l| fl!(l, "label-monitor"), Cycler::Monitor),
+            ]),
         ),
         shown_section(
             |l| fl!(l, "section-quality"),
@@ -125,8 +136,17 @@ fn show_values(
     }
 }
 
-fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>) {
+fn show_monitor(
+    ui: Res<UiState>,
+    locale: Res<Locale>,
+    mut rows: Query<(&UiContainer, &mut Shown)>,
+) {
+    show(&mut rows, Cycler::Monitor, switch(&locale, ui.performance_monitor));
+}
+
+fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>, mut ui: ResMut<UiState>) {
     match event.cycler {
+        Cycler::Monitor => ui.performance_monitor = flip(ui.performance_monitor, &event),
         Cycler::FpsLimit => {
             if let Some(next) = step(&FpsLimit::ALL, &settings.fps_limit, &event) {
                 settings.fps_limit = next;

@@ -60,6 +60,7 @@ camera-orbit = Orbit
 
 section-frame-rate = FRAME RATE
 label-fps-limit = FPS limit
+label-monitor = Performance monitor
 section-quality = QUALITY
 label-render-scale = Render scale
 label-anti-aliasing = Anti-aliasing
@@ -101,6 +102,41 @@ label-language = Language
 # The choice that follows the system's languages instead of naming one.
 language-system = System
 
+## Performance monitor, shown at the top of the screen. Units after numbers.
+
+monitor-title = PERFORMANCE
+monitor-ms = { $value } ms
+monitor-mb = { $value } MB
+monitor-frame-rate = Frame rate
+monitor-fps = { $value } fps
+monitor-frame-time = { $time } a frame
+monitor-cpu = CPU
+# How many of the computer's cores CharPaper keeps busy, on average.
+monitor-cores = { $busy } of { $total } cores busy
+monitor-main-thread = Main thread
+monitor-render-thread = Render thread
+monitor-recording = { $time } writing GPU commands
+monitor-memory = Memory
+monitor-graphics = Graphics
+monitor-discrete = discrete
+monitor-integrated = integrated
+monitor-software = no GPU, drawn by the CPU
+monitor-other-gpu = other
+monitor-gpu = GPU
+monitor-busy = { $percent } of the time
+monitor-waiting = measuring…
+monitor-unsupported = this GPU can't time its work
+monitor-light-shadows = Light shadows
+monitor-shadow-maps = shadow maps: { $count }
+monitor-prepass = Prepass, sun shadows
+monitor-main-pass = Main pass
+monitor-fog = Fog
+monitor-effects = Effects
+monitor-display = Screen, panel
+monitor-scene = Scene
+monitor-lights = { $count } lights
+monitor-light-details = with shadows: { $shadowed }, in fog: { $fog }, fog boxes: { $boxes }
+
 ## Values shown in controls
 
 value-on = On
@@ -133,6 +169,7 @@ help-contrast = How far darks and lights are pushed apart.
 help-lut = A ready-made color grade from the character's luts folder.
 help-lut-strength = How much of the color grade to apply.
 help-fps-limit = How many frames a second to draw. Fewer save power.
+help-monitor = Shows at the top of the screen what drawing each frame costs the CPU and GPU, stage by stage.
 help-render-scale = Draws the scene at a lower resolution to save power. The panel stays sharp.
 help-anti-aliasing = Smooths jagged edges. TAA is smoothest but can trail behind movement.
 help-depth-of-field = Blurs what's out of focus, like a camera lens. Bokeh looks best, Blur is faster.

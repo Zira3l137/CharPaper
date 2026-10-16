@@ -3,6 +3,7 @@ mod elements;
 mod held;
 mod help;
 mod locale;
+mod overlay;
 mod panel;
 mod rows;
 mod tabs;
@@ -59,6 +60,7 @@ pub struct UiState {
     // in a later version is ignored instead of making the whole file unreadable.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) folded: BTreeMap<String, bool>,
+    pub performance_monitor: bool,
 }
 
 impl UiState {
@@ -99,6 +101,7 @@ impl Plugin for SettingsPanelPlugin {
             )
             .add_plugins((
                 panel::PanelPlugin,
+                overlay::OverlayPlugin,
                 tabs::character::CharacterTabPlugin,
                 tabs::scene::SceneTabPlugin,
                 tabs::render::RenderTabPlugin,

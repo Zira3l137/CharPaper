@@ -1,0 +1,9 @@
+[package]
+name = "charpaper-monitor"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+sysinfo.workspace = true
+wgpu.workspace = true
