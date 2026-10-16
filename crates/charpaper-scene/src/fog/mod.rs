@@ -23,7 +23,7 @@ use crate::look::ActiveLook;
 use crate::look::Resolved;
 use crate::look::look_needs_applying;
 use crate::render::FogResolution;
-use crate::render::RenderSettings;
+use crate::render::Graphics;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
@@ -36,7 +36,7 @@ impl Plugin for FogPlugin {
             .add_systems(
                 Update,
                 light_fog
-                    .run_if(look_needs_applying.or_eager(resource_changed::<RenderSettings>))
+                    .run_if(look_needs_applying.or_eager(any_match_filter::<Changed<Graphics>>))
                     .in_set(SceneSet::Run)
                     .after(spawn_environment_scenes),
             )
@@ -122,8 +122,13 @@ type FogLights<'w, 's> = Query<
 
 fn light_fog(
     mut commands: Commands,
-    settings: Res<RenderSettings>,
-    stages: Query<(Entity, Option<&ActiveLook>, &ShownEnvironment, Option<&ActiveSuite>)>,
+    stages: Query<(
+        Entity,
+        &Graphics,
+        Option<&ActiveLook>,
+        &ShownEnvironment,
+        Option<&ActiveSuite>,
+    )>,
     cameras: Query<Entity, With<SceneCamera>>,
     stage_of: StageOf,
     volumes: Query<(), With<FogVolume>>,
@@ -132,15 +137,15 @@ fn light_fog(
     names: Query<&Name>,
     lights: FogLights,
 ) {
-    for (stage, look, shown, suite) in &stages {
+    for (stage, graphics, look, shown, suite) in &stages {
         // Only this stage's fog counts: the fog boxes are under its environment.
         let has_fog = shown
             .root
             .is_some_and(|root| children.iter_descendants(root).any(|e| volumes.contains(e)));
-        let on = settings.fog && has_fog;
+        let on = graphics.fog && has_fog;
         for camera in cameras.iter().filter(|&camera| stage_of.get(camera) == Some(stage)) {
             if on {
-                commands.entity(camera).insert(scene_fog(&settings, 0.0));
+                commands.entity(camera).insert(scene_fog(graphics, 0.0));
             } else {
                 commands.entity(camera).remove::<SceneFog>();
             }
@@ -200,25 +205,29 @@ fn shown_environment<'a>(
 
 // Every frame, once transforms are final, since fog boxes can move and scale.
 fn sample_fog(
-    settings: Res<RenderSettings>,
     volumes: Query<&GlobalTransform, With<FogVolume>>,
-    mut fogs: Query<&mut SceneFog>,
+    mut fogs: Query<(Entity, &mut SceneFog)>,
+    stage_of: StageOf,
+    graphics: Query<&Graphics>,
 ) {
-    let steps = settings.fog_quality.steps();
     // Starting each pixel's samples up to one step further along turns the stripes between
     // steps into fine noise. Bevy wants that as a distance, so the step is measured along the
     // longest way through any fog box: its diagonal.
     let longest = volumes.iter().map(|v| v.scale().length()).fold(0.0, f32::max);
-    let jitter = if settings.fog_dithering { longest / steps as f32 } else { 0.0 };
-    for mut fog in &mut fogs {
-        fog.set_if_neq(scene_fog(&settings, jitter));
+    for (camera, mut fog) in &mut fogs {
+        let Some(graphics) = stage_of.get(camera).and_then(|s| graphics.get(s).ok()) else {
+            continue;
+        };
+        let steps = graphics.fog_quality.steps();
+        let jitter = if graphics.fog_dithering { longest / steps as f32 } else { 0.0 };
+        fog.set_if_neq(scene_fog(graphics, jitter));
     }
 }
 
-fn scene_fog(settings: &RenderSettings, jitter: f32) -> SceneFog {
+fn scene_fog(graphics: &Graphics, jitter: f32) -> SceneFog {
     SceneFog {
-        steps: settings.fog_quality.steps(),
+        steps: graphics.fog_quality.steps(),
         jitter,
-        half_resolution: settings.fog_resolution == FogResolution::Half,
+        half_resolution: graphics.fog_resolution == FogResolution::Half,
     }
 }

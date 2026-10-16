@@ -12,7 +12,7 @@ use crate::camera::rig::CameraRig;
 use crate::camera::rig::Following;
 use crate::character::Armature;
 use crate::render::DepthOfFieldQuality;
-use crate::render::RenderSettings;
+use crate::render::Graphics;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
@@ -35,7 +35,7 @@ struct Lens {
 
 pub(crate) fn focus_lens(
     mut commands: Commands,
-    settings: Res<RenderSettings>,
+    graphics: Query<&Graphics>,
     suites: Query<&ActiveSuite>,
     views: Query<(Entity, &GlobalTransform, &OrbitCamera, &Following, &ChildOf), With<SceneView>>,
     mut cameras: Query<(Entity, Option<&mut DepthOfField>, &ChildOf), With<SceneCamera>>,
@@ -46,14 +46,16 @@ pub(crate) fn focus_lens(
     names: Query<&Name>,
     globals: Query<&GlobalTransform>,
 ) {
-    let mode = match settings.depth_of_field {
-        DepthOfFieldQuality::Off => None,
-        DepthOfFieldQuality::Blur => Some(DepthOfFieldMode::Gaussian),
-        DepthOfFieldQuality::Bokeh => Some(DepthOfFieldMode::Bokeh),
-    };
-
     for (view, eye, orbit, following, stage) in &views {
         let stage = stage.parent();
+        let Ok(graphics) = graphics.get(stage) else {
+            continue;
+        };
+        let mode = match graphics.depth_of_field {
+            DepthOfFieldQuality::Off => None,
+            DepthOfFieldQuality::Blur => Some(DepthOfFieldMode::Gaussian),
+            DepthOfFieldQuality::Bokeh => Some(DepthOfFieldMode::Bokeh),
+        };
         let lens = match following.name() {
             None => suites.get(stage).ok().and_then(|s| s.camera.f_stop).map(|f_stop| Lens {
                 f_stop,
@@ -101,7 +103,7 @@ pub(crate) fn focus_lens(
             aperture_f_stops: lens.f_stop,
             // Counted in the scene image's pixels, so it follows the render scale to look the
             // same.
-            max_circle_of_confusion_diameter: MAX_BLUR_PX * settings.scale_percent() as f32 / 100.0,
+            max_circle_of_confusion_diameter: MAX_BLUR_PX * graphics.scale_percent() as f32 / 100.0,
             max_depth: SKY_DEPTH,
         });
         for (camera, depth_of_field, parent) in &mut cameras {

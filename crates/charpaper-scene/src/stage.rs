@@ -31,6 +31,7 @@ use crate::look::ActiveLook;
 use crate::look::EditedLooks;
 use crate::look::LookEdited;
 use crate::lut::ShownLut;
+use crate::render::Graphics;
 use crate::screens::Screen;
 use crate::screens::ScreenSync;
 use crate::screens::ShowsStage;
@@ -67,7 +68,8 @@ use crate::suite::starting_suite;
     ShownLut,
     Soundscape,
     GazeRig,
-    Fader
+    Fader,
+    Graphics
 )]
 pub struct Stage;
 
@@ -92,6 +94,9 @@ pub struct StageSeed {
     // The edits to each suite's look, by the suite's folder.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub looks: BTreeMap<String, LookEdits>,
+    // None for a stage saved before stages had graphics of their own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graphics: Option<Graphics>,
 }
 
 // Every stage's seed, filled from state.toml and brought up to date as a stage goes away.
@@ -156,6 +161,7 @@ pub(crate) fn sync_stages(
                 seed.gaze,
                 Remembered(seed.suites),
                 EditedLooks(seed.looks),
+                seed.graphics.unwrap_or_default(),
                 // Every stage stands at the origin, overlapping the others, and only its render
                 // layer keeps it apart. Placed far away instead, its positions would lose the
                 // fraction of a millimetre that layered meshes keep between them, and they would
@@ -187,16 +193,18 @@ type StageMemory = (
     &'static GazeSettings,
     &'static Remembered,
     &'static EditedLooks,
+    &'static Graphics,
     Option<(&'static ActiveSuite, &'static ActiveLook)>,
 );
 
 fn seed_of(
-    (_, state, gaze, remembered, edited, shown): (
+    (_, state, gaze, remembered, edited, graphics, shown): (
         &StageKey,
         &CharacterState,
         &GazeSettings,
         &Remembered,
         &EditedLooks,
+        &Graphics,
         Option<(&ActiveSuite, &ActiveLook)>,
     ),
 ) -> StageSeed {
@@ -206,7 +214,13 @@ fn seed_of(
         suites.entry(suite.folder()).or_default().merge(Picks::from_state(state));
         looks.keep(suite, look);
     }
-    StageSeed { suite: state.suite.clone(), gaze: gaze.clone(), suites, looks: looks.0 }
+    StageSeed {
+        suite: state.suite.clone(),
+        gaze: gaze.clone(),
+        suites,
+        looks: looks.0,
+        graphics: Some(graphics.clone()),
+    }
 }
 
 // What the app saves: every stage's seed, running or not.
@@ -238,6 +252,7 @@ pub fn stage_memory_changed(
                 Changed<GazeSettings>,
                 Added<ActiveSuite>,
                 Changed<ActiveLook>,
+                Changed<Graphics>,
             )>,
         ),
     >,

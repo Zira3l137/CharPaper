@@ -19,6 +19,7 @@ use charpaper_scene::FocusedMut;
 use charpaper_scene::FogQuality;
 use charpaper_scene::FogResolution;
 use charpaper_scene::FpsLimit;
+use charpaper_scene::Graphics;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
 use charpaper_scene::Resolved;
@@ -85,8 +86,23 @@ enum Phase {
 
 struct Row {
     label: String,
-    settings: RenderSettings,
+    setup: Setup,
     shadows: Option<bool>,
+}
+
+// The settings every stage shares, and those of the stage measured.
+#[derive(Clone, PartialEq)]
+struct Setup {
+    render: RenderSettings,
+    graphics: Graphics,
+}
+
+// What a row changes, on the stage the benchmark measures: the focused one.
+#[derive(SystemParam)]
+struct Tuned<'w, 's> {
+    render: ResMut<'w, RenderSettings>,
+    graphics: FocusedMut<'w, 's, Graphics>,
+    look: FocusedMut<'w, 's, ActiveLook>,
 }
 
 struct Measured {
@@ -109,8 +125,7 @@ struct Shown<'w, 's> {
 fn run(
     time: Res<Time<Real>>,
     mut bench: ResMut<Benchmark>,
-    mut settings: ResMut<RenderSettings>,
-    mut look: FocusedMut<ActiveLook>,
+    mut tuned: Tuned,
     paused: Res<Paused>,
     scene: Shown,
     mut exit: MessageWriter<AppExit>,
@@ -135,9 +150,11 @@ fn run(
                 bench.elapsed += delta;
             }
             if ready && bench.elapsed >= WARM_UP {
-                let saved_look = look.get().map(|l| l.0.clone()).unwrap_or_default();
-                start(bench, &settings, saved_look, &scene);
-                apply(bench, &mut settings, look.get_mut().as_deref_mut());
+                let saved_look = tuned.look.get().map(|l| l.0.clone()).unwrap_or_default();
+                let graphics = tuned.graphics.get().cloned().unwrap_or_default();
+                let saved = Setup { render: tuned.render.clone(), graphics };
+                start(bench, &saved, saved_look, &scene);
+                apply(bench, &mut tuned);
             } else if bench.waited >= LOAD_LIMIT {
                 error!("benchmark: the suite did not finish loading within a minute");
                 exit.write(AppExit::error());
@@ -164,7 +181,7 @@ fn run(
             bench.measured.push(Measured { label: row.label.clone(), median, slow });
             bench.next += 1;
             if bench.next < bench.rows.len() {
-                apply(bench, &mut settings, look.get_mut().as_deref_mut());
+                apply(bench, &mut tuned);
             } else {
                 finish(bench);
                 exit.write(AppExit::Success);
@@ -175,7 +192,7 @@ fn run(
     }
 }
 
-fn start(bench: &mut Benchmark, saved: &RenderSettings, look: Look, scene: &Shown) {
+fn start(bench: &mut Benchmark, saved: &Setup, look: Look, scene: &Shown) {
     let environment = scene.state.get().and_then(|state| state.environment.clone());
     let shadows = Resolved::new(&look, environment.as_deref()).shadows;
     let lit = !scene.lights.is_empty();
@@ -190,12 +207,17 @@ fn start(bench: &mut Benchmark, saved: &RenderSettings, look: Look, scene: &Show
     );
 }
 
-fn apply(bench: &mut Benchmark, settings: &mut RenderSettings, look: Option<&mut ActiveLook>) {
+fn apply(bench: &mut Benchmark, tuned: &mut Tuned) {
     let row = &bench.rows[bench.next];
-    if *settings != row.settings {
-        *settings = row.settings.clone();
+    if *tuned.render != row.setup.render {
+        *tuned.render = row.setup.render.clone();
     }
-    if let Some(look) = look {
+    if let Some(mut graphics) = tuned.graphics.get_mut()
+        && *graphics != row.setup.graphics
+    {
+        *graphics = row.setup.graphics.clone();
+    }
+    if let Some(mut look) = tuned.look.get_mut() {
         let mut wanted = bench.look.clone();
         if let (Some(shadows), Some(name)) = (row.shadows, &bench.environment) {
             wanted.environments.entry(name.clone()).or_default().shadows = Some(shadows);
@@ -208,24 +230,24 @@ fn apply(bench: &mut Benchmark, settings: &mut RenderSettings, look: Option<&mut
     bench.elapsed = Duration::ZERO;
 }
 
-fn plan(saved: &RenderSettings, fog: bool, shadows: Option<bool>) -> Vec<Row> {
+fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
     let mut rows = vec![changed(saved, "saved settings", |_| {})];
 
     if fog {
-        if saved.fog {
-            rows.push(changed(saved, "fog off", |s| s.fog = false));
+        if saved.graphics.fog {
+            rows.push(changed(saved, "fog off", |s| s.graphics.fog = false));
         }
         for quality in FogQuality::ALL {
-            if saved.fog && saved.fog_quality == quality {
+            if saved.graphics.fog && saved.graphics.fog_quality == quality {
                 continue;
             }
             rows.push(changed(saved, format!("fog {}", fog_name(quality)), |s| {
-                s.fog = true;
-                s.fog_quality = quality;
+                s.graphics.fog = true;
+                s.graphics.fog_quality = quality;
             }));
         }
         for resolution in FogResolution::ALL {
-            if saved.fog && saved.fog_resolution == resolution {
+            if saved.graphics.fog && saved.graphics.fog_resolution == resolution {
                 continue;
             }
             let label = match resolution {
@@ -233,18 +255,18 @@ fn plan(saved: &RenderSettings, fog: bool, shadows: Option<bool>) -> Vec<Row> {
                 FogResolution::Half => "fog half resolution",
             };
             rows.push(changed(saved, label, |s| {
-                s.fog = true;
-                s.fog_resolution = resolution;
+                s.graphics.fog = true;
+                s.graphics.fog_resolution = resolution;
             }));
         }
     }
     if let Some(on) = shadows {
         let label = if on { "shadows off" } else { "shadows on" };
-        rows.push(Row { label: label.into(), settings: saved.clone(), shadows: Some(!on) });
+        rows.push(Row { label: label.into(), setup: saved.clone(), shadows: Some(!on) });
     }
     if shadows == Some(true) {
         for quality in ShadowQuality::ALL {
-            if quality == saved.shadow_quality {
+            if quality == saved.render.shadow_quality {
                 continue;
             }
             let label = match quality {
@@ -252,36 +274,34 @@ fn plan(saved: &RenderSettings, fog: bool, shadows: Option<bool>) -> Vec<Row> {
                 ShadowQuality::Medium => "shadow quality medium",
                 ShadowQuality::High => "shadow quality high",
             };
-            rows.push(changed(saved, label, |s| s.shadow_quality = quality));
+            rows.push(changed(saved, label, |s| s.render.shadow_quality = quality));
         }
     }
     for anti_aliasing in AntiAliasing::ALL {
-        if anti_aliasing != saved.anti_aliasing {
+        if anti_aliasing != saved.graphics.anti_aliasing {
             let label = format!("anti-aliasing {}", anti_aliasing_name(anti_aliasing));
-            rows.push(changed(saved, label, |s| s.anti_aliasing = anti_aliasing));
+            rows.push(changed(saved, label, |s| s.graphics.anti_aliasing = anti_aliasing));
         }
     }
-    if saved.depth_of_field != DepthOfFieldQuality::Off {
+    if saved.graphics.depth_of_field != DepthOfFieldQuality::Off {
         rows.push(changed(saved, "depth of field off", |s| {
-            s.depth_of_field = DepthOfFieldQuality::Off;
+            s.graphics.depth_of_field = DepthOfFieldQuality::Off;
         }));
     }
     for scale in RENDER_SCALES {
-        if scale != saved.scale_percent() {
-            rows.push(changed(saved, format!("render scale {scale}%"), |s| s.render_scale = scale));
+        if scale != saved.graphics.scale_percent() {
+            rows.push(changed(saved, format!("render scale {scale}%"), |s| {
+                s.graphics.render_scale = scale
+            }));
         }
     }
     rows
 }
 
-fn changed(
-    saved: &RenderSettings,
-    label: impl Into<String>,
-    change: impl FnOnce(&mut RenderSettings),
-) -> Row {
-    let mut settings = saved.clone();
-    change(&mut settings);
-    Row { label: label.into(), settings, shadows: None }
+fn changed(saved: &Setup, label: impl Into<String>, change: impl FnOnce(&mut Setup)) -> Row {
+    let mut setup = saved.clone();
+    change(&mut setup);
+    Row { label: label.into(), setup, shadows: None }
 }
 
 fn header(scene: &Shown) -> String {

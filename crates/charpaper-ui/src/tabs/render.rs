@@ -1,12 +1,16 @@
 use bevy::prelude::*;
 use charpaper_scene::AntiAliasing;
 use charpaper_scene::DepthOfFieldQuality;
+use charpaper_scene::Focused;
+use charpaper_scene::FocusedMut;
 use charpaper_scene::FogQuality;
 use charpaper_scene::FogResolution;
 use charpaper_scene::FpsLimit;
+use charpaper_scene::Graphics;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
 use charpaper_scene::ShadowQuality;
+use charpaper_scene::focused_changed;
 use i18n_embed_fl::fl;
 
 use crate::UiState;
@@ -19,8 +23,8 @@ use crate::locale::Locale;
 use crate::panel::new_panel;
 use crate::widgets::*;
 
-// How often and how finely the scene is drawn, and when to stop drawing it. Edits
-// RenderSettings, which the app saves and applies at once.
+// How often and how finely the scene is drawn, and when to stop drawing it. How finely is the
+// focused stage's Graphics; the rest is RenderSettings, shared by every stage.
 pub(crate) struct RenderTabPlugin;
 
 impl Plugin for RenderTabPlugin {
@@ -30,6 +34,7 @@ impl Plugin for RenderTabPlugin {
             (
                 show_values.run_if(
                     resource_changed::<RenderSettings>
+                        .or_eager(focused_changed::<Graphics>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(new_panel),
                 ),
@@ -87,9 +92,13 @@ pub(crate) fn page() -> impl Bundle {
 
 fn show_values(
     settings: Res<RenderSettings>,
+    graphics: Focused<Graphics>,
     locale: Res<Locale>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
+    let Some(graphics) = graphics.get() else {
+        return;
+    };
     let off = on_off(&locale, false);
     for (container, mut shown) in &mut rows {
         let UiContainer::Row(cycler) = *container else {
@@ -103,17 +112,17 @@ fn show_values(
                 })
             }
             Cycler::RenderScale => {
-                choice(&RENDER_SCALES, &settings.scale_percent(), |scale| format!("{scale}%"))
+                choice(&RENDER_SCALES, &graphics.scale_percent(), |scale| format!("{scale}%"))
             }
             Cycler::AntiAliasing => {
-                choice(&AntiAliasing::ALL, &settings.anti_aliasing, |aa| match aa {
+                choice(&AntiAliasing::ALL, &graphics.anti_aliasing, |aa| match aa {
                     AntiAliasing::Off => off.clone(),
                     AntiAliasing::Msaa4 => "4x".into(),
                     AntiAliasing::Taa => "TAA".into(),
                 })
             }
             Cycler::DepthOfField => {
-                choice(&DepthOfFieldQuality::ALL, &settings.depth_of_field, |quality| match quality
+                choice(&DepthOfFieldQuality::ALL, &graphics.depth_of_field, |quality| match quality
                 {
                     DepthOfFieldQuality::Off => off.clone(),
                     DepthOfFieldQuality::Blur => fl!(locale, "value-blur"),
@@ -127,9 +136,9 @@ fn show_values(
                     ShadowQuality::High => fl!(locale, "value-high"),
                 })
             }
-            Cycler::Fog => switch(&locale, settings.fog),
+            Cycler::Fog => switch(&locale, graphics.fog),
             Cycler::FogQuality => {
-                choice(&FogQuality::ALL, &settings.fog_quality, |quality| match quality {
+                choice(&FogQuality::ALL, &graphics.fog_quality, |quality| match quality {
                     FogQuality::VeryLow => fl!(locale, "value-very-low"),
                     FogQuality::Low => fl!(locale, "value-low"),
                     FogQuality::Medium => fl!(locale, "value-medium"),
@@ -137,9 +146,9 @@ fn show_values(
                     FogQuality::Ultra => fl!(locale, "value-ultra"),
                 })
             }
-            Cycler::FogDithering => switch(&locale, settings.fog_dithering),
+            Cycler::FogDithering => switch(&locale, graphics.fog_dithering),
             Cycler::FogResolution => {
-                choice(&FogResolution::ALL, &settings.fog_resolution, |resolution| match resolution
+                choice(&FogResolution::ALL, &graphics.fog_resolution, |resolution| match resolution
                 {
                     FogResolution::Full => fl!(locale, "value-full"),
                     FogResolution::Half => fl!(locale, "value-half"),
@@ -162,7 +171,15 @@ fn show_monitor(
     show(&mut rows, Cycler::Monitor, switch(&locale, ui.performance_monitor));
 }
 
-fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>, mut ui: ResMut<UiState>) {
+fn on_step(
+    event: On<Step>,
+    mut settings: ResMut<RenderSettings>,
+    mut graphics: FocusedMut<Graphics>,
+    mut ui: ResMut<UiState>,
+) {
+    let Some(mut graphics) = graphics.get_mut() else {
+        return;
+    };
     match event.cycler {
         Cycler::Monitor => ui.performance_monitor = flip(ui.performance_monitor, &event),
         Cycler::FpsLimit => {
@@ -171,18 +188,18 @@ fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>, mut ui: ResMut
             }
         }
         Cycler::RenderScale => {
-            if let Some(next) = step(&RENDER_SCALES, &settings.scale_percent(), &event) {
-                settings.render_scale = next;
+            if let Some(next) = step(&RENDER_SCALES, &graphics.scale_percent(), &event) {
+                graphics.render_scale = next;
             }
         }
         Cycler::AntiAliasing => {
-            if let Some(next) = step(&AntiAliasing::ALL, &settings.anti_aliasing, &event) {
-                settings.anti_aliasing = next;
+            if let Some(next) = step(&AntiAliasing::ALL, &graphics.anti_aliasing, &event) {
+                graphics.anti_aliasing = next;
             }
         }
         Cycler::DepthOfField => {
-            if let Some(next) = step(&DepthOfFieldQuality::ALL, &settings.depth_of_field, &event) {
-                settings.depth_of_field = next;
+            if let Some(next) = step(&DepthOfFieldQuality::ALL, &graphics.depth_of_field, &event) {
+                graphics.depth_of_field = next;
             }
         }
         Cycler::ShadowQuality => {
@@ -190,16 +207,16 @@ fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>, mut ui: ResMut
                 settings.shadow_quality = next;
             }
         }
-        Cycler::Fog => settings.fog = flip(settings.fog, &event),
+        Cycler::Fog => graphics.fog = flip(graphics.fog, &event),
         Cycler::FogQuality => {
-            if let Some(next) = step(&FogQuality::ALL, &settings.fog_quality, &event) {
-                settings.fog_quality = next;
+            if let Some(next) = step(&FogQuality::ALL, &graphics.fog_quality, &event) {
+                graphics.fog_quality = next;
             }
         }
-        Cycler::FogDithering => settings.fog_dithering = flip(settings.fog_dithering, &event),
+        Cycler::FogDithering => graphics.fog_dithering = flip(graphics.fog_dithering, &event),
         Cycler::FogResolution => {
-            if let Some(next) = step(&FogResolution::ALL, &settings.fog_resolution, &event) {
-                settings.fog_resolution = next;
+            if let Some(next) = step(&FogResolution::ALL, &graphics.fog_resolution, &event) {
+                graphics.fog_resolution = next;
             }
         }
         Cycler::PauseFullscreen => {

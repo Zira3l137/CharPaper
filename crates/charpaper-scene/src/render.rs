@@ -23,6 +23,7 @@ use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::screens::Screen;
 use crate::screens::Unseen;
+use crate::stage::StageOf;
 
 pub(crate) struct RenderPlugin;
 
@@ -38,7 +39,7 @@ impl Plugin for RenderPlugin {
                     rest_unseen,
                     fit_scene_targets,
                     apply_anti_aliasing
-                        .run_if(resource_changed::<RenderSettings>.or_eager(new_camera)),
+                        .run_if(any_match_filter::<Changed<Graphics>>.or_eager(new_camera)),
                     apply_shadow_quality
                         .run_if(resource_changed::<RenderSettings>.or_eager(new_camera)),
                 )
@@ -47,19 +48,13 @@ impl Plugin for RenderPlugin {
     }
 }
 
-// Saved between runs by the app, whose frame pacing reads the fps and pause settings.
+// What every stage shares, saved between runs by the app, whose frame pacing reads the fps and
+// pause settings. Bevy gives all lights' shadow maps one size, so their quality is shared too.
 #[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RenderSettings {
     pub fps_limit: FpsLimit,
-    pub render_scale: u32,
-    pub anti_aliasing: AntiAliasing,
-    pub depth_of_field: DepthOfFieldQuality,
     pub shadow_quality: ShadowQuality,
-    pub fog: bool,
-    pub fog_quality: FogQuality,
-    pub fog_dithering: bool,
-    pub fog_resolution: FogResolution,
     pub pause_when_fullscreen: bool,
     pub pause_when_covered: bool,
     pub pause_on_battery: bool,
@@ -69,14 +64,7 @@ impl Default for RenderSettings {
     fn default() -> Self {
         Self {
             fps_limit: FpsLimit::default(),
-            render_scale: 100,
-            anti_aliasing: AntiAliasing::default(),
-            depth_of_field: DepthOfFieldQuality::default(),
             shadow_quality: ShadowQuality::default(),
-            fog: true,
-            fog_quality: FogQuality::default(),
-            fog_dithering: false,
-            fog_resolution: FogResolution::default(),
             pause_when_fullscreen: true,
             pause_when_covered: true,
             pause_on_battery: false,
@@ -84,9 +72,36 @@ impl Default for RenderSettings {
     }
 }
 
+// How finely a stage is drawn. Each stage has its own, saved with it.
+#[derive(Component, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Graphics {
+    pub render_scale: u32,
+    pub anti_aliasing: AntiAliasing,
+    pub depth_of_field: DepthOfFieldQuality,
+    pub fog: bool,
+    pub fog_quality: FogQuality,
+    pub fog_dithering: bool,
+    pub fog_resolution: FogResolution,
+}
+
+impl Default for Graphics {
+    fn default() -> Self {
+        Self {
+            render_scale: 100,
+            anti_aliasing: AntiAliasing::default(),
+            depth_of_field: DepthOfFieldQuality::default(),
+            fog: true,
+            fog_quality: FogQuality::default(),
+            fog_dithering: false,
+            fog_resolution: FogResolution::default(),
+        }
+    }
+}
+
 pub const RENDER_SCALES: [u32; 3] = [50, 75, 100];
 
-impl RenderSettings {
+impl Graphics {
     pub fn scale_percent(&self) -> u32 {
         RENDER_SCALES.into_iter().min_by_key(|s| s.abs_diff(self.render_scale)).unwrap_or(100)
     }
@@ -297,9 +312,9 @@ pub(crate) fn screen_parts(
     materials: &mut Assets<SceneImage>,
     screen: &Screen,
     window: &Window,
-    settings: &RenderSettings,
+    graphics: &Graphics,
 ) -> (impl Bundle, ScreenParts) {
-    let size = scaled(window, settings);
+    let size = scaled(window, graphics);
     let image =
         images.add(Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None));
     let material =
@@ -337,7 +352,7 @@ pub(crate) fn screen_parts(
         image: image.clone(),
         material,
     };
-    ((RenderTarget::from(image), settings.anti_aliasing.msaa()), parts)
+    ((RenderTarget::from(image), graphics.anti_aliasing.msaa()), parts)
 }
 
 fn remove_screen_parts(
@@ -356,17 +371,21 @@ fn remove_screen_parts(
 // Bevy recreates the GPU texture behind the same handle. The material that shows it keeps
 // the old texture until it is marked changed, which makes Bevy build it again.
 pub(crate) fn fit_scene_targets(
-    settings: Res<RenderSettings>,
     screens: Query<(&Screen, &ScreenParts)>,
     windows: Query<&Window>,
+    stage_of: StageOf,
+    graphics: Query<&Graphics>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<SceneImage>>,
 ) {
     for (screen, parts) in &screens {
-        let Ok(window) = windows.get(screen.window) else {
+        let (Ok(window), Some(graphics)) = (
+            windows.get(screen.window),
+            stage_of.get(parts.camera).and_then(|s| graphics.get(s).ok()),
+        ) else {
             continue;
         };
-        let size = scaled(window, &settings);
+        let size = scaled(window, graphics);
         if images.get(&parts.image).is_none_or(|image| image.size() == size) {
             continue;
         }
@@ -400,16 +419,25 @@ fn rest_unseen(
 }
 
 // TAA can't run with MSAA. Inserting it brings the prepasses and camera jitter it needs, but
-// removing it leaves them behind, so they go explicitly.
+// removing it leaves them behind, so they go explicitly. Only new cameras, and those of a stage
+// whose graphics changed, are touched.
 pub(crate) fn apply_anti_aliasing(
     mut commands: Commands,
-    settings: Res<RenderSettings>,
-    camera: Query<Entity, With<SceneCamera>>,
+    cameras: Query<(Entity, Ref<SceneCamera>)>,
+    stage_of: StageOf,
+    graphics: Query<Ref<Graphics>>,
 ) {
-    for camera in &camera {
+    for (camera, marker) in &cameras {
+        let new = marker.is_added();
+        let Some(graphics) = stage_of.get(camera).and_then(|s| graphics.get(s).ok()) else {
+            continue;
+        };
+        if !new && !graphics.is_changed() {
+            continue;
+        }
         let mut camera = commands.entity(camera);
-        camera.insert(settings.anti_aliasing.msaa());
-        if settings.anti_aliasing == AntiAliasing::Taa {
+        camera.insert(graphics.anti_aliasing.msaa());
+        if graphics.anti_aliasing == AntiAliasing::Taa {
             camera.insert(TemporalAntiAliasing::default());
         } else {
             camera.remove::<(
@@ -443,8 +471,8 @@ fn apply_shadow_quality(
     }
 }
 
-fn scaled(window: &Window, settings: &RenderSettings) -> UVec2 {
-    let scale = settings.scale_percent() as f32 / 100.0;
+fn scaled(window: &Window, graphics: &Graphics) -> UVec2 {
+    let scale = graphics.scale_percent() as f32 / 100.0;
     let physical = UVec2::new(window.physical_width(), window.physical_height()).as_vec2();
     (physical * scale).round().as_uvec2().max(UVec2::ONE)
 }

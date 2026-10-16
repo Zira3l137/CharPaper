@@ -16,7 +16,7 @@ use crate::camera::orbit::PITCH_LIMIT;
 use crate::camera::orbit::update_camera_transform;
 use crate::camera::rig::Following;
 use crate::environment::ShownEnvironment;
-use crate::render::RenderSettings;
+use crate::render::Graphics;
 use crate::render::SceneImage;
 use crate::render::ScreenParts;
 use crate::render::screen_parts;
@@ -101,7 +101,7 @@ fn regroup_screens(
 // A screen whose window or stage doesn't exist yet is tried again next frame.
 fn spawn_screen_cameras(
     mut commands: Commands,
-    settings: Res<RenderSettings>,
+    graphics: Query<&Graphics>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<SceneImage>>,
     views: Query<(Entity, &ChildOf), With<SceneView>>,
@@ -112,13 +112,16 @@ fn spawn_screen_cameras(
     for (entity, screen, shows) in &screens {
         let view = views
             .iter()
-            .find(|(_, stage)| keys.get(stage.parent()).is_ok_and(|key| key.0 == shows.0))
-            .map(|(view, _)| view);
-        let (Some(view), Ok(window)) = (view, windows.get(screen.window)) else {
+            .find(|(_, stage)| keys.get(stage.parent()).is_ok_and(|key| key.0 == shows.0));
+        let Some((view, stage)) = view else {
+            continue;
+        };
+        let (Ok(window), Ok(graphics)) = (windows.get(screen.window), graphics.get(stage.parent()))
+        else {
             continue;
         };
         let (target, mut parts) =
-            screen_parts(&mut commands, &mut images, &mut materials, screen, window, &settings);
+            screen_parts(&mut commands, &mut images, &mut materials, screen, window, graphics);
         // Only the pointer over the scene steers the orbit, so anything drawn on top of the
         // scene, such as the settings panel, keeps its scrolls and drags to itself.
         commands

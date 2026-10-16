@@ -14,7 +14,7 @@ use crate::character::CharacterClips;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
 use crate::config::SceneConfig;
-use crate::render::RenderSettings;
+use crate::render::Graphics;
 use crate::render::ScreenParts;
 use crate::screens::Screen;
 use crate::stage::StageOf;
@@ -267,13 +267,13 @@ struct Bones<'w, 's> {
 fn aim(
     time: Res<Time>,
     config: Res<SceneConfig>,
-    render: Res<RenderSettings>,
     cursor: Res<CursorPosition>,
     mut stages: Query<(
         Entity,
         &GazeSettings,
         &CharacterState,
         Option<&CharacterClips>,
+        &Graphics,
         &mut GazeRig,
     )>,
     screens: Query<(&Screen, &ScreenParts)>,
@@ -281,7 +281,7 @@ fn aim(
     stage_of: StageOf,
     mut bones: Bones,
 ) {
-    for (stage, settings, state, clips, mut rig) in &mut stages {
+    for (stage, settings, state, clips, graphics, mut rig) in &mut stages {
         // Through the camera of the screen the cursor is measured from, if that screen shows
         // this stage.
         let seen = cursor.0.and_then(|at| {
@@ -292,7 +292,7 @@ fn aim(
             Some((at.position, cameras.get(parts.camera).ok()?))
         });
         let watched = Watched { cursor: cursor.0, seen, settings, state, clips };
-        aim_stage(&time, &config, &render, watched, &mut rig, &mut bones);
+        aim_stage(&time, &config, graphics, watched, &mut rig, &mut bones);
     }
 }
 
@@ -308,7 +308,7 @@ struct Watched<'a> {
 fn aim_stage(
     time: &Time,
     config: &SceneConfig,
-    render: &RenderSettings,
+    graphics: &Graphics,
     Watched { cursor, seen, settings, state, clips }: Watched,
     rig: &mut GazeRig,
     bones: &mut Bones,
@@ -361,7 +361,7 @@ fn aim_stage(
     let (reference_bone, reference_forward) = (reference.bone, reference.forward);
     let to_model = armature_global.affine().inverse();
     if let Some((at, (camera, camera_global))) = seen {
-        let scale = render.scale_percent() as f32 / 100.0;
+        let scale = graphics.scale_percent() as f32 / 100.0;
         if let Ok(ray) = camera.viewport_to_world(camera_global, at * scale) {
             let head =
                 pose(reference_bone, armature, &bones.parents, &bones.transforms.as_readonly());

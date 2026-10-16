@@ -39,6 +39,7 @@ pub use render::DepthOfFieldQuality;
 pub use render::FogQuality;
 pub use render::FogResolution;
 pub use render::FpsLimit;
+pub use render::Graphics;
 pub use render::RENDER_SCALES;
 pub use render::RenderSettings;
 pub use render::ShadowQuality;
