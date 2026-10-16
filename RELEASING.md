@@ -66,5 +66,7 @@ Once people have downloaded a version, ship the fix as the next patch version in
 1. Add an entry to the matrix in `.github/workflows/build.yml`. A commented Linux entry is
    already there; its system libraries install in the step guarded by `runner.os`.
 2. Give the target its flags in `.cargo/config.toml`, as Windows has.
+3. Put any files the platform ships next to the executable, such as launch scripts, in
+   `packaging/<platform>/` and point the entry's `extras` at it.
 
 Nightly and Release both build through `build.yml`, so neither needs changing.
