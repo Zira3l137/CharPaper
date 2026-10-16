@@ -4,6 +4,9 @@ use bevy::camera::RenderTarget;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::prepass::MotionVectorPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::light::DirectionalLightShadowMap;
+use bevy::light::PointLightShadowMap;
+use bevy::light::ShadowFilteringMethod;
 use bevy::prelude::*;
 use bevy::render::camera::MipBias;
 use bevy::render::camera::TemporalJitter;
@@ -36,6 +39,8 @@ impl Plugin for RenderPlugin {
                     fit_scene_targets,
                     apply_anti_aliasing
                         .run_if(resource_changed::<RenderSettings>.or_eager(new_camera)),
+                    apply_shadow_quality
+                        .run_if(resource_changed::<RenderSettings>.or_eager(new_camera)),
                 )
                     .in_set(SceneSet::Run),
             );
@@ -50,6 +55,7 @@ pub struct RenderSettings {
     pub render_scale: u32,
     pub anti_aliasing: AntiAliasing,
     pub depth_of_field: DepthOfFieldQuality,
+    pub shadow_quality: ShadowQuality,
     pub fog: bool,
     pub fog_quality: FogQuality,
     pub fog_dithering: bool,
@@ -66,6 +72,7 @@ impl Default for RenderSettings {
             render_scale: 100,
             anti_aliasing: AntiAliasing::default(),
             depth_of_field: DepthOfFieldQuality::default(),
+            shadow_quality: ShadowQuality::default(),
             fog: true,
             fog_quality: FogQuality::default(),
             fog_dithering: false,
@@ -150,6 +157,46 @@ pub enum DepthOfFieldQuality {
 impl DepthOfFieldQuality {
     pub const ALL: [DepthOfFieldQuality; 3] =
         [DepthOfFieldQuality::Off, DepthOfFieldQuality::Blur, DepthOfFieldQuality::Bokeh];
+}
+
+// What shadows cost the GPU. Every point light draws the scene six times a frame into its
+// shadow map, a sun once per cascade; the size of those maps is what the setting changes,
+// along with how many times each lit pixel looks its shadow up. Medium is Bevy's own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShadowQuality {
+    // One look-up a pixel, so edges are hard and can look jagged.
+    Low,
+    #[default]
+    Medium,
+    // Each point light's maps take 96 MB of video memory instead of 24.
+    High,
+}
+
+impl ShadowQuality {
+    pub const ALL: [ShadowQuality; 3] =
+        [ShadowQuality::Low, ShadowQuality::Medium, ShadowQuality::High];
+
+    // Pixels a side of each of a point light's six maps.
+    fn point_map(self) -> usize {
+        match self {
+            ShadowQuality::Low => 512,
+            ShadowQuality::Medium => 1024,
+            ShadowQuality::High => 2048,
+        }
+    }
+
+    // Pixels a side of each of a sun's cascades.
+    fn sun_map(self) -> usize {
+        self.point_map() * 2
+    }
+
+    fn filtering(self) -> ShadowFilteringMethod {
+        match self {
+            ShadowQuality::Low => ShadowFilteringMethod::Hardware2x2,
+            ShadowQuality::Medium | ShadowQuality::High => ShadowFilteringMethod::Gaussian,
+        }
+    }
 }
 
 // How many samples each pixel takes through the fog. Too few show as stripes wherever
@@ -373,6 +420,26 @@ pub(crate) fn apply_anti_aliasing(
                 MotionVectorPrepass,
             )>();
         }
+    }
+}
+
+// The maps' sizes are shared by every light; the filtering belongs to each camera.
+fn apply_shadow_quality(
+    mut commands: Commands,
+    settings: Res<RenderSettings>,
+    cameras: Query<Entity, With<SceneCamera>>,
+    mut point: ResMut<PointLightShadowMap>,
+    mut sun: ResMut<DirectionalLightShadowMap>,
+) {
+    let quality = settings.shadow_quality;
+    if point.size != quality.point_map() {
+        point.size = quality.point_map();
+    }
+    if sun.size != quality.sun_map() {
+        sun.size = quality.sun_map();
+    }
+    for camera in &cameras {
+        commands.entity(camera).insert(quality.filtering());
     }
 }
 

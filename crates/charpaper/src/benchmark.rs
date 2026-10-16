@@ -22,6 +22,7 @@ use charpaper_scene::FpsLimit;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
 use charpaper_scene::Resolved;
+use charpaper_scene::ShadowQuality;
 use charpaper_suite::Look;
 
 use crate::wallpaper::Paused;
@@ -240,6 +241,19 @@ fn plan(saved: &RenderSettings, fog: bool, shadows: Option<bool>) -> Vec<Row> {
     if let Some(on) = shadows {
         let label = if on { "shadows off" } else { "shadows on" };
         rows.push(Row { label: label.into(), settings: saved.clone(), shadows: Some(!on) });
+    }
+    if shadows == Some(true) {
+        for quality in ShadowQuality::ALL {
+            if quality == saved.shadow_quality {
+                continue;
+            }
+            let label = match quality {
+                ShadowQuality::Low => "shadow quality low",
+                ShadowQuality::Medium => "shadow quality medium",
+                ShadowQuality::High => "shadow quality high",
+            };
+            rows.push(changed(saved, label, |s| s.shadow_quality = quality));
+        }
     }
     for anti_aliasing in AntiAliasing::ALL {
         if anti_aliasing != saved.anti_aliasing {

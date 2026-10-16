@@ -109,6 +109,7 @@ pub(crate) enum Cycler {
     RenderScale,
     AntiAliasing,
     DepthOfField,
+    ShadowQuality,
     Fog,
     FogQuality,
     FogDithering,

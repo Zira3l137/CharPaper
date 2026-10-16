@@ -41,6 +41,7 @@ pub use render::FogResolution;
 pub use render::FpsLimit;
 pub use render::RENDER_SCALES;
 pub use render::RenderSettings;
+pub use render::ShadowQuality;
 pub use screens::ChosenMonitor;
 pub use screens::MonitorEntry;
 pub use screens::Monitors;

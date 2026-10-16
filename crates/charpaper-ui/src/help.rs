@@ -70,6 +70,7 @@ fn help(cycler: Cycler, l: &FluentLanguageLoader) -> String {
         Cycler::RenderScale => fl!(l, "help-render-scale"),
         Cycler::AntiAliasing => fl!(l, "help-anti-aliasing"),
         Cycler::DepthOfField => fl!(l, "help-depth-of-field"),
+        Cycler::ShadowQuality => fl!(l, "help-shadow-quality"),
         Cycler::Fog => fl!(l, "help-fog"),
         Cycler::FogQuality => fl!(l, "help-fog-quality"),
         Cycler::FogDithering => fl!(l, "help-fog-dithering"),

@@ -6,6 +6,7 @@ use charpaper_scene::FogResolution;
 use charpaper_scene::FpsLimit;
 use charpaper_scene::RENDER_SCALES;
 use charpaper_scene::RenderSettings;
+use charpaper_scene::ShadowQuality;
 use i18n_embed_fl::fl;
 
 use crate::UiState;
@@ -59,6 +60,7 @@ pub(crate) fn page() -> impl Bundle {
                 segments(|l| fl!(l, "label-render-scale"), Cycler::RenderScale),
                 segments(|l| fl!(l, "label-anti-aliasing"), Cycler::AntiAliasing),
                 segments(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
+                segments(|l| fl!(l, "label-shadow-quality"), Cycler::ShadowQuality),
             ]),
         ),
         shown_section(
@@ -118,6 +120,13 @@ fn show_values(
                     DepthOfFieldQuality::Bokeh => fl!(locale, "value-bokeh"),
                 })
             }
+            Cycler::ShadowQuality => {
+                choice(&ShadowQuality::ALL, &settings.shadow_quality, |quality| match quality {
+                    ShadowQuality::Low => fl!(locale, "value-low"),
+                    ShadowQuality::Medium => fl!(locale, "value-medium"),
+                    ShadowQuality::High => fl!(locale, "value-high"),
+                })
+            }
             Cycler::Fog => switch(&locale, settings.fog),
             Cycler::FogQuality => {
                 choice(&FogQuality::ALL, &settings.fog_quality, |quality| match quality {
@@ -174,6 +183,11 @@ fn on_step(event: On<Step>, mut settings: ResMut<RenderSettings>, mut ui: ResMut
         Cycler::DepthOfField => {
             if let Some(next) = step(&DepthOfFieldQuality::ALL, &settings.depth_of_field, &event) {
                 settings.depth_of_field = next;
+            }
+        }
+        Cycler::ShadowQuality => {
+            if let Some(next) = step(&ShadowQuality::ALL, &settings.shadow_quality, &event) {
+                settings.shadow_quality = next;
             }
         }
         Cycler::Fog => settings.fog = flip(settings.fog, &event),
