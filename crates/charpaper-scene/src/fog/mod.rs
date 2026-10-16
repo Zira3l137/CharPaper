@@ -1,11 +1,12 @@
-// Volumetric fog. Each fog object named in suite.toml gets a box of Bevy fog shaped by its
-// mesh's bounds, and its own mesh is hidden. Fog shows only where lights light it, and every
-// light that does adds a pass over the screen, so the camera only does fog while there is
-// fog to draw.
+// Volumetric fog. Each fog object named in suite.toml gets a box of fog shaped by its mesh's
+// bounds, and its own mesh is hidden. Fog shows only where lights light it, and every light
+// that does adds to the work of every pixel the fog covers, so the camera only does fog while
+// there is fog to draw. pass.rs draws it.
+
+mod pass;
 
 use bevy::camera::primitives::Aabb;
 use bevy::light::FogVolume;
-use bevy::light::VolumetricFog;
 use bevy::light::VolumetricLight;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
@@ -17,6 +18,7 @@ use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::environment::ShownEnvironment;
 use crate::environment::spawn_environment_scenes;
+use crate::fog::pass::SceneFog;
 use crate::look::ActiveLook;
 use crate::look::Resolved;
 use crate::look::look_needs_applying;
@@ -28,7 +30,8 @@ pub(crate) struct FogPlugin;
 
 impl Plugin for FogPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(spawn_fog)
+        app.add_plugins(pass::FogPassPlugin)
+            .add_observer(spawn_fog)
             .add_systems(
                 Update,
                 light_fog
@@ -136,12 +139,10 @@ fn light_fog(
         let on = settings.fog && has_fog;
         for camera in cameras.iter().filter(|&camera| stage_of.get(camera) == Some(stage)) {
             if on {
-                // No ambient: Bevy adds it evenly whatever the density, which no Blender fog does.
-                commands
-                    .entity(camera)
-                    .insert(VolumetricFog { ambient_intensity: 0.0, ..default() });
+                let steps = settings.fog_quality.steps();
+                commands.entity(camera).insert(SceneFog { steps, jitter: 0.0 });
             } else {
-                commands.entity(camera).remove::<VolumetricFog>();
+                commands.entity(camera).remove::<SceneFog>();
             }
         }
         let Some(root) = shown.root else {
@@ -201,7 +202,7 @@ fn shown_environment<'a>(
 fn sample_fog(
     settings: Res<RenderSettings>,
     volumes: Query<&GlobalTransform, With<FogVolume>>,
-    mut fogs: Query<&mut VolumetricFog>,
+    mut fogs: Query<&mut SceneFog>,
 ) {
     let steps = settings.fog_quality.steps();
     // Starting each pixel's samples up to one step further along turns the stripes between
@@ -210,9 +211,6 @@ fn sample_fog(
     let longest = volumes.iter().map(|v| v.scale().length()).fold(0.0, f32::max);
     let jitter = if settings.fog_dithering { longest / steps as f32 } else { 0.0 };
     for mut fog in &mut fogs {
-        if fog.step_count != steps || fog.jitter != jitter {
-            fog.step_count = steps;
-            fog.jitter = jitter;
-        }
+        fog.set_if_neq(SceneFog { steps, jitter });
     }
 }
