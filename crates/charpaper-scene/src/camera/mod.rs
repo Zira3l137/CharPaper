@@ -21,6 +21,7 @@ use crate::render::SceneImage;
 use crate::render::ScreenParts;
 use crate::render::screen_parts;
 use crate::screens::Screen;
+use crate::screens::ScreenSync;
 use crate::screens::ScreenUi;
 use crate::screens::ShowsStage;
 use crate::shadows::ShadowReach;
@@ -50,11 +51,11 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(rig::on_rig_ready)
             .add_systems(
-                Update,
+                PreUpdate,
                 (regroup_screens, spawn_screen_cameras)
                     .chain()
                     .after(sync_stages)
-                    .before(SceneSet::Switch),
+                    .in_set(ScreenSync),
             )
             .add_systems(Update, (rig::choose_camera, reset_view).in_set(SceneSet::Fill))
             .add_systems(Update, (rig::switch_rig, rig::spawn_rig).chain().in_set(SceneSet::Run))

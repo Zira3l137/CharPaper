@@ -5,6 +5,7 @@ use charpaper_monitor::AdapterKind;
 use charpaper_monitor::Gpu;
 use charpaper_monitor::Monitoring;
 use charpaper_monitor::Readings;
+use charpaper_scene::ScreenSync;
 use charpaper_scene::ScreenUi;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
@@ -20,18 +21,20 @@ pub(crate) struct OverlayPlugin;
 
 impl Plugin for OverlayPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, spawn_overlays).add_observer(despawn_overlay).add_systems(
-            Update,
-            (
-                switch_monitoring.run_if(resource_changed::<UiState>),
-                show_overlays.run_if(resource_changed::<UiState>.or_eager(new_overlay)),
-                fill_overlays.run_if(
-                    resource_changed::<Readings>
-                        .or_eager(resource_changed::<Locale>)
-                        .or_eager(new_overlay),
+        app.add_systems(PreUpdate, spawn_overlays.after(ScreenSync))
+            .add_observer(despawn_overlay)
+            .add_systems(
+                Update,
+                (
+                    switch_monitoring.run_if(resource_changed::<UiState>),
+                    show_overlays.run_if(resource_changed::<UiState>.or_eager(new_overlay)),
+                    fill_overlays.run_if(
+                        resource_changed::<Readings>
+                            .or_eager(resource_changed::<Locale>)
+                            .or_eager(new_overlay),
+                    ),
                 ),
-            ),
-        );
+            );
     }
 }
 

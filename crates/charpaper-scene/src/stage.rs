@@ -14,7 +14,6 @@ use charpaper_suite::LookEdits;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::SceneSet;
 use crate::camera::ShownRig;
 use crate::camera::view_bundle;
 use crate::character::CueClock;
@@ -32,6 +31,7 @@ use crate::look::EditedLooks;
 use crate::look::LookEdited;
 use crate::lut::ShownLut;
 use crate::screens::Screen;
+use crate::screens::ScreenSync;
 use crate::screens::ShowsStage;
 use crate::screens::StageId;
 use crate::soundscape::Soundscape;
@@ -108,7 +108,7 @@ impl Plugin for StagePlugin {
                 PropagateSet::<RenderLayers>::default().before(VisibilitySystems::CheckVisibility),
             )
             .add_observer(remember_stage)
-            .add_systems(Update, (sync_stages, follow_cursor).chain().before(SceneSet::Switch));
+            .add_systems(PreUpdate, (sync_stages, follow_cursor).chain().in_set(ScreenSync));
     }
 }
 

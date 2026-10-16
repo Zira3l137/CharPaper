@@ -48,6 +48,7 @@ pub use screens::Monitors;
 pub use screens::Screen;
 pub use screens::ScreenPlace;
 pub use screens::ScreenSettings;
+pub use screens::ScreenSync;
 pub use screens::ScreenUi;
 pub use screens::ShowsStage;
 pub use screens::StageId;

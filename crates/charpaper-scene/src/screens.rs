@@ -5,6 +5,13 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
+// Where the scene follows the screens: stages start and stop, and each screen gets the cameras
+// of the stage it shows. In PreUpdate, with the app describing the screens before it and the
+// panels following after, so that by Update whatever went away is gone. A system there can't
+// pick up a screen, camera or panel that is despawned while its commands wait.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ScreenSync;
+
 // A window a stage is shown in. The app spawns one per window; the scene gives each a camera
 // of its own, at that window's size, looking from the view of the stage it shows. Despawning
 // the entity takes all of that away again.

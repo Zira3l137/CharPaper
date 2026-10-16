@@ -4,6 +4,7 @@ use bevy::window::PrimaryWindow;
 use charpaper_scene::Screen;
 use charpaper_scene::ScreenPlace;
 use charpaper_scene::ScreenSettings;
+use charpaper_scene::ScreenSync;
 use charpaper_scene::ShowsStage;
 use charpaper_wallpaper::DesktopMonitor;
 
@@ -12,6 +13,7 @@ use crate::wallpaper::WallpaperSettings;
 use crate::wallpaper::attach::Attachment;
 use crate::wallpaper::key;
 use crate::wallpaper::monitors::Targets;
+use crate::wallpaper::monitors::pick_targets;
 
 // Where a window belongs. Attaching and placing the window follow it.
 #[derive(Component, Clone, PartialEq)]
@@ -26,9 +28,13 @@ pub(crate) struct WindowsPlugin;
 
 impl Plugin for WindowsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, adopt_primary_window)
-            .add_systems(Update, assign_windows.run_if(resource_changed::<Targets>))
-            .add_systems(Update, describe_screens.after(assign_windows));
+        app.add_systems(Startup, adopt_primary_window).add_systems(
+            PreUpdate,
+            (assign_windows.run_if(resource_changed::<Targets>), describe_screens)
+                .chain()
+                .after(pick_targets)
+                .before(ScreenSync),
+        );
     }
 }
 
@@ -40,7 +46,7 @@ fn adopt_primary_window(mut commands: Commands, window: Single<Entity, With<Prim
 // Every window keeps its monitor while that is still wanted, so a change elsewhere moves
 // nothing. A window whose monitor is gone takes one nobody has, and the rest are closed or
 // made.
-pub(crate) fn assign_windows(
+fn assign_windows(
     _main_thread: NonSendMarker,
     mut commands: Commands,
     mut backend: ResMut<Backend>,

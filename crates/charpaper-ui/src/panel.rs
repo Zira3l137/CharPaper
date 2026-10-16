@@ -3,6 +3,7 @@ use bevy::prelude::percent;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::Focused;
+use charpaper_scene::ScreenSync;
 use charpaper_scene::ScreenUi;
 use charpaper_scene::StageKey;
 use i18n_embed_fl::fl;
@@ -28,7 +29,7 @@ pub(crate) struct PanelPlugin;
 impl Plugin for PanelPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PanelHovered>()
-            .add_systems(PreUpdate, spawn_panels)
+            .add_systems(PreUpdate, spawn_panels.after(ScreenSync))
             .add_observer(despawn_panel)
             .add_systems(Update, track_hover)
             .add_systems(

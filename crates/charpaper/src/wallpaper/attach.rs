@@ -19,7 +19,6 @@ use crate::wallpaper::keeper;
 use crate::wallpaper::key;
 use crate::wallpaper::monitors::Layout;
 use crate::wallpaper::windows::OnMonitor;
-use crate::wallpaper::windows::assign_windows;
 
 // How far attaching a window got.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,7 +41,7 @@ pub(crate) struct AttachPlugin;
 impl Plugin for AttachPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, probe_desktop)
-            .add_systems(Update, (attach_windows, place_windows).chain().after(assign_windows))
+            .add_systems(Update, (attach_windows, place_windows).chain())
             .add_systems(Update, start_keeper.after(attach_windows))
             .add_systems(Last, leave_desktop);
     }

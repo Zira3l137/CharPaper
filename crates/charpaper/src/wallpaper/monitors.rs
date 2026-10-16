@@ -89,7 +89,7 @@ fn from_bevy(monitor: &Monitor, primary: bool) -> DesktopMonitor {
     }
 }
 
-fn pick_targets(
+pub(crate) fn pick_targets(
     layout: Res<Layout>,
     screen: Res<ScreenSettings>,
     mut targets: ResMut<Targets>,
