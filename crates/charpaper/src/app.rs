@@ -34,15 +34,11 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     config.scene.characters_dir = exe_dir.join(CHARACTERS_DIR);
     let state_path = exe_dir.join(save::STATE_FILE);
     let loaded = save::load(&state_path);
-    config.scene.remembered = loaded.state.suites.clone();
-    if config.scene.suite.is_none() {
-        config.scene.suite = loaded.state.suite.clone();
-    }
+    config.scene.stages = loaded.state.stages.clone();
     config.scene.render = loaded.state.render.clone();
     if config.benchmark {
         benchmark::unthrottle(&mut config.scene.render);
     }
-    config.scene.gaze = loaded.state.gaze.clone();
     config.ui.locales_dir = exe_dir.join(LOCALES_DIR);
     if config.ui.language.is_none() {
         config.ui.language = loaded.state.ui.language.clone();

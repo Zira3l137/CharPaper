@@ -22,6 +22,11 @@ use crate::render::ScreenParts;
 use crate::render::screen_parts;
 use crate::screens::Screen;
 use crate::screens::ScreenUi;
+use crate::screens::ShowsStage;
+use crate::shadows::ShadowReach;
+use crate::stage::StageKey;
+use crate::stage::StageOf;
+use crate::stage::sync_stages;
 use crate::suite::ActiveSuite;
 
 const ORBIT_FOCUS: [f32; 3] = [0.0, 1.0, 0.0];
@@ -44,7 +49,13 @@ pub(crate) struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(rig::on_rig_ready)
-            .add_systems(Update, spawn_screen_cameras.before(SceneSet::Switch))
+            .add_systems(
+                Update,
+                (regroup_screens, spawn_screen_cameras)
+                    .chain()
+                    .after(sync_stages)
+                    .before(SceneSet::Switch),
+            )
             .add_systems(Update, (rig::choose_camera, reset_view).in_set(SceneSet::Fill))
             .add_systems(Update, (rig::switch_rig, rig::spawn_rig).chain().in_set(SceneSet::Run))
             // After propagation, so the rig's animated transform is final, and before frusta
@@ -66,21 +77,43 @@ pub(crate) fn view_bundle() -> impl Bundle {
     let orbit = orbit_for(None);
     let mut transform = Transform::default();
     update_camera_transform(&mut transform, &orbit);
-    (Name::new("Scene view"), SceneView, orbit, Following::default(), transform)
+    let reach = ShadowReach::default();
+    (Name::new("Scene view"), SceneView, orbit, Following::default(), transform, reach)
 }
 
-// A screen whose window doesn't exist yet is tried again next frame.
+// A screen moved to another stage, or whose stage went away, loses its camera, display and
+// panel, and gets new ones under the stage it shows now.
+fn regroup_screens(
+    mut commands: Commands,
+    screens: Query<(Entity, &ShowsStage, &ScreenParts)>,
+    stage_of: StageOf,
+    keys: Query<&StageKey>,
+) {
+    for (screen, shows, parts) in &screens {
+        let current = stage_of.get(parts.camera).and_then(|stage| keys.get(stage).ok());
+        if current.is_none_or(|key| key.0 != shows.0) {
+            commands.entity(screen).remove::<(ScreenParts, ScreenUi)>();
+        }
+    }
+}
+
+// A screen whose window or stage doesn't exist yet is tried again next frame.
 fn spawn_screen_cameras(
     mut commands: Commands,
     settings: Res<RenderSettings>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<SceneImage>>,
-    view: Single<Entity, With<SceneView>>,
-    screens: Query<(Entity, &Screen), Without<ScreenParts>>,
+    views: Query<(Entity, &ChildOf), With<SceneView>>,
+    keys: Query<&StageKey>,
+    screens: Query<(Entity, &Screen, &ShowsStage), Without<ScreenParts>>,
     windows: Query<&Window>,
 ) {
-    for (entity, screen) in &screens {
-        let Ok(window) = windows.get(screen.window) else {
+    for (entity, screen, shows) in &screens {
+        let view = views
+            .iter()
+            .find(|(_, stage)| keys.get(stage.parent()).is_ok_and(|key| key.0 == shows.0))
+            .map(|(view, _)| view);
+        let (Some(view), Ok(window)) = (view, windows.get(screen.window)) else {
             continue;
         };
         let (target, mut parts) =
@@ -89,7 +122,7 @@ fn spawn_screen_cameras(
         // scene, such as the settings panel, keeps its scrolls and drags to itself.
         commands
             .entity(parts.image_node)
-            .insert(orbit::Steers(*view))
+            .insert(orbit::Steers(view))
             .observe(orbit::on_pan)
             .observe(orbit::on_orbit)
             .observe(orbit::on_zoom);
@@ -99,7 +132,7 @@ fn spawn_screen_cameras(
                 SceneCamera,
                 Camera3d::default(),
                 target,
-                ChildOf(*view),
+                ChildOf(view),
             ))
             .id();
         commands.entity(entity).insert((ScreenUi(parts.display), parts));

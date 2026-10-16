@@ -47,14 +47,20 @@ pub use screens::Screen;
 pub use screens::ScreenPlace;
 pub use screens::ScreenSettings;
 pub use screens::ScreenUi;
+pub use screens::ShowsStage;
+pub use screens::StageId;
 pub use screens::Unseen;
 pub use stage::Focused;
 pub use stage::FocusedMut;
 pub use stage::FocusedStage;
 pub use stage::Stage;
+pub use stage::StageKey;
+pub use stage::StageMemories;
+pub use stage::StageSeed;
 pub use stage::focused_added;
 pub use stage::focused_changed;
 pub use stage::focused_has;
+pub use stage::stage_memory_changed;
 pub use state::CharacterState;
 pub use state::Picks;
 pub use suite::ActiveSuite;
@@ -80,6 +86,7 @@ impl Plugin for ScenePlugin {
 
         app.insert_resource(config.clone())
             .insert_resource(config.render.clone())
+            .insert_resource(stage::StageSeeds(config.stages.clone()))
             .insert_resource(ClearColor(Color::srgb(r, g, b)))
             // No built-in lighting: only what the environment ships lights the character.
             .insert_resource(GlobalAmbientLight::NONE)

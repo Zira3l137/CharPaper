@@ -6,14 +6,14 @@ use std::path::PathBuf;
 
 use bevy::prelude::*;
 use charpaper_audio::Volumes;
-use charpaper_scene::ActiveSuite;
-use charpaper_scene::CharacterState;
-use charpaper_scene::Focused;
 use charpaper_scene::GazeSettings;
 use charpaper_scene::Picks;
 use charpaper_scene::RenderSettings;
 use charpaper_scene::ScreenSettings;
-use charpaper_scene::focused_changed;
+use charpaper_scene::StageId;
+use charpaper_scene::StageMemories;
+use charpaper_scene::StageSeed;
+use charpaper_scene::stage_memory_changed;
 use charpaper_ui::UiState;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,14 +25,30 @@ pub const STATE_FILE: &str = "state.toml";
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(default)]
 pub struct SavedState {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub suite: Option<String>,
     pub ui: UiState,
     pub render: RenderSettings,
     pub screen: ScreenSettings,
-    pub gaze: GazeSettings,
     pub audio: Volumes,
-    pub suites: BTreeMap<String, Picks>,
+    pub stages: BTreeMap<StageId, StageSeed>,
+    // Where the one scene kept its choices before there were stages. Read once, into stage A.
+    #[serde(skip_serializing)]
+    suite: Option<String>,
+    #[serde(skip_serializing)]
+    gaze: Option<GazeSettings>,
+    #[serde(skip_serializing)]
+    suites: BTreeMap<String, Picks>,
+}
+
+impl SavedState {
+    fn adopt_single_scene(mut self) -> Self {
+        let (suite, gaze, suites) =
+            (self.suite.take(), self.gaze.take(), std::mem::take(&mut self.suites));
+        if self.stages.is_empty() && (suite.is_some() || gaze.is_some() || !suites.is_empty()) {
+            let seed = StageSeed { suite, gaze: gaze.unwrap_or_default(), suites };
+            self.stages.insert(StageId::FIRST, seed);
+        }
+        self
+    }
 }
 
 // Problems are returned, not logged, because this runs before Bevy's logger exists.
@@ -51,8 +67,8 @@ pub fn load(path: &Path) -> Loaded {
         }
         Err(err) => return fresh(format!("cannot read {}: {err}; starting fresh", path.display())),
     };
-    match toml::from_str(&text) {
-        Ok(state) => Loaded { state, problem: None },
+    match toml::from_str::<SavedState>(&text) {
+        Ok(state) => Loaded { state: state.adopt_single_scene(), problem: None },
         Err(err) => {
             // Moved aside rather than overwritten, in case it was edited by hand.
             let aside = path.with_extension("toml.bad");
@@ -88,11 +104,10 @@ impl Plugin for StatePlugin {
             Last,
             (
                 note_change.run_if(
-                    focused_changed::<CharacterState>
+                    stage_memory_changed
                         .or_eager(resource_changed::<UiState>)
                         .or_eager(resource_changed::<RenderSettings>)
                         .or_eager(resource_changed::<ScreenSettings>)
-                        .or_eager(focused_changed::<GazeSettings>)
                         .or_eager(resource_changed::<Volumes>),
                 ),
                 save_settled,
@@ -117,38 +132,26 @@ fn report_problem(mut file: ResMut<StateFile>) {
     }
 }
 
-// Builds on what is still unsaved, so picks made in a suite just left are kept when the
-// switch comes before they were written.
+// The stages' memories hold every stage, those whose monitors are unplugged included, so
+// none is dropped from the file while it is away.
 fn note_change(
     time: Res<Time<Real>>,
     mut file: ResMut<StateFile>,
     ui: Res<UiState>,
     render: Res<RenderSettings>,
     screen: Res<ScreenSettings>,
-    gaze: Focused<GazeSettings>,
     volumes: Res<Volumes>,
-    character: Focused<CharacterState>,
-    suite: Focused<ActiveSuite>,
+    stages: StageMemories,
 ) {
-    let (Some(gaze), Some(character)) = (gaze.get(), character.get()) else {
-        return;
+    let next = SavedState {
+        ui: ui.clone(),
+        render: render.clone(),
+        screen: screen.clone(),
+        audio: volumes.clone(),
+        stages: stages.all(),
+        ..default()
     };
-    let unsaved = file.unsaved.take();
-    let mut next = unsaved.map_or_else(|| file.saved.clone(), |unsaved| unsaved.value);
-    next.ui = ui.clone();
-    next.render = render.clone();
-    next.screen = screen.clone();
-    next.gaze = gaze.clone();
-    next.audio = volumes.clone();
-    if character.suite.is_some() {
-        next.suite = character.suite.clone();
-    }
-    if let Some(suite) = suite.get() {
-        next.suites.entry(suite.folder()).or_default().merge(Picks::from_state(&character));
-    }
-    if next != file.saved {
-        file.unsaved = Some(Unsaved::new(next, time.elapsed()));
-    }
+    file.unsaved = (next != file.saved).then(|| Unsaved::new(next, time.elapsed()));
 }
 
 fn save_settled(

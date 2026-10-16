@@ -4,8 +4,7 @@ use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::Focused;
 use charpaper_scene::ScreenUi;
-use charpaper_scene::focused_added;
-use charpaper_scene::focused_has;
+use charpaper_scene::StageKey;
 use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
@@ -16,6 +15,7 @@ use crate::elements::HelpText;
 use crate::elements::StatusText;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
+use crate::locale::Locale;
 use crate::tabs;
 use crate::theme::*;
 use crate::widgets::*;
@@ -36,13 +36,7 @@ impl Plugin for PanelPlugin {
                 (show_panel, style_tabs, show_folds)
                     .run_if(resource_changed::<UiState>.or_eager(new_panel)),
             )
-            .add_systems(
-                Update,
-                show_suite_name.run_if(
-                    focused_added::<ActiveSuite>
-                        .or_eager(new_panel.and_eager(focused_has::<ActiveSuite>)),
-                ),
-            )
+            .add_systems(Update, show_status)
             .add_observer(on_click);
     }
 }
@@ -335,12 +329,26 @@ fn track_hover(parts: Query<&Hovered>, mut panel: ResMut<PanelHovered>) {
     panel.set_if_neq(PanelHovered(parts.iter().any(Hovered::get)));
 }
 
-fn show_suite_name(suite: Focused<ActiveSuite>, mut status: Query<&mut Text, With<StatusText>>) {
-    let Some(suite) = suite.get() else {
-        return;
+// The suite's name, and with several stages running, which stage the panel shows. Every
+// frame, but a Text is only touched when it changes, so the panel isn't laid out again.
+fn show_status(
+    suite: Focused<ActiveSuite>,
+    stage: Focused<StageKey>,
+    stages: Query<(), With<StageKey>>,
+    locale: Res<Locale>,
+    mut status: Query<&mut Text, With<StatusText>>,
+) {
+    let name = suite.get().map(|suite| suite.name.clone()).unwrap_or_default();
+    let wanted = match stage.get() {
+        Some(key) if stages.iter().count() > 1 => {
+            format!("{} · {name}", fl!(locale, "stage-name", letter = key.0.to_string()))
+        }
+        _ => name,
     };
     for mut text in &mut status {
-        text.0 = suite.name.clone();
+        if text.0 != wanted {
+            text.0.clone_from(&wanted);
+        }
     }
 }
 

@@ -3,6 +3,8 @@ use bevy::camera::SubCameraView;
 use bevy::camera::primitives::Frustum;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::math::primitives::ViewFrustum;
+use std::collections::BTreeMap;
+
 use bevy::prelude::*;
 
 use crate::SceneSet;
@@ -10,6 +12,8 @@ use crate::camera::SceneCamera;
 use crate::render::ScreenParts;
 use crate::screens::ScreenPlace;
 use crate::screens::ScreenSettings;
+use crate::screens::ShowsStage;
+use crate::screens::StageId;
 
 // Span mode: the screens show one wide view between them, as if their monitors were a single
 // screen. Every camera keeps the shared pose and lens, and renders only its own monitor's part
@@ -27,22 +31,33 @@ impl Plugin for SpanPlugin {
     }
 }
 
-// The whole picture is the smallest rectangle around every monitor. Each camera's part sits
-// where its monitor does, so the picture runs on unbroken from one monitor to the next, and
-// nothing is drawn for the corners no monitor covers.
+// A spanning stage's whole picture is the smallest rectangle around its monitors. Each
+// camera's part sits where its monitor does, so the picture runs on unbroken from one monitor
+// to the next, and nothing is drawn for the corners no monitor covers.
 fn cut_views(
     settings: Option<Res<ScreenSettings>>,
-    screens: Query<(&ScreenParts, Option<&ScreenPlace>)>,
+    screens: Query<(&ScreenParts, &ShowsStage, Option<&ScreenPlace>)>,
     mut cameras: Query<(&mut Camera, Option<&mut TemporalAntiAliasing>), With<SceneCamera>>,
 ) {
-    let places: Vec<IRect> = screens.iter().filter_map(|(_, place)| Some(place?.0)).collect();
-    let spanning = settings.is_some_and(|s| s.span) && places.len() > 1;
-    let whole = places.iter().copied().reduce(|a, b| a.union(b)).filter(|_| spanning);
+    let mut wholes: BTreeMap<StageId, (IRect, usize)> = BTreeMap::new();
+    for (_, shows, place) in &screens {
+        let Some(place) = place else {
+            continue;
+        };
+        let (whole, count) = wholes.entry(shows.0).or_insert((place.0, 0));
+        *whole = whole.union(place.0);
+        *count += 1;
+    }
+    let spanned = |stage: StageId| settings.as_ref().is_some_and(|s| s.spanned.contains(&stage));
 
-    for (parts, place) in &screens {
+    for (parts, shows, place) in &screens {
         let Ok((mut camera, taa)) = cameras.get_mut(parts.camera) else {
             continue;
         };
+        let whole = wholes
+            .get(&shows.0)
+            .filter(|(_, count)| *count > 1 && spanned(shows.0))
+            .map(|(whole, _)| *whole);
         let wanted = whole.zip(place).map(|(whole, place)| SubCameraView {
             full_size: whole.size().as_uvec2(),
             offset: (place.0.min - whole.min).as_vec2(),

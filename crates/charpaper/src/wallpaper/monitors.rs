@@ -122,7 +122,7 @@ fn pick_targets(
             name: m.name.clone(),
             width: m.area.width,
             height: m.area.height,
-            shown: next.iter().any(|t| t.id == m.id),
+            stage: next.iter().any(|t| t.id == m.id).then(|| screen.stage_of(&m.id)),
         })
         .collect();
     listed.set_if_neq(Monitors(entries));

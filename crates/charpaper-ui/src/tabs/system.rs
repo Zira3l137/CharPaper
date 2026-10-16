@@ -1,8 +1,12 @@
 use bevy::prelude::*;
 use charpaper_audio::Volumes;
 use charpaper_scene::ChosenMonitor;
+use charpaper_scene::Focused;
 use charpaper_scene::Monitors;
 use charpaper_scene::ScreenSettings;
+use charpaper_scene::StageId;
+use charpaper_scene::StageKey;
+use charpaper_scene::focused_changed;
 use i18n_embed_fl::fl;
 
 use crate::UiState;
@@ -21,8 +25,8 @@ use crate::widgets::*;
 
 const VOLUME_STEP: f32 = 0.05;
 
-// Settings of the app itself rather than of what it shows: which monitor it is on, how loud
-// it is, and the panel's language.
+// Settings of the app itself rather than of what it shows: which monitors it is on and which
+// stage each shows, how loud it is, and the panel's language.
 pub(crate) struct SystemTabPlugin;
 
 impl Plugin for SystemTabPlugin {
@@ -40,6 +44,7 @@ impl Plugin for SystemTabPlugin {
                     resource_changed::<ScreenSettings>
                         .or_eager(resource_changed::<Monitors>)
                         .or_eager(resource_changed::<Locale>)
+                        .or_eager(focused_changed::<StageKey>)
                         .or_eager(new_panel),
                 ),
             ),
@@ -96,7 +101,7 @@ fn show_volumes(volumes: Res<Volumes>, mut rows: Query<(&UiContainer, &mut Shown
 
 // One row per connected monitor, left to right as they stand, and one for each chosen monitor
 // that is unplugged, so it can be switched off while it is away. Made again only when the rows
-// themselves change, or for a list still empty; switching one on or off only relabels its
+// themselves change, or for a list still empty; giving one another stage only relabels its
 // button.
 fn fill_monitors(
     mut commands: Commands,
@@ -159,7 +164,10 @@ fn show_monitors(
         let UiButton::Monitor(id) = button else {
             continue;
         };
-        let text = on_off(&locale, shows_on(&screen, &monitors, id));
+        let text = match shown_stage(&screen, &monitors, id) {
+            Some(stage) => stage.to_string(),
+            None => on_off(&locale, false),
+        };
         for &child in &**children {
             if let Ok(mut label) = texts.get_mut(child) {
                 label.0.clone_from(&text);
@@ -168,31 +176,36 @@ fn show_monitors(
     }
 }
 
-// Only with the wallpaper on two monitors or more.
+// For the stage the panel shows, with two monitors or more showing it.
 fn show_layout(
     screen: Res<ScreenSettings>,
     monitors: Res<Monitors>,
+    stage: Focused<StageKey>,
     locale: Res<Locale>,
     mut nodes: Query<(&UiContainer, &mut Node)>,
     mut rows: Query<(&UiContainer, &mut Shown)>,
 ) {
-    let several = monitors.0.iter().filter(|m| m.shown).count() > 1;
+    let stage = stage.get().map(|key| key.0);
+    let several = monitors.0.iter().filter(|m| m.stage.is_some() && m.stage == stage).count() > 1;
     show_container(&mut nodes, UiContainer::Row(Cycler::Layout), several);
     let label = |span: &bool| match span {
         false => fl!(locale, "layout-mirror"),
         true => fl!(locale, "layout-span"),
     };
-    show(&mut rows, Cycler::Layout, choice(&[false, true], &screen.span, label));
+    let span = stage.is_some_and(|stage| screen.spanned.contains(&stage));
+    show(&mut rows, Cycler::Layout, choice(&[false, true], &span, label));
 }
 
-// An unplugged monitor counts as on while it is chosen: switching it off unchooses it.
-fn shows_on(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> bool {
+// An unplugged monitor keeps its stage while it is chosen: switching it off unchooses it.
+fn shown_stage(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> Option<StageId> {
     match monitors.get(id) {
-        Some(monitor) => monitor.shown,
-        None => screen.monitors.iter().any(|chosen| chosen.id == id),
+        Some(monitor) => monitor.stage,
+        None => screen.monitors.iter().find(|chosen| chosen.id == id).map(|chosen| chosen.stage),
     }
 }
 
+// A click moves the monitor on to the next stage, then Off, then round to A. There are as many
+// stages to pick from as monitors in the list, enough for each to show its own.
 fn on_click(
     event: On<Pointer<Click>>,
     buttons: Query<&UiButton>,
@@ -207,20 +220,32 @@ fn on_click(
         true => monitors
             .0
             .iter()
-            .filter(|m| m.shown)
-            .map(|m| ChosenMonitor { id: m.id.clone(), name: m.name.clone() })
+            .filter_map(|m| {
+                let stage = m.stage?;
+                Some(ChosenMonitor { id: m.id.clone(), name: m.name.clone(), stage })
+            })
             .collect(),
         false => screen.monitors.clone(),
     };
-    if shows_on(&screen, &monitors, id) {
-        chosen.retain(|c| &c.id != id);
-        // The last connected monitor showing it stays on: a wallpaper on no monitor is none.
-        let connected_left = chosen.iter().any(|c| monitors.get(&c.id).is_some());
-        if monitors.get(id).is_some() && !connected_left {
-            return;
-        }
-    } else if let Some(monitor) = monitors.get(id) {
-        chosen.push(ChosenMonitor { id: monitor.id.clone(), name: monitor.name.clone() });
+    let unplugged = chosen.iter().filter(|c| monitors.get(&c.id).is_none()).count();
+    let count = (monitors.0.len() + unplugged).min(StageId::MAX);
+    let options: Vec<Option<StageId>> =
+        std::iter::once(None).chain((0..count).map(StageId::new)).collect();
+    let current = shown_stage(&screen, &monitors, id);
+    let at = options.iter().position(|option| *option == current).unwrap_or(0);
+    let mut next = options[(at + 1) % options.len()];
+    // The last connected monitor showing it can't go Off: a wallpaper on no monitor is none.
+    let others_on = chosen.iter().any(|c| &c.id != id && monitors.get(&c.id).is_some());
+    if next.is_none() && monitors.get(id).is_some() && !others_on {
+        next = options[1];
+    }
+
+    chosen.retain(|c| &c.id != id);
+    if let Some(stage) = next {
+        let name = monitors.get(id).map(|m| m.name.clone());
+        let name =
+            name.or_else(|| screen.monitors.iter().find(|c| &c.id == id).map(|c| c.name.clone()));
+        chosen.push(ChosenMonitor { id: id.clone(), name: name.unwrap_or_default(), stage });
     }
     screen.monitors = chosen;
 }
@@ -248,11 +273,19 @@ fn on_step(
     languages: Res<Languages>,
     mut ui: ResMut<UiState>,
     mut screen: ResMut<ScreenSettings>,
+    stage: Focused<StageKey>,
     mut volumes: ResMut<Volumes>,
 ) {
     let volume = match event.cycler {
         Cycler::Layout => {
-            screen.span = flip(screen.span, &event);
+            let Some(stage) = stage.get().map(|key| key.0) else {
+                return;
+            };
+            if flip(screen.spanned.contains(&stage), &event) {
+                screen.spanned.insert(stage);
+            } else {
+                screen.spanned.remove(&stage);
+            }
             return;
         }
         Cycler::Language => {

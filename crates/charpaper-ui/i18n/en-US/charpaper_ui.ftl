@@ -84,6 +84,8 @@ value-ultra = Ultra
 ## System tab
 
 section-display = DISPLAY
+# Above the panel, with several stages: which one the panel shows.
+stage-name = Stage { $letter }
 # After the name of a chosen monitor that is unplugged.
 monitor-missing = not connected
 label-layout = Layout
@@ -140,7 +142,7 @@ help-fog-dithering = Hides banding in the fog with fine noise.
 help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
 help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
 help-pause-battery = Stops the picture and sound while the computer runs on battery.
-help-layout = Mirror shows the whole scene on every monitor. Span spreads one wide view across them, as if they were a single screen.
+help-layout = For this monitor's stage. Mirror shows the whole scene on each of its monitors. Span spreads one wide view across them, as if they were a single screen.
 help-master-volume = How loud all of CharPaper's sound is.
 help-music-volume = The environment's music.
 help-ambience-volume = The environment's background sounds, such as rain or wind.

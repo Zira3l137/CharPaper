@@ -3,6 +3,8 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use charpaper_scene::Screen;
 use charpaper_scene::ScreenPlace;
+use charpaper_scene::ScreenSettings;
+use charpaper_scene::ShowsStage;
 use charpaper_wallpaper::DesktopMonitor;
 
 use crate::wallpaper::Backend;
@@ -26,7 +28,7 @@ impl Plugin for WindowsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, adopt_primary_window)
             .add_systems(Update, assign_windows.run_if(resource_changed::<Targets>))
-            .add_systems(Update, place_screens.after(assign_windows));
+            .add_systems(Update, describe_screens.after(assign_windows));
     }
 }
 
@@ -98,16 +100,21 @@ pub(crate) fn assign_windows(
     }
 }
 
-// Tells the scene where each screen is, for span mode.
-fn place_screens(
+// Tells the scene which stage each screen shows, and where the screen is, for span mode.
+fn describe_screens(
     mut commands: Commands,
-    screens: Query<(Entity, &Screen, Option<&ScreenPlace>)>,
+    settings: Res<ScreenSettings>,
+    screens: Query<(Entity, &Screen, Option<&ScreenPlace>, Option<&ShowsStage>)>,
     windows: Query<&OnMonitor>,
 ) {
-    for (entity, screen, place) in &screens {
+    for (entity, screen, place, shows) in &screens {
         let Ok(on) = windows.get(screen.window) else {
             continue;
         };
+        let stage = ShowsStage(settings.stage_of(&on.0.id));
+        if shows != Some(&stage) {
+            commands.entity(entity).insert(stage);
+        }
         let area = on.0.area;
         let corner = IVec2::new(area.x, area.y);
         let size = UVec2::new(area.width, area.height).as_ivec2();

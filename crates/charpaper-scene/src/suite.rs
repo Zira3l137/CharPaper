@@ -77,10 +77,15 @@ pub(crate) fn discover_suites(config: Res<SceneConfig>, mut available: ResMut<Av
     debug!("character suites in {}: {:?}", dir.display(), available.0);
 }
 
-pub(crate) fn starting_suite(config: &SceneConfig, available: &AvailableSuites) -> Option<String> {
+// The suite asked for, or the first there is.
+pub(crate) fn starting_suite(
+    config: &SceneConfig,
+    available: &AvailableSuites,
+    asked: Option<String>,
+) -> Option<String> {
     let dir = &config.characters_dir;
     let first = available.0.first().cloned();
-    let suite = match &config.suite {
+    let suite = match &asked {
         Some(name) if available.0.contains(name) => Some(name.clone()),
         Some(name) => {
             error!("no suite named {name:?} in {}; using the first instead", dir.display());
