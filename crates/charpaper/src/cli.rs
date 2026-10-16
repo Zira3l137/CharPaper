@@ -98,6 +98,12 @@ pub struct Cli {
     /// Log level for Bevy, wgpu and everything else.
     #[arg(long, value_enum, default_value = "warn")]
     pub bevy_log_level: LogLevel,
+
+    // The app starts itself with these to leave a keeper behind; see wallpaper/keeper.rs.
+    #[arg(long, hide = true, value_name = "PID")]
+    pub keep_desktop: Option<u32>,
+    #[arg(long, hide = true, requires = "keep_desktop")]
+    pub orphaned: bool,
 }
 
 pub fn parse() -> Cli {

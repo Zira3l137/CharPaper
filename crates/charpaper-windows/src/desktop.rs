@@ -294,14 +294,20 @@ pub fn leave(windows: &[Hwnd]) {
     for &hwnd in windows {
         unsafe { sys::ShowWindow(hwnd, sys::SW_HIDE) };
     }
-    if windows.is_empty() || find_shell_windows().raised_desktop {
+    if !windows.is_empty() {
+        repaint();
+    }
+}
+
+pub fn repaint() {
+    if find_shell_windows().raised_desktop {
         return;
     }
     let null = std::ptr::null_mut();
     let ok = unsafe {
         sys::SystemParametersInfoW(sys::SPI_SETDESKWALLPAPER, 0, null, sys::SPIF_UPDATEINIFILE)
     };
-    debug!("repainted the desktop behind {} window(s) (ok={})", windows.len(), ok != 0);
+    debug!("repainted the desktop (ok={})", ok != 0);
 }
 
 pub fn dump_window_tree() -> Vec<String> {

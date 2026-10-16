@@ -1,3 +1,6 @@
+use std::io;
+use std::os::windows::process::CommandExt;
+use std::process::Command;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
@@ -114,6 +117,29 @@ impl WallpaperBackend for WindowsBackend {
     fn release(&mut self) {
         let gone: Vec<sys::Hwnd> = self.attached.list().drain(..).map(|(_, hwnd)| hwnd).collect();
         desktop::leave(&gone);
+    }
+
+    // The raised desktop of newer Windows 11 shows no ghost.
+    fn needs_keeper(&self) -> bool {
+        !desktop::find_shell_windows().raised_desktop
+    }
+
+    // Out of the app's job when the job allows it, since a job can end all its processes at
+    // once. No console either, which a debug build would otherwise open.
+    fn spawn_keeper(&self, keeper: &mut Command) -> io::Result<()> {
+        let quiet = sys::CREATE_NO_WINDOW;
+        match keeper.creation_flags(quiet | sys::CREATE_BREAKAWAY_FROM_JOB).spawn() {
+            Ok(_) => Ok(()),
+            Err(_) => keeper.creation_flags(quiet).spawn().map(drop),
+        }
+    }
+
+    // Exit code 0 is a clean quit, which repainted already. Any other, or a process gone
+    // before it could be watched, may have left the ghost.
+    fn keep(&mut self, app: u32) {
+        if sys::wait_for_exit(app) != Some(0) {
+            desktop::repaint();
+        }
     }
 
     fn monitors(&mut self) -> Vec<DesktopMonitor> {

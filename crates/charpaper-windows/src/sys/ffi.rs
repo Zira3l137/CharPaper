@@ -12,6 +12,7 @@ pub type LParam = isize;
 pub type LResult = isize;
 pub type HHook = isize;
 pub type HInstance = isize;
+pub type Handle = isize;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -244,6 +245,13 @@ pub const SW_HIDE: i32 = 0;
 pub const SPI_SETDESKWALLPAPER: u32 = 0x0014;
 pub const SPIF_UPDATEINIFILE: u32 = 0x0001;
 
+pub const SYNCHRONIZE: u32 = 0x0010_0000;
+pub const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+pub const INFINITE: u32 = 0xFFFF_FFFF;
+pub const WAIT_OBJECT_0: u32 = 0;
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+pub const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+
 pub const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
 pub const MONITOR_DEFAULTTONEAREST: u32 = 2;
 
@@ -383,4 +391,8 @@ unsafe extern "system" {
     pub fn GetCurrentThreadId() -> u32;
     pub fn GetModuleHandleW(name: *const u16) -> HInstance;
     pub fn GetSystemPowerStatus(status: *mut SystemPowerStatus) -> Bool;
+    pub fn OpenProcess(access: u32, inherit: Bool, pid: u32) -> Handle;
+    pub fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
+    pub fn GetExitCodeProcess(process: Handle, code: *mut u32) -> Bool;
+    pub fn CloseHandle(handle: Handle) -> Bool;
 }

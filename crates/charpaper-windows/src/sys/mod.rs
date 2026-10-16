@@ -170,3 +170,17 @@ pub fn monitor_dpi(monitor: HMonitor) -> Option<u32> {
     let ok = unsafe { GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut x, &mut y) } == 0;
     ok.then_some(x)
 }
+
+// Waits for another process to end and gives its exit code. None when it can't be watched,
+// which includes having ended already.
+pub fn wait_for_exit(pid: u32) -> Option<u32> {
+    let process = unsafe { OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process == 0 {
+        return None;
+    }
+    let mut code = 0;
+    let ended = unsafe { WaitForSingleObject(process, INFINITE) } == WAIT_OBJECT_0
+        && unsafe { GetExitCodeProcess(process, &mut code) } != 0;
+    unsafe { CloseHandle(process) };
+    ended.then_some(code)
+}

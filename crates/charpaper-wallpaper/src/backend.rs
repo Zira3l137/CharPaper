@@ -1,3 +1,6 @@
+use std::io;
+use std::process::Command;
+
 use raw_window_handle::RawWindowHandle;
 
 use crate::AttachStrategy;
@@ -88,8 +91,25 @@ pub trait WallpaperBackend: Send + Sync + 'static {
     fn detach(&mut self, _window: WindowKey) {}
 
     // The app is quitting: take every window off the desktop and leave it as it was. Called
-    // while the windows still exist. A process that is killed or crashes never gets here.
+    // while the windows still exist. A process that is killed or crashes never gets here, so
+    // when that leaves something behind, the backend asks for a keeper.
     fn release(&mut self) {}
+
+    // Whether a process that ends without `release` leaves something on the desktop. If so,
+    // once a window is attached the app leaves a keeper process running, which calls `keep`.
+    fn needs_keeper(&self) -> bool {
+        false
+    }
+
+    // Starts the keeper, given the command that runs it. Here the backend can keep it from
+    // ending together with the app.
+    fn spawn_keeper(&self, keeper: &mut Command) -> io::Result<()> {
+        keeper.spawn().map(drop)
+    }
+
+    // The keeper's work, in a process of its own: wait for the app's process to end, and if
+    // it ended without `release`, put the desktop right.
+    fn keep(&mut self, _app: u32) {}
 
     // Every monitor, freshly read. Polled about once a second. Empty when the backend can't
     // tell, which leaves the app to Bevy's own list: it has no lasting ids and can miss a

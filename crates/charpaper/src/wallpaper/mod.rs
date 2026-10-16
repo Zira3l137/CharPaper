@@ -1,6 +1,7 @@
 mod attach;
 mod cursor;
 mod input;
+mod keeper;
 mod monitors;
 mod pacing;
 mod platform;
@@ -12,6 +13,7 @@ use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WindowKey;
 
+pub use keeper::keep_desktop;
 pub(crate) use pacing::Paused;
 pub use platform::inspect_report;
 

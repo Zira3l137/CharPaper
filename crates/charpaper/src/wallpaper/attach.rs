@@ -15,6 +15,7 @@ use crate::wallpaper::Backend;
 use crate::wallpaper::WallpaperSettings;
 use crate::wallpaper::input::PointerOnDesktop;
 use crate::wallpaper::input::PointerSourceResource;
+use crate::wallpaper::keeper;
 use crate::wallpaper::key;
 use crate::wallpaper::monitors::Layout;
 use crate::wallpaper::windows::OnMonitor;
@@ -42,6 +43,7 @@ impl Plugin for AttachPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, probe_desktop)
             .add_systems(Update, (attach_windows, place_windows).chain().after(assign_windows))
+            .add_systems(Update, start_keeper.after(attach_windows))
             .add_systems(Last, leave_desktop);
     }
 }
@@ -148,6 +150,22 @@ fn place_windows(
             continue;
         }
         match_scale(&mut settings, on.0.scale);
+    }
+}
+
+// Once, when the first window is attached.
+fn start_keeper(
+    _main_thread: NonSendMarker,
+    backend: Res<Backend>,
+    windows: Query<&Attachment>,
+    mut started: Local<bool>,
+) {
+    if *started || !windows.iter().any(|a| *a == Attachment::Attached) {
+        return;
+    }
+    *started = true;
+    if backend.0.needs_keeper() {
+        keeper::start(backend.0.as_ref());
     }
 }
 

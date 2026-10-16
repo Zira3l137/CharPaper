@@ -15,6 +15,10 @@ use crate::config::AppConfig;
 
 fn main() -> Result<()> {
     let args = cli::parse();
+    if let Some(app) = args.keep_desktop {
+        wallpaper::keep_desktop(app, args.orphaned);
+        return Ok(());
+    }
     if args.inspect {
         commands::inspect();
         return Ok(());
