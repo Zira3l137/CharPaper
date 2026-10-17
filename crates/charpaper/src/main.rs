@@ -10,12 +10,14 @@ mod save;
 mod wallpaper;
 
 use anyhow::Result;
+use charpaper_monitor::CountingAllocator;
 use mimalloc::MiMalloc;
 
 use crate::config::AppConfig;
 
+// Counted for the performance monitor's heap row.
 #[global_allocator]
-static ALLOCATOR: MiMalloc = MiMalloc;
+static ALLOCATOR: CountingAllocator<MiMalloc> = CountingAllocator(MiMalloc);
 
 fn main() -> Result<()> {
     let args = cli::parse();

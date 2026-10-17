@@ -129,7 +129,23 @@ monitor-stage-queue = Sorting draws
 monitor-stage-prepare = GPU buffers
 monitor-stage-render = Commands
 monitor-stage-cleanup = Cleanup
+# The memory section. "Memory" is all the RAM the process touches, as Task Manager counts it.
 monitor-memory = Memory
+# How much a kind of memory grew over the last minute, with its sign.
+monitor-growth = { $mb } MB a minute
+# Memory the process asked Windows for, touched or not.
+monitor-committed = Committed
+# What the app's own code holds, and in how many separate pieces.
+monitor-heap = Heap
+monitor-heap-blocks = { $count } blocks
+monitor-gpu-memory = GPU memory
+monitor-gpu-reserved = { $mb } MB reserved
+monitor-gpu-objects = GPU objects
+monitor-gpu-object-details = buffers { $buffers }, textures { $textures }, views { $views }, bind groups { $groups }, samplers { $samplers }, pipelines { $pipelines }, shaders { $shaders }
+monitor-entities = Entities
+monitor-render-entities = render world: { $count }
+monitor-assets = Assets
+monitor-asset-details = images { $images }, meshes { $meshes }, materials { $materials }, clips { $clips }, glTF { $gltfs }
 monitor-graphics = Graphics
 monitor-discrete = discrete
 monitor-integrated = integrated

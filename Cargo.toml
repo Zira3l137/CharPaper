@@ -62,9 +62,10 @@ bevy_audio = { version = "0.19.1", default-features = false, features = ["vorbis
 rodio = { version = "0.22", default-features = false, features = ["playback"] }
 
 raw-window-handle = { version = "0.6", default-features = false, features = ["std"] }
-# The version Bevy's renderer builds. Only for the GPU timestamp queries, which Bevy doesn't
-# re-export.
-wgpu = { version = "29", default-features = false }
+# The version Bevy's renderer builds, for what Bevy doesn't re-export: GPU timestamp queries,
+# and `counters`, which makes wgpu count its live objects for the monitor with an atomic add
+# each time one is made or dropped.
+wgpu = { version = "29", default-features = false, features = ["counters"] }
 # The app's allocator. Bevy's render thread allocates and frees many small buffers for every
 # view every frame, which mimalloc does faster than the system's allocator and with less
 # memory left fragmented.

@@ -6,6 +6,8 @@
 // show; the panel shows them as an overlay.
 
 mod gpu;
+mod heap;
+mod memory;
 mod process;
 mod threads;
 
@@ -30,7 +32,16 @@ use bevy::render::extract_resource::ExtractResourcePlugin;
 use bevy::render::renderer::RenderAdapterInfo;
 use wgpu::DeviceType;
 
+use crate::memory::Measured;
+use crate::memory::MemorySources;
 use crate::process::Process;
+
+pub use heap::CountingAllocator;
+pub use memory::Amount;
+pub use memory::AssetCounts;
+pub use memory::GpuMemory;
+pub use memory::GpuObjects;
+pub use memory::Memory;
 
 const EVERY: Duration = Duration::from_millis(500);
 
@@ -79,7 +90,7 @@ pub struct Readings {
     // Of the whole machine, as Task Manager counts it.
     pub cpu_percent: Option<f32>,
     pub cores: usize,
-    pub memory_mb: Option<f32>,
+    pub memory: Memory,
     pub adapter: Option<Adapter>,
     pub gpu: Gpu,
     // Point light faces and spot lights with a shadow map, and how many of those maps were
@@ -267,6 +278,8 @@ pub(crate) struct RenderSamples {
     pub shadow_maps_drawn: Mean,
     pub gpu: GpuMeans,
     pub gpu_unsupported: bool,
+    // The latest count, not a mean.
+    pub render_entities: Option<usize>,
 }
 
 // What the main thread gathered since the last readings.
@@ -347,12 +360,14 @@ fn publish(
     mut readings: ResMut<Readings>,
     scene: SceneCounts,
     adapter: Option<Res<RenderAdapterInfo>>,
+    mut memory: MemorySources,
 ) {
     if !on.0 {
         if gathered.frames > 0 {
             *gathered = Gathered::default();
             *samples.lock() = RenderSamples::default();
             *process = None;
+            memory.reset();
         }
         return;
     }
@@ -377,7 +392,11 @@ fn publish(
         recording_ms: render.recording.get(),
         cpu_percent: usage.cpu_percent,
         cores: process.cores(),
-        memory_mb: usage.memory_mb,
+        memory: memory.read(Measured {
+            working_set_mb: usage.working_set_mb,
+            committed_mb: usage.committed_mb,
+            render_entities: render.render_entities,
+        }),
         adapter: adapter.map(|info| Adapter {
             name: info.name.clone(),
             kind: match info.device_type {

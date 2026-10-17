@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use bevy::text::Justify;
 use bevy::text::LineBreak;
 use charpaper_monitor::AdapterKind;
+use charpaper_monitor::Amount;
 use charpaper_monitor::Gpu;
+use charpaper_monitor::Memory;
 use charpaper_monitor::Monitoring;
 use charpaper_monitor::Readings;
 use charpaper_scene::ScreenSync;
@@ -167,6 +169,96 @@ fn subpart(label: String) -> String {
     format!("        {label}")
 }
 
+fn memory_rows(m: &Memory, l: &FluentLanguageLoader) -> Vec<Row> {
+    let mb = |mb: f32| fl!(l, "monitor-mb", value = format!("{mb:.0}"));
+    let value = |amount: Option<Amount>| amount.map(|a| mb(a.mb)).unwrap_or_else(|| "-".into());
+    // How much it grew over the last minute, once there is enough of a minute to tell.
+    let growth = |amount: Option<Amount>| {
+        amount
+            .and_then(|a| a.per_minute)
+            .map(|rate| fl!(l, "monitor-growth", mb = format!("{rate:+.1}")))
+            .unwrap_or_default()
+    };
+    let notes = |parts: &[String]| {
+        parts.iter().filter(|p| !p.is_empty()).cloned().collect::<Vec<_>>().join(", ")
+    };
+
+    let mut rows = vec![
+        row(fl!(l, "monitor-memory"), value(m.working_set), growth(m.working_set)),
+        row(part(fl!(l, "monitor-committed")), value(m.committed), growth(m.committed)),
+        row(
+            part(fl!(l, "monitor-heap")),
+            value(m.heap),
+            notes(&[
+                m.heap
+                    .map(|_| fl!(l, "monitor-heap-blocks", count = m.heap_blocks.to_string()))
+                    .unwrap_or_default(),
+                growth(m.heap),
+            ]),
+        ),
+    ];
+    if let Some(gpu) = &m.gpu {
+        let allocated = Some(gpu.allocated);
+        rows.push(row(
+            part(fl!(l, "monitor-gpu-memory")),
+            value(allocated),
+            notes(&[
+                fl!(l, "monitor-gpu-reserved", mb = format!("{:.0}", gpu.reserved_mb)),
+                growth(allocated),
+            ]),
+        ));
+        for (name, size) in &gpu.largest {
+            rows.push(row(subpart(name.clone()), mb(*size), String::new()));
+        }
+    }
+    if let Some(o) = m.gpu_objects {
+        let total = o.buffers
+            + o.textures
+            + o.texture_views
+            + o.bind_groups
+            + o.samplers
+            + o.pipelines
+            + o.shader_modules;
+        rows.push(row(
+            part(fl!(l, "monitor-gpu-objects")),
+            total.to_string(),
+            fl!(
+                l,
+                "monitor-gpu-object-details",
+                buffers = o.buffers.to_string(),
+                textures = o.textures.to_string(),
+                views = o.texture_views.to_string(),
+                groups = o.bind_groups.to_string(),
+                samplers = o.samplers.to_string(),
+                pipelines = o.pipelines.to_string(),
+                shaders = o.shader_modules.to_string()
+            ),
+        ));
+    }
+    rows.push(row(
+        part(fl!(l, "monitor-entities")),
+        m.entities.to_string(),
+        m.render_entities
+            .map(|count| fl!(l, "monitor-render-entities", count = count.to_string()))
+            .unwrap_or_default(),
+    ));
+    let a = m.assets;
+    rows.push(row(
+        part(fl!(l, "monitor-assets")),
+        (a.images + a.meshes + a.materials + a.clips + a.gltfs).to_string(),
+        fl!(
+            l,
+            "monitor-asset-details",
+            images = a.images.to_string(),
+            meshes = a.meshes.to_string(),
+            materials = a.materials.to_string(),
+            clips = a.clips.to_string(),
+            gltfs = a.gltfs.to_string()
+        ),
+    ));
+    rows
+}
+
 fn rows(r: &Readings, l: &FluentLanguageLoader) -> Vec<Row> {
     let ms = |value: f32| fl!(l, "monitor-ms", value = format!("{value:.1}"));
     let maybe_ms = |value: Option<f32>| value.map(ms).unwrap_or_else(|| "-".into());
@@ -216,13 +308,7 @@ fn rows(r: &Readings, l: &FluentLanguageLoader) -> Vec<Row> {
             row(subpart(fl!(l, "monitor-stage-cleanup")), ms(stages.cleanup), none()),
         ]);
     }
-    rows.extend([row(
-        fl!(l, "monitor-memory"),
-        r.memory_mb
-            .map(|mb| fl!(l, "monitor-mb", value = format!("{mb:.0}")))
-            .unwrap_or_else(|| "-".into()),
-        none(),
-    )]);
+    rows.extend(memory_rows(&r.memory, l));
 
     if let Some(adapter) = &r.adapter {
         let kind = match adapter.kind {

@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use bevy::ecs::entity::Entities;
 use bevy::prelude::*;
 use bevy::render::Render;
 use bevy::render::RenderApp;
@@ -94,7 +95,7 @@ fn mark<const STAGE: usize>(mut clock: ResMut<StageClock>) {
     clock.last = Some(now);
 }
 
-fn end_render(mut clock: ResMut<StageClock>, samples: Res<Samples>) {
+fn end_render(mut clock: ResMut<StageClock>, samples: Res<Samples>, entities: &Entities) {
     let (Some(started), Some(last)) = (clock.started.take(), clock.last.take()) else {
         return;
     };
@@ -102,4 +103,5 @@ fn end_render(mut clock: ResMut<StageClock>, samples: Res<Samples>) {
     let mut samples = samples.lock();
     samples.render_thread.add(started.elapsed().as_secs_f64() * 1000.0);
     samples.render_stages.add(&clock.stages);
+    samples.render_entities = Some(entities.count_spawned() as usize);
 }
