@@ -251,7 +251,11 @@ fn rows(r: &Readings, l: &FluentLanguageLoader) -> Vec<Row> {
             let busy = gpu.total / r.frame_ms.max(0.001) * 100.0;
             let shadow_maps = r
                 .shadow_maps
-                .map(|count| fl!(l, "monitor-shadow-maps", count = format!("{count:.0}")))
+                .zip(r.shadow_maps_drawn)
+                .map(|(count, drawn)| {
+                    let (count, drawn) = (format!("{count:.0}"), format!("{drawn:.0}"));
+                    fl!(l, "monitor-shadow-maps", count = count, drawn = drawn)
+                })
                 .unwrap_or_default();
             rows.extend([
                 row(

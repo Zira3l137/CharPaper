@@ -134,7 +134,9 @@ monitor-busy = { $percent } времени
 monitor-waiting = идёт замер…
 monitor-unsupported = эта видеокарта не умеет замерять время
 monitor-light-shadows = Тени ламп
-monitor-shadow-maps = карт теней: { $count }
+# Of the shadow maps there are, how many were drawn again this frame; the rest show what
+# they showed before, since nothing in them changed.
+monitor-shadow-maps = карт теней перерисовано: { $drawn } из { $count }
 monitor-prepass = Предпроход, тени солнца
 monitor-main-pass = Основной проход
 monitor-fog = Туман

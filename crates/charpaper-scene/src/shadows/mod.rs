@@ -3,6 +3,8 @@
 // thing in view: in a room usually one cascade, drawn once a frame instead of four times, and
 // sharper, since the same shadow map covers less.
 
+mod cache;
+
 use bevy::camera::primitives::Aabb;
 use bevy::camera::visibility::RenderLayers;
 use bevy::light::CascadeShadowConfig;
@@ -22,7 +24,7 @@ pub(crate) struct ShadowsPlugin;
 
 impl Plugin for ShadowsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.add_plugins(cache::ShadowCachePlugin).add_systems(
             PostUpdate,
             fit_cascades
                 .after(TransformSystems::Propagate)

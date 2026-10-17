@@ -26,6 +26,7 @@ use bevy::core_pipeline::schedule::Core3d;
 use bevy::core_pipeline::schedule::Core3dSystems;
 use bevy::core_pipeline::schedule::RootNonCameraView;
 use bevy::core_pipeline::upscaling::upscaling;
+use bevy::ecs::schedule::ScheduleLabel;
 use bevy::pbr::EARLY_SHADOW_PASS;
 use bevy::pbr::clear_indirect_parameters_metadata;
 use bevy::pbr::per_view_shadow_pass;
@@ -236,7 +237,7 @@ fn begin_frame(
     device: Res<RenderDevice>,
     mut pending: ResMut<PendingCommandBuffers>,
     samples: Res<Samples>,
-    shadow_views: Query<(), With<RootNonCameraView>>,
+    shadow_views: Query<&RootNonCameraView>,
 ) {
     let Some(mut clock) = clock else {
         return;
@@ -269,6 +270,9 @@ fn begin_frame(
     }
     let mut samples = samples.lock();
     samples.shadow_maps.add(shadow_views.iter().count() as f64);
+    // A view pointed at any other schedule is one the app chose not to draw this frame.
+    let drawn = shadow_views.iter().filter(|view| view.0 == Core3d.intern()).count();
+    samples.shadow_maps_drawn.add(drawn as f64);
     if !clock.supported {
         samples.gpu_unsupported = true;
         return;

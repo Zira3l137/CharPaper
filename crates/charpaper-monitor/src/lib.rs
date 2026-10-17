@@ -82,8 +82,10 @@ pub struct Readings {
     pub memory_mb: Option<f32>,
     pub adapter: Option<Adapter>,
     pub gpu: Gpu,
-    // Point light faces and spot lights drawn into shadow maps each frame.
+    // Point light faces and spot lights with a shadow map, and how many of those maps were
+    // drawn again each frame rather than kept from the one before.
     pub shadow_maps: Option<f32>,
+    pub shadow_maps_drawn: Option<f32>,
     pub lights: LightCounts,
     pub meshes: MeshCounts,
     pub fog_boxes: usize,
@@ -262,6 +264,7 @@ pub(crate) struct RenderSamples {
     pub render_stages: StageMeans,
     pub recording: Mean,
     pub shadow_maps: Mean,
+    pub shadow_maps_drawn: Mean,
     pub gpu: GpuMeans,
     pub gpu_unsupported: bool,
 }
@@ -391,6 +394,7 @@ fn publish(
             None => Gpu::Waiting,
         },
         shadow_maps: render.shadow_maps.get(),
+        shadow_maps_drawn: render.shadow_maps_drawn.get(),
         lights: scene.lights(),
         meshes: scene.meshes(),
         fog_boxes: scene.fog.iter().len(),

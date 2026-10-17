@@ -140,7 +140,9 @@ monitor-busy = { $percent } of the time
 monitor-waiting = measuring…
 monitor-unsupported = this GPU can't time its work
 monitor-light-shadows = Light shadows
-monitor-shadow-maps = shadow maps: { $count }
+# Of the shadow maps there are, how many were drawn again this frame; the rest show what
+# they showed before, since nothing in them changed.
+monitor-shadow-maps = shadow maps: { $drawn } of { $count } drawn
 monitor-prepass = Prepass, sun shadows
 monitor-main-pass = Main pass
 monitor-fog = Fog
