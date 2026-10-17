@@ -65,6 +65,10 @@ raw-window-handle = { version = "0.6", default-features = false, features = ["st
 # The version Bevy's renderer builds. Only for the GPU timestamp queries, which Bevy doesn't
 # re-export.
 wgpu = { version = "29", default-features = false }
+# The app's allocator. Bevy's render thread allocates and frees many small buffers for every
+# view every frame, which mimalloc does faster than the system's allocator and with less
+# memory left fragmented.
+mimalloc = { version = "0.1.52", default-features = false }
 # The process's own CPU and memory use, for the performance monitor.
 sysinfo = { version = "0.38", default-features = false, features = ["system"] }
 

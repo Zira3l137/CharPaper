@@ -10,8 +10,12 @@ mod save;
 mod wallpaper;
 
 use anyhow::Result;
+use mimalloc::MiMalloc;
 
 use crate::config::AppConfig;
+
+#[global_allocator]
+static ALLOCATOR: MiMalloc = MiMalloc;
 
 fn main() -> Result<()> {
     let args = cli::parse();
