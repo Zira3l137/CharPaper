@@ -1,5 +1,6 @@
 mod arrows;
 mod elements;
+mod fonts;
 mod held;
 mod help;
 mod locale;
@@ -103,6 +104,7 @@ impl Plugin for SettingsPanelPlugin {
                     .chain(),
             )
             .add_plugins((
+                fonts::FontsPlugin,
                 panel::PanelPlugin,
                 overlay::OverlayPlugin,
                 tabs::character::CharacterPlugin,
