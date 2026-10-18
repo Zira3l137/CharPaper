@@ -1,9 +1,9 @@
+mod activity;
 mod attach;
 mod cursor;
 mod input;
 mod keeper;
 mod monitors;
-mod pacing;
 mod platform;
 mod windows;
 
@@ -12,13 +12,14 @@ use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WindowKey;
 
+pub(crate) use activity::Paused;
+pub(crate) use activity::ReadActivity;
 pub use keeper::keep_desktop;
-pub(crate) use pacing::Paused;
 pub use platform::inspect_report;
 
 // Puts a window behind the desktop icons on every chosen monitor and keeps them working there:
 // attaching, keeping each on its monitor, replaying the mouse input the desktop keeps from
-// them, telling the scene where the cursor is, and resting while nobody can see them.
+// them, telling the scene where the cursor is, and telling the app when nobody can see them.
 // Everything OS-specific stays behind the WallpaperBackend that platform.rs picks.
 pub struct WallpaperPlugin {
     pub config: WallpaperConfig,
@@ -34,7 +35,7 @@ impl Plugin for WallpaperPlugin {
                 attach::AttachPlugin,
                 cursor::CursorPlugin,
                 input::InputPlugin,
-                pacing::PacingPlugin,
+                activity::ActivityPlugin,
             ));
     }
 }

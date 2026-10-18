@@ -21,6 +21,7 @@ use crate::benchmark::BenchmarkPlugin;
 use crate::config::AppConfig;
 use crate::config::WindowConfig;
 use crate::logging;
+use crate::pacing::PacingPlugin;
 use crate::save::StatePlugin;
 use crate::wallpaper::WallpaperPlugin;
 
@@ -77,6 +78,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
             WallpaperPlugin { config: config.wallpaper.clone() },
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone() },
+            PacingPlugin,
         ));
     // GPU time of each of Bevy's render passes, which Tracy shows beside the CPU's.
     #[cfg(feature = "profile")]

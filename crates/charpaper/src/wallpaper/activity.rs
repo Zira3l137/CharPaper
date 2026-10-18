@@ -2,43 +2,29 @@ use std::time::Duration;
 
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
-use bevy::winit::UpdateMode;
-use bevy::winit::WinitSettings;
-use charpaper_audio::Hush;
 use charpaper_scene::Screen;
 use charpaper_scene::Unseen;
 use charpaper_settings::RenderSettings;
-use charpaper_ui::PanelHovered;
 
 use crate::wallpaper::Backend;
 use crate::wallpaper::key;
 
-const PAUSED_WAKE: Duration = Duration::from_secs(1);
 const ACTIVITY_POLL: Duration = Duration::from_secs(1);
-// While the pointer is on the panel, whatever the frame limit and even while paused, so a
-// click or a wheel turn shows at once.
-const PANEL_FPS: f64 = 60.0;
 
+// Why the app should rest now, if it should: nobody can see or wants to see the wallpaper.
+// The app's pacing decides what resting means.
 #[derive(Resource, Default, Debug, PartialEq, Eq)]
 pub struct Paused(pub Option<&'static str>);
 
-pub(crate) struct PacingPlugin;
+// Where the desktop's activity is read, so what acts on it can run after in the same frame.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ReadActivity;
 
-impl Plugin for PacingPlugin {
+pub(crate) struct ActivityPlugin;
+
+impl Plugin for ActivityPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Paused>().add_systems(
-            Update,
-            (
-                poll_activity,
-                apply_update_mode.run_if(
-                    resource_changed::<RenderSettings>
-                        .or_eager(resource_changed::<Paused>)
-                        .or_eager(resource_changed::<PanelHovered>),
-                ),
-                hush_while_paused.run_if(resource_changed::<Paused>),
-            )
-                .chain(),
-        );
+        app.init_resource::<Paused>().add_systems(Update, poll_activity.in_set(ReadActivity));
     }
 }
 
@@ -90,29 +76,4 @@ fn poll_activity(
         }
         paused.0 = reason;
     }
-}
-
-// Whatever stops the drawing stops the sound too.
-fn hush_while_paused(paused: Res<Paused>, mut hush: ResMut<Hush>) {
-    hush.set_if_neq(Hush(paused.0.is_some()));
-}
-
-// In reactive mode winit sleeps until the wait runs out or an event arrives, so between
-// frames nothing runs and the GPU draws nothing.
-fn apply_update_mode(
-    settings: Res<RenderSettings>,
-    paused: Res<Paused>,
-    panel: Res<PanelHovered>,
-    mut winit: ResMut<WinitSettings>,
-) {
-    let every = |fps: f64| UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / fps));
-    let mode = match (paused.0, settings.fps_limit.per_second()) {
-        (_, Some(fps)) if panel.0 => every(fps.max(PANEL_FPS)),
-        (_, None) if panel.0 => UpdateMode::Continuous,
-        (Some(_), _) => UpdateMode::reactive_low_power(PAUSED_WAKE),
-        (None, Some(fps)) => every(fps),
-        (None, None) => UpdateMode::Continuous,
-    };
-    winit.focused_mode = mode;
-    winit.unfocused_mode = mode;
 }
