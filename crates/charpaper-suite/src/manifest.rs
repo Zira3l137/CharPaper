@@ -262,8 +262,12 @@ pub struct Post {
     pub tonemapping: Option<Tonemapping>,
     /// Exposure compensation in EV stops; positive is brighter.
     pub exposure: Option<f32>,
-    /// Bloom intensity; 0.0 turns bloom off.
+    /// How much glow is added around light brighter than the threshold, as
+    /// Blender's Glare node does. 0.0 turns bloom off; 0.1 is subtle.
     pub bloom: Option<f32>,
+    /// How bright light must be to glow, before tonemapping: 1.0 is white,
+    /// like the Glare node's threshold. Defaults to 1.0.
+    pub bloom_threshold: Option<f32>,
     /// Color fringes that grow towards the edges of the image, as a fraction
     /// of its size. 0.0 turns them off; 0.005 is subtle.
     pub chromatic_aberration: Option<f32>,

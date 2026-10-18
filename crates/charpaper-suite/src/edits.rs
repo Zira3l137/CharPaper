@@ -27,6 +27,7 @@ pub struct LookEdits {
 pub enum PostSetting {
     Exposure,
     Bloom,
+    BloomThreshold,
     ChromaticAberration,
     Vignette,
     VignetteSize,
@@ -40,9 +41,10 @@ pub enum PostSetting {
 }
 
 impl PostSetting {
-    const ALL: [PostSetting; 12] = [
+    const ALL: [PostSetting; 13] = [
         PostSetting::Exposure,
         PostSetting::Bloom,
+        PostSetting::BloomThreshold,
         PostSetting::ChromaticAberration,
         PostSetting::Vignette,
         PostSetting::VignetteSize,
@@ -60,6 +62,7 @@ impl PostSetting {
         match self {
             PostSetting::Exposure => &mut post.exposure,
             PostSetting::Bloom => &mut post.bloom,
+            PostSetting::BloomThreshold => &mut post.bloom_threshold,
             PostSetting::ChromaticAberration => &mut post.chromatic_aberration,
             PostSetting::Vignette => &mut post.vignette.intensity,
             PostSetting::VignetteSize => &mut post.vignette.size,

@@ -29,6 +29,8 @@ use crate::widgets::*;
 
 const EXPOSURE: Scale = Scale { step: 0.5, min: -10.0, max: 10.0, per_unit: 10.0 };
 const BLOOM: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
+// Brightness before tonemapping, 1.0 being white.
+const BLOOM_THRESHOLD: Scale = Scale { step: 0.1, min: 0.0, max: 5.0, per_unit: 10.0 };
 const ABERRATION: Scale = Scale { step: 0.0025, min: 0.0, max: 0.05, per_unit: 10_000.0 };
 const VIGNETTE: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
 const VIGNETTE_SIZE: Scale = Scale { step: 0.1, min: 0.3, max: 2.0, per_unit: 10.0 };
@@ -266,6 +268,24 @@ fn image() -> impl Bundle {
                 change: |w, step| {
                     edit_look(w, |look, current, _| {
                         look.post.bloom = Some(BLOOM.nudge(current.bloom, step));
+                    });
+                },
+            }
+            .stepper(),
+            // Does nothing with bloom off.
+            Setting {
+                label: |l| fl!(l, "label-bloom-threshold"),
+                help: |l| fl!(l, "help-bloom-threshold"),
+                show: |w, _| {
+                    let current = resolved(w)?;
+                    let threshold = current.bloom_threshold;
+                    let shown = BLOOM_THRESHOLD.number(format!("{threshold:.1}"), threshold);
+                    Some(shown.when(current.bloom > 0.0))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        let threshold = BLOOM_THRESHOLD.nudge(current.bloom_threshold, step);
+                        look.post.bloom_threshold = Some(threshold);
                     });
                 },
             }

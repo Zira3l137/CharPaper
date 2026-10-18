@@ -683,7 +683,15 @@
       "type": "object",
       "properties": {
         "bloom": {
-          "description": "Bloom intensity; 0.0 turns bloom off.",
+          "description": "How much glow is added around light brighter than the threshold, as\nBlender's Glare node does. 0.0 turns bloom off; 0.1 is subtle.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "bloom_threshold": {
+          "description": "How bright light must be to glow, before tonemapping: 1.0 is white,\nlike the Glare node's threshold. Defaults to 1.0.",
           "type": [
             "number",
             "null"

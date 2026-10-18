@@ -6,6 +6,8 @@ use bevy::ecs::system::SystemParam;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::Skybox;
 use bevy::post_process::bloom::Bloom;
+use bevy::post_process::bloom::BloomCompositeMode;
+use bevy::post_process::bloom::BloomPrefilter;
 use bevy::post_process::effect_stack;
 use bevy::post_process::effect_stack::ChromaticAberration;
 use bevy::prelude::*;
@@ -56,6 +58,9 @@ impl Plugin for LookPlugin {
 pub const DEFAULT_TONEMAPPING: SuiteTonemapping = SuiteTonemapping::TonyMcMapface;
 pub const DEFAULT_EXPOSURE: f32 = 0.0;
 pub const DEFAULT_BLOOM: f32 = 0.0;
+pub const DEFAULT_BLOOM_THRESHOLD: f32 = 1.0;
+// Light a little under the threshold glows a little, so the glow has no hard edge.
+const BLOOM_SOFTNESS: f32 = 0.5;
 pub const DEFAULT_CHROMATIC_ABERRATION: f32 = 0.0;
 pub const DEFAULT_BRIGHTNESS: f32 = 1000.0;
 pub const DEFAULT_SHADOWS: bool = true;
@@ -122,6 +127,7 @@ fn restore_look(
 pub struct Resolved {
     pub tonemapping: SuiteTonemapping,
     pub bloom: f32,
+    pub bloom_threshold: f32,
     pub chromatic_aberration: f32,
     pub vignette: f32,
     pub vignette_size: f32,
@@ -143,6 +149,7 @@ impl Resolved {
         Self {
             tonemapping: look.post.tonemapping.unwrap_or(DEFAULT_TONEMAPPING),
             bloom: look.post.bloom.unwrap_or(DEFAULT_BLOOM),
+            bloom_threshold: look.post.bloom_threshold.unwrap_or(DEFAULT_BLOOM_THRESHOLD),
             chromatic_aberration: look
                 .post
                 .chromatic_aberration
@@ -160,6 +167,21 @@ impl Resolved {
             shadows: entry.shadows.unwrap_or(DEFAULT_SHADOWS),
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
         }
+    }
+}
+
+// As Blender's Glare node does it: only light past the threshold glows, and the glow is added
+// on top of the image. Bevy's own default instead fades the whole image towards a blurred copy
+// of itself, which at full strength is nothing but the blur.
+fn bloom(resolved: &Resolved) -> Bloom {
+    Bloom {
+        intensity: resolved.bloom,
+        prefilter: BloomPrefilter {
+            threshold: resolved.bloom_threshold,
+            threshold_softness: BLOOM_SOFTNESS,
+        },
+        composite_mode: BloomCompositeMode::Additive,
+        ..Bloom::NATURAL
     }
 }
 
@@ -224,7 +246,7 @@ fn apply_stage_look(
         commands.entity(entity).insert((to_bevy(resolved.tonemapping), Exposure { ev100 }));
         // Only when asked for: bloom costs an HDR target and extra passes, all day long.
         if resolved.bloom > 0.0 {
-            commands.entity(entity).insert(Bloom { intensity: resolved.bloom, ..Bloom::NATURAL });
+            commands.entity(entity).insert(bloom(&resolved));
         } else {
             commands.entity(entity).remove::<Bloom>();
         }
