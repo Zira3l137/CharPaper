@@ -3,16 +3,9 @@ use std::process::Command;
 
 use raw_window_handle::RawWindowHandle;
 
-use crate::AttachStrategy;
-use crate::config::WallpaperConfig;
 use crate::error::WallpaperError;
 use crate::input::PointerSource;
 use crate::input::Wake;
-
-#[derive(Debug, Default)]
-pub struct DesktopProbe {
-    pub recommended: Option<AttachStrategy>,
-}
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct DesktopActivity {
@@ -61,16 +54,9 @@ impl ScreenArea {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct AttachOutcome {
-    pub strategy_used: Option<AttachStrategy>,
-}
-
 // Send + Sync so it fits in a Bevy Resource; callers keep to the main thread themselves.
 pub trait WallpaperBackend: Send + Sync + 'static {
     fn name(&self) -> &'static str;
-
-    fn probe(&mut self, config: &WallpaperConfig) -> Result<DesktopProbe, WallpaperError>;
 
     // `area` is the part of the screen the window covers, usually one monitor. Any number of
     // windows can be attached, each under its own key.
@@ -79,8 +65,7 @@ pub trait WallpaperBackend: Send + Sync + 'static {
         window: WindowKey,
         handle: RawWindowHandle,
         area: ScreenArea,
-        config: &WallpaperConfig,
-    ) -> Result<AttachOutcome, WallpaperError>;
+    ) -> Result<(), WallpaperError>;
 
     // Moves an attached window over `area`. Does nothing for a window that isn't attached.
     fn place(&mut self, _window: WindowKey, _area: ScreenArea) -> Result<(), WallpaperError> {

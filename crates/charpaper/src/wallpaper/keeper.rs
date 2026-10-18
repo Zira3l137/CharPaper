@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use charpaper_wallpaper::WallpaperBackend;
 
 use crate::wallpaper::platform;
+use crate::wallpaper::platform::BackendOptions;
 
 // A process that is killed or crashes can't take its windows off the desktop, and on some
 // desktops that leaves a frozen picture of them behind. So once a window is attached, a keeper
@@ -23,7 +24,7 @@ pub(super) fn start(backend: &dyn WallpaperBackend) {
 // with the ones it started, so the first keeper only starts a second and leaves. With no
 // parent left, the second ends only on its own.
 pub fn keep_desktop(app: u32, orphaned: bool) {
-    let mut backend = platform::create_backend();
+    let mut backend = platform::create_backend(BackendOptions::default());
     if orphaned {
         backend.keep(app);
     } else {

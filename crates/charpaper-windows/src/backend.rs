@@ -6,17 +6,13 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::PoisonError;
 
-use charpaper_wallpaper::AttachOutcome;
-use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::DesktopActivity;
 use charpaper_wallpaper::DesktopMonitor;
-use charpaper_wallpaper::DesktopProbe;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
 use charpaper_wallpaper::ScreenArea;
 use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperBackend;
-use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WallpaperError;
 use charpaper_wallpaper::WindowKey;
 
@@ -28,6 +24,7 @@ use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 use crate::activity;
 use crate::desktop;
 use crate::monitors;
+use crate::options::Options;
 use crate::pointer::DesktopPointer;
 use crate::sys;
 use crate::sys::Hwnd;
@@ -47,14 +44,23 @@ impl AttachedWindows {
     }
 }
 
-#[derive(Default)]
 pub struct WindowsBackend {
+    options: Options,
     attached: AttachedWindows,
 }
 
 impl WindowsBackend {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(options: Options) -> Self {
+        if options.tree {
+            for line in desktop::dump_window_tree() {
+                debug!("{line}");
+            }
+        }
+        let shell = desktop::find_shell_windows();
+        if !shell.progman.is_null() {
+            debug!("auto strategy resolves to {:?}", shell.recommended_strategy());
+        }
+        Self { options, attached: AttachedWindows::default() }
     }
 }
 
@@ -63,43 +69,23 @@ impl WallpaperBackend for WindowsBackend {
         "windows"
     }
 
-    fn probe(&mut self, config: &WallpaperConfig) -> Result<DesktopProbe, WallpaperError> {
-        let shell = desktop::find_shell_windows();
-
-        if config.dump_window_tree {
-            for line in desktop::dump_window_tree() {
-                debug!("{line}");
-            }
-        }
-
-        if shell.progman.is_null() {
-            return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
-        }
-
-        Ok(DesktopProbe { recommended: Some(shell.recommended_strategy()) })
-    }
-
     fn attach(
         &mut self,
         window: WindowKey,
         handle: RawWindowHandle,
         area: ScreenArea,
-        config: &WallpaperConfig,
-    ) -> Result<AttachOutcome, WallpaperError> {
+    ) -> Result<(), WallpaperError> {
         let RawWindowHandle::Win32(win32) = handle else {
             return Err(WallpaperError::WrongHandleKind);
         };
         let hwnd = Hwnd(win32.hwnd.get() as HWND);
 
         debug!("our window HWND = {hwnd:#x}, going to {area:?}");
-        let strategy = desktop::attach(hwnd, area, config)?;
-        if strategy != AttachStrategy::None {
-            let mut list = self.attached.list();
-            list.retain(|(key, _)| *key != window);
-            list.push((window, hwnd));
-        }
-
-        Ok(AttachOutcome { strategy_used: Some(strategy) })
+        desktop::attach(hwnd, area, &self.options)?;
+        let mut list = self.attached.list();
+        list.retain(|(key, _)| *key != window);
+        list.push((window, hwnd));
+        Ok(())
     }
 
     fn place(&mut self, window: WindowKey, area: ScreenArea) -> Result<(), WallpaperError> {
@@ -171,7 +157,11 @@ impl WallpaperBackend for WindowsBackend {
 
 pub fn inspect_report() -> Vec<String> {
     let shell = desktop::find_shell_windows();
-    let mut out = vec![format!("recommended strategy: {:?}", shell.recommended_strategy())];
+    let recommended = match shell.progman.is_null() {
+        true => "none: there is no Progman, so Explorer may not be running".to_string(),
+        false => format!("{:?}", shell.recommended_strategy()),
+    };
+    let mut out = vec![format!("recommended strategy: {recommended}")];
     out.extend(desktop::dump_window_tree());
     out
 }

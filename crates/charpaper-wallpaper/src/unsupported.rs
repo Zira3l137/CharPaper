@@ -1,29 +1,17 @@
 use raw_window_handle::RawWindowHandle;
 
-use crate::backend::AttachOutcome;
-use crate::backend::DesktopProbe;
 use crate::backend::ScreenArea;
 use crate::backend::WallpaperBackend;
 use crate::backend::WindowKey;
-use crate::config::WallpaperConfig;
 use crate::error::WallpaperError;
 
+// For systems without a backend yet: the app runs as an ordinary window there.
+#[derive(Default)]
 pub struct UnsupportedBackend;
-
-impl UnsupportedBackend {
-    pub fn new() -> Self {
-        Self
-    }
-}
 
 impl WallpaperBackend for UnsupportedBackend {
     fn name(&self) -> &'static str {
         "unsupported"
-    }
-
-    fn probe(&mut self, _config: &WallpaperConfig) -> Result<DesktopProbe, WallpaperError> {
-        tracing::info!("no wallpaper backend for {}; running as a normal window", std::env::consts::OS);
-        Ok(DesktopProbe { recommended: None })
     }
 
     fn attach(
@@ -31,8 +19,7 @@ impl WallpaperBackend for UnsupportedBackend {
         _window: WindowKey,
         _handle: RawWindowHandle,
         _area: ScreenArea,
-        _config: &WallpaperConfig,
-    ) -> Result<AttachOutcome, WallpaperError> {
+    ) -> Result<(), WallpaperError> {
         Err(WallpaperError::Unsupported(std::env::consts::OS))
     }
 }

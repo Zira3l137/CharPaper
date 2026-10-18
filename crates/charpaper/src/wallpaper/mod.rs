@@ -15,6 +15,7 @@ use charpaper_wallpaper::WindowKey;
 pub(crate) use activity::Paused;
 pub(crate) use activity::ReadActivity;
 pub use keeper::keep_desktop;
+pub use platform::BackendOptions;
 pub use platform::inspect_report;
 
 // Puts a window behind the desktop icons on every chosen monitor and keeps them working there:
@@ -23,12 +24,15 @@ pub use platform::inspect_report;
 // Everything OS-specific stays behind the WallpaperBackend that platform.rs picks.
 pub struct WallpaperPlugin {
     pub config: WallpaperConfig,
+    pub backend: BackendOptions,
 }
 
 impl Plugin for WallpaperPlugin {
     fn build(&self, app: &mut App) {
+        let backend = platform::create_backend(self.backend.clone());
+        info!("wallpaper backend: {}", backend.name());
         app.insert_resource(WallpaperSettings(self.config.clone()))
-            .insert_resource(Backend(platform::create_backend()))
+            .insert_resource(Backend(backend))
             .add_plugins((
                 monitors::MonitorsPlugin,
                 windows::WindowsPlugin,

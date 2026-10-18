@@ -4,12 +4,14 @@ use charpaper_wallpaper::WallpaperConfig;
 
 use crate::cli::Cli;
 use crate::logging::LogLevels;
+use crate::wallpaper::BackendOptions;
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
     pub window: WindowConfig,
     pub scene: SceneConfig,
     pub wallpaper: WallpaperConfig,
+    pub backend: BackendOptions,
     pub ui: UiConfig,
     pub log: LogLevels,
     pub benchmark: bool,
@@ -35,35 +37,22 @@ impl AppConfig {
             window: WindowConfig::default(),
             scene: SceneConfig::default(),
             wallpaper: WallpaperConfig::default(),
+            backend: cli.backend.clone(),
             ui: UiConfig::default(),
             log: LogLevels { ours: cli.log_level, engine: cli.bevy_log_level },
             benchmark: cli.benchmark,
         };
 
-        cfg.wallpaper.dump_window_tree = cli.tree;
         cfg.scene.suite = cli.suite.clone();
         cfg.ui.language = cli.language.clone();
-
-        if cli.no_spawn_workerw {
-            cfg.wallpaper.spawn_worker_w = false;
-        }
 
         if cli.no_input_forwarding {
             cfg.wallpaper.forward_input = false;
         }
 
-        if let Some(strategy) = cli.strategy {
-            cfg.wallpaper.strategy = strategy;
-        }
-
-        if let Some(layered) = cli.layered {
-            cfg.wallpaper.layered = layered;
-        }
-
         // A dry run never reparents, so a hidden borderless window would stay invisible.
         if cli.dry_run {
             cfg.wallpaper.dry_run = true;
-            cfg.wallpaper.dump_window_tree = true;
             cfg.window.start_hidden = false;
             cfg.window.decorations = true;
         }

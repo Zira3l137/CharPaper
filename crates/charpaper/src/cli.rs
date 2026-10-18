@@ -1,10 +1,9 @@
 use std::path::PathBuf;
 
-use charpaper_wallpaper::AttachStrategy;
-use charpaper_wallpaper::LayeredMode;
 use clap::Parser;
 
 use crate::logging::LogLevel;
+use crate::wallpaper::BackendOptions;
 
 #[derive(Parser, Debug)]
 #[command(name = "charpaper", version, about = "A Bevy live desktop wallpaper")]
@@ -46,15 +45,11 @@ pub struct Cli {
     #[arg(long, value_name = "TAG")]
     pub language: Option<String>,
 
-    /// Run in an ordinary window and log the full attach plan without touching
-    /// any desktop window. With `--bake-environments`, only list what would be
-    /// baked.
+    /// Run in an ordinary window and log what attaching would do, without
+    /// touching any desktop window. With `--bake-environments`, only list what
+    /// would be baked.
     #[arg(long)]
     pub dry_run: bool,
-
-    /// Dump the desktop window tree during startup.
-    #[arg(long)]
-    pub tree: bool,
 
     /// Skip the wallpaper machinery entirely and run as an ordinary window.
     ///
@@ -62,21 +57,8 @@ pub struct Cli {
     #[arg(long)]
     pub windowed: bool,
 
-    /// How to attach to the desktop.
-    #[arg(long, value_enum)]
-    pub strategy: Option<AttachStrategy>,
-
-    /// Whether to give our window the WS_EX_LAYERED extended style.
-    ///
-    /// Try `never` first if the log reports a successful attach but nothing
-    /// renders.
-    #[arg(long, value_enum)]
-    pub layered: Option<LayeredMode>,
-
-    /// Do not send the undocumented 0x052C message asking Explorer to create
-    /// the background WorkerW.
-    #[arg(long)]
-    pub no_spawn_workerw: bool,
+    #[command(flatten)]
+    pub backend: BackendOptions,
 
     /// Do not replay the mouse input the desktop keeps from the wallpaper.
     ///

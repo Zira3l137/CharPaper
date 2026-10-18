@@ -3,10 +3,8 @@ name = "charpaper-wallpaper"
 version.workspace = true
 edition.workspace = true
 
-# Bevy-free on purpose, so the OS half builds without the engine. clap is only here for
-# the ValueEnum derive.
+# Bevy-free on purpose, so the OS half builds without the engine.
 [dependencies]
-clap.workspace = true
 raw-window-handle.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

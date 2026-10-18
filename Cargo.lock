@@ -1984,7 +1984,6 @@ dependencies = [
 name = "charpaper-wallpaper"
 version = "0.1.0"
 dependencies = [
- "clap",
  "raw-window-handle",
  "thiserror 2.0.20",
  "tracing",
@@ -1995,6 +1994,7 @@ name = "charpaper-windows"
 version = "0.1.0"
 dependencies = [
  "charpaper-wallpaper",
+ "clap",
  "raw-window-handle",
  "tracing",
  "windows-sys 0.61.2",

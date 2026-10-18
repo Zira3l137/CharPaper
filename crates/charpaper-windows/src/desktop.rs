@@ -1,11 +1,9 @@
-use charpaper_wallpaper::AttachStrategy;
-use charpaper_wallpaper::LayeredMode;
 use charpaper_wallpaper::ScreenArea;
-use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WallpaperError;
 
 use tracing::debug;
 use tracing::error;
+use tracing::info;
 use tracing::warn;
 use windows_sys::Win32::Foundation::SetLastError;
 use windows_sys::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE;
@@ -30,6 +28,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::WS_CHILD;
 use windows_sys::Win32::UI::WindowsAndMessaging::WS_EX_LAYERED;
 use windows_sys::Win32::UI::WindowsAndMessaging::WS_EX_NOREDIRECTIONBITMAP;
 
+use crate::options::AttachStrategy;
+use crate::options::Options;
 use crate::sys;
 use crate::sys::Hwnd;
 
@@ -48,9 +48,7 @@ pub struct ShellWindows {
 
 impl ShellWindows {
     pub fn recommended_strategy(&self) -> AttachStrategy {
-        if self.progman.is_null() {
-            AttachStrategy::None
-        } else if self.raised_desktop {
+        if self.raised_desktop {
             AttachStrategy::RaisedDesktopChild
         } else if !self.worker_w.is_null() {
             AttachStrategy::ClassicWorkerW
@@ -87,9 +85,7 @@ pub fn request_worker_w(progman: Hwnd) {
 }
 
 pub fn find_shell_windows() -> ShellWindows {
-    let mut found = ShellWindows::default();
-
-    found.progman = sys::find_window("Progman");
+    let mut found = ShellWindows { progman: sys::find_window("Progman"), ..Default::default() };
     if found.progman.is_null() {
         error!("Progman not found -- is Explorer running?");
         return found;
@@ -145,11 +141,7 @@ pub fn find_shell_windows() -> ShellWindows {
     found
 }
 
-pub fn attach(
-    hwnd: Hwnd,
-    area: ScreenArea,
-    config: &WallpaperConfig,
-) -> Result<AttachStrategy, WallpaperError> {
+pub fn attach(hwnd: Hwnd, area: ScreenArea, options: &Options) -> Result<(), WallpaperError> {
     if !sys::is_window(hwnd) {
         return Err(WallpaperError::DesktopNotFound(
             "our own window (handle is not a valid window)".to_string(),
@@ -157,28 +149,29 @@ pub fn attach(
     }
 
     let mut shell = find_shell_windows();
+    if shell.progman.is_null() {
+        return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
+    }
 
-    if config.spawn_worker_w && !shell.progman.is_null() && shell.worker_w.is_null() {
+    if !options.no_spawn_workerw && shell.worker_w.is_null() {
         debug!("no WorkerW yet; asking Explorer to create one");
         request_worker_w(shell.progman);
         shell = find_shell_windows();
     }
 
-    let strategy = match config.strategy {
+    let strategy = match options.strategy {
         AttachStrategy::Auto => shell.recommended_strategy(),
         explicit => explicit,
     };
-    debug!("using strategy {strategy:?}");
-
     let parent = match strategy {
-        AttachStrategy::None => return Ok(strategy),
-        AttachStrategy::RaisedDesktopChild => attach_raised(hwnd, &shell, config)?,
+        AttachStrategy::RaisedDesktopChild => attach_raised(hwnd, &shell, options)?,
         AttachStrategy::ClassicWorkerW => attach_classic(hwnd, &shell)?,
         AttachStrategy::ProgmanDirect => attach_progman(hwnd, &shell)?,
         AttachStrategy::Auto => unreachable!("Auto was resolved above"),
     };
     place(hwnd, parent, area)?;
-    Ok(strategy)
+    info!("attached {hwnd:#x} to the desktop with the {strategy:?} strategy, over {area:?}");
+    Ok(())
 }
 
 fn attach_classic(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperError> {
@@ -193,9 +186,6 @@ fn attach_classic(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperErr
 }
 
 fn attach_progman(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperError> {
-    if shell.progman.is_null() {
-        return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
-    }
     warn!("ProgmanDirect draws over the desktop icons; it proves rendering works, nothing more");
     set_parent(hwnd, shell.progman)?;
     Ok(shell.progman)
@@ -204,19 +194,19 @@ fn attach_progman(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperErr
 fn attach_raised(
     hwnd: Hwnd,
     shell: &ShellWindows,
-    config: &WallpaperConfig,
+    options: &Options,
 ) -> Result<Hwnd, WallpaperError> {
-    if shell.progman.is_null() {
-        return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
-    }
-
     // Styles must be set before SetParent. WS_EX_LAYERED added afterwards can silently fail.
     let style = sys::get_window_long_ptr(hwnd, GWL_STYLE);
     let child = style | WS_CHILD as isize;
     sys::set_window_long_ptr(hwnd, GWL_STYLE, child);
     debug!("added WS_CHILD (style {style:#x} -> {child:#x})");
 
-    set_window_attributes(hwnd, config);
+    if options.not_layered {
+        debug!("leaving out WS_EX_LAYERED (--not-layered)");
+    } else {
+        make_layered(hwnd);
+    }
     set_parent(hwnd, shell.progman)?;
 
     ensure_window_behind_icon_layer(hwnd, shell);
@@ -224,18 +214,14 @@ fn attach_raised(
     Ok(shell.progman)
 }
 
-fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig) {
-    if config.layered != LayeredMode::Never {
-        let ex = sys::get_window_long_ptr(hwnd, GWL_EXSTYLE);
-        let layered = WS_EX_LAYERED as isize;
-        if ex & layered == 0 {
-            sys::set_window_long_ptr(hwnd, GWL_EXSTYLE, ex | layered);
-        }
-        let ok = unsafe { SetLayeredWindowAttributes(hwnd.0, 0, 255, LWA_ALPHA) };
-        debug!("WS_EX_LAYERED + alpha 255 applied (ok={})", ok != 0);
-    } else {
-        debug!("skipping WS_EX_LAYERED (--layered never)");
+fn make_layered(hwnd: Hwnd) {
+    let ex = sys::get_window_long_ptr(hwnd, GWL_EXSTYLE);
+    let layered = WS_EX_LAYERED as isize;
+    if ex & layered == 0 {
+        sys::set_window_long_ptr(hwnd, GWL_EXSTYLE, ex | layered);
     }
+    let ok = unsafe { SetLayeredWindowAttributes(hwnd.0, 0, 255, LWA_ALPHA) };
+    debug!("WS_EX_LAYERED + alpha 255 applied (ok={})", ok != 0);
 }
 
 fn ensure_window_behind_icon_layer(hwnd: Hwnd, shell: &ShellWindows) {

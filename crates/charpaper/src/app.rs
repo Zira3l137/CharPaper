@@ -75,7 +75,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
         .add_plugins((
             SoundPlugin,
             MonitorPlugin,
-            WallpaperPlugin { config: config.wallpaper.clone() },
+            WallpaperPlugin { config: config.wallpaper.clone(), backend: config.backend.clone() },
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone() },
             PacingPlugin,

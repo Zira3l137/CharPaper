@@ -1,58 +1,20 @@
-use clap::ValueEnum;
-
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AttachStrategy {
-    /// Pick the right one for this machine.
-    Auto,
-    /// Windows 10 and older Windows 11: inside the top-level WorkerW behind the icons.
-    #[value(name = "classic")]
-    ClassicWorkerW,
-    /// Newer Windows 11: a layered child of Progman, below the icons.
-    #[value(name = "raised")]
-    RaisedDesktopChild,
-    /// Last resort: straight into Progman. Draws over the icons.
-    #[value(name = "progman")]
-    ProgmanDirect,
-    /// Don't attach at all.
-    None,
-}
-
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LayeredMode {
-    /// Only when the strategy needs it.
-    Auto,
-    Always,
-    Never,
-}
-
+// What the app asks of any backend. Each backend takes options of its own when it is made.
 #[derive(Clone, Debug)]
 pub struct WallpaperConfig {
     pub enabled: bool,
     pub dry_run: bool,
-    pub dump_window_tree: bool,
-    pub strategy: AttachStrategy,
-    pub spawn_worker_w: bool,
-    pub layered: LayeredMode,
     pub forward_input: bool,
 }
 
 impl WallpaperConfig {
     // Whether windows go behind the desktop icons at all, rather than staying ordinary ones.
     pub fn attaches(&self) -> bool {
-        self.enabled && !self.dry_run && self.strategy != AttachStrategy::None
+        self.enabled && !self.dry_run
     }
 }
 
 impl Default for WallpaperConfig {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            dry_run: false,
-            dump_window_tree: false,
-            strategy: AttachStrategy::Auto,
-            spawn_worker_w: true,
-            layered: LayeredMode::Auto,
-            forward_input: true,
-        }
+        Self { enabled: true, dry_run: false, forward_input: true }
     }
 }

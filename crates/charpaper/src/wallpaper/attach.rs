@@ -2,7 +2,6 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::RawHandleWrapper;
 use bevy::winit::EventLoopProxyWrapper;
-use charpaper_wallpaper::AttachStrategy;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
 use charpaper_wallpaper::ScreenArea;
@@ -44,33 +43,15 @@ pub(crate) struct AttachPlugin;
 
 impl Plugin for AttachPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, probe_desktop)
-            .add_systems(Update, (attach_windows, place_windows).chain())
+        app.add_systems(Update, (attach_windows, place_windows).chain())
             .add_systems(Update, start_keeper.after(attach_windows))
             .add_systems(Last, leave_desktop);
     }
 }
 
-// NonSendMarker keeps a system on the main thread, which owns the window.
-fn probe_desktop(
-    _main_thread: NonSendMarker,
-    mut backend: ResMut<Backend>,
-    config: Res<WallpaperSettings>,
-) {
-    info!("wallpaper backend: {}", backend.0.name());
-
-    match backend.0.probe(&config) {
-        Ok(probe) => {
-            if let Some(rec) = probe.recommended {
-                info!("auto strategy resolves to: {rec:?}");
-            }
-        }
-        Err(err) => warn!("desktop probe failed: {err}"),
-    }
-}
-
 // Retried every few frames: a window's handle doesn't exist on its first frame, and Explorer
-// may still be starting up right after login.
+// may still be starting up right after login. NonSendMarker keeps a system on the main thread,
+// which owns the windows.
 fn attach_windows(
     _main_thread: NonSendMarker,
     mut commands: Commands,
@@ -109,14 +90,13 @@ fn attach_windows(
                 warn!("continuing as an ordinary window");
                 *attachment = Attachment::Loose;
             }
-            Step::Done { message, attached } => {
-                info!("{message}");
-                if attached {
-                    *attachment = Attachment::Attached;
-                    match_scale(&mut settings, on.0.scale);
-                } else {
-                    *attachment = Attachment::Loose;
-                }
+            Step::Attached => {
+                *attachment = Attachment::Attached;
+                match_scale(&mut settings, on.0.scale);
+            }
+            Step::Loose(why) => {
+                info!("{why}");
+                *attachment = Attachment::Loose;
             }
         }
         // Shown on failure too: an invisible process with no way to close it is worse.
@@ -195,7 +175,9 @@ fn match_scale(window: &mut Window, scale: f64) {
 
 enum Step {
     Wait(String),
-    Done { message: String, attached: bool },
+    Attached,
+    // Stays an ordinary window, for this reason.
+    Loose(&'static str),
 }
 
 fn decide(
@@ -205,9 +187,8 @@ fn decide(
     handle: Option<RawWindowHandle>,
     area: ScreenArea,
 ) -> Step {
-    if !config.enabled || config.strategy == AttachStrategy::None {
-        let message = "wallpaper attach disabled".to_string();
-        return Step::Done { message, attached: false };
+    if !config.enabled {
+        return Step::Loose("wallpaper attach disabled");
     }
 
     let Some(raw) = handle else {
@@ -219,18 +200,11 @@ fn decide(
         if config.forward_input {
             debug!("[dry-run] would then ask the backend to forward pointer input");
         }
-        let message = "dry run: no windows were modified".to_string();
-        return Step::Done { message, attached: false };
+        return Step::Loose("dry run: no windows were modified");
     }
 
-    match backend.attach(window, raw, area, config) {
-        Ok(outcome) => {
-            let how =
-                outcome.strategy_used.map_or_else(|| "unknown".to_string(), |s| format!("{s:?}"));
-            let message = format!("attached to desktop using {how}, over {area:?}");
-            let attached = outcome.strategy_used.is_some_and(|s| s != AttachStrategy::None);
-            Step::Done { message, attached }
-        }
+    match backend.attach(window, raw, area) {
+        Ok(()) => Step::Attached,
         Err(err) => Step::Wait(format!("{:#}", anyhow::Error::new(err))),
     }
 }

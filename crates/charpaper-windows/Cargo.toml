@@ -6,6 +6,7 @@ edition.workspace = true
 # No bevy: the backend calls Win32 itself, through windows-sys's declarations.
 [dependencies]
 charpaper-wallpaper.workspace = true
+clap.workspace = true
 raw-window-handle.workspace = true
 tracing.workspace = true
 
