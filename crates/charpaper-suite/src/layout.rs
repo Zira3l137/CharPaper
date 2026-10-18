@@ -33,6 +33,7 @@ const ENVIRONMENT_DIR: &str = "environment";
 const MUSIC_DIR: &str = "music";
 const AMBIENCE_FILE: &str = "ambience.ogg";
 const SOUND_EXTENSIONS: &[&str] = &["ogg"];
+const ANIMATED_DIR: &str = "animated";
 
 pub const SKYBOX_MAP: &str = "skybox.ktx2";
 pub const DIFFUSE_MAP: &str = "diffuse.ktx2";
@@ -120,6 +121,8 @@ pub struct Environment {
     // In file-name order, which is the order they play in.
     pub music: Vec<PathBuf>,
     pub ambience: Option<PathBuf>,
+    // GIFs that play on the scene's materials, keyed by the material each is named after.
+    pub animated: BTreeMap<String, PathBuf>,
     pub settings: EnvironmentEntry,
 }
 
@@ -145,6 +148,16 @@ impl Environment {
         self.music = files_in(root, &folder.join(MUSIC_DIR).to_string_lossy())?
             .into_iter()
             .filter(|p| has_extension(p, SOUND_EXTENSIONS))
+            .collect();
+        Ok(())
+    }
+
+    fn find_animated(&mut self, root: &Path) -> Result<(), SuiteError> {
+        let folder = self.folder().join(ANIMATED_DIR);
+        self.animated = files_in(root, &folder.to_string_lossy())?
+            .into_iter()
+            .filter(|p| has_extension(p, &["gif"]))
+            .map(|p| (p.file_stem().unwrap_or_default().to_string_lossy().into_owned(), p))
             .collect();
         Ok(())
     }
@@ -434,6 +447,7 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
         let mut candidate = Environment { name: name.clone(), ..Default::default() };
         candidate.find_maps(root);
         candidate.find_sounds(root)?;
+        candidate.find_animated(root)?;
         let relative = candidate.folder();
         let mut panoramas: Vec<PathBuf> = files_in(root, &relative.to_string_lossy())?
             .into_iter()
@@ -458,6 +472,7 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
         environment.specular = candidate.specular;
         environment.music = candidate.music;
         environment.ambience = candidate.ambience;
+        environment.animated = candidate.animated;
         debug!("environment {name:?}: folder found");
     }
 

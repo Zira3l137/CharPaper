@@ -39,7 +39,10 @@ pub struct Manifest {
     /// in `environment/` without its extension, or the name of its folder.
     /// That folder may also hold the environment's sound: `music/`, whose
     /// `.ogg` files play in file-name order and then start over, and
-    /// `ambience.ogg`, which loops under them.
+    /// `ambience.ogg`, which loops under them. Its `animated/` folder holds
+    /// GIFs that play on the scene's materials, each on the material it is
+    /// named after: `animated/TV screen.gif` replaces the base color of the
+    /// material named "TV screen".
     #[serde(default)]
     pub environments: BTreeMap<String, EnvironmentEntry>,
     #[serde(default)]

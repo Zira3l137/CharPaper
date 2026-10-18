@@ -29,6 +29,7 @@ pub(super) fn check_environments(suite: &Suite, report: &mut Report) {
             if let Some(gltf) = open(suite, scene, report) {
                 lights = gltf.doc.nodes().filter(|n| n.light().is_some()).count();
                 check_fog(environment, scene, &gltf, report);
+                check_animated_materials(environment, scene, &gltf, report);
                 check_light_ranges(scene, &gltf, report);
                 let cameras: Vec<&str> = gltf
                     .doc
@@ -53,6 +54,20 @@ pub(super) fn check_environments(suite: &Suite, report: &mut Report) {
                 environment.name
             );
             report.push(Severity::Warning, Some(Path::new(MANIFEST_FILE)), message);
+        }
+
+        if environment.scene.is_none() && !environment.animated.is_empty() {
+            let message = format!(
+                "environment {:?} has GIFs in `animated/` but no scene file with materials to \
+                 play them on",
+                environment.name
+            );
+            report.push(Severity::Warning, None, message);
+        }
+        for path in environment.animated.values() {
+            if let Err(message) = read_gif_signature(&suite.absolute(path)) {
+                report.push(Severity::Error, Some(path), message);
+            }
         }
 
         let maps = [&environment.skybox, &environment.diffuse, &environment.specular];
@@ -142,6 +157,35 @@ fn check_fog(environment: &Environment, scene: &Path, gltf: &Gltf, report: &mut 
              the sky and reflection maps do not light fog"
         );
         report.push(Severity::Warning, manifest, message);
+    }
+}
+
+fn check_animated_materials(
+    environment: &Environment,
+    scene: &Path,
+    gltf: &Gltf,
+    report: &mut Report,
+) {
+    for (material, path) in &environment.animated {
+        if !gltf.doc.materials().any(|m| m.name() == Some(material.as_str())) {
+            let message = format!(
+                "no material in {} is named {material:?}, so this GIF plays nowhere; a GIF is \
+                 named after the material it plays on",
+                scene.display()
+            );
+            report.push(Severity::Warning, Some(path), message);
+        }
+    }
+}
+
+fn read_gif_signature(path: &Path) -> Result<(), String> {
+    let mut head = [0u8; 6];
+    File::open(path)
+        .and_then(|mut file| file.read_exact(&mut head))
+        .map_err(|_| "cannot be read as a GIF".to_string())?;
+    match &head {
+        b"GIF87a" | b"GIF89a" => Ok(()),
+        _ => Err("not a GIF; only GIFs play on materials".to_string()),
     }
 }
 

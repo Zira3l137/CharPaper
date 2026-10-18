@@ -547,6 +547,36 @@ fn environment_folders_bring_their_music_and_ambience() {
 }
 
 #[test]
+fn environment_gifs_are_found_by_material_name_and_checked() {
+    let fixture = Fixture::new("environment-gifs", "schema = 1");
+    let scene = r#"{"asset": {"version": "2.0"}, "scenes": [{"nodes": []}],
+        "materials": [{"name": "TV screen"}, {"name": "Wall"}]}"#;
+    fixture.write("environment/room.gltf", scene);
+    fixture.write("environment/room/animated/TV screen.gif", "GIF89a and the rest");
+    fixture.write("environment/room/animated/Poster.gif", "GIF87a and the rest");
+    fixture.write("environment/room/animated/Wall.gif", "a PNG in disguise");
+    fixture.write("environment/room/animated/notes.txt", "not a GIF");
+    let suite = fixture.load().unwrap();
+
+    let room = &suite.environments[0];
+    let materials: Vec<&str> = room.animated.keys().map(String::as_str).collect();
+    assert_eq!(materials, ["Poster", "TV screen", "Wall"]);
+    assert_eq!(room.animated["TV screen"], Path::new("environment/room/animated/TV screen.gif"));
+
+    let errors = messages(&suite, Severity::Error);
+    assert!(
+        errors.iter().any(|e| e.contains("Wall.gif") && e.contains("not a GIF")),
+        "{errors:#?}"
+    );
+    let warnings = messages(&suite, Severity::Warning);
+    assert!(
+        warnings.iter().any(|w| w.contains("Poster.gif") && w.contains("plays nowhere")),
+        "{warnings:#?}"
+    );
+    assert!(!warnings.iter().any(|w| w.contains("TV screen.gif")), "{warnings:#?}");
+}
+
+#[test]
 fn fog_objects_and_the_lights_skipping_them_are_checked() {
     let manifest = r#"schema = 1
 [environments.foggy]
