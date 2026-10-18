@@ -3,9 +3,9 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use charpaper_scene::Screen;
 use charpaper_scene::ScreenPlace;
-use charpaper_scene::ScreenSettings;
 use charpaper_scene::ScreenSync;
 use charpaper_scene::ShowsStage;
+use charpaper_settings::ScreenSettings;
 use charpaper_wallpaper::DesktopMonitor;
 
 use crate::wallpaper::Backend;

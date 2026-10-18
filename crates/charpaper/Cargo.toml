@@ -8,6 +8,7 @@ charpaper-audio.workspace = true
 charpaper-bake.workspace = true
 charpaper-monitor.workspace = true
 charpaper-scene.workspace = true
+charpaper-settings.workspace = true
 charpaper-suite.workspace = true
 charpaper-wallpaper.workspace = true
 charpaper-ui.workspace = true
@@ -16,8 +17,6 @@ anyhow.workspace = true
 bevy.workspace = true
 clap.workspace = true
 mimalloc.workspace = true
-serde.workspace = true
-toml.workspace = true
 
 [features]
 # Streams the time of every system and render pass to the Tracy profiler, for finding what

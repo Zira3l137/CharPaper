@@ -7,22 +7,19 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 pub use bevy_audio::AudioSource;
-use serde::Deserialize;
-use serde::Serialize;
+use charpaper_settings::Volumes;
 
 // Sound flows from each sound's player into one mix, from the mix through the master player,
 // and from there to the sound card, which is reopened whenever the device changes. Bevy's
 // audio plugin is left out because it opens the sound card once and never again; only its
 // file loader is used.
-pub struct SoundPlugin {
-    pub volumes: Volumes,
-}
+pub struct SoundPlugin;
 
 impl Plugin for SoundPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<AudioSource>()
             .init_asset_loader::<bevy_audio::AudioLoader>()
-            .insert_resource(self.volumes.clone())
+            .init_resource::<Volumes>()
             .init_resource::<Hush>()
             .init_resource::<output::Output>()
             .add_systems(
@@ -80,36 +77,17 @@ pub enum Layer {
     Character,
 }
 
-// From 0 (silent) to 1 (as loud as the file).
-#[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct Volumes {
-    pub master: f32,
-    pub music: f32,
-    pub ambience: f32,
-    pub character: f32,
+pub(crate) fn master_volume(volumes: &Volumes) -> f32 {
+    volumes.master.clamp(0.0, 1.0)
 }
 
-// Quiet at first: a wallpaper that suddenly plays loud sound is unwelcome.
-impl Default for Volumes {
-    fn default() -> Self {
-        Self { master: 0.25, music: 1.0, ambience: 1.0, character: 1.0 }
-    }
-}
-
-impl Volumes {
-    fn master(&self) -> f32 {
-        self.master.clamp(0.0, 1.0)
-    }
-
-    fn of(&self, layer: Layer) -> f32 {
-        let volume = match layer {
-            Layer::Music => self.music,
-            Layer::Ambience => self.ambience,
-            Layer::Character => self.character,
-        };
-        volume.clamp(0.0, 1.0)
-    }
+pub(crate) fn layer_volume(volumes: &Volumes, layer: Layer) -> f32 {
+    let volume = match layer {
+        Layer::Music => volumes.music,
+        Layer::Ambience => volumes.ambience,
+        Layer::Character => volumes.character,
+    };
+    volume.clamp(0.0, 1.0)
 }
 
 // While true, all sound fades out and pauses. Once false again, it resumes where it stopped

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-
-use crate::Tab;
+use charpaper_settings::Tab;
+use charpaper_settings::UiState;
 
 // Marks the parts of the panel that systems show, hide or fill in.
 #[derive(Component, Debug, Clone, PartialEq)]
@@ -66,6 +66,16 @@ impl Section {
             Section::Sound => "sound",
             Section::Interface => "interface",
         }
+    }
+
+    // A section the viewer never folded or unfolded starts as it does by default.
+    pub(crate) fn is_folded(self, ui: &UiState) -> bool {
+        ui.folded.get(self.key()).copied().unwrap_or_else(|| self.folded_by_default())
+    }
+
+    pub(crate) fn toggle_fold(self, ui: &mut UiState) {
+        let folded = !self.is_folded(ui);
+        ui.folded.insert(self.key().to_string(), folded);
     }
 
     // Fine-tuning starts folded, so a first look at the panel shows the main choices.

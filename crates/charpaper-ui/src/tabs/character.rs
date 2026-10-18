@@ -6,11 +6,11 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedMut;
-use charpaper_scene::GazeSettings;
 use charpaper_scene::SkinObjects;
 use charpaper_scene::focused_added;
 use charpaper_scene::focused_changed;
 use charpaper_scene::focused_has;
+use charpaper_settings::GazeSettings;
 use i18n_embed_fl::fl;
 
 use crate::elements::Cycler;

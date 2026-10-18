@@ -1,15 +1,15 @@
 use bevy::prelude::*;
-use charpaper_scene::AntiAliasing;
-use charpaper_scene::DepthOfFieldQuality;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedMut;
-use charpaper_scene::FogQuality;
-use charpaper_scene::FogResolution;
-use charpaper_scene::Graphics;
-use charpaper_scene::RENDER_SCALES;
-use charpaper_scene::RenderSettings;
-use charpaper_scene::ShadowQuality;
 use charpaper_scene::focused_changed;
+use charpaper_settings::AntiAliasing;
+use charpaper_settings::DepthOfFieldQuality;
+use charpaper_settings::FogQuality;
+use charpaper_settings::FogResolution;
+use charpaper_settings::Graphics;
+use charpaper_settings::RENDER_SCALES;
+use charpaper_settings::RenderSettings;
+use charpaper_settings::ShadowQuality;
 use i18n_embed_fl::fl;
 
 use crate::elements::Cycler;

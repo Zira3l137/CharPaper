@@ -1893,14 +1893,13 @@ dependencies = [
  "charpaper-bake",
  "charpaper-monitor",
  "charpaper-scene",
+ "charpaper-settings",
  "charpaper-suite",
  "charpaper-ui",
  "charpaper-wallpaper",
  "charpaper-windows",
  "clap",
  "mimalloc",
- "serde",
- "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -1909,8 +1908,8 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_audio",
+ "charpaper-settings",
  "rodio",
- "serde",
 ]
 
 [[package]]
@@ -1939,10 +1938,20 @@ dependencies = [
  "bevy",
  "charpaper-audio",
  "charpaper-bake",
+ "charpaper-settings",
  "charpaper-suite",
  "crossbeam-channel",
  "image",
+]
+
+[[package]]
+name = "charpaper-settings"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "charpaper-suite",
  "serde",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]
@@ -1963,13 +1972,12 @@ name = "charpaper-ui"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "charpaper-audio",
  "charpaper-monitor",
  "charpaper-scene",
+ "charpaper-settings",
  "charpaper-suite",
  "i18n-embed",
  "i18n-embed-fl",
- "serde",
 ]
 
 [[package]]

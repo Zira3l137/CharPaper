@@ -19,6 +19,8 @@ mod suite;
 
 use bevy::light::GlobalAmbientLight;
 use bevy::prelude::*;
+use charpaper_settings::RenderSettings;
+use charpaper_settings::StageSeeds;
 
 pub use assets::ARMATURE_SOURCE;
 pub use assets::CHARACTERS_SOURCE;
@@ -29,30 +31,15 @@ pub use character::SkinObjects;
 pub use config::SceneConfig;
 pub use gaze::CursorAt;
 pub use gaze::CursorPosition;
-pub use gaze::GazeSettings;
 pub use look::ActiveLook;
 pub use look::LookEdited;
 pub use look::Resolved;
 pub use look::RestoreLook;
-pub use render::AntiAliasing;
-pub use render::DepthOfFieldQuality;
-pub use render::FogQuality;
-pub use render::FogResolution;
-pub use render::FpsLimit;
-pub use render::Graphics;
-pub use render::RENDER_SCALES;
-pub use render::RenderSettings;
-pub use render::ShadowQuality;
-pub use screens::ChosenMonitor;
-pub use screens::MonitorEntry;
-pub use screens::Monitors;
 pub use screens::Screen;
 pub use screens::ScreenPlace;
-pub use screens::ScreenSettings;
 pub use screens::ScreenSync;
 pub use screens::ScreenUi;
 pub use screens::ShowsStage;
-pub use screens::StageId;
 pub use screens::Unseen;
 pub use stage::Focused;
 pub use stage::FocusedMut;
@@ -60,7 +47,6 @@ pub use stage::FocusedStage;
 pub use stage::Stage;
 pub use stage::StageKey;
 pub use stage::StageMemories;
-pub use stage::StageSeed;
 pub use stage::focused_added;
 pub use stage::focused_changed;
 pub use stage::focused_has;
@@ -87,10 +73,10 @@ pub struct ScenePlugin {
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        let config = &self.config;
-        app.insert_resource(config.clone())
-            .insert_resource(config.render.clone())
-            .insert_resource(stage::StageSeeds(config.stages.clone()))
+        // The app inserts what state.toml holds before adding this plugin.
+        app.insert_resource(self.config.clone())
+            .init_resource::<RenderSettings>()
+            .init_resource::<StageSeeds>()
             .insert_resource(ClearColor(CLEAR_COLOR))
             // No built-in lighting: only what the environment ships lights the character.
             .insert_resource(GlobalAmbientLight::NONE)

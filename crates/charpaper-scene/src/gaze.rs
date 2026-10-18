@@ -4,8 +4,8 @@ use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy::world_serialization::WorldInstanceReady;
-use serde::Deserialize;
-use serde::Serialize;
+use charpaper_settings::GazeSettings;
+use charpaper_settings::Graphics;
 
 use crate::SceneSet;
 use crate::camera::SceneCamera;
@@ -13,7 +13,6 @@ use crate::character::Armature;
 use crate::character::CharacterClips;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
-use crate::render::Graphics;
 use crate::render::ScreenParts;
 use crate::screens::Screen;
 use crate::stage::StageOf;
@@ -40,18 +39,6 @@ impl Plugin for GazePlugin {
                 PostUpdate,
                 aim.after(AnimationSystems).before(TransformSystems::Propagate),
             );
-    }
-}
-
-#[derive(Component, Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct GazeSettings {
-    pub follow_cursor: bool,
-}
-
-impl Default for GazeSettings {
-    fn default() -> Self {
-        Self { follow_cursor: true }
     }
 }
 

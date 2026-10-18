@@ -4,6 +4,8 @@
 use bevy::post_process::dof::DepthOfField;
 use bevy::post_process::dof::DepthOfFieldMode;
 use bevy::prelude::*;
+use charpaper_settings::DepthOfFieldQuality;
+use charpaper_settings::Graphics;
 
 use crate::camera::SceneCamera;
 use crate::camera::SceneView;
@@ -11,8 +13,6 @@ use crate::camera::orbit::OrbitCamera;
 use crate::camera::rig::CameraRig;
 use crate::camera::rig::Following;
 use crate::character::Armature;
-use crate::render::DepthOfFieldQuality;
-use crate::render::Graphics;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 

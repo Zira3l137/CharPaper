@@ -5,6 +5,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::Skybox;
 use bevy::prelude::*;
+use charpaper_settings::Picks;
 use charpaper_suite::Suite;
 
 use crate::SceneSet;
@@ -23,7 +24,7 @@ use crate::look::ActiveLook;
 use crate::look::EditedLooks;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
-use crate::state::Picks;
+use crate::state::picks_of;
 
 // Which suite each stage shows, and swapping it while the app runs. A missing or broken suite
 // is logged, not fatal: a wallpaper with nothing on it beats one that never starts.
@@ -123,7 +124,7 @@ pub(crate) fn switch_suite(
         }
 
         if let Some(old) = active {
-            remembered.0.entry(old.folder()).or_default().merge(Picks::from_state(&state));
+            remembered.0.entry(old.folder()).or_default().merge(picks_of(&state));
             if let Some(look) = look {
                 edited.keep(old, look);
             }

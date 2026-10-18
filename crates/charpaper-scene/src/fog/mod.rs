@@ -11,6 +11,8 @@ use bevy::light::VolumetricLight;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy::world_serialization::WorldInstanceReady;
+use charpaper_settings::FogResolution;
+use charpaper_settings::Graphics;
 use charpaper_suite::Fog;
 
 use crate::SceneSet;
@@ -23,8 +25,6 @@ use crate::fog::pass::SceneFog;
 use crate::look::ActiveLook;
 use crate::look::Resolved;
 use crate::look::look_needs_applying;
-use crate::render::FogResolution;
-use crate::render::Graphics;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 

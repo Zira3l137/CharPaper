@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use bevy::app::HierarchyPropagatePlugin;
@@ -11,9 +10,11 @@ use bevy::ecs::system::SystemParam;
 use bevy::light::cluster::GlobalClusterSettings;
 use bevy::prelude::*;
 use charpaper_audio::Fader;
-use charpaper_suite::LookEdits;
-use serde::Deserialize;
-use serde::Serialize;
+use charpaper_settings::GazeSettings;
+use charpaper_settings::Graphics;
+use charpaper_settings::StageId;
+use charpaper_settings::StageSeed;
+use charpaper_settings::StageSeeds;
 
 use crate::camera::ShownRig;
 use crate::camera::view_bundle;
@@ -26,19 +27,16 @@ use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
 use crate::gaze::CursorPosition;
 use crate::gaze::GazeRig;
-use crate::gaze::GazeSettings;
 use crate::look::ActiveLook;
 use crate::look::EditedLooks;
 use crate::look::LookEdited;
 use crate::lut::ShownLut;
-use crate::render::Graphics;
 use crate::screens::Screen;
 use crate::screens::ScreenSync;
 use crate::screens::ShowsStage;
-use crate::screens::StageId;
 use crate::soundscape::Soundscape;
 use crate::state::CharacterState;
-use crate::state::Picks;
+use crate::state::picks_of;
 use crate::suite::ActiveSuite;
 use crate::suite::AvailableSuites;
 use crate::suite::LoadedSuite;
@@ -80,26 +78,6 @@ pub struct StageKey(pub StageId);
 // change.
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
 pub struct FocusedStage(pub Option<Entity>);
-
-// What a stage keeps between runs, and while none of its monitors is connected.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(default)]
-pub struct StageSeed {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub suite: Option<String>,
-    pub gaze: GazeSettings,
-    // The picks per suite, by the suite's folder.
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub suites: BTreeMap<String, Picks>,
-    // The edits to each suite's look, by the suite's folder.
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub looks: BTreeMap<String, LookEdits>,
-    pub graphics: Graphics,
-}
-
-// Every stage's seed, filled from state.toml and brought up to date as a stage goes away.
-#[derive(Resource, Default)]
-pub struct StageSeeds(pub(crate) BTreeMap<StageId, StageSeed>);
 
 pub(crate) struct StagePlugin;
 
@@ -209,7 +187,7 @@ fn seed_of(
     let mut suites = remembered.0.clone();
     let mut looks = EditedLooks(edited.0.clone());
     if let Some((suite, look)) = shown {
-        suites.entry(suite.folder()).or_default().merge(Picks::from_state(state));
+        suites.entry(suite.folder()).or_default().merge(picks_of(state));
         looks.keep(suite, look);
     }
     StageSeed {
@@ -229,10 +207,10 @@ pub struct StageMemories<'w, 's> {
 }
 
 impl StageMemories<'_, '_> {
-    pub fn all(&self) -> BTreeMap<StageId, StageSeed> {
-        let mut all = self.seeds.0.clone();
+    pub fn all(&self) -> StageSeeds {
+        let mut all = self.seeds.clone();
         for memory in &self.stages {
-            all.insert(memory.0.0, seed_of(memory));
+            all.0.insert(memory.0.0, seed_of(memory));
         }
         all
     }

@@ -13,6 +13,7 @@ use charpaper_monitor::MonitorPlugin;
 use charpaper_scene::ARMATURE_SOURCE;
 use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
+use charpaper_settings::STATE_FILE;
 use charpaper_ui::SettingsPanelPlugin;
 
 use crate::benchmark;
@@ -20,7 +21,6 @@ use crate::benchmark::BenchmarkPlugin;
 use crate::config::AppConfig;
 use crate::config::WindowConfig;
 use crate::logging;
-use crate::save;
 use crate::save::StatePlugin;
 use crate::wallpaper::WallpaperPlugin;
 
@@ -35,16 +35,17 @@ const WINDOWED_SIZE: (u32, u32) = (1280, 720);
 pub fn run(mut config: AppConfig) -> Result<()> {
     let exe_dir = exe_dir()?;
     config.scene.characters_dir = exe_dir.join(CHARACTERS_DIR);
-    let state_path = exe_dir.join(save::STATE_FILE);
-    let loaded = save::load(&state_path);
-    config.scene.stages = loaded.state.stages.clone();
-    config.scene.render = loaded.state.render.clone();
-    if config.benchmark {
-        benchmark::unthrottle(&mut config.scene.render);
-    }
     config.ui.locales_dir = exe_dir.join(LOCALES_DIR);
-    if config.ui.language.is_none() {
-        config.ui.language = loaded.state.ui.language.clone();
+    let state_path = exe_dir.join(STATE_FILE);
+    let loaded = charpaper_settings::load(&state_path);
+    let mut state = loaded.state.clone();
+    // A language asked for on the command line becomes the one chosen, and is saved as such.
+    if config.ui.language.is_some() {
+        state.ui.language = config.ui.language.clone();
+    }
+    config.ui.language = state.ui.language.clone();
+    if config.benchmark {
+        benchmark::unthrottle(&mut state.render);
     }
     let characters =
         config.scene.characters_dir.to_str().with_context(|| {
@@ -64,15 +65,18 @@ pub fn run(mut config: AppConfig) -> Result<()> {
                 })
                 .set(logging::plugin(config.log)),
         )
+        // The plugins below start from defaults wherever these aren't inserted first.
+        .insert_resource(state.ui)
+        .insert_resource(state.render)
+        .insert_resource(state.screen)
+        .insert_resource(state.audio)
+        .insert_resource(state.stages)
         .add_plugins((
-            SoundPlugin { volumes: loaded.state.audio.clone() },
+            SoundPlugin,
             MonitorPlugin,
-            WallpaperPlugin {
-                config: config.wallpaper.clone(),
-                screen: loaded.state.screen.clone(),
-            },
+            WallpaperPlugin { config: config.wallpaper.clone() },
             ScenePlugin { config: config.scene.clone() },
-            SettingsPanelPlugin { config: config.ui.clone(), state: loaded.state.ui.clone() },
+            SettingsPanelPlugin { config: config.ui.clone() },
         ));
     // GPU time of each of Bevy's render passes, which Tracy shows beside the CPU's.
     #[cfg(feature = "profile")]

@@ -9,10 +9,10 @@ use charpaper_monitor::Monitoring;
 use charpaper_monitor::Readings;
 use charpaper_scene::ScreenSync;
 use charpaper_scene::ScreenUi;
+use charpaper_settings::UiState;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
-use crate::UiState;
 use crate::locale::Locale;
 use crate::theme::*;
 use crate::widgets::*;

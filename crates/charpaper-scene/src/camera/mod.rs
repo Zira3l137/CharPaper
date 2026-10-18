@@ -6,6 +6,7 @@ use bevy::anti_alias::taa::TemporalAntiAliasing;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
+use charpaper_settings::Graphics;
 
 pub(crate) use rig::ShownRig;
 pub(crate) use rig::follow_selected;
@@ -16,7 +17,6 @@ use crate::camera::orbit::PITCH_LIMIT;
 use crate::camera::orbit::update_camera_transform;
 use crate::camera::rig::Following;
 use crate::environment::ShownEnvironment;
-use crate::render::Graphics;
 use crate::render::SceneImage;
 use crate::render::ScreenParts;
 use crate::render::screen_parts;

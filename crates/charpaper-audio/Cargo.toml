@@ -6,5 +6,5 @@ edition.workspace = true
 [dependencies]
 bevy.workspace = true
 bevy_audio.workspace = true
+charpaper-settings.workspace = true
 rodio.workspace = true
-serde.workspace = true

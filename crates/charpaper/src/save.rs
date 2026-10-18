@@ -1,66 +1,19 @@
-use std::collections::BTreeMap;
-use std::fs;
-use std::io;
-use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use bevy::prelude::*;
-use charpaper_audio::Volumes;
-use charpaper_scene::RenderSettings;
-use charpaper_scene::ScreenSettings;
-use charpaper_scene::StageId;
 use charpaper_scene::StageMemories;
-use charpaper_scene::StageSeed;
 use charpaper_scene::stage_memory_changed;
-use charpaper_ui::UiState;
-use serde::Deserialize;
-use serde::Serialize;
+use charpaper_settings::Loaded;
+use charpaper_settings::RenderSettings;
+use charpaper_settings::SavedState;
+use charpaper_settings::ScreenSettings;
+use charpaper_settings::UiState;
+use charpaper_settings::Volumes;
 
-use crate::save::Unsaved;
-
-pub const STATE_FILE: &str = "state.toml";
-
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
-#[serde(default)]
-pub struct SavedState {
-    pub ui: UiState,
-    pub render: RenderSettings,
-    pub screen: ScreenSettings,
-    pub audio: Volumes,
-    pub stages: BTreeMap<StageId, StageSeed>,
-}
-
-// Problems are returned, not logged, because this runs before Bevy's logger exists.
-#[derive(Clone)]
-pub struct Loaded {
-    pub state: SavedState,
-    pub problem: Option<String>,
-}
-
-pub fn load(path: &Path) -> Loaded {
-    let fresh = |problem: String| Loaded { state: SavedState::default(), problem: Some(problem) };
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => {
-            return Loaded { state: SavedState::default(), problem: None };
-        }
-        Err(err) => return fresh(format!("cannot read {}: {err}; starting fresh", path.display())),
-    };
-    match toml::from_str::<SavedState>(&text) {
-        Ok(state) => Loaded { state, problem: None },
-        Err(err) => {
-            // Moved aside rather than overwritten, in case it was edited by hand.
-            let aside = path.with_extension("toml.bad");
-            let moved = fs::rename(path, &aside).is_ok();
-            let fate = if moved {
-                format!("moved it to {}", aside.display())
-            } else {
-                "ignored it".into()
-            };
-            fresh(format!("{} is not valid ({err}); {fate} and started fresh", path.display()))
-        }
-    }
-}
+// How long changes must stop before they are written, so stepping a setting with the wheel
+// writes the file once rather than on every step.
+const SETTLE: Duration = Duration::from_secs(1);
 
 // Saved once changes settle rather than on exit: a logoff, shutdown or killed process never
 // runs Bevy's exit path.
@@ -100,7 +53,8 @@ impl Plugin for StatePlugin {
 struct StateFile {
     path: PathBuf,
     saved: SavedState,
-    unsaved: Option<Unsaved<SavedState>>,
+    // A change not on disk yet, and when it was made.
+    unsaved: Option<(SavedState, Duration)>,
     problem: Option<String>,
     write_failed: bool,
 }
@@ -129,9 +83,10 @@ fn note_change(
         audio: volumes.clone(),
         stages: stages.all(),
     };
-    file.unsaved = (next != file.saved).then(|| Unsaved::new(next, time.elapsed()));
+    file.unsaved = (next != file.saved).then(|| (next, time.elapsed()));
 }
 
+// Quitting writes at once: the app is gone before the settle time is up.
 fn save_settled(
     time: Res<Time<Real>>,
     mut exits: MessageReader<AppExit>,
@@ -139,11 +94,14 @@ fn save_settled(
 ) {
     let quitting = exits.read().count() > 0;
     let now = time.elapsed();
-    let Some(due) = file.unsaved.take_if(|u| u.is_due(now, quitting)) else {
+    let due = |(_, changed_at): &mut (SavedState, Duration)| {
+        quitting || now.saturating_sub(*changed_at) >= SETTLE
+    };
+    let Some((state, _)) = file.unsaved.take_if(due) else {
         return;
     };
 
-    match write(&file.path, &due.value) {
+    match charpaper_settings::write(&file.path, &state) {
         Ok(()) => {
             debug!("saved choices to {}", file.path.display());
             file.write_failed = false;
@@ -154,14 +112,5 @@ fn save_settled(
         }
         Err(_) => {}
     }
-    file.saved = due.value;
-}
-
-// Written to a temporary file and renamed, so a crash mid-write can't truncate it.
-fn write(path: &Path, state: &SavedState) -> anyhow::Result<()> {
-    let text = toml::to_string_pretty(state)?;
-    let temporary = path.with_extension("toml.tmp");
-    fs::write(&temporary, text)?;
-    fs::rename(&temporary, path)?;
-    Ok(())
+    file.saved = state;
 }

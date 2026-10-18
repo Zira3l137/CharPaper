@@ -6,14 +6,14 @@ use bevy::math::primitives::ViewFrustum;
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
+use charpaper_settings::ScreenSettings;
+use charpaper_settings::StageId;
 
 use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::render::ScreenParts;
 use crate::screens::ScreenPlace;
-use crate::screens::ScreenSettings;
 use crate::screens::ShowsStage;
-use crate::screens::StageId;
 
 // Span mode: the screens show one wide view between them, as if their monitors were a single
 // screen. Every camera keeps the shared pose and lens, and renders only its own monitor's part

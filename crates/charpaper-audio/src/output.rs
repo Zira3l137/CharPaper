@@ -2,12 +2,13 @@ use std::time::Duration;
 
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
+use charpaper_settings::Volumes;
 
 use crate::Hush;
-use crate::Volumes;
 use crate::device::Device;
 use crate::device::default_device_id;
 use crate::envelope::Envelope;
+use crate::master_volume;
 
 // How often to ask which device is the default, to follow a switch made in the system's
 // settings. A device that disappears is noticed sooner, through its stream's error.
@@ -90,7 +91,7 @@ pub(crate) fn watch_device(
         }
         None => {}
     }
-    output.reopen(hush.0, volumes.master());
+    output.reopen(hush.0, master_volume(&volumes));
 }
 
 pub(crate) fn follow_hush(hush: Res<Hush>, output: Res<Output>) {

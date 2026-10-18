@@ -5,9 +5,9 @@ use bevy::prelude::*;
 use bevy::winit::UpdateMode;
 use bevy::winit::WinitSettings;
 use charpaper_audio::Hush;
-use charpaper_scene::RenderSettings;
 use charpaper_scene::Screen;
 use charpaper_scene::Unseen;
+use charpaper_settings::RenderSettings;
 use charpaper_ui::PanelHovered;
 
 use crate::wallpaper::Backend;

@@ -8,7 +8,6 @@ mod platform;
 mod windows;
 
 use bevy::prelude::*;
-use charpaper_scene::ScreenSettings;
 use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WindowKey;
@@ -23,7 +22,6 @@ pub use platform::inspect_report;
 // Everything OS-specific stays behind the WallpaperBackend that platform.rs picks.
 pub struct WallpaperPlugin {
     pub config: WallpaperConfig,
-    pub screen: ScreenSettings,
 }
 
 impl Plugin for WallpaperPlugin {
@@ -31,7 +29,7 @@ impl Plugin for WallpaperPlugin {
         app.insert_resource(WallpaperSettings(self.config.clone()))
             .insert_resource(Backend(platform::create_backend()))
             .add_plugins((
-                monitors::MonitorsPlugin { screen: self.screen.clone() },
+                monitors::MonitorsPlugin,
                 windows::WindowsPlugin,
                 attach::AttachPlugin,
                 cursor::CursorPlugin,

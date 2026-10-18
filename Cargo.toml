@@ -105,6 +105,7 @@ tracing = { version = "0.1", default-features = false, features = ["std"] }
 charpaper-audio = { path = "crates/charpaper-audio" }
 charpaper-monitor = { path = "crates/charpaper-monitor" }
 charpaper-scene = { path = "crates/charpaper-scene" }
+charpaper-settings = { path = "crates/charpaper-settings" }
 charpaper-suite = { path = "crates/charpaper-suite" }
 charpaper-bake = { path = "crates/charpaper-bake" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }

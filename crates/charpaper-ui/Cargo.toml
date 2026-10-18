@@ -5,10 +5,9 @@ edition.workspace = true
 
 [dependencies]
 bevy.workspace = true
-charpaper-audio.workspace = true
 charpaper-monitor.workspace = true
 charpaper-scene.workspace = true
+charpaper-settings.workspace = true
 charpaper-suite.workspace = true
 i18n-embed.workspace = true
 i18n-embed-fl.workspace = true
-serde.workspace = true

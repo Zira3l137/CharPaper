@@ -4,9 +4,9 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::Monitor;
 use bevy::window::PrimaryMonitor;
-use charpaper_scene::MonitorEntry;
-use charpaper_scene::Monitors;
-use charpaper_scene::ScreenSettings;
+use charpaper_settings::MonitorEntry;
+use charpaper_settings::Monitors;
+use charpaper_settings::ScreenSettings;
 use charpaper_wallpaper::DesktopMonitor;
 use charpaper_wallpaper::ScreenArea;
 
@@ -24,13 +24,11 @@ pub(crate) struct Layout(pub Vec<DesktopMonitor>);
 #[derive(Resource, Default, PartialEq)]
 pub(crate) struct Targets(pub Vec<DesktopMonitor>);
 
-pub(crate) struct MonitorsPlugin {
-    pub screen: ScreenSettings,
-}
+pub(crate) struct MonitorsPlugin;
 
 impl Plugin for MonitorsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(self.screen.clone())
+        app.init_resource::<ScreenSettings>()
             .init_resource::<Monitors>()
             .init_resource::<Layout>()
             .init_resource::<Targets>()

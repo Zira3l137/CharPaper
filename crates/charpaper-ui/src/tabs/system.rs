@@ -1,16 +1,16 @@
 use bevy::prelude::*;
-use charpaper_scene::ChosenMonitor;
 use charpaper_scene::Focused;
-use charpaper_scene::FpsLimit;
-use charpaper_scene::Monitors;
-use charpaper_scene::RenderSettings;
-use charpaper_scene::ScreenSettings;
-use charpaper_scene::StageId;
 use charpaper_scene::StageKey;
 use charpaper_scene::focused_changed;
+use charpaper_settings::ChosenMonitor;
+use charpaper_settings::FpsLimit;
+use charpaper_settings::Monitors;
+use charpaper_settings::RenderSettings;
+use charpaper_settings::ScreenSettings;
+use charpaper_settings::StageId;
+use charpaper_settings::UiState;
 use i18n_embed_fl::fl;
 
-use crate::UiState;
 use crate::elements::Cycler;
 use crate::elements::Section;
 use crate::elements::Shown;

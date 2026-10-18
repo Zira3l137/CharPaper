@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
+use charpaper_settings::Volumes;
 use rodio::Player;
 
 use crate::AudioSource;
@@ -8,8 +9,9 @@ use crate::FadeOut;
 use crate::Fader;
 use crate::Sound;
 use crate::SoundFailed;
-use crate::Volumes;
 use crate::envelope::Envelope;
+use crate::layer_volume;
+use crate::master_volume;
 use crate::output::Output;
 
 // A sound that is playing.
@@ -51,7 +53,7 @@ pub(crate) fn start_sounds(
         let group = Envelope::new(fader.map_or(1.0, |fader| fader.level));
         match device.play(source.clone(), sound.looped, Duration::ZERO, (&envelope, &group)) {
             Ok(player) => {
-                player.set_volume(volumes.of(sound.layer));
+                player.set_volume(layer_volume(&volumes, sound.layer));
                 commands.entity(entity).insert(Voice {
                     player,
                     envelope,
@@ -93,7 +95,7 @@ pub(crate) fn move_to_new_device(
         });
         match played {
             Some(Ok(player)) => {
-                player.set_volume(volumes.of(sound.layer));
+                player.set_volume(layer_volume(&volumes, sound.layer));
                 voice.player = player;
                 voice.generation = output.generation;
                 voice.offset = from;
@@ -109,10 +111,10 @@ pub(crate) fn apply_volumes(
     voices: Query<(&Sound, &Voice)>,
 ) {
     if let Some(device) = output.device() {
-        device.master.set_volume(volumes.master());
+        device.master.set_volume(master_volume(&volumes));
     }
     for (sound, voice) in &voices {
-        voice.player.set_volume(volumes.of(sound.layer));
+        voice.player.set_volume(layer_volume(&volumes, sound.layer));
     }
 }
 

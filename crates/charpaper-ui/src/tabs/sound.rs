@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use charpaper_audio::Volumes;
+use charpaper_settings::Volumes;
 use i18n_embed_fl::fl;
 
 use crate::elements::Cycler;

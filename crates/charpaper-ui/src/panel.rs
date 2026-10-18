@@ -6,17 +6,18 @@ use charpaper_scene::Focused;
 use charpaper_scene::ScreenSync;
 use charpaper_scene::ScreenUi;
 use charpaper_scene::StageKey;
+use charpaper_settings::Tab;
+use charpaper_settings::UiState;
 use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
-use crate::Tab;
-use crate::UiState;
 use crate::elements::Chevron;
 use crate::elements::HelpText;
 use crate::elements::StatusText;
 use crate::elements::UiButton;
 use crate::elements::UiContainer;
 use crate::locale::Locale;
+use crate::locale::Tr;
 use crate::tabs;
 use crate::theme::*;
 use crate::widgets::*;
@@ -190,7 +191,7 @@ fn header() -> impl Bundle {
 
 fn tab_bar() -> impl Bundle {
     let tab = |tab: Tab| {
-        translated_button(tab.title())
+        translated_button(tab_title(tab))
             .node(|n| {
                 n.flex_grow = 1.0;
                 n.flex_basis = Val::ZERO;
@@ -266,14 +267,14 @@ fn show_folds(
 ) {
     for (container, mut node) in &mut bodies {
         if let UiContainer::Body(section) = container {
-            let shown = display(!ui.is_folded(*section));
+            let shown = display(!section.is_folded(&ui));
             if node.display != shown {
                 node.display = shown;
             }
         }
     }
     for (chevron, mut text) in &mut chevrons {
-        let arrow = if ui.is_folded(chevron.0) { "►" } else { "▼" };
+        let arrow = if chevron.0.is_folded(&ui) { "►" } else { "▼" };
         if text.0 != arrow {
             text.0 = arrow.to_string();
         }
@@ -366,7 +367,16 @@ fn on_click(
         UiButton::HideMenu => ui.is_menu_closed = true,
         UiButton::RevealMenu => ui.is_menu_closed = false,
         UiButton::Tab(tab) => ui.tab = *tab,
-        UiButton::Fold(section) => ui.toggle_fold(*section),
+        UiButton::Fold(section) => section.toggle_fold(&mut ui),
         _ => {}
+    }
+}
+
+fn tab_title(tab: Tab) -> Tr {
+    match tab {
+        Tab::Scene => |l| fl!(l, "tab-scene"),
+        Tab::Graphics => |l| fl!(l, "tab-graphics"),
+        Tab::Sound => |l| fl!(l, "tab-sound"),
+        Tab::System => |l| fl!(l, "tab-system"),
     }
 }
