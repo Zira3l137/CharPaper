@@ -12,6 +12,7 @@ pub struct Cli {
     ///
     /// Read-only: opens no window, allocates no GPU, modifies nothing. Start
     /// here when something does not work.
+    #[cfg(feature = "diagnostics")]
     #[arg(long)]
     pub inspect: bool,
 
@@ -57,6 +58,7 @@ pub struct Cli {
     #[arg(long)]
     pub windowed: bool,
 
+    #[cfg(feature = "diagnostics")]
     #[command(flatten)]
     pub backend: BackendOptions,
 
@@ -79,4 +81,16 @@ pub struct Cli {
     pub keep_desktop: Option<u32>,
     #[arg(long, hide = true, requires = "keep_desktop")]
     pub orphaned: bool,
+}
+
+impl Cli {
+    #[cfg(feature = "diagnostics")]
+    pub fn backend(&self) -> BackendOptions {
+        self.backend.clone()
+    }
+
+    #[cfg(not(feature = "diagnostics"))]
+    pub fn backend(&self) -> BackendOptions {
+        BackendOptions::default()
+    }
 }

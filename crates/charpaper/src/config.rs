@@ -37,7 +37,7 @@ impl AppConfig {
             window: WindowConfig::default(),
             scene: SceneConfig::default(),
             wallpaper: WallpaperConfig::default(),
-            backend: cli.backend.clone(),
+            backend: cli.backend(),
             ui: UiConfig::default(),
             log: LogLevels { ours: cli.log_level, engine: cli.bevy_log_level },
             benchmark: cli.benchmark,

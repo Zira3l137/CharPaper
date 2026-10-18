@@ -21,12 +21,12 @@ pub fn create_backend(_options: BackendOptions) -> Box<dyn WallpaperBackend> {
     Box::new(charpaper_wallpaper::UnsupportedBackend)
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "diagnostics"))]
 pub fn inspect_report() -> Vec<String> {
     charpaper_windows::inspect_report()
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), feature = "diagnostics"))]
 pub fn inspect_report() -> Vec<String> {
     vec![format!("no wallpaper backend for {}; nothing to inspect", std::env::consts::OS)]
 }

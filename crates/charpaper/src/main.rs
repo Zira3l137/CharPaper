@@ -28,6 +28,7 @@ fn main() -> Result<()> {
         wallpaper::keep_desktop(app, args.orphaned);
         return Ok(());
     }
+    #[cfg(feature = "diagnostics")]
     if args.inspect {
         commands::inspect();
         return Ok(());

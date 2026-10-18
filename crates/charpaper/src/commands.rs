@@ -6,13 +6,12 @@ use anyhow::Result;
 use charpaper_bake::BakeSettings;
 use charpaper_suite::Suite;
 
-use crate::wallpaper;
-
 // Commands that run instead of the app. They never start Bevy: no window, no GPU, and
 // output goes straight to stdout rather than through the log.
 
+#[cfg(feature = "diagnostics")]
 pub fn inspect() {
-    for line in wallpaper::inspect_report() {
+    for line in crate::wallpaper::inspect_report() {
         println!("{line}");
     }
 }

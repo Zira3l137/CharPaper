@@ -16,6 +16,7 @@ pub(crate) use activity::Paused;
 pub(crate) use activity::ReadActivity;
 pub use keeper::keep_desktop;
 pub use platform::BackendOptions;
+#[cfg(feature = "diagnostics")]
 pub use platform::inspect_report;
 
 // Puts a window behind the desktop icons on every chosen monitor and keeps them working there:
