@@ -156,7 +156,14 @@ fn play_gifs(
             player.playback = Playback::Stopped;
             continue;
         };
-        let image = images.add(gif_image(playing.width, playing.height, pixels));
+        let mut image = gif_image(playing.width, playing.height, pixels);
+        // The still the scene file carries came with the Image Texture node's Extension and
+        // Interpolation, as wrap and filter modes. Without them a scaled GIF wouldn't repeat.
+        // Bevy keeps an uploaded image's settings in RAM, only its pixels are dropped.
+        if let Some(still) = copy.base_color_texture.as_ref().and_then(|h| images.get(h)) {
+            image.sampler = still.sampler.clone();
+        }
+        let image = images.add(image);
         copy.base_color_texture = Some(image.clone());
         let copy = materials.add(copy);
         for &mesh in &player.meshes {
