@@ -3,9 +3,10 @@
 // - the working set: every page of RAM the process touches, driver and DLLs included, which
 //   is what Task Manager shows;
 // - committed memory: what the process has asked Windows for, touched or not;
-// - the heap: what Rust code holds, counted by CountingAllocator;
+// - the heap: what Rust code holds, counted by CountingAllocator in diagnostics builds;
 // - GPU memory: what wgpu has allocated on the graphics card;
-// - counts of things that each hold memory, which point at what leaks when one keeps growing.
+// - counts of things that each hold memory, which point at what leaks when one keeps growing,
+//   the GPU's objects among them in diagnostics builds.
 
 use std::cmp::Reverse;
 use std::collections::HashMap;
@@ -160,7 +161,8 @@ fn gpu_memory(device: &RenderDevice) -> Option<GpuReport> {
     Some((mb(report.total_allocated_bytes), mb(report.total_reserved_bytes), largest))
 }
 
-// wgpu only counts with its `counters` feature, and reads all zeros without it.
+// wgpu only counts with its `counters` feature, which diagnostics builds turn on, and reads all
+// zeros without it.
 fn gpu_objects(device: &RenderDevice) -> Option<GpuObjects> {
     let hal = device.wgpu_device().get_internal_counters().hal;
     let objects = GpuObjects {

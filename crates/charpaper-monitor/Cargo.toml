@@ -7,3 +7,9 @@ edition.workspace = true
 bevy.workspace = true
 sysinfo.workspace = true
 wgpu.workspace = true
+
+[features]
+# Counts for hunting leaks: what Rust code holds on the heap, and wgpu's live objects. Counting
+# costs an atomic add on every allocation and every GPU object made or dropped, all the time,
+# so only diagnostics builds do it. The app also wraps its allocator in CountingAllocator then.
+diagnostics = ["wgpu/counters"]

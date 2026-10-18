@@ -186,17 +186,16 @@ fn memory_rows(m: &Memory, l: &FluentLanguageLoader) -> Vec<Row> {
     let mut rows = vec![
         row(fl!(l, "monitor-memory"), value(m.working_set), growth(m.working_set)),
         row(part(fl!(l, "monitor-committed")), value(m.committed), growth(m.committed)),
-        row(
+    ];
+    // Counted only in diagnostics builds.
+    if m.heap.is_some() {
+        let blocks = fl!(l, "monitor-heap-blocks", count = m.heap_blocks.to_string());
+        rows.push(row(
             part(fl!(l, "monitor-heap")),
             value(m.heap),
-            notes(&[
-                m.heap
-                    .map(|_| fl!(l, "monitor-heap-blocks", count = m.heap_blocks.to_string()))
-                    .unwrap_or_default(),
-                growth(m.heap),
-            ]),
-        ),
-    ];
+            notes(&[blocks, growth(m.heap)]),
+        ));
+    }
     if let Some(gpu) = &m.gpu {
         let allocated = Some(gpu.allocated);
         rows.push(row(

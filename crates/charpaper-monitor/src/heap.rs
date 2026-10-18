@@ -8,8 +8,9 @@ static LIVE_BLOCKS: AtomicIsize = AtomicIsize::new(0);
 
 // Wraps the app's allocator to count what is allocated and not yet freed: everything Rust code
 // holds on the heap, the app's, Bevy's and wgpu's alike, but not what the graphics driver or
-// the system allocate on their own. Two uncontended atomic adds per allocation, always on, so
-// the count is right from the first allocation.
+// the system allocate on their own. It counts from the first allocation, so the count is right,
+// at two atomic adds on counters every thread shares for each allocation and free, monitor on
+// or off. Only diagnostics builds use it.
 pub struct CountingAllocator<A>(pub A);
 
 // SAFETY: every call is passed on to the wrapped allocator unchanged; only counts are kept.

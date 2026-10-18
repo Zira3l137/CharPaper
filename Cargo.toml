@@ -62,10 +62,8 @@ bevy_audio = { version = "0.19.1", default-features = false, features = ["vorbis
 rodio = { version = "0.22", default-features = false, features = ["playback"] }
 
 raw-window-handle = { version = "0.6", default-features = false, features = ["std"] }
-# The version Bevy's renderer builds, for what Bevy doesn't re-export: GPU timestamp queries,
-# and `counters`, which makes wgpu count its live objects for the monitor with an atomic add
-# each time one is made or dropped.
-wgpu = { version = "29", default-features = false, features = ["counters"] }
+# The version Bevy's renderer builds, for what Bevy doesn't re-export: GPU timestamp queries.
+wgpu = { version = "29", default-features = false }
 # The Win32 API's declarations, for the Windows backend. The version Bevy builds already; only
 # the parts the backend calls are switched on.
 windows-sys = { version = "0.61", default-features = false, features = [

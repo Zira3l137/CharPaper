@@ -22,10 +22,11 @@ mimalloc.workspace = true
 # Streams the time of every system and render pass to the Tracy profiler, for finding what
 # exactly is slow. Slows the app down, so only for profiling builds.
 profile = ["bevy/trace_tracy"]
-# Flags for finding out why the wallpaper won't attach on some machine: --inspect, and the
-# backend's own, such as --strategy and --tree. Users never need them, so they stay out of
-# the --help everyone sees.
-diagnostics = []
+# For finding out what goes wrong on some machine: the flags --inspect, and the backend's own,
+# such as --strategy and --tree, which users never need and so stay out of the --help they
+# see; and the performance monitor's heap and GPU object counts, which cost a little on
+# every allocation.
+diagnostics = ["charpaper-monitor/diagnostics"]
 
 [target.'cfg(windows)'.dependencies]
 charpaper-windows.workspace = true

@@ -11,6 +11,7 @@ mod save;
 mod wallpaper;
 
 use anyhow::Result;
+#[cfg(feature = "diagnostics")]
 use charpaper_monitor::CountingAllocator;
 use clap::Parser;
 use mimalloc::MiMalloc;
@@ -19,8 +20,13 @@ use crate::cli::Cli;
 use crate::config::AppConfig;
 
 // Counted for the performance monitor's heap row.
+#[cfg(feature = "diagnostics")]
 #[global_allocator]
 static ALLOCATOR: CountingAllocator<MiMalloc> = CountingAllocator(MiMalloc);
+
+#[cfg(not(feature = "diagnostics"))]
+#[global_allocator]
+static ALLOCATOR: MiMalloc = MiMalloc;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
