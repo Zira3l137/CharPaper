@@ -384,9 +384,7 @@ focus_object = "Tripod"
     let suite = fixture.load().unwrap();
     assert_eq!(suite.cameras[0].settings.focus_object.as_deref(), Some("Head"));
     assert_eq!(suite.cameras[1].settings.focus_distance(), 10.0);
-
-    let errors = messages(&suite, Severity::Error);
-    assert_eq!(errors, ["error   suite.toml: camera: `f_stop` must be above 0"]);
+    assert_eq!(suite.camera.f_stop, None);
     let warnings = messages(&suite, Severity::Warning);
     assert!(
         warnings.iter().any(|w| w.contains("\"Tripod\" is neither in cameras/wide.gltf")),

@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use gltf::Document;
 use tracing::debug;
+use tracing::warn;
 
 use crate::document::read_document;
 use crate::error::SuiteError;
@@ -289,6 +290,9 @@ impl Suite {
             None => environments.first().map(|e| e.name.clone()),
         };
 
+        let mut camera = manifest.camera;
+        above_zero(&mut camera.f_stop, "camera: `f_stop`");
+
         Ok(Self {
             root: root.to_path_buf(),
             name,
@@ -304,7 +308,7 @@ impl Suite {
             default_environment,
             luts,
             post: manifest.post,
-            camera: manifest.camera,
+            camera,
             gaze: manifest.gaze,
         })
     }
@@ -363,7 +367,7 @@ fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationF
 fn resolve_cameras(root: &Path, manifest: &Manifest) -> Result<Vec<ExportedCamera>, SuiteError> {
     let mut cameras: Vec<ExportedCamera> = Vec::new();
     for (name, file) in named_files(root, CAMERAS_DIR, "camera")? {
-        // An unreadable file stays one camera here; `inspect` reports what is wrong with it.
+        // An unreadable file stays one camera here; the app reports it when it loads the file.
         let found = read_document(&root.join(&file)).map(|d| camera_nodes(&d)).unwrap_or_default();
         if found.len() <= 1 {
             cameras.push(ExportedCamera {
@@ -400,8 +404,27 @@ fn resolve_cameras(root: &Path, manifest: &Manifest) -> Result<Vec<ExportedCamer
             return Err(SuiteError::UnknownEntry { kind: "camera", name: name.clone() });
         };
         camera.settings = settings.clone();
+        let lens = &mut camera.settings;
+        for (key, value) in [
+            ("f_stop", &mut lens.f_stop),
+            ("focus_distance", &mut lens.focus_distance),
+            ("sensor_height_mm", &mut lens.sensor_height_mm),
+        ] {
+            above_zero(value, &format!("camera {name:?}: `{key}`"));
+        }
     }
     Ok(cameras)
+}
+
+// Depth of field divides by each of these, so a value that isn't above 0 counts as not given:
+// no f-stop leaves depth of field off, and the others fall back to their defaults.
+fn above_zero(value: &mut Option<f32>, what: &str) {
+    if let Some(v) = *value
+        && !(v > 0.0 && v.is_finite())
+    {
+        warn!("{what} is {v}, but must be above 0, so it counts as not given");
+        *value = None;
+    }
 }
 
 fn camera_nodes(doc: &Document) -> Vec<(String, Option<String>)> {
