@@ -66,7 +66,6 @@ pub use stage::focused_changed;
 pub use stage::focused_has;
 pub use stage::stage_memory_changed;
 pub use state::CharacterState;
-pub use state::Picks;
 pub use suite::ActiveSuite;
 pub use suite::AvailableSuites;
 

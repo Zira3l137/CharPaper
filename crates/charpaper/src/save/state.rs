@@ -6,9 +6,6 @@ use std::path::PathBuf;
 
 use bevy::prelude::*;
 use charpaper_audio::Volumes;
-use charpaper_scene::GazeSettings;
-use charpaper_scene::Graphics;
-use charpaper_scene::Picks;
 use charpaper_scene::RenderSettings;
 use charpaper_scene::ScreenSettings;
 use charpaper_scene::StageId;
@@ -31,59 +28,6 @@ pub struct SavedState {
     pub screen: ScreenSettings,
     pub audio: Volumes,
     pub stages: BTreeMap<StageId, StageSeed>,
-    // Where the one scene kept its choices before there were stages. Read once, into stage A.
-    #[serde(skip_serializing)]
-    suite: Option<String>,
-    #[serde(skip_serializing)]
-    gaze: Option<GazeSettings>,
-    #[serde(skip_serializing)]
-    suites: BTreeMap<String, Picks>,
-}
-
-impl SavedState {
-    fn adopt_single_scene(mut self) -> Self {
-        let (suite, gaze, suites) =
-            (self.suite.take(), self.gaze.take(), std::mem::take(&mut self.suites));
-        if self.stages.is_empty() && (suite.is_some() || gaze.is_some() || !suites.is_empty()) {
-            let seed = StageSeed { suite, gaze: gaze.unwrap_or_default(), suites, ..default() };
-            self.stages.insert(StageId::FIRST, seed);
-        }
-        self
-    }
-
-    // Before each stage was drawn its own way, [render] held how the one scene was. Every stage
-    // saved then starts from that.
-    fn adopt_shared_graphics(mut self, text: &str) -> Self {
-        let Some(graphics) = shared_graphics(text) else {
-            return self;
-        };
-        if self.stages.is_empty() {
-            self.stages.insert(StageId::FIRST, StageSeed::default());
-        }
-        for seed in self.stages.values_mut() {
-            seed.graphics.get_or_insert_with(|| graphics.clone());
-        }
-        self
-    }
-}
-
-const SHARED_GRAPHICS: [&str; 7] = [
-    "render_scale",
-    "anti_aliasing",
-    "depth_of_field",
-    "fog",
-    "fog_quality",
-    "fog_dithering",
-    "fog_resolution",
-];
-
-fn shared_graphics(text: &str) -> Option<Graphics> {
-    let file: toml::Table = toml::from_str(text).ok()?;
-    let render = file.get("render")?.as_table()?;
-    if !SHARED_GRAPHICS.iter().any(|key| render.contains_key(*key)) {
-        return None;
-    }
-    toml::Value::Table(render.clone()).try_into().ok()
 }
 
 // Problems are returned, not logged, because this runs before Bevy's logger exists.
@@ -103,10 +47,7 @@ pub fn load(path: &Path) -> Loaded {
         Err(err) => return fresh(format!("cannot read {}: {err}; starting fresh", path.display())),
     };
     match toml::from_str::<SavedState>(&text) {
-        Ok(state) => {
-            let state = state.adopt_single_scene().adopt_shared_graphics(&text);
-            Loaded { state, problem: None }
-        }
+        Ok(state) => Loaded { state, problem: None },
         Err(err) => {
             // Moved aside rather than overwritten, in case it was edited by hand.
             let aside = path.with_extension("toml.bad");
@@ -187,7 +128,6 @@ fn note_change(
         screen: screen.clone(),
         audio: volumes.clone(),
         stages: stages.all(),
-        ..default()
     };
     file.unsaved = (next != file.saved).then(|| Unsaved::new(next, time.elapsed()));
 }

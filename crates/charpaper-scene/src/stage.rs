@@ -94,9 +94,7 @@ pub struct StageSeed {
     // The edits to each suite's look, by the suite's folder.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub looks: BTreeMap<String, LookEdits>,
-    // None for a stage saved before stages had graphics of their own.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub graphics: Option<Graphics>,
+    pub graphics: Graphics,
 }
 
 // Every stage's seed, filled from state.toml and brought up to date as a stage goes away.
@@ -161,7 +159,7 @@ pub(crate) fn sync_stages(
                 seed.gaze,
                 Remembered(seed.suites),
                 EditedLooks(seed.looks),
-                seed.graphics.unwrap_or_default(),
+                seed.graphics,
                 // Every stage stands at the origin, overlapping the others, and only its render
                 // layer keeps it apart. Placed far away instead, its positions would lose the
                 // fraction of a millimetre that layered meshes keep between them, and they would
@@ -219,7 +217,7 @@ fn seed_of(
         gaze: gaze.clone(),
         suites,
         looks: looks.0,
-        graphics: Some(graphics.clone()),
+        graphics: graphics.clone(),
     }
 }
 

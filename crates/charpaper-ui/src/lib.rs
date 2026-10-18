@@ -29,11 +29,8 @@ use crate::locale::Tr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Tab {
-    // Under the names of the tabs they replaced, so the panel reopens where it was left.
     #[default]
-    #[serde(alias = "character")]
     Scene,
-    #[serde(alias = "render")]
     Graphics,
     Sound,
     System,
