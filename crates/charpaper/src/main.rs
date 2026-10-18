@@ -32,10 +32,8 @@ fn main() -> Result<()> {
     if let Some(path) = &args.check_suite {
         return commands::check_suite(path);
     }
-
-    let config = AppConfig::from_cli(&args);
     if let Some(path) = &args.bake_environments {
-        return commands::bake_environments(path, &config.scene.bake, args.dry_run);
+        return commands::bake_environments(path, args.dry_run);
     }
-    app::run(config)
+    app::run(AppConfig::from_cli(&args))
 }

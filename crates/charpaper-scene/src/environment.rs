@@ -13,6 +13,7 @@ use bevy::tasks::Task;
 use bevy::tasks::block_on;
 use bevy::tasks::poll_once;
 use bevy::world_serialization::WorldInstanceReady;
+use charpaper_bake::BakeSettings;
 use charpaper_suite::Environment;
 use charpaper_suite::Suite;
 
@@ -20,7 +21,6 @@ use crate::SceneSet;
 use crate::assets::GPU_ONLY;
 use crate::assets::asset_path;
 use crate::camera::SceneCamera;
-use crate::config::SceneConfig;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
@@ -98,7 +98,6 @@ pub(crate) fn choose_environment(
 
 pub(crate) fn switch_environment(
     mut commands: Commands,
-    config: Res<SceneConfig>,
     assets: Res<AssetServer>,
     mut stages: Query<(
         Entity,
@@ -140,7 +139,7 @@ pub(crate) fn switch_environment(
             attach_maps(&mut commands, camera, &assets, suite, environment);
         }
         if environment.needs_baking() && !baking.0.contains_key(&environment.name) {
-            start_bake(&mut baking, suite, environment, &config);
+            start_bake(&mut baking, suite, environment);
         }
         if let Some(scene) = &environment.scene {
             let file = assets
@@ -189,20 +188,21 @@ fn attach_maps(
     }
 }
 
-fn start_bake(baking: &mut Baking, suite: &Suite, environment: &Environment, config: &SceneConfig) {
+fn start_bake(baking: &mut Baking, suite: &Suite, environment: &Environment) {
     let Some(panorama) = &environment.panorama else {
         return;
     };
     let panorama = suite.absolute(panorama);
     let folder = suite.absolute(&environment.folder());
-    let settings = config.bake.clone();
     info!(
         "baking the missing maps of environment {:?} from {}; it shows without them until done",
         environment.name,
         panorama.display()
     );
     let task = AsyncComputeTaskPool::get().spawn(async move {
-        charpaper_bake::bake(&panorama, &folder, &settings).map(drop).map_err(|e| e.to_string())
+        charpaper_bake::bake(&panorama, &folder, &BakeSettings::default())
+            .map(drop)
+            .map_err(|e| e.to_string())
     });
     baking.0.insert(environment.name.clone(), task);
 }

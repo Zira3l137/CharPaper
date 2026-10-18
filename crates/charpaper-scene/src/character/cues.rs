@@ -10,9 +10,9 @@ use charpaper_audio::Layer;
 use charpaper_audio::Sound;
 
 use crate::assets::asset_path;
+use crate::character::CROSSFADE;
 use crate::character::CharacterClips;
 use crate::character::animation::Playing;
-use crate::config::SceneConfig;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
@@ -37,7 +37,6 @@ pub(crate) fn play_cues(
     mut stages: Query<(Entity, Option<&ActiveSuite>, Option<&CharacterClips>, &mut CueClock)>,
     armatures: Query<(Entity, &AnimationPlayer, &Playing)>,
     stage_of: StageOf,
-    config: Res<SceneConfig>,
     hush: Res<Hush>,
     assets: Res<AssetServer>,
     playing: Query<(Entity, &ChildOf), (With<CueSound>, Without<FadeOut>)>,
@@ -50,7 +49,6 @@ pub(crate) fn play_cues(
             &mut commands,
             stage,
             (suite, clips, armature),
-            &config,
             &hush,
             &assets,
             &playing,
@@ -59,7 +57,6 @@ pub(crate) fn play_cues(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn play_stage_cues(
     commands: &mut Commands,
     stage: Entity,
@@ -68,7 +65,6 @@ fn play_stage_cues(
         Option<&CharacterClips>,
         Option<(&AnimationPlayer, &Playing)>,
     ),
-    config: &SceneConfig,
     hush: &Hush,
     assets: &AssetServer,
     playing: &Query<(Entity, &ChildOf), (With<CueSound>, Without<FadeOut>)>,
@@ -79,10 +75,9 @@ fn play_stage_cues(
 
     if clock.clip != current {
         // Every sound stops with the clip that played it, fading out with the animation.
-        let fade = Duration::from_secs_f32(config.animation_crossfade_secs.max(0.0));
         for (entity, parent) in playing {
             if parent.parent() == stage {
-                commands.entity(entity).insert(FadeOut(fade));
+                commands.entity(entity).insert(FadeOut(CROSSFADE));
             }
         }
         *clock = CueClock { clip: current, ..default() };

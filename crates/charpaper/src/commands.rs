@@ -51,7 +51,7 @@ pub fn check_suite(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn bake_environments(path: &Path, settings: &BakeSettings, dry_run: bool) -> Result<()> {
+pub fn bake_environments(path: &Path, dry_run: bool) -> Result<()> {
     let suite =
         Suite::load(path).with_context(|| format!("cannot load suite at {}", path.display()))?;
     let mut any = false;
@@ -71,7 +71,7 @@ pub fn bake_environments(path: &Path, settings: &BakeSettings, dry_run: bool) ->
         } else {
             println!("{name:<16} baking {} from {}", maps.join(", "), panorama.display());
             let started = Instant::now();
-            charpaper_bake::bake(&suite.absolute(panorama), &folder, settings)
+            charpaper_bake::bake(&suite.absolute(panorama), &folder, &BakeSettings::default())
                 .with_context(|| format!("cannot bake environment {name:?}"))?;
             println!("{name:<16} done in {:.1}s", started.elapsed().as_secs_f32());
         }

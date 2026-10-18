@@ -30,7 +30,6 @@ pub use config::SceneConfig;
 pub use gaze::CursorAt;
 pub use gaze::CursorPosition;
 pub use gaze::GazeSettings;
-pub use gaze::GazeTuning;
 pub use look::ActiveLook;
 pub use look::LookEdited;
 pub use look::Resolved;
@@ -80,6 +79,9 @@ pub(crate) enum SceneSet {
     Run,
 }
 
+// What a screen shows wherever no stage draws, such as before its suite has loaded.
+const CLEAR_COLOR: Color = Color::srgb(0.05, 0.06, 0.09);
+
 pub struct ScenePlugin {
     pub config: SceneConfig,
 }
@@ -87,12 +89,10 @@ pub struct ScenePlugin {
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         let config = &self.config;
-        let [r, g, b] = config.clear_color;
-
         app.insert_resource(config.clone())
             .insert_resource(config.render.clone())
             .insert_resource(stage::StageSeeds(config.stages.clone()))
-            .insert_resource(ClearColor(Color::srgb(r, g, b)))
+            .insert_resource(ClearColor(CLEAR_COLOR))
             // No built-in lighting: only what the environment ships lights the character.
             .insert_resource(GlobalAmbientLight::NONE)
             .configure_sets(Update, (SceneSet::Switch, SceneSet::Fill, SceneSet::Run).chain())

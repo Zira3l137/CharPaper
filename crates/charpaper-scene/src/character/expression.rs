@@ -8,10 +8,11 @@ use bevy::prelude::*;
 use crate::character::binding::InstanceReady;
 use crate::character::skin::SkinFile;
 use crate::character::skin::SkinRoot;
-use crate::config::SceneConfig;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
+
+const EXPRESSION_FADE: Duration = Duration::from_millis(300);
 
 #[derive(Component, Default, Debug)]
 pub struct Expressions(pub Vec<String>);
@@ -139,14 +140,12 @@ pub(crate) fn setup_expressions(
 
 pub(crate) fn play_expression(
     time: Res<Time>,
-    config: Res<SceneConfig>,
     mut skins: Query<(Entity, &mut ExpressionPlayers)>,
     stage_of: StageOf,
     stages: Query<&CharacterState>,
     mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     mut morphs: Query<&mut MorphWeights>,
 ) {
-    let fade = Duration::from_secs_f32(config.expression_fade_secs.max(0.0));
     for (entity, mut skin) in &mut skins {
         let Some(state) = stage_of.get(entity).and_then(|stage| stages.get(stage).ok()) else {
             continue;
@@ -161,7 +160,7 @@ pub(crate) fn play_expression(
                     skin.easing = None;
                     for &entity in &skin.players {
                         if let Ok((mut player, mut transitions)) = players.get_mut(entity) {
-                            transitions.play(&mut player, node, fade).repeat();
+                            transitions.play(&mut player, node, EXPRESSION_FADE).repeat();
                         }
                     }
                 }
@@ -186,11 +185,7 @@ pub(crate) fn play_expression(
             continue;
         };
         *elapsed += time.delta();
-        let t = if fade.is_zero() {
-            1.0
-        } else {
-            (elapsed.as_secs_f32() / fade.as_secs_f32()).min(1.0)
-        };
+        let t = (elapsed.as_secs_f32() / EXPRESSION_FADE.as_secs_f32()).min(1.0);
         for (entity, start) in skin.faces.iter().zip(from.iter()) {
             if let Ok(mut morph) = morphs.get_mut(*entity) {
                 for (weight, &begin) in morph.weights_mut().iter_mut().zip(start) {

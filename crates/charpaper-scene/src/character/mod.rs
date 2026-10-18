@@ -5,6 +5,8 @@ mod cues;
 mod expression;
 mod skin;
 
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 pub use animation::CharacterClips;
@@ -20,6 +22,10 @@ use crate::state::CharacterState;
 use crate::state::prefer;
 use crate::suite::ActiveSuite;
 use crate::suite::Remembered;
+
+// How long one animation blends into the next, and how long the sounds of the one that ends
+// take to fade out.
+pub(crate) const CROSSFADE: Duration = Duration::from_millis(250);
 
 // The armature, the one skin worn on it, and everything that animates them.
 pub(crate) struct CharacterPlugin;

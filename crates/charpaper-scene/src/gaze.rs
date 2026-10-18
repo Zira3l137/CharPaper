@@ -13,7 +13,6 @@ use crate::character::Armature;
 use crate::character::CharacterClips;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
-use crate::config::SceneConfig;
 use crate::render::Graphics;
 use crate::render::ScreenParts;
 use crate::screens::Screen;
@@ -67,33 +66,17 @@ pub struct CursorAt {
     pub position: Vec2,
 }
 
-#[derive(Clone, Debug)]
-pub struct GazeTuning {
-    // Where along the ray from the camera through the cursor she looks, as a share of the
-    // distance to her head: 1 looks at the cursor as if it were beside her, near 0 at the
-    // camera itself, and she barely moves.
-    pub target_depth: f32,
-    pub fade_secs: f32,
-    // With the cursor still this long, she goes back to what the animation has her do.
-    pub idle_secs: f32,
-    // How quickly each part catches up with where it should look.
-    pub eye_secs: f32,
-    pub head_secs: f32,
-    pub neck_secs: f32,
-}
-
-impl Default for GazeTuning {
-    fn default() -> Self {
-        Self {
-            target_depth: 0.5,
-            fade_secs: 0.4,
-            idle_secs: 5.0,
-            eye_secs: 0.06,
-            head_secs: 0.25,
-            neck_secs: 0.35,
-        }
-    }
-}
+// Where along the ray from the camera through the cursor she looks, as a share of the distance
+// to her head: 1 looks at the cursor as if it were beside her, near 0 at the camera itself, and
+// she barely moves.
+const TARGET_DEPTH: f32 = 0.5;
+const FADE_SECS: f32 = 0.4;
+// With the cursor still this long, she goes back to what the animation has her do.
+const IDLE_SECS: f32 = 5.0;
+// How quickly each part catches up with where it should look.
+const EYE_SECS: f32 = 0.06;
+const HEAD_SECS: f32 = 0.25;
+const NECK_SECS: f32 = 0.35;
 
 struct Part {
     bone: Entity,
@@ -263,10 +246,8 @@ struct Bones<'w, 's> {
     morphs: Query<'w, 's, &'static mut MorphWeights>,
 }
 
-#[allow(clippy::too_many_arguments)]
 fn aim(
     time: Res<Time>,
-    config: Res<SceneConfig>,
     cursor: Res<CursorPosition>,
     mut stages: Query<(
         Entity,
@@ -292,7 +273,7 @@ fn aim(
             Some((at.position, cameras.get(parts.camera).ok()?))
         });
         let watched = Watched { cursor: cursor.0, seen, settings, state, clips };
-        aim_stage(&time, &config, graphics, watched, &mut rig, &mut bones);
+        aim_stage(&time, graphics, watched, &mut rig, &mut bones);
     }
 }
 
@@ -307,7 +288,6 @@ struct Watched<'a> {
 
 fn aim_stage(
     time: &Time,
-    config: &SceneConfig,
     graphics: &Graphics,
     Watched { cursor, seen, settings, state, clips }: Watched,
     rig: &mut GazeRig,
@@ -319,7 +299,6 @@ fn aim_stage(
     let Ok(armature_global) = bones.globals.get(armature) else {
         return;
     };
-    let tuning = &config.gaze_tuning;
     let dt = time.delta_secs();
 
     if cursor.is_some() && cursor != rig.last_cursor {
@@ -334,13 +313,12 @@ fn aim_stage(
         .and_then(|name| clips.as_ref()?.get(name))
         .is_none_or(|clip| clip.gaze);
     let wanted =
-        settings.follow_cursor && cursor.is_some() && allowed && rig.still_secs < tuning.idle_secs;
-    let step = if tuning.fade_secs > 0.0 { dt / tuning.fade_secs } else { 1.0 };
+        settings.follow_cursor && cursor.is_some() && allowed && rig.still_secs < IDLE_SECS;
+    let step = dt / FADE_SECS;
     let goal = if wanted { 1.0 } else { 0.0 };
     rig.weight += (goal - rig.weight).clamp(-step, step);
 
-    let parts = rig.neck.iter_mut().chain(rig.head.iter_mut()).chain(rig.eyes.iter_mut());
-    for part in parts {
+    for part in rig.parts_mut() {
         let Ok(mut transform) = bones.transforms.get_mut(part.bone) else {
             return;
         };
@@ -367,7 +345,7 @@ fn aim_stage(
                 pose(reference_bone, armature, &bones.parents, &bones.transforms.as_readonly());
             let head_world = armature_global.transform_point(head.translation);
             let distance = (head_world - ray.origin).dot(*ray.direction).max(0.0);
-            let point = ray.origin + *ray.direction * distance * tuning.target_depth;
+            let point = ray.origin + *ray.direction * distance * TARGET_DEPTH;
             rig.target = Some(to_model.transform_point3(point));
         }
     }
@@ -391,7 +369,7 @@ fn aim_stage(
     // Neck before head before eyes: each turn moves the bones below it, and the next part
     // works from where that left it.
     for (part, goal, secs) in
-        [(&mut rig.neck, neck_goal, tuning.neck_secs), (&mut rig.head, head_goal, tuning.head_secs)]
+        [(&mut rig.neck, neck_goal, NECK_SECS), (&mut rig.head, head_goal, HEAD_SECS)]
     {
         if let Some(part) = part {
             part.angles = follow(part.angles, goal.clamp(-part.limits, part.limits), secs, dt);
@@ -405,7 +383,7 @@ fn aim_stage(
         let eye_pose = pose(eye.bone, armature, &bones.parents, &bones.transforms.as_readonly());
         let forward = eye_pose.rotation * eye.forward;
         let goal = difference(angles(target - eye_pose.translation), angles(forward));
-        eye.angles = follow(eye.angles, goal.clamp(-eye.limits, eye.limits), tuning.eye_secs, dt);
+        eye.angles = follow(eye.angles, goal.clamp(-eye.limits, eye.limits), EYE_SECS, dt);
         let by = eye.angles * weight;
         turn(eye, by, forward, armature, &bones.parents, &mut bones.transforms);
         eye_angles += by;

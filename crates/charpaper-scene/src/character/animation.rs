@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use bevy::animation::AnimatedBy;
 use bevy::animation::AnimationTargetId;
@@ -13,8 +12,8 @@ use charpaper_suite::PlayMode;
 
 use crate::assets::asset_path;
 use crate::character::Armature;
+use crate::character::CROSSFADE;
 use crate::character::binding::InstanceReady;
-use crate::config::SceneConfig;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
@@ -230,7 +229,6 @@ pub(crate) fn finish_once(
 
 // Runs every frame, since a request can arrive before the graph exists.
 pub(crate) fn play_selected(
-    config: Res<SceneConfig>,
     mut armatures: Query<(Entity, &mut AnimationPlayer, &mut AnimationTransitions, &mut Playing)>,
     stage_of: StageOf,
     stages: Query<(&CharacterState, &CharacterClips)>,
@@ -243,12 +241,11 @@ pub(crate) fn play_selected(
             continue;
         }
         playing.0 = state.animation.clone();
-        play(&config, &mut player, &mut transitions, state, clips);
+        play(&mut player, &mut transitions, state, clips);
     }
 }
 
 fn play(
-    config: &SceneConfig,
     player: &mut AnimationPlayer,
     transitions: &mut AnimationTransitions,
     state: &CharacterState,
@@ -263,8 +260,7 @@ fn play(
         return;
     };
 
-    let fade = Duration::from_secs_f32(config.animation_crossfade_secs.max(0.0));
-    let active = transitions.play(player, clip.node, fade);
+    let active = transitions.play(player, clip.node, CROSSFADE);
     match clip.mode {
         PlayMode::Loop => {
             active.repeat();
