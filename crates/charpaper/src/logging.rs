@@ -33,20 +33,10 @@ pub struct LogLevels {
     pub engine: LogLevel,
 }
 
-const OUR_CRATES: [&str; 7] = [
-    "charpaper",
-    "charpaper_bake",
-    "charpaper_scene",
-    "charpaper_suite",
-    "charpaper_ui",
-    "charpaper_wallpaper",
-    "charpaper_windows",
-];
-
 pub fn plugin(levels: LogLevels) -> LogPlugin {
-    let ours = levels.ours.as_directive();
-    let mut filter = format!("{},{DEFAULT_FILTER}", levels.engine.as_directive());
-    filter.extend(OUR_CRATES.map(|krate| format!("{krate}={ours},")));
+    let (ours, engine) = (levels.ours.as_directive(), levels.engine.as_directive());
+    // A target matches by prefix, so `charpaper` covers every `charpaper_*` crate too.
+    let filter = format!("{engine},{DEFAULT_FILTER},charpaper={ours}");
 
     // LogPlugin puts `level` in front of `filter`, where our own leading level overrides it.
     // TRACE only means the plugin itself never caps anything.
