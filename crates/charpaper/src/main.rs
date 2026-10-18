@@ -31,9 +31,6 @@ fn main() -> Result<()> {
         commands::inspect();
         return Ok(());
     }
-    if let Some(path) = &args.check_suite {
-        return commands::check_suite(path);
-    }
     if let Some(path) = &args.bake_environments {
         return commands::bake_environments(path, args.dry_run);
     }

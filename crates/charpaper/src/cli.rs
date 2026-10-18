@@ -16,13 +16,6 @@ pub struct Cli {
     #[arg(long)]
     pub inspect: bool,
 
-    /// Check a character suite folder and exit.
-    ///
-    /// Reads only the structure of its files and opens no window. Exits with
-    /// an error if the suite would fail to load; warnings do not fail it.
-    #[arg(long, value_name = "DIR")]
-    pub check_suite: Option<PathBuf>,
-
     /// Bake the missing reflection maps of every environment in a suite folder
     /// that has a panorama (`.hdr` or `.exr`), then exit.
     ///

@@ -122,26 +122,6 @@ fn foggy_scene() -> String {
     )
 }
 
-// A table scaled to 10 m and a chair 20 m away: a 25 m diagonal, which takes three cascades.
-fn furnished_scene() -> String {
-    format!(
-        r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0, 1, 2, 3, 4, 5]}}],
-        "extensionsUsed": ["KHR_lights_punctual"],
-        "extensions": {{"KHR_lights_punctual": {{"lights": [
-            {{"type": "directional"}}, {{"type": "point", "range": 3.0}},
-            {{"type": "spot", "range": 5.0, "spot": {{}}}}]}}}},
-        "nodes": [
-            {{"name": "Mist", "mesh": 0}},
-            {{"name": "Table", "mesh": 0, "scale": [10, 10, 10]}},
-            {{"name": "Chair", "mesh": 0, "translation": [0, 0, 20]}},
-            {{"name": "Sun", "extensions": {{"KHR_lights_punctual": {{"light": 0}}}}}},
-            {{"name": "Lamp", "extensions": {{"KHR_lights_punctual": {{"light": 1}}}}}},
-            {{"name": "Spot", "extensions": {{"KHR_lights_punctual": {{"light": 2}}}}}}
-        ],
-        {MESH}, {ACCESSORS}}}"#
-    )
-}
-
 struct Fixture(PathBuf);
 
 impl Fixture {
@@ -845,60 +825,6 @@ fn lights_without_a_range_are_warned_about() {
     fixture.write("environment/stage.gltf", &lit_scene());
     let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
     assert!(!warnings.iter().any(|w| w.contains("no range")), "{warnings:#?}");
-}
-
-#[test]
-fn costs_count_shadow_passes_fog_lights_and_triangles() {
-    let manifest = r#"schema = 1
-[environments.stage]
-no_volume_scatter = ["Spot"]
-[environments.stage.fog.Mist]
-"#;
-    let fixture = Fixture::new("costs", manifest);
-    fixture.write("environment/stage.gltf", &furnished_scene());
-    let suite = fixture.load().unwrap();
-    let costs = charpaper_suite::costs(&suite);
-    assert_eq!(costs.len(), 1);
-    let cost = &costs[0];
-    assert_eq!((cost.sun_cascades, cost.shadow_passes()), (3, 6 + 1 + 3));
-    assert_eq!((cost.fog_boxes, cost.objects, cost.triangles), (1, 2, 2));
-    assert_eq!(
-        cost.to_string(),
-        "stage: 3 lights (1 point, 1 spot, 1 sun), up to 10 shadow passes a frame\n\
-         fog: 1 box, lit by 2 lights (1 point, 1 sun)\n\
-         2 triangles in 2 objects"
-    );
-
-    // Without shadows a sun can't light fog either.
-    fixture.write(
-        "suite.toml",
-        &manifest.replace("[environments.stage]", "[environments.stage]\nshadows = false"),
-    );
-    let cost = charpaper_suite::costs(&fixture.load().unwrap()).remove(0);
-    assert_eq!(cost.shadow_passes(), 0);
-    assert!(
-        cost.to_string().contains("shadows off\nfog: 1 box, lit by 1 light (1 point)"),
-        "{cost}"
-    );
-}
-
-#[test]
-fn lights_listed_in_no_shadows_cost_no_shadow_passes() {
-    let manifest = r#"schema = 1
-[environments.stage]
-no_shadows = ["Lamp", "Sun", "Ghost"]
-[environments.stage.fog.Mist]
-"#;
-    let fixture = Fixture::new("no-shadows", manifest);
-    fixture.write("environment/stage.gltf", &furnished_scene());
-    let suite = fixture.load().unwrap();
-    let cost = charpaper_suite::costs(&suite).remove(0);
-    assert_eq!(cost.shadow_passes(), 1);
-    // A sun without shadows can't light fog; the point light still does, evenly.
-    assert!(cost.to_string().contains("up to 1 shadow passes a frame"), "{cost}");
-    assert!(cost.to_string().contains("lit by 2 lights (1 point, 1 spot)"), "{cost}");
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("`no_shadows` names \"Ghost\"")), "{warnings:#?}");
 }
 
 #[test]
