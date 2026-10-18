@@ -4,6 +4,7 @@ from collections import Counter
 import bpy
 
 from . import anim
+from . import animated
 from . import cues
 from . import env_settings
 from . import gltf
@@ -326,6 +327,34 @@ def _check_environment(entry, add):
         add(Finding(f"environment {entry.name!r}: cameras are left out, use Cameras: {_examples(cameras)}", severity="INFO"))
     _check_fog(entry.name, objects, add)
     _check_shadows(entry.name, objects, add)
+    _check_animated(objects, add)
+
+
+def _check_animated(objects, add):
+    for material in animated.materials(objects):
+        moving = animated.moving_images(material)
+        gifs = [image for image in moving if animated.is_gif(image)]
+        others = [image.name for image in moving if not animated.is_gif(image)]
+        if others:
+            add(Finding(
+                f"material {material.name!r}: only GIFs play in the app, so these show as a "
+                f"still: {_examples(others)}",
+            ))
+        if not gifs:
+            continue
+        if len(gifs) > 1:
+            add(Finding(
+                f"material {material.name!r} has {len(gifs)} GIFs; the app plays one on its base "
+                f"color, {gifs[0].name!r}",
+            ))
+        if file_stem(material.name) != material.name:
+            add(Finding(
+                f"material {material.name!r}: its GIF is saved under the material's name, which "
+                "can't be a file name; rename the material",
+            ))
+        source = animated.source_path(gifs[0])
+        if not os.path.isfile(source):
+            add(Finding(f"GIF {gifs[0].name!r}: its file {source} is missing"))
 
 
 def _check_fog(name, objects, add):

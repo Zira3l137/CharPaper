@@ -23,7 +23,7 @@ saved in the `.blend`.
 | Model file  | the armature alone                                      | `<model>.glb` next to suite.toml |
 | Skin        | the armature + every mesh in its collection, plus ticked expressions | `skins/<name>.glb` |
 | Animation   | the armature + ticked clips, plus corrective meshes if turned on | `animations/<name>.glb` |
-| Environment | everything in its collection except cameras, with active actions | `environment/<name>.glb` |
+| Environment | everything in its collection except cameras, with active actions | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/` |
 | Camera      | the camera, the empties it hangs from, its focus object, and one action | `cameras/<name>.glb` |
 
 - **Clips** and **expressions** are named after their Blender actions. *Shown as* renames a
@@ -49,6 +49,15 @@ saved in the `.blend`.
   ticked, otherwise the distance where they fade below *Render Properties > Sampling >
   Advanced > Light Threshold*. Every exported point and spot light carries that distance, so
   the app stops shading and shadowing it there too. Without one it would reach 20 m.
+- **Animated materials:** an Image Texture node showing a GIF (Blender opens a GIF as a
+  movie) plays in the app on its material's base color. Export copies the GIF to
+  `environment/<name>/animated/<material>.gif`, and the app finds it by that name. The app
+  plays the GIF at the speed saved in it, while the viewport shows one GIF frame per scene
+  frame, so the speed there can differ. Only GIFs play: image sequences and other movies
+  export as a still. To make a material unlit, like a screen or a sign that ignores the
+  scene's lights, plug the image's *Color* straight into the Material Output's *Surface*. For
+  transparency, put a *Mix Shader* in between: *Fac* from the image's *Alpha*, a *Transparent
+  BSDF* in its first shader slot and the image's *Color* in its second.
 - **Sounds** are pose markers on a clip's action. In the Action Editor, turn on *Marker >
   Show Pose Markers*, put a marker where the sound should start and name it after a sound
   in the .blend: `step_l` matches the Sound `step_l.wav` or `step_l`. The app plays it each

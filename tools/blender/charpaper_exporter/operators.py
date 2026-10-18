@@ -265,6 +265,7 @@ class CHARPAPER_OT_export(Operator):
                     failed.append(f"{label}: {error}")
                     continue
                 done.append(result.path)
+                done += result.written
                 for note in result.notes:
                     self.report({"WARNING"}, note)
                 if result.skipped:

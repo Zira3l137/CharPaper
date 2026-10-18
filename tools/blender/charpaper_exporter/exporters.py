@@ -1,6 +1,7 @@
 import os
 
 from . import anim
+from . import animated
 from . import gltf
 from . import lens
 from . import lights
@@ -19,6 +20,8 @@ class Result:
         self.path = path
         self.skipped = []
         self.notes = []
+        # Files written besides the one at `path`.
+        self.written = []
 
 
 def extension(suite):
@@ -127,13 +130,13 @@ def animation(context, suite, entry, folder):
 def environment(context, suite, entry, folder):
     path = target(folder, ENVIRONMENT_DIR, entry.name, suite)
     threshold = context.scene.eevee.light_threshold
-    with isolated(context) as iso:
-        for obj in entry.collection.all_objects:
-            if obj.type != "CAMERA":
-                copy = iso.add(obj, own_light=True, keep_animation=True)
-                if copy.type == "LIGHT":
-                    lights.give_range(copy.data, threshold)
-        return _run(
+    objects = [obj for obj in entry.collection.all_objects if obj.type != "CAMERA"]
+    with isolated(context) as iso, animated.stills(objects):
+        for obj in objects:
+            copy = iso.add(obj, own_light=True, keep_animation=True)
+            if copy.type == "LIGHT":
+                lights.give_range(copy.data, threshold)
+        result = _run(
             context, iso, path,
             _options(
                 suite,
@@ -144,6 +147,10 @@ def environment(context, suite, entry, folder):
                 export_cameras=False,
             ),
         )
+    gifs = os.path.join(folder, ENVIRONMENT_DIR, file_stem(entry.name), animated.ANIMATED_DIR)
+    result.written, notes = animated.copy_gifs(objects, gifs)
+    result.notes.extend(notes)
+    return result
 
 
 def _chain(obj):
