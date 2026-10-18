@@ -11,8 +11,10 @@ mod wallpaper;
 
 use anyhow::Result;
 use charpaper_monitor::CountingAllocator;
+use clap::Parser;
 use mimalloc::MiMalloc;
 
+use crate::cli::Cli;
 use crate::config::AppConfig;
 
 // Counted for the performance monitor's heap row.
@@ -20,7 +22,7 @@ use crate::config::AppConfig;
 static ALLOCATOR: CountingAllocator<MiMalloc> = CountingAllocator(MiMalloc);
 
 fn main() -> Result<()> {
-    let args = cli::parse();
+    let args = Cli::parse();
     if let Some(app) = args.keep_desktop {
         wallpaper::keep_desktop(app, args.orphaned);
         return Ok(());

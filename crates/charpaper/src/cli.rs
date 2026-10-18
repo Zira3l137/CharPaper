@@ -105,7 +105,3 @@ pub struct Cli {
     #[arg(long, hide = true, requires = "keep_desktop")]
     pub orphaned: bool,
 }
-
-pub fn parse() -> Cli {
-    Cli::parse()
-}

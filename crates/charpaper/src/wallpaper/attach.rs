@@ -97,7 +97,7 @@ fn attach_windows(
         }
 
         let handle = handle.map(RawHandleWrapper::get_window_handle);
-        match decide(&mut backend.0, &config, key(window), handle, on.0.area) {
+        match decide(backend.0.as_mut(), &config, key(window), handle, on.0.area) {
             Step::Wait(reason) if attempts + 1 < MAX_ATTEMPTS => {
                 debug!("attempt {} on {} not ready: {reason}", attempts + 1, on.0.name);
                 let countdown = FRAMES_BETWEEN_ATTEMPTS;
@@ -129,7 +129,7 @@ fn attach_windows(
     if !*forwarding_started && windows.iter().any(|(_, _, a, _, _)| *a == Attachment::Attached) {
         *forwarding_started = true;
         let wake = on_desktop.waker(proxy.as_deref());
-        if let Some(source) = start_forwarding(&mut backend.0, &config, wake) {
+        if let Some(source) = start_forwarding(backend.0.as_mut(), &config, wake) {
             commands.insert_resource(PointerSourceResource::new(source));
         }
     }
@@ -199,7 +199,7 @@ enum Step {
 }
 
 fn decide(
-    backend: &mut Box<dyn WallpaperBackend>,
+    backend: &mut dyn WallpaperBackend,
     config: &WallpaperConfig,
     window: WindowKey,
     handle: Option<RawWindowHandle>,
@@ -237,7 +237,7 @@ fn decide(
 
 // A failure is only logged: a wallpaper that can't be clicked beats no wallpaper.
 fn start_forwarding(
-    backend: &mut Box<dyn WallpaperBackend>,
+    backend: &mut dyn WallpaperBackend,
     config: &WallpaperConfig,
     wake: Wake,
 ) -> Option<Box<dyn PointerSource>> {
