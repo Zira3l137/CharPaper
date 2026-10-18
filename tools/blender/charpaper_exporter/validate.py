@@ -1,4 +1,5 @@
 import os
+import tomllib
 from collections import Counter
 
 import bpy
@@ -9,6 +10,12 @@ from . import cues
 from . import env_settings
 from . import gltf
 from . import lens
+from . import manifest
+from . import toml_io
+from .exporters import CAMERAS_DIR
+from .exporters import ENVIRONMENT_DIR
+from .exporters import SKINS_DIR
+from .props import ORBIT
 from .props import file_stem
 
 MAX_SHAPE_KEYS = 256
@@ -58,6 +65,8 @@ def check(context, suite):
             _check_gaze(suite, armature, add)
 
     _check_names(suite, add)
+    _check_contents(suite, add)
+    _check_defaults(suite, add)
     for entry in suite.skins:
         if entry.enabled:
             _check_skin(suite, entry, armature, add)
@@ -195,6 +204,49 @@ def _check_names(suite, add):
         add(Finding("a camera named 'orbit' hides the built-in orbit camera"))
 
 
+def _on_disk(suite, subdir):
+    """What an earlier export left in a subfolder, by file stem or folder name."""
+    folder = os.path.join(bpy.path.abspath(suite.folder), subdir)
+    return {os.path.splitext(name)[0] for name in os.listdir(folder)} if os.path.isdir(folder) else set()
+
+
+def _listed_animations(suite):
+    path = manifest.path(bpy.path.abspath(suite.folder))
+    try:
+        return set(toml_io.load(path).get("animations", {}))
+    except (OSError, tomllib.TOMLDecodeError):
+        return set()
+
+
+def _check_contents(suite, add):
+    if not any(e.enabled for e in suite.skins) and not _on_disk(suite, SKINS_DIR):
+        add(Finding("no skins, so there is nothing of her to show"))
+    if not any(e.enabled for e in suite.environments) and not _on_disk(suite, ENVIRONMENT_DIR):
+        add(Finding("no environments, so nothing lights her and she renders black"))
+
+
+# The app refuses to load a suite whose default skin, environment or camera doesn't exist.
+def _check_defaults(suite, add):
+    clips = {c.name or c.action.name for e in suite.animations for c in e.clips if c.action}
+    offered = (
+        ("skin", suite.default_skin, {e.name for e in suite.skins} | _on_disk(suite, SKINS_DIR)),
+        ("animation", suite.default_animation, clips | _listed_animations(suite)),
+        (
+            "environment",
+            suite.default_environment,
+            {e.name for e in suite.environments} | _on_disk(suite, ENVIRONMENT_DIR),
+        ),
+        (
+            "camera",
+            suite.default_camera,
+            {ORBIT} | {e.name for e in suite.cameras} | _on_disk(suite, CAMERAS_DIR),
+        ),
+    )
+    for kind, name, names in offered:
+        if name and name not in names:
+            add(Finding(f"the default {kind} {name!r} is not one of the suite's {kind}s"))
+
+
 def _check_skin(suite, entry, armature, add):
     if entry.collection is None:
         add(Finding(f"skin {entry.name!r} has no collection"))
@@ -280,8 +332,18 @@ def _check_animation(suite, entry, armature, add):
     for obj in meshes:
         if obj not in skin_meshes:
             add(Finding(f"{obj.name} is in no skin, so its correctives move nothing", obj))
-        if not keyed & set(obj.data.shape_keys.key_blocks.keys()):
+        keys = set(obj.data.shape_keys.key_blocks.keys())
+        if not keyed & keys:
             add(Finding(f"{obj.name}: no clip keys its shape keys, so it only takes up space", obj))
+        for skin in suite.skins:
+            if skin.collection is None or obj.name not in skin.collection.all_objects:
+                continue
+            if any(e.enabled and e.action and anim.key_names(e.action) & keys for e in skin.expressions):
+                add(Finding(
+                    f"{obj.name}: skin {skin.name!r}'s expressions key its shape keys, so with that "
+                    "skin this file's correctives on it do nothing",
+                    obj,
+                ))
 
 
 def _check_cues(suite, clips, add):
@@ -445,6 +507,11 @@ def _check_lens(suite, entry, add):
     if camera.data.type != "PERSP":
         add(Finding(f"camera {name!r} is not perspective, so its depth of field is left out", camera))
         return
+
+    if dof.aperture_fstop <= 0.0:
+        add(Finding(f"camera {name!r}: an F-Stop of 0 can't work, so the app leaves depth of field off", camera))
+    if dof.focus_object is None and dof.focus_distance <= 0.0:
+        add(Finding(f"camera {name!r}: a Focus Distance of 0 can't work, so the app focuses 10 m away", camera))
 
     data = camera.data.animation_data
     keyed = {c.data_path for c in anim.fcurves(data.action)} if data and data.action else set()
