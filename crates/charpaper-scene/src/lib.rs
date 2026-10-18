@@ -1,3 +1,4 @@
+mod animated;
 mod assets;
 mod camera;
 mod character;
@@ -101,6 +102,7 @@ impl Plugin for ScenePlugin {
                 character::CharacterPlugin,
                 camera::CameraPlugin,
                 environment::EnvironmentPlugin,
+                animated::AnimatedPlugin,
                 fog::FogPlugin,
                 look::LookPlugin,
                 lut::LutPlugin,
