@@ -6,15 +6,35 @@ use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperError;
 use tracing::debug;
 use tracing::warn;
+use windows_sys::Win32::Foundation::LPARAM;
+use windows_sys::Win32::Foundation::LRESULT;
+use windows_sys::Win32::Foundation::POINT;
+use windows_sys::Win32::Foundation::WPARAM;
+use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+use windows_sys::Win32::UI::WindowsAndMessaging::CallNextHookEx;
+use windows_sys::Win32::UI::WindowsAndMessaging::GetMessageW;
+use windows_sys::Win32::UI::WindowsAndMessaging::HC_ACTION;
+use windows_sys::Win32::UI::WindowsAndMessaging::MSG;
+use windows_sys::Win32::UI::WindowsAndMessaging::MSLLHOOKSTRUCT;
+use windows_sys::Win32::UI::WindowsAndMessaging::PM_NOREMOVE;
+use windows_sys::Win32::UI::WindowsAndMessaging::PeekMessageW;
+use windows_sys::Win32::UI::WindowsAndMessaging::PostThreadMessageW;
+use windows_sys::Win32::UI::WindowsAndMessaging::SetWindowsHookExW;
+use windows_sys::Win32::UI::WindowsAndMessaging::UnhookWindowsHookEx;
+use windows_sys::Win32::UI::WindowsAndMessaging::WH_MOUSE_LL;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_MOUSEMOVE;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_QUIT;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_USER;
 
 use crate::sys;
 
 const QUEUE_CAPACITY: usize = 4096;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct RawMouseEvent {
     pub message: u32,
-    pub screen: sys::Point,
+    pub screen: POINT,
     pub mouse_data: u32,
 }
 
@@ -74,7 +94,7 @@ impl MouseHook {
 impl Drop for MouseHook {
     fn drop(&mut self) {
         // Makes GetMessageW return 0 on the hook thread, which then unhooks and exits.
-        unsafe { sys::PostThreadMessageW(self.thread_id, sys::WM_QUIT, 0, 0) };
+        unsafe { PostThreadMessageW(self.thread_id, WM_QUIT, 0, 0) };
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
@@ -82,27 +102,29 @@ impl Drop for MouseHook {
 }
 
 fn run(sink: Sink, ready: mpsc::Sender<Result<u32, u32>>) {
-    let mut msg = sys::Msg::default();
+    // SAFETY: all zeroes is a valid MSG: a null window and numbers.
+    let mut msg: MSG = unsafe { std::mem::zeroed() };
 
     // A thread only gets a message queue on its first message call. Create it now so a
     // quick WM_QUIT from Drop has somewhere to land.
-    unsafe { sys::PeekMessageW(&mut msg, 0, sys::WM_USER, sys::WM_USER, sys::PM_NOREMOVE) };
+    let no_window = std::ptr::null_mut();
+    unsafe { PeekMessageW(&mut msg, no_window, WM_USER, WM_USER, PM_NOREMOVE) };
 
     SINK.set(Some(sink));
 
-    let module = unsafe { sys::GetModuleHandleW(std::ptr::null()) };
-    let hook = unsafe { sys::SetWindowsHookExW(sys::WH_MOUSE_LL, hook_proc, module, 0) };
-    if hook == 0 {
+    let module = unsafe { GetModuleHandleW(std::ptr::null()) };
+    let hook = unsafe { SetWindowsHookExW(WH_MOUSE_LL, Some(hook_proc), module, 0) };
+    if hook.is_null() {
         let _ = ready.send(Err(sys::last_error()));
         return;
     }
 
-    let _ = ready.send(Ok(unsafe { sys::GetCurrentThreadId() }));
+    let _ = ready.send(Ok(unsafe { GetCurrentThreadId() }));
     debug!("low-level mouse hook installed");
 
     // The hook callback is delivered from inside GetMessageW; nothing else is posted here.
     loop {
-        match unsafe { sys::GetMessageW(&mut msg, 0, 0, 0) } {
+        match unsafe { GetMessageW(&mut msg, no_window, 0, 0) } {
             0 => break,
             -1 => {
                 warn!("mouse hook message loop failed: {}", std::io::Error::last_os_error());
@@ -112,28 +134,24 @@ fn run(sink: Sink, ready: mpsc::Sender<Result<u32, u32>>) {
         }
     }
 
-    unsafe { sys::UnhookWindowsHookEx(hook) };
+    unsafe { UnhookWindowsHookEx(hook) };
     SINK.set(None);
     debug!("low-level mouse hook removed");
 }
 
-unsafe extern "system" fn hook_proc(
-    code: i32,
-    wparam: sys::WParam,
-    lparam: sys::LParam,
-) -> sys::LResult {
-    if code == sys::HC_ACTION {
+unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if code == HC_ACTION as i32 {
         // SAFETY: for WH_MOUSE_LL with HC_ACTION, lparam points at a valid MSLLHOOKSTRUCT.
-        let info = unsafe { &*(lparam as *const sys::MsLlHookStruct) };
+        let info = unsafe { &*(lparam as *const MSLLHOOKSTRUCT) };
         let event =
-            RawMouseEvent { message: wparam as u32, screen: info.pt, mouse_data: info.mouse_data };
+            RawMouseEvent { message: wparam as u32, screen: info.pt, mouse_data: info.mouseData };
 
         SINK.with_borrow(|sink| {
             if let Some(sink) = sink {
                 // Never block here. A full queue drops the event instead.
                 let _ = sink.events.try_send(event);
                 // Not for moves: a fast mouse would keep the app from ever resting.
-                if event.message != sys::WM_MOUSEMOVE {
+                if event.message != WM_MOUSEMOVE {
                     (sink.wake)();
                 }
             }
@@ -141,5 +159,5 @@ unsafe extern "system" fn hook_proc(
     }
 
     // Always pass the event on. Returning non-zero would swallow it for the whole system.
-    unsafe { sys::CallNextHookEx(0, code, wparam, lparam) }
+    unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
 }

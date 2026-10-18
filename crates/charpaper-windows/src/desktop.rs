@@ -7,11 +7,36 @@ use charpaper_wallpaper::WallpaperError;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
+use windows_sys::Win32::Foundation::SetLastError;
+use windows_sys::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE;
+use windows_sys::Win32::UI::WindowsAndMessaging::GWL_STYLE;
+use windows_sys::Win32::UI::WindowsAndMessaging::HWND_BOTTOM;
+use windows_sys::Win32::UI::WindowsAndMessaging::LWA_ALPHA;
+use windows_sys::Win32::UI::WindowsAndMessaging::SMTO_NORMAL;
+use windows_sys::Win32::UI::WindowsAndMessaging::SPI_SETDESKWALLPAPER;
+use windows_sys::Win32::UI::WindowsAndMessaging::SPIF_UPDATEINIFILE;
+use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
+use windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE;
+use windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOMOVE;
+use windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOSIZE;
+use windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOZORDER;
+use windows_sys::Win32::UI::WindowsAndMessaging::SendMessageTimeoutW;
+use windows_sys::Win32::UI::WindowsAndMessaging::SetLayeredWindowAttributes;
+use windows_sys::Win32::UI::WindowsAndMessaging::SetParent;
+use windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPos;
+use windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow;
+use windows_sys::Win32::UI::WindowsAndMessaging::SystemParametersInfoW;
+use windows_sys::Win32::UI::WindowsAndMessaging::WS_CHILD;
+use windows_sys::Win32::UI::WindowsAndMessaging::WS_EX_LAYERED;
+use windows_sys::Win32::UI::WindowsAndMessaging::WS_EX_NOREDIRECTIONBITMAP;
 
 use crate::sys;
 use crate::sys::Hwnd;
 
 const WORKER_W_REQUEST_TIMEOUT_MS: u32 = 1000;
+
+// Undocumented: asks Progman to create the WorkerW window behind the icons.
+const WM_SPAWN_WORKER_W: u32 = 0x052C;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ShellWindows {
@@ -23,11 +48,11 @@ pub struct ShellWindows {
 
 impl ShellWindows {
     pub fn recommended_strategy(&self) -> AttachStrategy {
-        if self.progman == 0 {
+        if self.progman.is_null() {
             AttachStrategy::None
         } else if self.raised_desktop {
             AttachStrategy::RaisedDesktopChild
-        } else if self.worker_w != 0 {
+        } else if !self.worker_w.is_null() {
             AttachStrategy::ClassicWorkerW
         } else {
             AttachStrategy::ProgmanDirect
@@ -43,12 +68,12 @@ pub fn request_worker_w(progman: Hwnd) {
     for (wparam, lparam) in ATTEMPTS {
         let mut result: usize = 0;
         let sent = unsafe {
-            sys::SendMessageTimeoutW(
-                progman,
-                sys::WM_SPAWN_WORKER_W,
+            SendMessageTimeoutW(
+                progman.0,
+                WM_SPAWN_WORKER_W,
                 wparam,
                 lparam,
-                sys::SMTO_NORMAL,
+                SMTO_NORMAL,
                 // A timeout, so a hung Explorer can't hang us too.
                 WORKER_W_REQUEST_TIMEOUT_MS,
                 &mut result,
@@ -65,13 +90,13 @@ pub fn find_shell_windows() -> ShellWindows {
     let mut found = ShellWindows::default();
 
     found.progman = sys::find_window("Progman");
-    if found.progman == 0 {
+    if found.progman.is_null() {
         error!("Progman not found -- is Explorer running?");
         return found;
     }
     debug!("Progman = {:#x}", found.progman);
 
-    found.raised_desktop = sys::has_ex_style(found.progman, sys::WS_EX_NOREDIRECTIONBITMAP);
+    found.raised_desktop = sys::has_ex_style(found.progman, WS_EX_NOREDIRECTIONBITMAP);
     debug!(
         "desktop layout = {}",
         if found.raised_desktop {
@@ -82,12 +107,12 @@ pub fn find_shell_windows() -> ShellWindows {
     );
 
     for top in sys::top_level_windows() {
-        let defview = sys::find_window_ex(top, 0, "SHELLDLL_DefView");
-        if defview != 0 {
+        let defview = sys::find_window_ex(top, Hwnd::NULL, "SHELLDLL_DefView");
+        if !defview.is_null() {
             found.defview = defview;
             // With no parent this searches top-level windows, starting after `top` in z-order.
-            let candidate = sys::find_window_ex(0, top, "WorkerW");
-            if candidate != 0 {
+            let candidate = sys::find_window_ex(Hwnd::NULL, top, "WorkerW");
+            if !candidate.is_null() {
                 found.worker_w = candidate;
             }
             debug!(
@@ -101,9 +126,9 @@ pub fn find_shell_windows() -> ShellWindows {
     }
 
     if found.raised_desktop {
-        let child_defview = sys::find_window_ex(found.progman, 0, "SHELLDLL_DefView");
-        let child_worker = sys::find_window_ex(found.progman, 0, "WorkerW");
-        if child_defview != 0 {
+        let child_defview = sys::find_window_ex(found.progman, Hwnd::NULL, "SHELLDLL_DefView");
+        let child_worker = sys::find_window_ex(found.progman, Hwnd::NULL, "WorkerW");
+        if !child_defview.is_null() {
             found.defview = child_defview;
         }
         // In this layout a top-level WorkerW is not the one behind the icons.
@@ -113,7 +138,7 @@ pub fn find_shell_windows() -> ShellWindows {
         );
     }
 
-    if found.worker_w == 0 {
+    if found.worker_w.is_null() {
         warn!("no WorkerW found");
     }
 
@@ -133,7 +158,7 @@ pub fn attach(
 
     let mut shell = find_shell_windows();
 
-    if config.spawn_worker_w && shell.progman != 0 && shell.worker_w == 0 {
+    if config.spawn_worker_w && !shell.progman.is_null() && shell.worker_w.is_null() {
         debug!("no WorkerW yet; asking Explorer to create one");
         request_worker_w(shell.progman);
         shell = find_shell_windows();
@@ -157,7 +182,7 @@ pub fn attach(
 }
 
 fn attach_classic(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperError> {
-    if shell.worker_w == 0 {
+    if shell.worker_w.is_null() {
         return Err(WallpaperError::DesktopNotFound(
             "a top-level WorkerW (classic layout)".to_string(),
         ));
@@ -168,7 +193,7 @@ fn attach_classic(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperErr
 }
 
 fn attach_progman(hwnd: Hwnd, shell: &ShellWindows) -> Result<Hwnd, WallpaperError> {
-    if shell.progman == 0 {
+    if shell.progman.is_null() {
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
     }
     warn!("ProgmanDirect draws over the desktop icons; it proves rendering works, nothing more");
@@ -181,14 +206,15 @@ fn attach_raised(
     shell: &ShellWindows,
     config: &WallpaperConfig,
 ) -> Result<Hwnd, WallpaperError> {
-    if shell.progman == 0 {
+    if shell.progman.is_null() {
         return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
     }
 
     // Styles must be set before SetParent. WS_EX_LAYERED added afterwards can silently fail.
-    let style = sys::get_window_long_ptr(hwnd, sys::GWL_STYLE);
-    sys::set_window_long_ptr(hwnd, sys::GWL_STYLE, style | sys::WS_CHILD);
-    debug!("added WS_CHILD (style {style:#x} -> {:#x})", style | sys::WS_CHILD);
+    let style = sys::get_window_long_ptr(hwnd, GWL_STYLE);
+    let child = style | WS_CHILD as isize;
+    sys::set_window_long_ptr(hwnd, GWL_STYLE, child);
+    debug!("added WS_CHILD (style {style:#x} -> {child:#x})");
 
     set_window_attributes(hwnd, config);
     set_parent(hwnd, shell.progman)?;
@@ -200,11 +226,12 @@ fn attach_raised(
 
 fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig) {
     if config.layered != LayeredMode::Never {
-        let ex = sys::get_window_long_ptr(hwnd, sys::GWL_EXSTYLE);
-        if ex & sys::WS_EX_LAYERED == 0 {
-            sys::set_window_long_ptr(hwnd, sys::GWL_EXSTYLE, ex | sys::WS_EX_LAYERED);
+        let ex = sys::get_window_long_ptr(hwnd, GWL_EXSTYLE);
+        let layered = WS_EX_LAYERED as isize;
+        if ex & layered == 0 {
+            sys::set_window_long_ptr(hwnd, GWL_EXSTYLE, ex | layered);
         }
-        let ok = unsafe { sys::SetLayeredWindowAttributes(hwnd, 0, 255, sys::LWA_ALPHA) };
+        let ok = unsafe { SetLayeredWindowAttributes(hwnd.0, 0, 255, LWA_ALPHA) };
         debug!("WS_EX_LAYERED + alpha 255 applied (ok={})", ok != 0);
     } else {
         debug!("skipping WS_EX_LAYERED (--layered never)");
@@ -212,18 +239,9 @@ fn set_window_attributes(hwnd: Hwnd, config: &WallpaperConfig) {
 }
 
 fn ensure_window_behind_icon_layer(hwnd: Hwnd, shell: &ShellWindows) {
-    if shell.defview != 0 {
-        let ok = unsafe {
-            sys::SetWindowPos(
-                hwnd,
-                shell.defview,
-                0,
-                0,
-                0,
-                0,
-                sys::SWP_NOMOVE | sys::SWP_NOSIZE | sys::SWP_NOACTIVATE,
-            )
-        };
+    if !shell.defview.is_null() {
+        let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+        let ok = unsafe { SetWindowPos(hwnd.0, shell.defview.0, 0, 0, 0, 0, flags) };
         debug!("placed below SHELLDLL_DefView (ok={})", ok != 0);
     } else {
         warn!("no SHELLDLL_DefView found; z-order may put us over the icons");
@@ -231,35 +249,26 @@ fn ensure_window_behind_icon_layer(hwnd: Hwnd, shell: &ShellWindows) {
 }
 
 fn ensure_worker_w_at_bottom(shell: &ShellWindows) {
-    if shell.worker_w == 0 {
+    if shell.worker_w.is_null() {
         return;
     }
     // EnumChildWindows goes front to back, so the last window is the bottom-most one.
-    let last = sys::child_windows(shell.progman).last().copied().unwrap_or(0);
-    if last == shell.worker_w {
+    let last = sys::child_windows(shell.progman).last().copied();
+    if last == Some(shell.worker_w) {
         return;
     }
-    let ok = unsafe {
-        sys::SetWindowPos(
-            shell.worker_w,
-            sys::HWND_BOTTOM,
-            0,
-            0,
-            0,
-            0,
-            sys::SWP_NOMOVE | sys::SWP_NOSIZE | sys::SWP_NOACTIVATE,
-        )
-    };
+    let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+    let ok = unsafe { SetWindowPos(shell.worker_w.0, HWND_BOTTOM, 0, 0, 0, 0, flags) };
     debug!("pushed WorkerW to the bottom of the z-order (ok={})", ok != 0);
 }
 
 fn set_parent(hwnd: Hwnd, parent: Hwnd) -> Result<(), WallpaperError> {
     // SetParent returns the old parent, and 0 means both "failed" and "had none".
     // Only the error code tells them apart.
-    unsafe { sys::SetLastError(0) };
-    let previous = unsafe { sys::SetParent(hwnd, parent) };
+    unsafe { SetLastError(0) };
+    let previous = Hwnd(unsafe { SetParent(hwnd.0, parent.0) });
     let code = sys::last_error();
-    if previous == 0 && code != 0 {
+    if previous.is_null() && code != 0 {
         return Err(WallpaperError::native("SetParent", code));
     }
     debug!("SetParent({hwnd:#x} -> {parent:#x}), previous parent {previous:#x}");
@@ -275,8 +284,8 @@ pub fn place(hwnd: Hwnd, parent: Hwnd, area: ScreenArea) -> Result<(), Wallpaper
 
     let (x, y) = (area.x - origin.left, area.y - origin.top);
     let (w, h) = (area.width as i32, area.height as i32);
-    let ok =
-        unsafe { sys::SetWindowPos(hwnd, 0, x, y, w, h, sys::SWP_NOACTIVATE | sys::SWP_NOZORDER) };
+    let flags = SWP_NOACTIVATE | SWP_NOZORDER;
+    let ok = unsafe { SetWindowPos(hwnd.0, std::ptr::null_mut(), x, y, w, h, flags) };
     if ok == 0 {
         return Err(WallpaperError::native("SetWindowPos(place)", sys::last_error()));
     }
@@ -292,7 +301,7 @@ pub fn place(hwnd: Hwnd, parent: Hwnd, area: ScreenArea) -> Result<(), Wallpaper
 // has no such ghost, and there this would tear the WorkerW down instead.
 pub fn leave(windows: &[Hwnd]) {
     for &hwnd in windows {
-        unsafe { sys::ShowWindow(hwnd, sys::SW_HIDE) };
+        unsafe { ShowWindow(hwnd.0, SW_HIDE) };
     }
     if !windows.is_empty() {
         repaint();
@@ -304,9 +313,7 @@ pub fn repaint() {
         return;
     }
     let null = std::ptr::null_mut();
-    let ok = unsafe {
-        sys::SystemParametersInfoW(sys::SPI_SETDESKWALLPAPER, 0, null, sys::SPIF_UPDATEINIFILE)
-    };
+    let ok = unsafe { SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, null, SPIF_UPDATEINIFILE) };
     debug!("repainted the desktop (ok={})", ok != 0);
 }
 
@@ -325,9 +332,9 @@ pub fn dump_window_tree() -> Vec<String> {
             "{top:#010x} {class:<16} \"{title}\"  [{},{} {}x{}] exstyle={:#x}",
             rect.left,
             rect.top,
-            rect.width(),
-            rect.height(),
-            sys::get_window_long_ptr(top, sys::GWL_EXSTYLE),
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            sys::get_window_long_ptr(top, GWL_EXSTYLE),
         ));
 
         for (i, child) in sys::child_windows(top).into_iter().enumerate() {

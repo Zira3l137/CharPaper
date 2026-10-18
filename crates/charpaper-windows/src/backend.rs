@@ -21,24 +21,28 @@ use charpaper_wallpaper::WallpaperError;
 use charpaper_wallpaper::WindowKey;
 
 use tracing::debug;
+use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
+use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 use crate::activity;
 use crate::desktop;
 use crate::monitors;
 use crate::pointer::DesktopPointer;
 use crate::sys;
+use crate::sys::Hwnd;
 
 // Shared with the pointer, which has to know about windows attached after it started too.
 #[derive(Clone, Default)]
-pub(crate) struct AttachedWindows(Arc<Mutex<Vec<(WindowKey, sys::Hwnd)>>>);
+pub(crate) struct AttachedWindows(Arc<Mutex<Vec<(WindowKey, Hwnd)>>>);
 
 impl AttachedWindows {
     // Only the app's main thread locks it, so it never waits.
-    pub fn list(&self) -> MutexGuard<'_, Vec<(WindowKey, sys::Hwnd)>> {
+    pub fn list(&self) -> MutexGuard<'_, Vec<(WindowKey, Hwnd)>> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn get(&self, window: WindowKey) -> Option<sys::Hwnd> {
+    fn get(&self, window: WindowKey) -> Option<Hwnd> {
         self.list().iter().find(|(key, _)| *key == window).map(|&(_, hwnd)| hwnd)
     }
 }
@@ -68,7 +72,7 @@ impl WallpaperBackend for WindowsBackend {
             }
         }
 
-        if shell.progman == 0 {
+        if shell.progman.is_null() {
             return Err(WallpaperError::DesktopNotFound("Progman".to_string()));
         }
 
@@ -85,7 +89,7 @@ impl WallpaperBackend for WindowsBackend {
         let RawWindowHandle::Win32(win32) = handle else {
             return Err(WallpaperError::WrongHandleKind);
         };
-        let hwnd: sys::Hwnd = win32.hwnd.get();
+        let hwnd = Hwnd(win32.hwnd.get() as HWND);
 
         debug!("our window HWND = {hwnd:#x}, going to {area:?}");
         let strategy = desktop::attach(hwnd, area, config)?;
@@ -107,7 +111,7 @@ impl WallpaperBackend for WindowsBackend {
 
     fn detach(&mut self, window: WindowKey) {
         let mut list = self.attached.list();
-        let gone: Vec<sys::Hwnd> =
+        let gone: Vec<Hwnd> =
             list.iter().filter(|(key, _)| *key == window).map(|&(_, hwnd)| hwnd).collect();
         list.retain(|(key, _)| *key != window);
         drop(list);
@@ -115,7 +119,7 @@ impl WallpaperBackend for WindowsBackend {
     }
 
     fn release(&mut self) {
-        let gone: Vec<sys::Hwnd> = self.attached.list().drain(..).map(|(_, hwnd)| hwnd).collect();
+        let gone: Vec<Hwnd> = self.attached.list().drain(..).map(|(_, hwnd)| hwnd).collect();
         desktop::leave(&gone);
     }
 
@@ -127,8 +131,8 @@ impl WallpaperBackend for WindowsBackend {
     // Out of the app's job when the job allows it, since a job can end all its processes at
     // once. No console either, which a debug build would otherwise open.
     fn spawn_keeper(&self, keeper: &mut Command) -> io::Result<()> {
-        let quiet = sys::CREATE_NO_WINDOW;
-        match keeper.creation_flags(quiet | sys::CREATE_BREAKAWAY_FROM_JOB).spawn() {
+        let quiet = CREATE_NO_WINDOW;
+        match keeper.creation_flags(quiet | CREATE_BREAKAWAY_FROM_JOB).spawn() {
             Ok(_) => Ok(()),
             Err(_) => keeper.creation_flags(quiet).spawn().map(drop),
         }

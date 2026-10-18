@@ -12,7 +12,7 @@ mod monitors;
 #[cfg(windows)]
 mod pointer;
 #[cfg(windows)]
-pub mod sys;
+mod sys;
 
 #[cfg(windows)]
 pub use backend::WindowsBackend;

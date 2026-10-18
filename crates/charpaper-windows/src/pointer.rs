@@ -4,6 +4,21 @@ use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WallpaperError;
 use charpaper_wallpaper::WindowKey;
+use windows_sys::Win32::Foundation::POINT;
+use windows_sys::Win32::UI::WindowsAndMessaging::WHEEL_DELTA;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_LBUTTONDOWN;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_LBUTTONUP;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_MBUTTONDOWN;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_MBUTTONUP;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_MOUSEHWHEEL;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_MOUSEMOVE;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_MOUSEWHEEL;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_RBUTTONDOWN;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_RBUTTONUP;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_XBUTTONDOWN;
+use windows_sys::Win32::UI::WindowsAndMessaging::WM_XBUTTONUP;
+use windows_sys::Win32::UI::WindowsAndMessaging::XBUTTON1;
+use windows_sys::Win32::UI::WindowsAndMessaging::XBUTTON2;
 
 use crate::backend::AttachedWindows;
 use crate::hook::MouseHook;
@@ -68,19 +83,19 @@ impl DesktopPointer {
             self.inside = Some((key, hwnd));
             out.push((key, PointerEvent::Entered));
             out.push((key, moved));
-            if raw.message == sys::WM_MOUSEMOVE {
+            if raw.message == WM_MOUSEMOVE {
                 return;
             }
         }
 
         match raw.message {
-            sys::WM_MOUSEMOVE => out.push((key, moved)),
-            sys::WM_MOUSEWHEEL => {
+            WM_MOUSEMOVE => out.push((key, moved)),
+            WM_MOUSEWHEEL => {
                 let wheel = PointerEvent::Wheel { x: 0.0, y: wheel_notches(raw.mouse_data) };
                 out.push((key, wheel));
             }
             // Negated to match winit's sign convention.
-            sys::WM_MOUSEHWHEEL => {
+            WM_MOUSEHWHEEL => {
                 let wheel = PointerEvent::Wheel { x: -wheel_notches(raw.mouse_data), y: 0.0 };
                 out.push((key, wheel));
             }
@@ -111,9 +126,9 @@ impl DesktopPointer {
         out.push((key, PointerEvent::Button { button, pressed }));
     }
 
-    fn target_at(&mut self, screen: sys::Point) -> Target {
+    fn target_at(&mut self, screen: POINT) -> Target {
         let hit = sys::window_from_point(screen);
-        if hit == 0 {
+        if hit.is_null() {
             return Target::Elsewhere;
         }
         let windows = self.windows.list();
@@ -144,13 +159,13 @@ impl DesktopPointer {
     }
 }
 
-fn covers(hwnd: Hwnd, screen: sys::Point) -> bool {
+fn covers(hwnd: Hwnd, screen: POINT) -> bool {
     sys::window_rect(hwnd).is_some_and(|r| {
         (r.left..r.right).contains(&screen.x) && (r.top..r.bottom).contains(&screen.y)
     })
 }
 
-fn moved_to(hwnd: Hwnd, screen: sys::Point) -> PointerEvent {
+fn moved_to(hwnd: Hwnd, screen: POINT) -> PointerEvent {
     let client = sys::screen_to_client(hwnd, screen).unwrap_or(screen);
     PointerEvent::Moved { x: client.x as f64, y: client.y as f64 }
 }
@@ -165,21 +180,19 @@ impl PointerSource for DesktopPointer {
 
 fn button_change(message: u32, mouse_data: u32) -> Option<(PointerButton, bool)> {
     let button = match message {
-        sys::WM_LBUTTONDOWN | sys::WM_LBUTTONUP => PointerButton::Left,
-        sys::WM_RBUTTONDOWN | sys::WM_RBUTTONUP => PointerButton::Right,
-        sys::WM_MBUTTONDOWN | sys::WM_MBUTTONUP => PointerButton::Middle,
-        sys::WM_XBUTTONDOWN | sys::WM_XBUTTONUP => match high_word(mouse_data) {
-            sys::XBUTTON1 => PointerButton::Back,
-            sys::XBUTTON2 => PointerButton::Forward,
+        WM_LBUTTONDOWN | WM_LBUTTONUP => PointerButton::Left,
+        WM_RBUTTONDOWN | WM_RBUTTONUP => PointerButton::Right,
+        WM_MBUTTONDOWN | WM_MBUTTONUP => PointerButton::Middle,
+        WM_XBUTTONDOWN | WM_XBUTTONUP => match high_word(mouse_data) {
+            XBUTTON1 => PointerButton::Back,
+            XBUTTON2 => PointerButton::Forward,
             _ => return None,
         },
         _ => return None,
     };
 
-    let pressed = matches!(
-        message,
-        sys::WM_LBUTTONDOWN | sys::WM_RBUTTONDOWN | sys::WM_MBUTTONDOWN | sys::WM_XBUTTONDOWN
-    );
+    let pressed =
+        matches!(message, WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_XBUTTONDOWN);
     Some((button, pressed))
 }
 
@@ -188,5 +201,5 @@ fn high_word(value: u32) -> u16 {
 }
 
 fn wheel_notches(mouse_data: u32) -> f32 {
-    high_word(mouse_data) as i16 as f32 / sys::WHEEL_DELTA as f32
+    high_word(mouse_data) as i16 as f32 / WHEEL_DELTA as f32
 }

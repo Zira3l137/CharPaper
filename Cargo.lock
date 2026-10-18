@@ -1997,6 +1997,7 @@ dependencies = [
  "charpaper-wallpaper",
  "raw-window-handle",
  "tracing",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

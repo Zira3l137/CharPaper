@@ -3,8 +3,11 @@ name = "charpaper-windows"
 version.workspace = true
 edition.workspace = true
 
-# No bevy and no windows crate: the few Win32 calls are declared by hand.
+# No bevy: the backend calls Win32 itself, through windows-sys's declarations.
 [dependencies]
 charpaper-wallpaper.workspace = true
 raw-window-handle.workspace = true
 tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

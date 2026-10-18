@@ -2,6 +2,22 @@ use std::collections::HashMap;
 
 use charpaper_wallpaper::DesktopMonitor;
 use charpaper_wallpaper::ScreenArea;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_DEVICE_INFO_HEADER;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_DEVICE_INFO_TYPE;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_MODE_INFO;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_PATH_INFO;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_SOURCE_DEVICE_NAME;
+use windows_sys::Win32::Devices::Display::DISPLAYCONFIG_TARGET_DEVICE_NAME;
+use windows_sys::Win32::Devices::Display::DisplayConfigGetDeviceInfo;
+use windows_sys::Win32::Devices::Display::GetDisplayConfigBufferSizes;
+use windows_sys::Win32::Devices::Display::QDC_ONLY_ACTIVE_PATHS;
+use windows_sys::Win32::Devices::Display::QueryDisplayConfig;
+use windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
+use windows_sys::Win32::Foundation::LUID;
+use windows_sys::Win32::Graphics::Gdi::HMONITOR;
+use windows_sys::Win32::UI::WindowsAndMessaging::MONITORINFOF_PRIMARY;
 
 use crate::sys;
 
@@ -17,10 +33,10 @@ pub fn monitors() -> Vec<DesktopMonitor> {
     sys::display_monitors().into_iter().filter_map(|monitor| describe(monitor, &names)).collect()
 }
 
-fn describe(monitor: sys::HMonitor, names: &HashMap<String, Names>) -> Option<DesktopMonitor> {
+fn describe(monitor: HMONITOR, names: &HashMap<String, Names>) -> Option<DesktopMonitor> {
     let info = sys::monitor_info_ex(monitor)?;
-    let device = sys::from_wide(&info.device);
-    let rect = info.info.rc_monitor;
+    let device = sys::from_wide(&info.szDevice);
+    let rect = info.monitorInfo.rcMonitor;
     let names = names.get(&device);
 
     let id = names.map(|n| n.path.clone()).filter(|path| !path.is_empty());
@@ -31,11 +47,11 @@ fn describe(monitor: sys::HMonitor, names: &HashMap<String, Names>) -> Option<De
         area: ScreenArea {
             x: rect.left,
             y: rect.top,
-            width: rect.width() as u32,
-            height: rect.height() as u32,
+            width: (rect.right - rect.left) as u32,
+            height: (rect.bottom - rect.top) as u32,
         },
         scale: sys::monitor_dpi(monitor).map_or(1.0, |dpi| f64::from(dpi) / 96.0),
-        primary: info.info.flags & sys::MONITORINFOF_PRIMARY != 0,
+        primary: info.monitorInfo.dwFlags & MONITORINFOF_PRIMARY != 0,
     })
 }
 
@@ -45,45 +61,46 @@ fn describe(monitor: sys::HMonitor, names: &HashMap<String, Names>) -> Option<De
 fn display_names() -> HashMap<String, Names> {
     let mut out = HashMap::new();
     for path in active_paths().unwrap_or_default() {
-        let source = &path.source;
-        let target = &path.target;
-        let gdi = device_info::<sys::SourceDeviceName>(
-            sys::DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
-            source.adapter_id,
+        let (source, target) = (&path.sourceInfo, &path.targetInfo);
+        let gdi = device_info::<DISPLAYCONFIG_SOURCE_DEVICE_NAME>(
+            DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
+            source.adapterId,
             source.id,
         );
-        let monitor = device_info::<sys::TargetDeviceName>(
-            sys::DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME,
-            target.adapter_id,
+        let monitor = device_info::<DISPLAYCONFIG_TARGET_DEVICE_NAME>(
+            DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME,
+            target.adapterId,
             target.id,
         );
         let (Some(gdi), Some(monitor)) = (gdi, monitor) else {
             continue;
         };
         let names = Names {
-            friendly: sys::from_wide(&monitor.friendly_name),
-            path: sys::from_wide(&monitor.device_path),
+            friendly: sys::from_wide(&monitor.monitorFriendlyDeviceName),
+            path: sys::from_wide(&monitor.monitorDevicePath),
         };
         // Mirrored monitors share one DISPLAY; the first of them names it.
-        out.entry(sys::from_wide(&gdi.gdi_device_name)).or_insert(names);
+        out.entry(sys::from_wide(&gdi.viewGdiDeviceName)).or_insert(names);
     }
     out
 }
 
-fn active_paths() -> Option<Vec<sys::PathInfo>> {
+fn active_paths() -> Option<Vec<DISPLAYCONFIG_PATH_INFO>> {
     // A monitor plugged in between asking for the sizes and the query makes the buffers too
     // small. Asking again is the documented answer.
     for _ in 0..3 {
         let (mut path_count, mut mode_count) = (0u32, 0u32);
-        let flags = sys::QDC_ONLY_ACTIVE_PATHS;
-        if unsafe { sys::GetDisplayConfigBufferSizes(flags, &mut path_count, &mut mode_count) } != 0
-        {
+        let flags = QDC_ONLY_ACTIVE_PATHS;
+        if unsafe { GetDisplayConfigBufferSizes(flags, &mut path_count, &mut mode_count) } != 0 {
             return None;
         }
-        let mut paths = vec![sys::PathInfo::default(); path_count as usize];
-        let mut modes = vec![sys::ModeInfo::default(); mode_count as usize];
+        // SAFETY: all zeroes is a valid value of both, which hold only numbers and unions of them.
+        let mut paths: Vec<DISPLAYCONFIG_PATH_INFO> =
+            vec![unsafe { std::mem::zeroed() }; path_count as usize];
+        let mut modes: Vec<DISPLAYCONFIG_MODE_INFO> =
+            vec![unsafe { std::mem::zeroed() }; mode_count as usize];
         let result = unsafe {
-            sys::QueryDisplayConfig(
+            QueryDisplayConfig(
                 flags,
                 &mut path_count,
                 paths.as_mut_ptr(),
@@ -97,7 +114,7 @@ fn active_paths() -> Option<Vec<sys::PathInfo>> {
                 paths.truncate(path_count as usize);
                 return Some(paths);
             }
-            sys::ERROR_INSUFFICIENT_BUFFER => continue,
+            ERROR_INSUFFICIENT_BUFFER => continue,
             _ => return None,
         }
     }
@@ -107,15 +124,20 @@ fn active_paths() -> Option<Vec<sys::PathInfo>> {
 // Every DISPLAYCONFIG_*_NAME request starts with the same header saying what is asked and
 // how big the struct is; Windows fills in the rest.
 trait DeviceInfo: Copy {}
-impl DeviceInfo for sys::SourceDeviceName {}
-impl DeviceInfo for sys::TargetDeviceName {}
+impl DeviceInfo for DISPLAYCONFIG_SOURCE_DEVICE_NAME {}
+impl DeviceInfo for DISPLAYCONFIG_TARGET_DEVICE_NAME {}
 
-fn device_info<T: DeviceInfo>(kind: u32, adapter_id: sys::Luid, id: u32) -> Option<T> {
-    // All zeroes is a valid value of both: they hold only numbers and arrays of them.
+fn device_info<T: DeviceInfo>(
+    kind: DISPLAYCONFIG_DEVICE_INFO_TYPE,
+    adapter_id: LUID,
+    id: u32,
+) -> Option<T> {
+    // SAFETY: all zeroes is a valid value of both: they hold only numbers and arrays of them.
     let mut request: T = unsafe { std::mem::zeroed() };
-    let header = &mut request as *mut T as *mut sys::DeviceInfoHeader;
-    let size = std::mem::size_of::<T>() as u32;
-    unsafe { header.write(sys::DeviceInfoHeader { kind, size, adapter_id, id }) };
-    let ok = unsafe { sys::DisplayConfigGetDeviceInfo(header) } == 0;
+    let header = &mut request as *mut T as *mut DISPLAYCONFIG_DEVICE_INFO_HEADER;
+    let size = size_of::<T>() as u32;
+    let filled = DISPLAYCONFIG_DEVICE_INFO_HEADER { r#type: kind, size, adapterId: adapter_id, id };
+    unsafe { header.write(filled) };
+    let ok = unsafe { DisplayConfigGetDeviceInfo(header) } == 0;
     ok.then_some(request)
 }
