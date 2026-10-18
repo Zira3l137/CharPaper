@@ -144,7 +144,7 @@ fn play_gifs(
             }
         };
         if let Some(image) = &player.image {
-            if let Some(image) = images.get_mut(image) {
+            if let Some(mut image) = images.get_mut(image) {
                 image.data = Some(pixels);
             }
             continue;
