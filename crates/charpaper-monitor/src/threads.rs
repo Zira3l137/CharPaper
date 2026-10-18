@@ -7,7 +7,6 @@ use bevy::render::RenderApp;
 use bevy::render::RenderSystems;
 
 use crate::Gathered;
-use crate::Monitoring;
 use crate::RenderStages;
 use crate::Samples;
 use crate::monitoring;
@@ -61,7 +60,8 @@ impl Plugin for RenderThreadPlugin {
                 mark::<PREPARE>.after(RenderSystems::Prepare).before(RenderSystems::Render),
                 mark::<RENDER>.after(RenderSystems::Render).before(RenderSystems::Cleanup),
                 end_render.in_set(RenderSystems::PostCleanup),
-            ),
+            )
+                .run_if(monitoring),
         );
     }
 }
@@ -81,8 +81,8 @@ struct StageClock {
     stages: [f64; RenderStages::COUNT],
 }
 
-fn start_render(on: Res<Monitoring>, mut clock: ResMut<StageClock>) {
-    let now = on.0.then(Instant::now);
+fn start_render(mut clock: ResMut<StageClock>) {
+    let now = Some(Instant::now());
     *clock = StageClock { started: now, last: now, ..default() };
 }
 

@@ -56,6 +56,7 @@ use wgpu::QueryType;
 use crate::GpuTimes;
 use crate::Monitoring;
 use crate::Samples;
+use crate::monitoring;
 
 // Two per frame and six per scene camera, so room for a dozen screens.
 const MAX_MARKS: u32 = 80;
@@ -98,7 +99,8 @@ impl Plugin for GpuClockPlugin {
                         .in_set(Core3dSystems::EarlyPostProcess)
                         .before(temporal_anti_alias),
                     mark::<CAMERA_END>.after(Core3dSystems::PostProcess).after(upscaling),
-                ),
+                )
+                    .run_if(monitoring),
             );
     }
 }
