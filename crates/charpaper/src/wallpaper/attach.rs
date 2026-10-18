@@ -20,6 +20,10 @@ use crate::wallpaper::key;
 use crate::wallpaper::monitors::Layout;
 use crate::wallpaper::windows::OnMonitor;
 
+// A window that still can't attach after this many tries stays an ordinary window.
+const MAX_ATTEMPTS: u32 = 20;
+const FRAMES_BETWEEN_ATTEMPTS: u32 = 15;
+
 // How far attaching a window got.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Attachment {
@@ -94,9 +98,9 @@ fn attach_windows(
 
         let handle = handle.map(RawHandleWrapper::get_window_handle);
         match decide(&mut backend.0, &config, key(window), handle, on.0.area) {
-            Step::Wait(reason) if attempts + 1 < config.max_attempts => {
+            Step::Wait(reason) if attempts + 1 < MAX_ATTEMPTS => {
                 debug!("attempt {} on {} not ready: {reason}", attempts + 1, on.0.name);
-                let countdown = config.frames_between_attempts;
+                let countdown = FRAMES_BETWEEN_ATTEMPTS;
                 *attachment = Attachment::Pending { attempts: attempts + 1, countdown };
                 continue;
             }
@@ -116,7 +120,7 @@ fn attach_windows(
             }
         }
         // Shown on failure too: an invisible process with no way to close it is worse.
-        if config.show_window_after_attach && !settings.visible {
+        if !settings.visible {
             settings.visible = true;
         }
     }

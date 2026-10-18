@@ -17,9 +17,6 @@ pub struct AppConfig {
 
 #[derive(Clone, Debug)]
 pub struct WindowConfig {
-    pub title: String,
-    pub width: u32,
-    pub height: u32,
     pub start_hidden: bool,
     pub decorations: bool,
     pub skip_taskbar: bool,
@@ -28,15 +25,7 @@ pub struct WindowConfig {
 
 impl Default for WindowConfig {
     fn default() -> Self {
-        Self {
-            title: "charpaper".to_string(),
-            width: 1280,
-            height: 720,
-            start_hidden: true,
-            decorations: false,
-            skip_taskbar: true,
-            vsync: true,
-        }
+        Self { start_hidden: true, decorations: false, skip_taskbar: true, vsync: true }
     }
 }
 

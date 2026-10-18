@@ -26,6 +26,9 @@ use crate::wallpaper::WallpaperPlugin;
 
 const CHARACTERS_DIR: &str = "characters";
 const LOCALES_DIR: &str = "locales";
+// The size of the window when it isn't attached, as with --windowed. Attached, it covers its
+// monitor.
+const WINDOWED_SIZE: (u32, u32) = (1280, 720);
 
 // Everything the app reads and writes sits next to the executable: suites in
 // characters/, translations in locales/, the viewer's choices in state.toml.
@@ -90,8 +93,8 @@ pub fn run(mut config: AppConfig) -> Result<()> {
 
 fn window(config: &WindowConfig) -> Window {
     Window {
-        title: config.title.clone(),
-        resolution: WindowResolution::new(config.width, config.height),
+        title: "charpaper".into(),
+        resolution: WindowResolution::new(WINDOWED_SIZE.0, WINDOWED_SIZE.1),
         decorations: config.decorations,
         resizable: false,
         // The wallpaper plugin shows it once attached, so no floating window flashes by.

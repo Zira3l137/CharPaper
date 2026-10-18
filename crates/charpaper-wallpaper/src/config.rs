@@ -33,10 +33,7 @@ pub struct WallpaperConfig {
     pub strategy: AttachStrategy,
     pub spawn_worker_w: bool,
     pub layered: LayeredMode,
-    pub show_window_after_attach: bool,
     pub forward_input: bool,
-    pub max_attempts: u32,
-    pub frames_between_attempts: u32,
 }
 
 impl WallpaperConfig {
@@ -55,10 +52,7 @@ impl Default for WallpaperConfig {
             strategy: AttachStrategy::Auto,
             spawn_worker_w: true,
             layered: LayeredMode::Auto,
-            show_window_after_attach: true,
             forward_input: true,
-            max_attempts: 20,
-            frames_between_attempts: 15,
         }
     }
 }
