@@ -3,10 +3,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use charpaper_suite::ClipSet;
-use charpaper_suite::Severity;
 use charpaper_suite::Suite;
 use charpaper_suite::SuiteError;
-use charpaper_suite::inspect;
 
 const ACCESSORS: &str = r#""buffers": [{"uri": "unused.bin", "byteLength": 64}],
 "bufferViews": [{"buffer": 0, "byteLength": 64}],
@@ -49,13 +47,13 @@ fn animation(armature: &str, clip: &str) -> String {
     )
 }
 
-fn outfit(spine_y: f32) -> String {
+fn outfit() -> String {
     format!(
         r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0]}}],
         "nodes": [
             {{"name": "Armature", "children": [1, 5]}},
             {{"name": "Hips", "children": [2]}},
-            {{"name": "Spine", "children": [3], "translation": [0, {spine_y}, 0]}},
+            {{"name": "Spine", "children": [3], "translation": [0, 0.5, 0]}},
             {{"name": "Head", "children": [4, 6]}},
             {{"name": "Ponytail"}},
             {{"name": "Head", "mesh": 0, "skin": 0}},
@@ -133,8 +131,8 @@ impl Fixture {
         fixture.write("suite.toml", manifest);
         fixture.write("aki.gltf", &model());
         fixture.write("animations/idle.gltf", &animation("Armature", "Idle"));
-        fixture.write("skins/casual.gltf", &outfit(0.5));
-        fixture.write("skins/dress.gltf", &outfit(0.5));
+        fixture.write("skins/casual.gltf", &outfit());
+        fixture.write("skins/dress.gltf", &outfit());
         fixture.write("skins/notes.txt", "ignored");
         fixture.write("skins/textures/ignored.gltf", "not a skin");
         fixture.write("cameras/closeup.gltf", &camera(&["Dolly"]));
@@ -160,16 +158,6 @@ impl Drop for Fixture {
     }
 }
 
-// Findings print paths the OS's way; the assertions are written with forward slashes.
-fn messages(suite: &Suite, severity: Severity) -> Vec<String> {
-    inspect(suite)
-        .findings
-        .into_iter()
-        .filter(|f| f.severity == severity)
-        .map(|f| f.to_string().replace('\\', "/"))
-        .collect()
-}
-
 #[test]
 fn folder_layout_fills_in_what_the_manifest_leaves_out() {
     let fixture = Fixture::new("convention", "schema = 1");
@@ -182,12 +170,6 @@ fn folder_layout_fills_in_what_the_manifest_leaves_out() {
     assert_eq!(skins, ["casual", "dress"]);
     assert_eq!(suite.skins[1].file, Path::new("skins/dress.gltf"));
     assert_eq!(suite.default_skin.as_deref(), Some("casual"));
-
-    let errors = messages(&suite, Severity::Error);
-    assert!(errors.is_empty(), "{errors:#?}");
-    let warnings = messages(&suite, Severity::Warning);
-    assert_eq!(warnings.len(), 2, "{warnings:#?}");
-    assert!(warnings.iter().all(|w| w.contains("Ponytail -> Head")));
 }
 
 #[test]
@@ -209,10 +191,6 @@ fn listing_a_file_replaces_its_discovered_clips() {
 
     let wave = suite.animations.iter().find(|a| a.path.ends_with("wave.gltf")).unwrap();
     assert!(matches!(&wave.clips, ClipSet::Listed(b) if b.len() == 2));
-
-    let errors = messages(&suite, Severity::Error);
-    assert_eq!(errors.len(), 1, "{errors:#?}");
-    assert!(errors[0].contains("no clip named \"Nope\""));
 }
 
 #[test]
@@ -239,26 +217,6 @@ fn cues_name_sounds_in_the_sounds_folder() {
 }
 
 #[test]
-fn renamed_armature_is_reported() {
-    let fixture = Fixture::new("renamed", "schema = 1");
-    fixture.write("animations/idle.gltf", &animation("Rig", "Idle"));
-    let suite = fixture.load().unwrap();
-
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("Rig/Hips/Spine")), "{warnings:#?}");
-}
-
-#[test]
-fn skin_with_a_different_rest_pose_is_reported() {
-    let fixture = Fixture::new("rest", "schema = 1");
-    fixture.write("skins/casual.gltf", &outfit(0.6));
-    let suite = fixture.load().unwrap();
-
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("rest pose of 1 bone(s)")), "{warnings:#?}");
-}
-
-#[test]
 fn bad_manifests_are_rejected() {
     let cases = [
         ("escape", "schema = 1\n[character]\nmodel = \"../aki.gltf\"", "must be relative"),
@@ -276,26 +234,6 @@ fn bad_manifests_are_rejected() {
         let err = Fixture::new(name, manifest).load().unwrap_err();
         assert!(err.to_string().contains(expected), "{name}: {err}");
     }
-}
-
-#[test]
-fn model_meshes_are_reported_because_no_skin_can_hide_them() {
-    let fixture = Fixture::new("model-mesh", "schema = 1");
-    fixture.write("aki.gltf", &outfit(0.5));
-    let suite = fixture.load().unwrap();
-
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("shown under every skin")), "{warnings:#?}");
-}
-
-#[test]
-fn a_suite_with_nothing_to_show_is_an_error() {
-    let fixture = Fixture::new("empty", "schema = 1");
-    fs::remove_dir_all(fixture.0.join("skins")).unwrap();
-    let suite = fixture.load().unwrap();
-
-    let errors = messages(&suite, Severity::Error);
-    assert!(errors.iter().any(|e| e.contains("nothing to show")), "{errors:#?}");
 }
 
 #[test]
@@ -334,22 +272,7 @@ fn a_camera_file_cannot_take_the_orbit_cameras_name() {
 }
 
 #[test]
-fn camera_files_hold_one_camera_and_at_most_one_clip() {
-    let fixture = Fixture::new("camera-checks", "schema = 1");
-    let suite = fixture.load().unwrap();
-    assert!(messages(&suite, Severity::Error).is_empty());
-
-    fixture.write("cameras/closeup.gltf", &camera(&["Dolly", "Pan"]));
-    fixture.write("cameras/wide.gltf", &model());
-    let suite = fixture.load().unwrap();
-    let errors = messages(&suite, Severity::Error);
-    assert_eq!(errors.len(), 2, "{errors:#?}");
-    assert!(errors.iter().any(|e| e.contains("holds 2 clips (Dolly, Pan)")));
-    assert!(errors.iter().any(|e| e.contains("wide.gltf: holds no camera")));
-}
-
-#[test]
-fn lens_settings_reach_their_camera_and_are_checked() {
+fn lens_settings_reach_their_camera_unless_they_cannot_work() {
     let manifest = r#"schema = 1
 [camera]
 f_stop = 0.0
@@ -358,74 +281,18 @@ f_stop = 2.8
 focus_object = "Head"
 [cameras.wide]
 f_stop = 4.0
-focus_object = "Tripod"
+focus_distance = -1.0
 "#;
-    let fixture = Fixture::new("lens", manifest);
-    let suite = fixture.load().unwrap();
-    assert_eq!(suite.cameras[0].settings.focus_object.as_deref(), Some("Head"));
-    assert_eq!(suite.cameras[1].settings.focus_distance(), 10.0);
+    let suite = Fixture::new("lens", manifest).load().unwrap();
     assert_eq!(suite.camera.f_stop, None);
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(
-        warnings.iter().any(|w| w.contains("\"Tripod\" is neither in cameras/wide.gltf")),
-        "{warnings:#?}"
-    );
-
-    let manifest = r#"schema = 1
-[cameras.closeup]
-focus_object = "Rig"
-f_stop = 2.0
-[cameras.wide]
-focus_distance = 3.0
-"#;
-    fixture.write("suite.toml", manifest);
-    let suite = fixture.load().unwrap();
-    assert!(messages(&suite, Severity::Error).is_empty());
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("focus_object")), "{warnings:#?}");
-    assert!(warnings.iter().any(|w| w.contains("\"wide\": depth of field is off")));
+    let (closeup, wide) = (&suite.cameras[0].settings, &suite.cameras[1].settings);
+    assert_eq!((closeup.f_stop, closeup.focus_object.as_deref()), (Some(2.8), Some("Head")));
+    assert_eq!((wide.f_stop, wide.focus_distance), (Some(4.0), None));
+    assert_eq!(wide.focus_distance(), 10.0);
 }
 
 #[test]
-fn an_animated_focus_object_is_not_idle() {
-    let manifest = "schema = 1\n[cameras.closeup]\nf_stop = 2.0\nfocus_object = \"Focus\"";
-    let fixture = Fixture::new("focus-moves", manifest);
-    let closeup = camera(&["Dolly"]).replace(
-        r#"{"name": "Lens", "camera": 0}"#,
-        r#"{"name": "Lens", "camera": 0}, {"name": "Focus"}"#,
-    );
-    let closeup =
-        closeup.replace(r#""scenes": [{"nodes": [0]}]"#, r#""scenes": [{"nodes": [0, 2]}]"#);
-    let closeup = closeup.replace(
-        r#"{"sampler": 0, "target": {"node": 0, "path": "translation"}}"#,
-        r#"{"sampler": 0, "target": {"node": 0, "path": "translation"}},
-           {"sampler": 0, "target": {"node": 2, "path": "translation"}}"#,
-    );
-    fixture.write("cameras/closeup.gltf", &closeup);
-    let suite = fixture.load().unwrap();
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("do not carry a camera")), "{warnings:#?}");
-
-    fixture.write("suite.toml", "schema = 1");
-    let suite = fixture.load().unwrap();
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("changes nothing: Focus")), "{warnings:#?}");
-}
-
-#[test]
-fn grading_without_tonemapping_is_flagged() {
-    let manifest = "schema = 1\n[post]\ntonemapping = \"none\"\n[post.grading]\nwarmth = 0.3";
-    let fixture = Fixture::new("grading", manifest);
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("`post.grading` does nothing")), "{warnings:#?}");
-
-    fixture.write("suite.toml", "schema = 1\n[post.grading]\nwarmth = 0.3");
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("post.grading")), "{warnings:#?}");
-}
-
-#[test]
-fn luts_are_found_and_the_chosen_one_is_checked() {
+fn luts_are_found_and_none_is_a_reserved_name() {
     let fixture = Fixture::new("luts", "schema = 1\n[post.lut]\nname = \"teal\"");
     fixture.write("luts/teal.cube", "LUT_3D_SIZE 2\n0 0 0\n");
     fixture.write("luts/warm.cube", "LUT_1D_SIZE 2\n0 0 0\n1 1 1\n");
@@ -433,37 +300,13 @@ fn luts_are_found_and_the_chosen_one_is_checked() {
     let suite = fixture.load().unwrap();
     let names: Vec<&str> = suite.luts.iter().map(|l| l.name.as_str()).collect();
     assert_eq!(names, ["teal", "warm"]);
-
-    let errors = messages(&suite, Severity::Error);
-    assert!(errors.iter().any(|e| e.contains("luts/teal.cube: has 1 entries")), "{errors:#?}");
-
-    fixture.write("suite.toml", "schema = 1\n[post.lut]\nname = \"cold\"");
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("teal.cube: has 1 entries")), "{warnings:#?}");
-    assert!(warnings.iter().any(|w| w.contains("names \"cold\", which is not in `luts/`")));
+    assert_eq!(suite.post.lut.name(), Some("teal"));
 
     fixture.write("suite.toml", "schema = 1\n[post.lut]\nname = \"none\"");
-    let suite = fixture.load().unwrap();
-    assert_eq!(suite.post.lut.name(), None);
-    assert!(!messages(&suite, Severity::Warning).iter().any(|w| w.contains("post.lut")));
+    assert_eq!(fixture.load().unwrap().post.lut.name(), None);
 
     fixture.write("luts/none.cube", "LUT_1D_SIZE 2\n0 0 0\n1 1 1\n");
     assert!(fixture.load().unwrap_err().to_string().contains("LUT \"none\" uses a reserved name"));
-}
-
-#[test]
-fn animation_pointer_clips_get_a_readable_error() {
-    let fixture = Fixture::new("pointer", "schema = 1");
-    let zoom = camera(&["Zoom"]).replace(
-        r#""target": {"node": 0, "path": "translation"}"#,
-        r#""target": {"path": "pointer", "extensions": {"KHR_animation_pointer":
-            {"pointer": "/cameras/0/perspective/yfov"}}}"#,
-    );
-    fixture.write("cameras/closeup.gltf", &zoom);
-    let suite = fixture.load().unwrap();
-
-    let errors = messages(&suite, Severity::Error);
-    assert!(errors.iter().any(|e| e.contains("KHR_animation_pointer")), "{errors:#?}");
 }
 
 #[test]
@@ -490,12 +333,6 @@ fn environments_come_from_scenes_and_map_folders() {
         (sky.scene.as_ref(), sky.sky()),
         (None, Some(Path::new("environment/sky/skybox.ktx2")))
     );
-
-    assert!(messages(&suite, Severity::Error).is_empty());
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("room.gltf: 1 camera(s) will be ignored")));
-    assert!(warnings.iter().any(|w| w.contains("\"sky\" has no lights and no reflection maps")));
-    assert!(!warnings.iter().any(|w| w.contains("\"room\" has no lights")), "{warnings:#?}");
 }
 
 #[test]
@@ -525,7 +362,7 @@ fn environment_folders_bring_their_music_and_ambience() {
 }
 
 #[test]
-fn environment_gifs_are_found_by_material_name_and_checked() {
+fn environment_gifs_are_found_by_material_name() {
     let fixture = Fixture::new("environment-gifs", "schema = 1");
     let scene = r#"{"asset": {"version": "2.0"}, "scenes": [{"nodes": []}],
         "materials": [{"name": "TV screen"}, {"name": "Wall"}]}"#;
@@ -540,22 +377,10 @@ fn environment_gifs_are_found_by_material_name_and_checked() {
     let materials: Vec<&str> = room.animated.keys().map(String::as_str).collect();
     assert_eq!(materials, ["Poster", "TV screen", "Wall"]);
     assert_eq!(room.animated["TV screen"], Path::new("environment/room/animated/TV screen.gif"));
-
-    let errors = messages(&suite, Severity::Error);
-    assert!(
-        errors.iter().any(|e| e.contains("Wall.gif") && e.contains("not a GIF")),
-        "{errors:#?}"
-    );
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(
-        warnings.iter().any(|w| w.contains("Poster.gif") && w.contains("plays nowhere")),
-        "{warnings:#?}"
-    );
-    assert!(!warnings.iter().any(|w| w.contains("TV screen.gif")), "{warnings:#?}");
 }
 
 #[test]
-fn fog_objects_and_the_lights_skipping_them_are_checked() {
+fn environment_settings_hold_fog_and_light_lists() {
     let manifest = r#"schema = 1
 [environments.foggy]
 no_volume_scatter = ["Lamp"]
@@ -567,56 +392,7 @@ density = 0.2
     let suite = fixture.load().unwrap();
     let foggy = &suite.environments[0];
     assert_eq!(foggy.settings.fog["Mist"].density, Some(0.2));
-    assert!(messages(&suite, Severity::Error).is_empty());
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("foggy")), "{warnings:#?}");
-
-    let manifest = r#"schema = 1
-[environments.foggy]
-no_volume_scatter = ["Sun", "Bulb", "Ghost"]
-[environments.foggy.fog.Haze]
-density = -1.0
-"#;
-    fixture.write("suite.toml", manifest);
-    let suite = fixture.load().unwrap();
-    let errors = messages(&suite, Severity::Error);
-    assert!(errors.iter().any(|e| e.contains("fog \"Haze\" needs a `density`")), "{errors:#?}");
-    let warnings = messages(&suite, Severity::Warning);
-    for expected in ["fog object \"Haze\" is not in", "names \"Ghost\"", "no light that lights it"]
-    {
-        assert!(warnings.iter().any(|w| w.contains(expected)), "{expected}: {warnings:#?}");
-    }
-}
-
-#[test]
-fn environment_maps_are_inspected() {
-    let fixture = Fixture::new("environment-maps", "schema = 1");
-    fixture.write("environment/room/diffuse.ktx2", ktx2(6, 1, 0));
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("reflections need both")), "{warnings:#?}");
-
-    fixture.write("environment/room/specular.ktx2", ktx2(6, 1, 0));
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("has a single level")), "{warnings:#?}");
-
-    let cases = [
-        (ktx2(1, 1, 0), "has 1 face(s)"),
-        (ktx2(6, 1, 1), "BasisLZ"),
-        (b"not a texture at all, just some words".repeat(2), "not a KTX2 texture"),
-    ];
-    for (bytes, expected) in cases {
-        fixture.write("environment/room/diffuse.ktx2", bytes);
-        let errors = messages(&fixture.load().unwrap(), Severity::Error);
-        assert!(errors.iter().any(|e| e.contains(expected)), "{expected}: {errors:#?}");
-    }
-}
-
-#[test]
-fn a_suite_without_environments_is_warned_about() {
-    let fixture = Fixture::new("no-environment", "schema = 1");
-    fs::remove_dir_all(fixture.0.join("environment")).unwrap();
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("no environments")), "{warnings:#?}");
+    assert_eq!(foggy.settings.no_volume_scatter, ["Lamp"]);
 }
 
 #[test]
@@ -628,8 +404,6 @@ fn a_panorama_makes_an_environment_whose_maps_are_baked_later() {
     let dusk = suite.environments.iter().find(|e| e.name == "dusk").unwrap();
     assert_eq!(dusk.panorama.as_deref(), Some(Path::new("environment/dusk/sky.hdr")));
     assert!(dusk.needs_baking());
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("\"dusk\"")), "{warnings:#?}");
 
     fixture.write("environment/dusk/other.exr", "a second panorama");
     let err = fixture.load().unwrap_err();
@@ -669,33 +443,10 @@ fn a_skins_clips_that_key_only_shape_keys_are_its_expressions() {
     let clips =
         [clip("Smile", 4, "weights"), clip("Angry", 4, "weights"), clip("Nod", 3, "rotation")];
     fixture.write("skins/casual.gltf", face(&clips.join(", ")));
-    let suite = fixture.load().unwrap();
 
     let found = charpaper_suite::skin_clips(&fixture.0.join("skins/casual.gltf")).unwrap();
     assert_eq!(found.expressions, ["Angry", "Smile"]);
     assert_eq!(found.expression_meshes.into_iter().collect::<Vec<_>>(), ["Face"]);
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("casual.gltf")), "{warnings:#?}");
-}
-
-#[test]
-fn body_animations_may_key_correctives_but_not_expression_meshes() {
-    let fixture = Fixture::new("correctives", "schema = 1");
-    fixture.write("skins/casual.gltf", face(&clip("Smile", 4, "weights")));
-    fixture.write("skins/dress.gltf", face(""));
-    fixture.write("animations/jump.gltf", face(&clip("Jump", 4, "weights")));
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    let about_jump: Vec<&String> = warnings.iter().filter(|w| w.contains("jump.gltf")).collect();
-    assert_eq!(about_jump.len(), 1, "{warnings:#?}");
-    assert!(about_jump[0].contains("keyed by skin \"casual\"'s expressions"), "{warnings:#?}");
-
-    let stray = face(&clip("Jump", 4, "weights")).replace(r#""name": "Face""#, r#""name": "Cape""#);
-    fixture.write("animations/jump.gltf", stray);
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(
-        warnings.iter().any(|w| w.contains("\"Armature/Cape\", which no skin has")),
-        "{warnings:#?}"
-    );
 }
 
 #[test]
@@ -705,8 +456,6 @@ fn without_a_model_file_the_armature_comes_from_the_default_skin() {
     let suite = fixture.load().unwrap();
     assert!(suite.model_is_skin);
     assert_eq!(suite.model, Path::new("skins/dress.gltf"));
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("shown under every skin")), "{warnings:#?}");
 
     fs::remove_dir_all(fixture.0.join("skins")).unwrap();
     fixture.write("suite.toml", "schema = 1");
@@ -751,9 +500,6 @@ fn a_camera_file_may_hold_several_cameras_each_with_its_clip() {
     assert_eq!(suite.cameras[1].clip.as_deref(), Some("SideSway"));
     assert_eq!(suite.cameras[2].node, None);
 
-    let findings = messages(&suite, Severity::Error);
-    assert!(!findings.iter().any(|f| f.contains("pair.gltf")), "{findings:#?}");
-
     fixture.write("cameras/Front.gltf", &camera(&[]));
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("camera \"Front\" is named twice"), "{err}");
@@ -774,27 +520,10 @@ up = "brows_up"
     let gaze = suite.gaze.as_ref().unwrap();
     assert_eq!(gaze.bones().collect::<Vec<_>>(), ["Head", "Spine"]);
     assert_eq!(gaze.eye_limits_deg(), [30.0, 20.0]);
-    let about_gaze = |suite: &charpaper_suite::Suite| -> Vec<String> {
-        charpaper_suite::inspect(suite)
-            .findings
-            .into_iter()
-            .map(|f| f.message)
-            .filter(|m| m.starts_with("gaze"))
-            .collect()
-    };
-    assert!(about_gaze(&suite).is_empty(), "{:#?}", about_gaze(&suite));
 
     let keys = charpaper_suite::mesh_shape_keys(&fixture.0.join("skins/casual.gltf")).unwrap();
     assert_eq!(keys[0].node, "Face");
     assert_eq!(keys[0].keys, ["mouth_corner_up", "brows_up"]);
-
-    let broken = manifest.replace(r#"["Head"]"#, r#"["Eye.L"]"#).replace("brows_up", "Lid_Up");
-    fixture.write("suite.toml", broken);
-    let suite = fixture.load().unwrap();
-    let errors = messages(&suite, Severity::Error);
-    assert!(errors.iter().any(|e| e.contains("\"Eye.L\" is not a bone")), "{errors:#?}");
-    let warnings = messages(&suite, Severity::Warning);
-    assert!(warnings.iter().any(|w| w.contains("\"Lid_Up\"")), "{warnings:#?}");
 }
 
 #[test]
@@ -803,28 +532,6 @@ fn an_animation_may_opt_out_of_gaze() {
     let suite = Fixture::new("gaze-opt-out", manifest).load().unwrap();
     let ClipSet::Listed(bindings) = &suite.animations[0].clips else { panic!("listed") };
     assert!(!bindings[0].gaze);
-}
-
-#[test]
-fn lights_without_a_range_are_warned_about() {
-    let fixture = Fixture::new("light-range", "schema = 1");
-    let scene = lit_scene()
-        .replace(r#"[{"type": "directional"}]"#, r#"[{"type": "directional"}, {"type": "point"}]"#);
-    let scene = scene.replace(
-        r#"}}}]}"#,
-        r#"}}}, {"name": "Lamp", "extensions": {"KHR_lights_punctual": {"light": 1}}}]}"#,
-    );
-    fixture.write("environment/stage.gltf", &scene);
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    let expected = "stage.gltf: 1 light(s) have no range";
-    assert!(
-        warnings.iter().any(|w| w.contains(expected) && w.ends_with(": Lamp")),
-        "{warnings:#?}"
-    );
-
-    fixture.write("environment/stage.gltf", &lit_scene());
-    let warnings = messages(&fixture.load().unwrap(), Severity::Warning);
-    assert!(!warnings.iter().any(|w| w.contains("no range")), "{warnings:#?}");
 }
 
 #[test]

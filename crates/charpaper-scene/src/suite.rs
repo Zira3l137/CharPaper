@@ -5,7 +5,6 @@ use bevy::ecs::system::SystemParam;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::Skybox;
 use bevy::prelude::*;
-use charpaper_suite::Severity;
 use charpaper_suite::Suite;
 
 use crate::SceneSet;
@@ -145,14 +144,6 @@ pub(crate) fn switch_suite(
                 continue;
             }
         };
-
-        for finding in charpaper_suite::inspect(&suite).findings {
-            let file = finding.file.map(|f| format!("{}: ", f.display())).unwrap_or_default();
-            match finding.severity {
-                Severity::Error => error!("suite {:?}: {file}{}", suite.name, finding.message),
-                Severity::Warning => warn!("suite {:?}: {file}{}", suite.name, finding.message),
-            }
-        }
 
         info!("showing suite {:?} from {}", suite.name, root.display());
         let look = edited.look_for(&suite);

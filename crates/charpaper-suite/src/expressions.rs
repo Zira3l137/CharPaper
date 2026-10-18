@@ -6,8 +6,6 @@ use gltf::animation::Property;
 
 use crate::document::read_document;
 
-pub const MAX_SHAPE_KEYS: usize = 256;
-
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SkinClips {
     pub expressions: Vec<String>,
@@ -36,6 +34,6 @@ pub fn skin_clips(path: &Path) -> Result<SkinClips, String> {
 
 // A skin clip that keys only shape keys is an expression. One that also moves bones is a
 // body animation exported along with the skin, and is ignored.
-pub(crate) fn is_expression(animation: &Animation) -> bool {
+fn is_expression(animation: &Animation) -> bool {
     animation.channels().all(|c| c.target().property() == Property::MorphTargetWeights)
 }

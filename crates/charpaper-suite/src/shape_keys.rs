@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use gltf::Document;
-
 use crate::document::read_document;
 
 // glTF has no place for shape key names; Blender writes them into each mesh's extras as
@@ -16,11 +14,9 @@ pub struct MeshShapeKeys {
 }
 
 pub fn mesh_shape_keys(path: &Path) -> Result<Vec<MeshShapeKeys>, String> {
-    read_document(path).map(|doc| in_document(&doc))
-}
-
-pub(crate) fn in_document(doc: &Document) -> Vec<MeshShapeKeys> {
-    doc.nodes()
+    let doc = read_document(path)?;
+    let meshes = doc
+        .nodes()
         .filter_map(|node| {
             let mesh = node.mesh()?;
             let count = mesh.primitives().map(|p| p.morph_targets().len()).max().unwrap_or(0);
@@ -33,7 +29,8 @@ pub(crate) fn in_document(doc: &Document) -> Vec<MeshShapeKeys> {
                 node.name().map_or_else(|| format!("GltfNode{}", node.index()), str::to_string);
             Some(MeshShapeKeys { node: name, keys })
         })
-        .collect()
+        .collect();
+    Ok(meshes)
 }
 
 fn target_names(mesh: &gltf::Mesh) -> Vec<String> {
