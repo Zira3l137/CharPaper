@@ -1,6 +1,9 @@
 use bevy::prelude::*;
+use charpaper_scene::ActiveLook;
+use charpaper_scene::ActiveSuite;
 use charpaper_scene::Focused;
-use charpaper_scene::FocusedMut;
+use charpaper_scene::LookEdited;
+use charpaper_scene::RestoreLook;
 use charpaper_scene::focused_changed;
 use charpaper_settings::AntiAliasing;
 use charpaper_settings::DepthOfFieldQuality;
@@ -10,166 +13,486 @@ use charpaper_settings::Graphics;
 use charpaper_settings::RENDER_SCALES;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
+use charpaper_suite::NO_LUT;
+use charpaper_suite::Tonemapping;
+use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
-use crate::elements::Cycler;
-use crate::elements::Section;
-use crate::elements::Shown;
-use crate::elements::Step;
-use crate::elements::UiContainer;
-use crate::locale::Locale;
+use super::look::edit_look;
+use super::look::resolved;
 use crate::panel::new_panel;
+use crate::row::percent;
+use crate::row::*;
+use crate::section::Section;
+use crate::section::section;
 use crate::widgets::*;
 
-// How finely the focused stage is drawn, in the Graphics tab. Edits its Graphics, which the
-// app saves with the stage. Shadow quality is the exception: every stage shares it.
+const EXPOSURE: Scale = Scale { step: 0.5, min: -10.0, max: 10.0, per_unit: 10.0 };
+const BLOOM: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
+const ABERRATION: Scale = Scale { step: 0.0025, min: 0.0, max: 0.05, per_unit: 10_000.0 };
+const VIGNETTE: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
+const VIGNETTE_SIZE: Scale = Scale { step: 0.1, min: 0.3, max: 2.0, per_unit: 10.0 };
+const GRAIN: Scale = Scale { step: 0.01, min: 0.0, max: 0.2, per_unit: 100.0 };
+const GRAIN_SIZE: Scale = Scale { step: 0.25, min: 1.0, max: 4.0, per_unit: 100.0 };
+// Warmth and tint.
+const SHIFT: Scale = Scale { step: 0.05, min: -1.0, max: 1.0, per_unit: 100.0 };
+// 100% leaves the picture as it is, which sits in the middle of both ranges.
+const SATURATION: Scale = Scale { step: 0.05, min: 0.0, max: 2.0, per_unit: 100.0 };
+const CONTRAST: Scale = Scale { step: 0.05, min: 0.5, max: 1.5, per_unit: 100.0 };
+const LUT_STRENGTH: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
+
+// The button under the post-processing rows that drops the viewer's look edits.
 pub(crate) struct GraphicsPlugin;
 
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_step).add_systems(
+        app.add_observer(on_click).add_systems(
             Update,
-            show_values.run_if(
-                focused_changed::<Graphics>
-                    .or_eager(resource_changed::<RenderSettings>)
-                    .or_eager(resource_changed::<Locale>)
-                    .or_eager(new_panel),
-            ),
+            show_restore.run_if(focused_changed::<LookEdited>.or_eager(new_panel)),
         );
     }
 }
 
-pub(crate) fn quality() -> impl Bundle {
-    shown_section(
+#[derive(Component)]
+struct RestoreButton;
+
+// How finely the focused stage is drawn, which the app saves with the stage in its Graphics,
+// and how the picture is finished, in its look. Shadow quality is the exception: every stage
+// shares it.
+pub(crate) fn page() -> impl Bundle {
+    children![quality(), fog(), post_processing()]
+}
+
+fn quality() -> impl Bundle {
+    section(
         |l| fl!(l, "section-quality"),
         Section::Quality,
-        rows(children![
-            segments(|l| fl!(l, "label-render-scale"), Cycler::RenderScale),
-            segments(|l| fl!(l, "label-anti-aliasing"), Cycler::AntiAliasing),
-            segments(|l| fl!(l, "label-depth-of-field"), Cycler::DepthOfField),
-            segments(|l| fl!(l, "label-shadow-quality"), Cycler::ShadowQuality),
-        ]),
+        children![
+            Setting {
+                label: |l| fl!(l, "label-render-scale"),
+                help: |l| fl!(l, "help-render-scale"),
+                show: |w, _| {
+                    let scale = w.focused::<Graphics>()?.scale_percent();
+                    Some(choice(&RENDER_SCALES, &scale, |scale| format!("{scale}%")))
+                },
+                change: |w, step| {
+                    w.edit(|graphics: &mut Graphics| {
+                        let mut scale = graphics.scale_percent();
+                        pick(&RENDER_SCALES, &mut scale, step);
+                        graphics.render_scale = scale;
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-anti-aliasing"),
+                help: |l| fl!(l, "help-anti-aliasing"),
+                show: |w, l| {
+                    let current = w.focused::<Graphics>()?.anti_aliasing;
+                    Some(choice(&AntiAliasing::ALL, &current, |aa| match aa {
+                        AntiAliasing::Off => on_off(l, false),
+                        AntiAliasing::Msaa4 => "4x".into(),
+                        AntiAliasing::Taa => "TAA".into(),
+                    }))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| pick(&AntiAliasing::ALL, &mut g.anti_aliasing, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-depth-of-field"),
+                help: |l| fl!(l, "help-depth-of-field"),
+                show: |w, l| {
+                    let current = w.focused::<Graphics>()?.depth_of_field;
+                    Some(choice(&DepthOfFieldQuality::ALL, &current, |quality| match quality {
+                        DepthOfFieldQuality::Off => on_off(l, false),
+                        DepthOfFieldQuality::Blur => fl!(l, "value-blur"),
+                        DepthOfFieldQuality::Bokeh => fl!(l, "value-bokeh"),
+                    }))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-shadow-quality"),
+                help: |l| fl!(l, "help-shadow-quality"),
+                show: |w, l| {
+                    let current = w.resource::<RenderSettings>().shadow_quality;
+                    Some(choice(&ShadowQuality::ALL, &current, |quality| match quality {
+                        ShadowQuality::Low => fl!(l, "value-low"),
+                        ShadowQuality::Medium => fl!(l, "value-medium"),
+                        ShadowQuality::High => fl!(l, "value-high"),
+                    }))
+                },
+                change: |w, step| {
+                    let mut settings = w.resource_mut::<RenderSettings>();
+                    pick(&ShadowQuality::ALL, &mut settings.shadow_quality, step);
+                },
+            }
+            .segments(),
+        ],
     )
 }
 
-pub(crate) fn fog() -> impl Bundle {
-    shown_section(
+fn fog() -> impl Bundle {
+    section(
         |l| fl!(l, "section-fog"),
         Section::Fog,
-        rows(children![
-            segments(|l| fl!(l, "label-fog"), Cycler::Fog),
-            picker(|l| fl!(l, "label-fog-quality"), Cycler::FogQuality),
-            segments(|l| fl!(l, "label-fog-dithering"), Cycler::FogDithering),
-            segments(|l| fl!(l, "label-fog-resolution"), Cycler::FogResolution),
-        ]),
+        children![
+            Setting {
+                label: |l| fl!(l, "label-fog"),
+                help: |l| fl!(l, "help-fog"),
+                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.fog)),
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.fog, step)),
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-fog-quality"),
+                help: |l| fl!(l, "help-fog-quality"),
+                show: |w, l| {
+                    let current = w.focused::<Graphics>()?.fog_quality;
+                    Some(choice(&FogQuality::ALL, &current, |quality| match quality {
+                        FogQuality::VeryLow => fl!(l, "value-very-low"),
+                        FogQuality::Low => fl!(l, "value-low"),
+                        FogQuality::Medium => fl!(l, "value-medium"),
+                        FogQuality::High => fl!(l, "value-high"),
+                        FogQuality::Ultra => fl!(l, "value-ultra"),
+                    }))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| pick(&FogQuality::ALL, &mut g.fog_quality, step));
+                },
+            }
+            .picker(),
+            Setting {
+                label: |l| fl!(l, "label-fog-dithering"),
+                help: |l| fl!(l, "help-fog-dithering"),
+                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.fog_dithering)),
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.fog_dithering, step)),
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-fog-resolution"),
+                help: |l| fl!(l, "help-fog-resolution"),
+                show: |w, l| {
+                    let current = w.focused::<Graphics>()?.fog_resolution;
+                    Some(choice(&FogResolution::ALL, &current, |resolution| match resolution {
+                        FogResolution::Full => fl!(l, "value-full"),
+                        FogResolution::Half => fl!(l, "value-half"),
+                    }))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        pick(&FogResolution::ALL, &mut g.fog_resolution, step);
+                    });
+                },
+            }
+            .segments(),
+        ],
     )
 }
 
-fn show_values(
-    graphics: Focused<Graphics>,
-    settings: Res<RenderSettings>,
-    locale: Res<Locale>,
-    mut rows: Query<(&UiContainer, &mut Shown)>,
-) {
-    let shadows = choice(&ShadowQuality::ALL, &settings.shadow_quality, |quality| match quality {
-        ShadowQuality::Low => fl!(locale, "value-low"),
-        ShadowQuality::Medium => fl!(locale, "value-medium"),
-        ShadowQuality::High => fl!(locale, "value-high"),
-    });
-    show(&mut rows, Cycler::ShadowQuality, shadows);
-    let Some(graphics) = graphics.get() else {
-        return;
-    };
-    let off = on_off(&locale, false);
-    for (container, mut shown) in &mut rows {
-        let UiContainer::Row(cycler) = *container else {
-            continue;
-        };
-        let next = match cycler {
-            Cycler::RenderScale => {
-                choice(&RENDER_SCALES, &graphics.scale_percent(), |scale| format!("{scale}%"))
+// Image, color and film, each folding on its own inside.
+fn post_processing() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-post-processing"),
+        Section::PostProcessing,
+        children![(
+            Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(12.0), ..default() },
+            Pickable::IGNORE,
+            children![
+                image(),
+                color(),
+                film(),
+                translated_button(|l| fl!(l, "restore-look"))
+                    .node(|n| n.display = Display::None)
+                    .build(RestoreButton),
+            ],
+        )],
+    )
+}
+
+fn image() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-image"),
+        Section::Image,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-tonemapping"),
+                help: |l| fl!(l, "help-tonemapping"),
+                show: |w, _| {
+                    let current = resolved(w)?.tonemapping;
+                    Some(choice(&Tonemapping::ALL, &current, |t| tonemapping_name(*t).into()))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.tonemapping =
+                            stepped(&Tonemapping::ALL, &current.tonemapping, step);
+                    });
+                },
             }
-            Cycler::AntiAliasing => {
-                choice(&AntiAliasing::ALL, &graphics.anti_aliasing, |aa| match aa {
-                    AntiAliasing::Off => off.clone(),
-                    AntiAliasing::Msaa4 => "4x".into(),
-                    AntiAliasing::Taa => "TAA".into(),
-                })
+            .picker(),
+            // Kept for the environment on screen while one shows, and for the suite otherwise.
+            Setting {
+                label: |l| fl!(l, "label-exposure"),
+                help: |l| fl!(l, "help-exposure"),
+                show: |w, _| {
+                    let exposure = resolved(w)?.exposure;
+                    Some(EXPOSURE.balance(format!("{exposure:+.1} EV"), exposure))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, environment| {
+                        let exposure = Some(EXPOSURE.nudge(current.exposure, step));
+                        match environment {
+                            Some(name) => {
+                                look.environments.entry(name.into()).or_default().exposure =
+                                    exposure;
+                            }
+                            None => look.post.exposure = exposure,
+                        }
+                    });
+                },
             }
-            Cycler::DepthOfField => {
-                choice(&DepthOfFieldQuality::ALL, &graphics.depth_of_field, |quality| match quality
-                {
-                    DepthOfFieldQuality::Off => off.clone(),
-                    DepthOfFieldQuality::Blur => fl!(locale, "value-blur"),
-                    DepthOfFieldQuality::Bokeh => fl!(locale, "value-bokeh"),
-                })
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-bloom"),
+                help: |l| fl!(l, "help-bloom"),
+                show: |w, l| Some(strength(l, resolved(w)?.bloom, BLOOM)),
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.bloom = Some(BLOOM.nudge(current.bloom, step));
+                    });
+                },
             }
-            Cycler::Fog => switch(&locale, graphics.fog),
-            Cycler::FogQuality => {
-                choice(&FogQuality::ALL, &graphics.fog_quality, |quality| match quality {
-                    FogQuality::VeryLow => fl!(locale, "value-very-low"),
-                    FogQuality::Low => fl!(locale, "value-low"),
-                    FogQuality::Medium => fl!(locale, "value-medium"),
-                    FogQuality::High => fl!(locale, "value-high"),
-                    FogQuality::Ultra => fl!(locale, "value-ultra"),
-                })
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-chromatic-aberration"),
+                help: |l| fl!(l, "help-chromatic-aberration"),
+                show: |w, l| Some(strength(l, resolved(w)?.chromatic_aberration, ABERRATION)),
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        let aberration = ABERRATION.nudge(current.chromatic_aberration, step);
+                        look.post.chromatic_aberration = Some(aberration);
+                    });
+                },
             }
-            Cycler::FogDithering => switch(&locale, graphics.fog_dithering),
-            Cycler::FogResolution => {
-                choice(&FogResolution::ALL, &graphics.fog_resolution, |resolution| match resolution
-                {
-                    FogResolution::Full => fl!(locale, "value-full"),
-                    FogResolution::Half => fl!(locale, "value-half"),
-                })
+            .stepper(),
+        ],
+    )
+}
+
+fn color() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-color"),
+        Section::Color,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-warmth"),
+                help: |l| fl!(l, "help-warmth"),
+                show: |w, _| {
+                    let warmth = resolved(w)?.warmth;
+                    Some(SHIFT.balance(signed_percent(warmth), warmth))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.grading.warmth = Some(SHIFT.nudge(current.warmth, step));
+                    });
+                },
             }
-            _ => continue,
-        };
-        shown.set_if_neq(next);
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-tint"),
+                help: |l| fl!(l, "help-tint"),
+                show: |w, _| {
+                    let tint = resolved(w)?.tint;
+                    Some(SHIFT.balance(signed_percent(tint), tint))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.grading.tint = Some(SHIFT.nudge(current.tint, step));
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-saturation"),
+                help: |l| fl!(l, "help-saturation"),
+                show: |w, _| {
+                    let saturation = resolved(w)?.saturation;
+                    Some(SATURATION.balance(percent(saturation), saturation))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.grading.saturation =
+                            Some(SATURATION.nudge(current.saturation, step));
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-contrast"),
+                help: |l| fl!(l, "help-contrast"),
+                show: |w, _| {
+                    let contrast = resolved(w)?.contrast;
+                    Some(CONTRAST.balance(percent(contrast), contrast))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.grading.contrast = Some(CONTRAST.nudge(current.contrast, step));
+                    });
+                },
+            }
+            .stepper(),
+            // The LUT rows only for a suite with LUTs.
+            Setting {
+                label: |l| fl!(l, "label-lut"),
+                help: |l| fl!(l, "help-lut"),
+                show: |w, l| {
+                    let options = luts(w)?;
+                    let current = w.focused::<ActiveLook>().and_then(|look| look.post.lut.name());
+                    let current = current.map(str::to_string);
+                    let label =
+                        |lut: &Option<String>| lut.clone().unwrap_or_else(|| on_off(l, false));
+                    Some(choice(&options, &current, label).when(options.len() > 1))
+                },
+                change: |w, step| {
+                    let Some(options) = luts(w) else {
+                        return;
+                    };
+                    w.edit(|look: &mut ActiveLook| {
+                        let current = look.post.lut.name().map(str::to_string);
+                        if let Some(next) = stepped(&options, &current, step) {
+                            look.post.lut.name = Some(next.unwrap_or_else(|| NO_LUT.to_string()));
+                        }
+                    });
+                },
+            }
+            .picker(),
+            Setting {
+                label: |l| fl!(l, "label-lut-strength"),
+                help: |l| fl!(l, "help-lut-strength"),
+                show: |w, _| {
+                    let has_luts = luts(w).is_some_and(|options| options.len() > 1);
+                    let strength = resolved(w)?.lut_strength;
+                    Some(LUT_STRENGTH.number(percent(strength), strength).when(has_luts))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.lut.strength =
+                            Some(LUT_STRENGTH.nudge(current.lut_strength, step));
+                    });
+                },
+            }
+            .stepper(),
+        ],
+    )
+}
+
+fn film() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-film"),
+        Section::Film,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-vignette"),
+                help: |l| fl!(l, "help-vignette"),
+                show: |w, l| Some(strength(l, resolved(w)?.vignette, VIGNETTE)),
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.vignette.intensity = Some(VIGNETTE.nudge(current.vignette, step));
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-vignette-size"),
+                help: |l| fl!(l, "help-vignette-size"),
+                show: |w, _| {
+                    let size = resolved(w)?.vignette_size;
+                    Some(VIGNETTE_SIZE.number(format!("{size:.1}"), size))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.vignette.size =
+                            Some(VIGNETTE_SIZE.nudge(current.vignette_size, step));
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-grain"),
+                help: |l| fl!(l, "help-grain"),
+                show: |w, l| Some(strength(l, resolved(w)?.grain, GRAIN)),
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.grain.intensity = Some(GRAIN.nudge(current.grain, step));
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-grain-size"),
+                help: |l| fl!(l, "help-grain-size"),
+                show: |w, _| {
+                    let size = resolved(w)?.grain_size;
+                    Some(GRAIN_SIZE.number(format!("{size:.2} px"), size))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        look.post.grain.size = Some(GRAIN_SIZE.nudge(current.grain_size, step));
+                    });
+                },
+            }
+            .stepper(),
+        ],
+    )
+}
+
+// An intensity reads as a share of the strongest the row allows, Off at none.
+fn strength(l: &FluentLanguageLoader, value: f32, scale: Scale) -> Shown {
+    let text = if value <= 0.0 { on_off(l, false) } else { percent(value / scale.max) };
+    scale.number(text, value)
+}
+
+// None is no LUT.
+fn luts(world: &World) -> Option<Vec<Option<String>>> {
+    let suite = world.focused::<ActiveSuite>()?;
+    Some(std::iter::once(None).chain(suite.luts.iter().map(|l| Some(l.name.clone()))).collect())
+}
+
+fn tonemapping_name(tonemapping: Tonemapping) -> &'static str {
+    match tonemapping {
+        Tonemapping::None => "None",
+        Tonemapping::Reinhard => "Reinhard",
+        Tonemapping::ReinhardLuminance => "Reinhard lum.",
+        Tonemapping::AcesFitted => "ACES",
+        Tonemapping::Agx => "AgX",
+        Tonemapping::SomewhatBoringDisplayTransform => "Boring",
+        Tonemapping::TonyMcMapface => "TonyMcMapface",
+        Tonemapping::BlenderFilmic => "Filmic",
     }
 }
 
-fn on_step(
-    event: On<Step>,
-    mut graphics: FocusedMut<Graphics>,
-    mut settings: ResMut<RenderSettings>,
-) {
-    if event.cycler == Cycler::ShadowQuality {
-        if let Some(next) = step(&ShadowQuality::ALL, &settings.shadow_quality, &event) {
-            settings.shadow_quality = next;
-        }
-        return;
-    }
-    let Some(mut graphics) = graphics.get_mut() else {
+fn show_restore(edited: Focused<LookEdited>, mut buttons: Query<&mut Node, With<RestoreButton>>) {
+    let Some(edited) = edited.get() else {
         return;
     };
-    match event.cycler {
-        Cycler::RenderScale => {
-            if let Some(next) = step(&RENDER_SCALES, &graphics.scale_percent(), &event) {
-                graphics.render_scale = next;
-            }
-        }
-        Cycler::AntiAliasing => {
-            if let Some(next) = step(&AntiAliasing::ALL, &graphics.anti_aliasing, &event) {
-                graphics.anti_aliasing = next;
-            }
-        }
-        Cycler::DepthOfField => {
-            if let Some(next) = step(&DepthOfFieldQuality::ALL, &graphics.depth_of_field, &event) {
-                graphics.depth_of_field = next;
-            }
-        }
-        Cycler::Fog => graphics.fog = flip(graphics.fog, &event),
-        Cycler::FogQuality => {
-            if let Some(next) = step(&FogQuality::ALL, &graphics.fog_quality, &event) {
-                graphics.fog_quality = next;
-            }
-        }
-        Cycler::FogDithering => graphics.fog_dithering = flip(graphics.fog_dithering, &event),
-        Cycler::FogResolution => {
-            if let Some(next) = step(&FogResolution::ALL, &graphics.fog_resolution, &event) {
-                graphics.fog_resolution = next;
-            }
-        }
-        _ => {}
+    for mut node in &mut buttons {
+        node.display = display(edited.0);
+    }
+}
+
+fn on_click(
+    event: On<Pointer<Click>>,
+    buttons: Query<(), With<RestoreButton>>,
+    mut restore: MessageWriter<RestoreLook>,
+) {
+    if buttons.contains(event.entity) {
+        restore.write(RestoreLook);
     }
 }

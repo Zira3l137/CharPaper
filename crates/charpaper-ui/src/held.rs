@@ -4,8 +4,9 @@ use bevy::prelude::*;
 use charpaper_scene::CharacterState;
 use charpaper_scene::FocusedMut;
 
-use crate::elements::Cycler;
-use crate::elements::Step;
+use crate::row::FocusedWorld;
+use crate::row::Step;
+use crate::row::stepped;
 
 // How long the steps must stop before a held choice is put in place.
 const SETTLE: Duration = Duration::from_millis(300);
@@ -21,36 +22,64 @@ impl Plugin for HeldPlugin {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Loads {
+    Suite,
+    Environment,
+    Camera,
+}
+
+impl Loads {
+    fn of(self, state: &CharacterState) -> &Option<String> {
+        match self {
+            Loads::Suite => &state.suite,
+            Loads::Environment => &state.environment,
+            Loads::Camera => &state.camera,
+        }
+    }
+
+    fn of_mut(self, state: &mut CharacterState) -> &mut Option<String> {
+        match self {
+            Loads::Suite => &mut state.suite,
+            Loads::Environment => &mut state.environment,
+            Loads::Camera => &mut state.camera,
+        }
+    }
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct Held(Vec<HeldChoice>);
 
 struct HeldChoice {
-    cycler: Cycler,
+    loads: Loads,
     value: Option<String>,
     at: Duration,
 }
 
-impl Held {
-    // What the row shows, and where its next step starts from.
-    pub(crate) fn current(&self, cycler: Cycler, applied: &Option<String>) -> Option<String> {
-        let held = self.0.iter().find(|choice| choice.cycler == cycler);
-        held.map_or_else(|| applied.clone(), |choice| choice.value.clone())
-    }
+// What the row shows, and where its next step starts from: the held choice, or else the one in
+// place. None without a stage.
+pub(crate) fn current(world: &World, loads: Loads) -> Option<Option<String>> {
+    let state = world.focused::<CharacterState>()?;
+    let held = world.resource::<Held>().0.iter().find(|choice| choice.loads == loads);
+    Some(held.map_or_else(|| loads.of(state).clone(), |choice| choice.value.clone()))
+}
 
-    // Holds a choice from the wheel or a held arrow. A click's choice is handed back to put in
-    // place at once, and drops anything held for the row, which would otherwise land after it.
-    pub(crate) fn hold(
-        &mut self,
-        step: &Step,
-        value: Option<String>,
-        now: Duration,
-    ) -> Option<Option<String>> {
-        self.0.retain(|choice| choice.cycler != step.cycler);
-        if !step.continuous {
-            return Some(value);
-        }
-        self.0.push(HeldChoice { cycler: step.cycler, value, at: now });
-        None
+// The `change` of these rows. A click's choice is put in place at once, and drops anything held
+// for the row, which would otherwise land after it.
+pub(crate) fn step(world: &mut World, loads: Loads, options: &[Option<String>], step: &Step) {
+    let Some(next) = current(world, loads).and_then(|current| stepped(options, &current, step))
+    else {
+        return;
+    };
+    let now = world.resource::<Time<Real>>().elapsed();
+    let mut held = world.resource_mut::<Held>();
+    held.0.retain(|choice| choice.loads != loads);
+    if step.continuous {
+        held.0.push(HeldChoice { loads, value: next, at: now });
+        return;
+    }
+    if let Some(mut state) = world.focused_mut::<CharacterState>() {
+        *loads.of_mut(&mut state) = next;
     }
 }
 
@@ -71,13 +100,7 @@ fn apply_settled(
         if now.saturating_sub(choice.at) < SETTLE {
             return true;
         }
-        let value = choice.value.clone();
-        match choice.cycler {
-            Cycler::Suite => state.suite = value,
-            Cycler::Environment => state.environment = value,
-            Cycler::Camera => state.camera = value,
-            _ => {}
-        }
+        *choice.loads.of_mut(&mut state) = choice.value.clone();
         false
     });
 }

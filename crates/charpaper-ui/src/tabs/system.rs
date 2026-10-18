@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use charpaper_scene::Focused;
 use charpaper_scene::StageKey;
 use charpaper_scene::focused_changed;
 use charpaper_settings::ChosenMonitor;
@@ -11,86 +10,192 @@ use charpaper_settings::StageId;
 use charpaper_settings::UiState;
 use i18n_embed_fl::fl;
 
-use crate::elements::Cycler;
-use crate::elements::Section;
-use crate::elements::Shown;
-use crate::elements::Step;
-use crate::elements::UiButton;
-use crate::elements::UiContainer;
 use crate::locale::Languages;
 use crate::locale::Locale;
 use crate::panel::new_panel;
+use crate::row::*;
+use crate::section::Content;
+use crate::section::Section;
+use crate::section::section;
 use crate::theme::*;
 use crate::widgets::*;
 
-// Settings of the app itself rather than of what it shows: which monitors it is on and which
-// stage each shows, how often it draws and when it stops, and the panel's language.
-pub(crate) struct SystemTabPlugin;
+// The list of monitors, which are not rows but a button each.
+pub(crate) struct SystemPlugin;
 
-impl Plugin for SystemTabPlugin {
+impl Plugin for SystemPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_step).add_observer(on_click).add_systems(
+        app.add_observer(on_click).add_systems(
             Update,
-            (
-                show_settings.run_if(
-                    resource_changed::<UiState>
-                        .or_eager(resource_changed::<RenderSettings>)
-                        .or_eager(resource_changed::<Locale>)
-                        .or_eager(new_panel),
-                ),
-                (fill_monitors, show_monitors, show_layout).chain().run_if(
-                    resource_changed::<ScreenSettings>
-                        .or_eager(resource_changed::<Monitors>)
-                        .or_eager(resource_changed::<Locale>)
-                        .or_eager(focused_changed::<StageKey>)
-                        .or_eager(new_panel),
-                ),
+            (fill_monitors, show_monitors).chain().run_if(
+                resource_changed::<ScreenSettings>
+                    .or_eager(resource_changed::<Monitors>)
+                    .or_eager(resource_changed::<Locale>)
+                    .or_eager(focused_changed::<StageKey>)
+                    .or_eager(new_panel),
             ),
         );
     }
 }
 
+#[derive(Component)]
+#[require(Content)]
+struct MonitorList;
+
+// Shows the wallpaper on the monitor with this id, or stops showing it there.
+#[derive(Component)]
+struct MonitorButton(String);
+
+// Settings of the app itself rather than of what it shows: which monitors it is on and which
+// stage each shows, how often it draws and when it stops, and the panel's language.
 pub(crate) fn page() -> impl Bundle {
-    children![
-        shown_section(
-            |l| fl!(l, "section-display"),
-            Section::Display,
-            rows(children![
-                (
-                    Node {
-                        flex_direction: FlexDirection::Column,
-                        row_gap: Val::Px(4.0),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                    UiContainer::MonitorList,
-                ),
-                segments(|l| fl!(l, "label-layout"), Cycler::Layout),
-            ]),
-        ),
-        shown_section(
-            |l| fl!(l, "section-frame-rate"),
-            Section::FrameRate,
-            rows(children![
-                segments(|l| fl!(l, "label-fps-limit"), Cycler::FpsLimit),
-                segments(|l| fl!(l, "label-monitor"), Cycler::Monitor),
-            ]),
-        ),
-        shown_section(
-            |l| fl!(l, "section-pause"),
-            Section::Pause,
-            rows(children![
-                segments(|l| fl!(l, "label-pause-fullscreen"), Cycler::PauseFullscreen),
-                segments(|l| fl!(l, "label-pause-covered"), Cycler::PauseCovered),
-                segments(|l| fl!(l, "label-pause-battery"), Cycler::PauseBattery),
-            ]),
-        ),
-        shown_section(
-            |l| fl!(l, "section-interface"),
-            Section::Interface,
-            picker(|l| fl!(l, "label-language"), Cycler::Language),
-        ),
-    ]
+    children![display_section(), frame_rate(), pause(), interface()]
+}
+
+fn display_section() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-display"),
+        Section::Display,
+        children![
+            (
+                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default() },
+                Pickable::IGNORE,
+                MonitorList,
+            ),
+            // For the stage the panel shows, with two monitors or more showing it.
+            Setting {
+                label: |l| fl!(l, "label-layout"),
+                help: |l| fl!(l, "help-layout"),
+                show: |w, l| {
+                    let stage = w.focused::<StageKey>().map(|key| key.0);
+                    let showing = w.resource::<Monitors>().0.iter();
+                    let several =
+                        showing.filter(|m| m.stage.is_some() && m.stage == stage).count() > 1;
+                    let spanned = &w.resource::<ScreenSettings>().spanned;
+                    let span = stage.is_some_and(|stage| spanned.contains(&stage));
+                    let label = |&span: &bool| match span {
+                        false => fl!(l, "layout-mirror"),
+                        true => fl!(l, "layout-span"),
+                    };
+                    Some(choice(&[false, true], &span, label).when(several))
+                },
+                change: |w, step| {
+                    let Some(stage) = w.focused::<StageKey>().map(|key| key.0) else {
+                        return;
+                    };
+                    let mut screen = w.resource_mut::<ScreenSettings>();
+                    let mut span = screen.spanned.contains(&stage);
+                    flip(&mut span, step);
+                    if span {
+                        screen.spanned.insert(stage);
+                    } else {
+                        screen.spanned.remove(&stage);
+                    }
+                },
+            }
+            .segments(),
+        ],
+    )
+}
+
+fn frame_rate() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-frame-rate"),
+        Section::FrameRate,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-fps-limit"),
+                help: |l| fl!(l, "help-fps-limit"),
+                show: |w, l| {
+                    let current = w.resource::<RenderSettings>().fps_limit;
+                    Some(choice(&FpsLimit::ALL, &current, |limit| match limit.per_second() {
+                        Some(fps) => format!("{fps:.0}"),
+                        None => fl!(l, "value-max"),
+                    }))
+                },
+                change: |w, step| {
+                    let mut settings = w.resource_mut::<RenderSettings>();
+                    pick(&FpsLimit::ALL, &mut settings.fps_limit, step);
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-monitor"),
+                help: |l| fl!(l, "help-monitor"),
+                show: |w, l| Some(switch(l, w.resource::<UiState>().performance_monitor)),
+                change: |w, step| flip(&mut w.resource_mut::<UiState>().performance_monitor, step),
+            }
+            .segments(),
+        ],
+    )
+}
+
+fn pause() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-pause"),
+        Section::Pause,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-pause-fullscreen"),
+                help: |l| fl!(l, "help-pause-fullscreen"),
+                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_when_fullscreen)),
+                change: |w, step| {
+                    flip(&mut w.resource_mut::<RenderSettings>().pause_when_fullscreen, step);
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-pause-covered"),
+                help: |l| fl!(l, "help-pause-covered"),
+                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_when_covered)),
+                change: |w, step| {
+                    flip(&mut w.resource_mut::<RenderSettings>().pause_when_covered, step);
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-pause-battery"),
+                help: |l| fl!(l, "help-pause-battery"),
+                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_on_battery)),
+                change: |w, step| {
+                    flip(&mut w.resource_mut::<RenderSettings>().pause_on_battery, step);
+                },
+            }
+            .segments(),
+        ],
+    )
+}
+
+fn interface() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-interface"),
+        Section::Interface,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-language"),
+                help: |l| fl!(l, "help-language"),
+                show: |w, l| {
+                    let languages = w.resource::<Languages>();
+                    let label = |tag: &Option<String>| match tag {
+                        None => fl!(l, "language-system"),
+                        Some(tag) => languages.name(tag).unwrap_or(tag).to_string(),
+                    };
+                    let current = &w.resource::<UiState>().language;
+                    Some(choice(&languages_of(languages), current, label))
+                },
+                change: |w, step| {
+                    let options = languages_of(w.resource::<Languages>());
+                    pick(&options, &mut w.resource_mut::<UiState>().language, step);
+                },
+            }
+            .picker()
+        ],
+    )
+}
+
+// None, following the system's languages, comes first.
+fn languages_of(languages: &Languages) -> Vec<Option<String>> {
+    std::iter::once(None).chain(languages.0.iter().map(|l| Some(l.tag.clone()))).collect()
 }
 
 // One row per connected monitor, left to right as they stand, and one for each chosen monitor
@@ -102,7 +207,7 @@ fn fill_monitors(
     screen: Res<ScreenSettings>,
     monitors: Res<Monitors>,
     locale: Res<Locale>,
-    lists: Query<(Entity, &UiContainer, Option<&Children>)>,
+    lists: Query<(Entity, Option<&Children>), With<MonitorList>>,
     mut made: Local<Vec<(String, String)>>,
 ) {
     let missing = fl!(locale, "monitor-missing");
@@ -115,9 +220,9 @@ fn fill_monitors(
         .map(|chosen| (chosen.id.clone(), format!("{} · {missing}", chosen.name)));
     let rows: Vec<(String, String)> = connected.chain(unplugged).collect();
     let changed = *made != rows;
-    for (list, container, children) in &lists {
+    for (list, children) in &lists {
         let filled = children.is_some_and(|c| !c.is_empty());
-        if *container != UiContainer::MonitorList || (filled && !changed) {
+        if filled && !changed {
             continue;
         }
         commands.entity(list).despawn_children().with_children(|list| {
@@ -138,7 +243,7 @@ fn fill_monitors(
                         ),
                         button("-")
                             .node(|n| n.width = Val::Px(56.0))
-                            .build(UiButton::Monitor(id.clone())),
+                            .build(MonitorButton(id.clone())),
                     ],
                 ));
             }
@@ -151,14 +256,11 @@ fn show_monitors(
     screen: Res<ScreenSettings>,
     monitors: Res<Monitors>,
     locale: Res<Locale>,
-    buttons: Query<(&UiButton, &Children)>,
+    buttons: Query<(&MonitorButton, &Children)>,
     mut texts: Query<&mut Text>,
 ) {
     for (button, children) in &buttons {
-        let UiButton::Monitor(id) = button else {
-            continue;
-        };
-        let text = match shown_stage(&screen, &monitors, id) {
+        let text = match shown_stage(&screen, &monitors, &button.0) {
             Some(stage) => stage.to_string(),
             None => on_off(&locale, false),
         };
@@ -168,26 +270,6 @@ fn show_monitors(
             }
         }
     }
-}
-
-// For the stage the panel shows, with two monitors or more showing it.
-fn show_layout(
-    screen: Res<ScreenSettings>,
-    monitors: Res<Monitors>,
-    stage: Focused<StageKey>,
-    locale: Res<Locale>,
-    mut nodes: Query<(&UiContainer, &mut Node)>,
-    mut rows: Query<(&UiContainer, &mut Shown)>,
-) {
-    let stage = stage.get().map(|key| key.0);
-    let several = monitors.0.iter().filter(|m| m.stage.is_some() && m.stage == stage).count() > 1;
-    show_container(&mut nodes, UiContainer::Row(Cycler::Layout), several);
-    let label = |span: &bool| match span {
-        false => fl!(locale, "layout-mirror"),
-        true => fl!(locale, "layout-span"),
-    };
-    let span = stage.is_some_and(|stage| screen.spanned.contains(&stage));
-    show(&mut rows, Cycler::Layout, choice(&[false, true], &span, label));
 }
 
 // An unplugged monitor keeps its stage while it is chosen: switching it off unchooses it.
@@ -202,11 +284,11 @@ fn shown_stage(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> Option
 // stages to pick from as monitors in the list, enough for each to show its own.
 fn on_click(
     event: On<Pointer<Click>>,
-    buttons: Query<&UiButton>,
+    buttons: Query<&MonitorButton>,
     monitors: Res<Monitors>,
     mut screen: ResMut<ScreenSettings>,
 ) {
-    let Ok(UiButton::Monitor(id)) = buttons.get(event.entity) else {
+    let Ok(MonitorButton(id)) = buttons.get(event.entity) else {
         return;
     };
     // Nothing chosen yet means the monitors showing it now, so the first click builds on them.
@@ -242,76 +324,4 @@ fn on_click(
         chosen.push(ChosenMonitor { id: id.clone(), name: name.unwrap_or_default(), stage });
     }
     screen.monitors = chosen;
-}
-
-fn show_settings(
-    ui: Res<UiState>,
-    settings: Res<RenderSettings>,
-    locale: Res<Locale>,
-    languages: Res<Languages>,
-    mut rows: Query<(&UiContainer, &mut Shown)>,
-) {
-    let fps = choice(&FpsLimit::ALL, &settings.fps_limit, |limit| match limit.per_second() {
-        Some(fps) => format!("{fps:.0}"),
-        None => fl!(locale, "value-max"),
-    });
-    show(&mut rows, Cycler::FpsLimit, fps);
-    show(&mut rows, Cycler::Monitor, switch(&locale, ui.performance_monitor));
-    show(&mut rows, Cycler::PauseFullscreen, switch(&locale, settings.pause_when_fullscreen));
-    show(&mut rows, Cycler::PauseCovered, switch(&locale, settings.pause_when_covered));
-    show(&mut rows, Cycler::PauseBattery, switch(&locale, settings.pause_on_battery));
-    let label = |tag: &Option<String>| match tag {
-        None => fl!(locale, "language-system"),
-        Some(tag) => languages.name(tag).unwrap_or(tag).to_string(),
-    };
-    show(&mut rows, Cycler::Language, choice(&options(&languages), &ui.language, label));
-}
-
-// None, following the system's languages, comes first.
-fn options(languages: &Languages) -> Vec<Option<String>> {
-    std::iter::once(None).chain(languages.0.iter().map(|l| Some(l.tag.clone()))).collect()
-}
-
-fn on_step(
-    event: On<Step>,
-    languages: Res<Languages>,
-    mut ui: ResMut<UiState>,
-    mut screen: ResMut<ScreenSettings>,
-    mut settings: ResMut<RenderSettings>,
-    stage: Focused<StageKey>,
-) {
-    match event.cycler {
-        Cycler::Layout => {
-            let Some(stage) = stage.get().map(|key| key.0) else {
-                return;
-            };
-            if flip(screen.spanned.contains(&stage), &event) {
-                screen.spanned.insert(stage);
-            } else {
-                screen.spanned.remove(&stage);
-            }
-        }
-        Cycler::Language => {
-            let options = options(&languages);
-            if let Some(next) = step(&options, &ui.language, &event) {
-                ui.language = next;
-            }
-        }
-        Cycler::FpsLimit => {
-            if let Some(next) = step(&FpsLimit::ALL, &settings.fps_limit, &event) {
-                settings.fps_limit = next;
-            }
-        }
-        Cycler::Monitor => ui.performance_monitor = flip(ui.performance_monitor, &event),
-        Cycler::PauseFullscreen => {
-            settings.pause_when_fullscreen = flip(settings.pause_when_fullscreen, &event);
-        }
-        Cycler::PauseCovered => {
-            settings.pause_when_covered = flip(settings.pause_when_covered, &event);
-        }
-        Cycler::PauseBattery => {
-            settings.pause_on_battery = flip(settings.pause_on_battery, &event);
-        }
-        _ => {}
-    }
 }

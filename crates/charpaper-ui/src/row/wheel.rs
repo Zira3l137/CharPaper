@@ -4,12 +4,12 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
-use crate::elements::Change;
-use crate::elements::Control;
-use crate::elements::Cycler;
-use crate::elements::Step;
-use crate::elements::UiContainer;
-use crate::elements::Well;
+use super::Change;
+use super::RowOf;
+use super::Step;
+use super::widgets::Control;
+use super::widgets::Well;
+use crate::panel::Page;
 use crate::theme::*;
 
 // Logical pixels, about one row.
@@ -49,7 +49,8 @@ struct Gesture {
 #[derive(Clone, Copy)]
 enum Target {
     Scroll(Entity),
-    Tune(Cycler),
+    // A row, and whether it accelerates.
+    Tune(Entity, bool),
 }
 
 // A global observer sees the event at every entity it bubbles through, so this acts only where
@@ -60,22 +61,21 @@ fn on_wheel(
     mut commands: Commands,
     time: Res<Time<Real>>,
     parents: Query<&ChildOf>,
-    containers: Query<&UiContainer>,
-    controls: Query<&Control>,
-    mut pages: Query<(&mut ScrollPosition, &ComputedNode)>,
+    pages: Query<(), With<Page>>,
+    controls: Query<(), With<Control>>,
+    row_of: RowOf,
+    mut scrolling: Query<(&mut ScrollPosition, &ComputedNode)>,
     mut gesture: ResMut<Gesture>,
 ) {
     let start = event.entity;
     if start != event.original_event_target() {
         return;
     }
-    let mut control = None;
+    let mut on_control = false;
     let mut page = None;
     for entity in std::iter::once(start).chain(parents.iter_ancestors(start)) {
-        if let (None, Ok(found)) = (control, controls.get(entity)) {
-            control = Some(found.0);
-        }
-        if let Ok(UiContainer::Page(_)) = containers.get(entity) {
+        on_control |= controls.contains(entity);
+        if pages.contains(entity) {
             page = Some(entity);
             break;
         }
@@ -89,7 +89,8 @@ fn on_wheel(
     let since = now.saturating_sub(gesture.last);
     gesture.last = now;
     if gesture.target.is_none() || since > REST {
-        let target = control.map_or(Target::Scroll(page), Target::Tune);
+        let row = row_of.get(start).filter(|_| on_control);
+        let target = row.map_or(Target::Scroll(page), |(row, r)| Target::Tune(row, r.accelerates));
         *gesture = Gesture { target: Some(target), last: now, carry: 0.0, stepped: None, speed: 1 };
     }
 
@@ -99,8 +100,8 @@ fn on_wheel(
     };
     let target = gesture.target;
     match target {
-        Some(Target::Scroll(page)) => scroll(&mut pages, page, notches * SCROLL_PER_NOTCH),
-        Some(Target::Tune(cycler)) => {
+        Some(Target::Scroll(page)) => scroll(&mut scrolling, page, notches * SCROLL_PER_NOTCH),
+        Some(Target::Tune(row, accelerates)) => {
             gesture.carry += notches;
             let whole = gesture.carry.trunc();
             if whole == 0.0 {
@@ -110,9 +111,9 @@ fn on_wheel(
             let fast = gesture.stepped.is_some_and(|stepped| now.saturating_sub(stepped) < FAST);
             gesture.speed = if fast { (gesture.speed + 1).min(TOP_SPEED) } else { 1 };
             gesture.stepped = Some(now);
-            let speed = if cycler.accelerates() { gesture.speed } else { 1 };
+            let speed = if accelerates { gesture.speed } else { 1 };
             let change = Change::By(whole as i32 * speed);
-            commands.trigger(Step { cycler, change, continuous: true });
+            commands.queue(Step { change, continuous: true }.on(row));
         }
         None => {}
     }
@@ -133,15 +134,17 @@ fn scroll(pages: &mut Query<(&mut ScrollPosition, &ComputedNode)>, page: Entity,
     }
 }
 
-// Outlines the value under the pointer, so it's plain that the wheel will change it.
+// Outlines the value under the pointer, so it's plain that the wheel will change it. The box is
+// the control itself, or inside it.
 fn light_controls(
-    controls: Query<(&Control, &Hovered), Changed<Hovered>>,
-    mut wells: Query<(&Well, &mut BorderColor)>,
+    controls: Query<(Entity, &Hovered), (With<Control>, Changed<Hovered>)>,
+    children: Query<&Children>,
+    mut wells: Query<&mut BorderColor, With<Well>>,
 ) {
     for (control, hovered) in &controls {
         let color = if hovered.get() { LIVE_BORDER } else { BORDER };
-        for (well, mut border) in &mut wells {
-            if well.0 == control.0 {
+        for part in std::iter::once(control).chain(children.iter_descendants(control)) {
+            if let Ok(mut border) = wells.get_mut(part) {
                 *border = BorderColor::all(color);
             }
         }

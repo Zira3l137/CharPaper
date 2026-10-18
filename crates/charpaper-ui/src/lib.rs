@@ -1,15 +1,12 @@
-mod arrows;
-mod elements;
 mod fonts;
 mod held;
-mod help;
 mod locale;
 mod overlay;
 mod panel;
-mod rows;
+mod row;
+mod section;
 mod tabs;
 mod theme;
-mod wheel;
 mod widgets;
 
 use bevy::prelude::*;
@@ -23,8 +20,8 @@ pub use locale::UiConfig;
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PanelHovered(pub bool);
 
-// The collapsible settings panel on the desktop. The frame and every tab register their
-// own systems; a new tab is a module in `tabs/` plus a line here and in panel.rs.
+// The collapsible settings panel on the desktop. A page of it is a module in `tabs/`, which lays
+// out sections of rows; a new tab is such a module plus a line in panel.rs.
 pub struct SettingsPanelPlugin {
     pub config: UiConfig,
 }
@@ -44,16 +41,10 @@ impl Plugin for SettingsPanelPlugin {
                 fonts::FontsPlugin,
                 panel::PanelPlugin,
                 overlay::OverlayPlugin,
-                tabs::character::CharacterPlugin,
-                tabs::look::LookPlugin,
-                tabs::graphics::GraphicsPlugin,
-                tabs::sound::SoundPlugin,
-                tabs::system::SystemTabPlugin,
-                wheel::WheelPlugin,
+                section::SectionsPlugin,
+                row::RowsPlugin,
                 held::HeldPlugin,
-                arrows::ArrowsPlugin,
-                rows::RowsPlugin,
-                help::HelpPlugin,
+                tabs::TabsPlugin,
             ));
     }
 }

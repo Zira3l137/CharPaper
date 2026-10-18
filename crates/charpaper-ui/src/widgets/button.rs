@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
-use crate::elements::UiButton;
 use crate::locale::Localized;
 use crate::locale::Tr;
 
@@ -65,7 +64,8 @@ impl ButtonBuilder {
         self
     }
 
-    pub(crate) fn build(self, action: UiButton) -> impl Bundle {
+    // The action is the component that says what a click does, for the observer that acts on it.
+    pub(crate) fn build(self, action: impl Bundle) -> impl Bundle {
         (
             self.node,
             BaseBackground(self.fill),
@@ -98,8 +98,7 @@ impl HoverFeedback for EntityCommands<'_> {
     }
 }
 
-type Feedback<'w, 's> =
-    Query<'w, 's, (&'static BaseBackground, &'static mut BackgroundColor), With<UiButton>>;
+type Feedback<'w, 's> = Query<'w, 's, (&'static BaseBackground, &'static mut BackgroundColor)>;
 
 fn brighten<E>(delta: f32) -> impl Fn(On<Pointer<E>>, Feedback)
 where

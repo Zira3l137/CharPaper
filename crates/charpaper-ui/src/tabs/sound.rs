@@ -2,62 +2,63 @@ use bevy::prelude::*;
 use charpaper_settings::Volumes;
 use i18n_embed_fl::fl;
 
-use crate::elements::Cycler;
-use crate::elements::Section;
-use crate::elements::Shown;
-use crate::elements::Step;
-use crate::elements::UiContainer;
-use crate::panel::new_panel;
-use crate::widgets::percent;
-use crate::widgets::*;
+use crate::row::percent;
+use crate::row::*;
+use crate::section::Section;
+use crate::section::section;
 
-const VOLUME_STEP: f32 = 0.05;
+const VOLUME: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
 
-// How loud the app is, in the Sound tab. Every stage shares it.
-pub(crate) struct SoundPlugin;
-
-impl Plugin for SoundPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_observer(on_step).add_systems(
-            Update,
-            show_volumes.run_if(resource_changed::<Volumes>.or_eager(new_panel)),
-        );
-    }
-}
-
+// How loud the app is. Every stage shares it.
 pub(crate) fn page() -> impl Bundle {
-    children![shown_section(
+    children![section(
         |l| fl!(l, "section-sound"),
         Section::Sound,
-        rows(children![
-            stepper(|l| fl!(l, "label-master-volume"), Cycler::MasterVolume),
-            stepper(|l| fl!(l, "label-music-volume"), Cycler::MusicVolume),
-            stepper(|l| fl!(l, "label-ambience-volume"), Cycler::AmbienceVolume),
-            stepper(|l| fl!(l, "label-character-volume"), Cycler::CharacterVolume),
-        ]),
+        children![
+            Setting {
+                label: |l| fl!(l, "label-master-volume"),
+                help: |l| fl!(l, "help-master-volume"),
+                show: |w, _| Some(volume(w.resource::<Volumes>().master)),
+                change: |w, step| {
+                    let mut volumes = w.resource_mut::<Volumes>();
+                    volumes.master = VOLUME.nudge(volumes.master, step);
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-music-volume"),
+                help: |l| fl!(l, "help-music-volume"),
+                show: |w, _| Some(volume(w.resource::<Volumes>().music)),
+                change: |w, step| {
+                    let mut volumes = w.resource_mut::<Volumes>();
+                    volumes.music = VOLUME.nudge(volumes.music, step);
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-ambience-volume"),
+                help: |l| fl!(l, "help-ambience-volume"),
+                show: |w, _| Some(volume(w.resource::<Volumes>().ambience)),
+                change: |w, step| {
+                    let mut volumes = w.resource_mut::<Volumes>();
+                    volumes.ambience = VOLUME.nudge(volumes.ambience, step);
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-character-volume"),
+                help: |l| fl!(l, "help-character-volume"),
+                show: |w, _| Some(volume(w.resource::<Volumes>().character)),
+                change: |w, step| {
+                    let mut volumes = w.resource_mut::<Volumes>();
+                    volumes.character = VOLUME.nudge(volumes.character, step);
+                },
+            }
+            .stepper(),
+        ],
     )]
 }
 
-fn show_volumes(volumes: Res<Volumes>, mut rows: Query<(&UiContainer, &mut Shown)>) {
-    for (cycler, volume) in [
-        (Cycler::MasterVolume, volumes.master),
-        (Cycler::MusicVolume, volumes.music),
-        (Cycler::AmbienceVolume, volumes.ambience),
-        (Cycler::CharacterVolume, volumes.character),
-    ] {
-        show(&mut rows, cycler, number(percent(volume), volume, 0.0, 1.0));
-    }
-}
-
-fn on_step(event: On<Step>, mut volumes: ResMut<Volumes>) {
-    let volume = match event.cycler {
-        Cycler::MasterVolume => &mut volumes.master,
-        Cycler::MusicVolume => &mut volumes.music,
-        Cycler::AmbienceVolume => &mut volumes.ambience,
-        Cycler::CharacterVolume => &mut volumes.character,
-        _ => return,
-    };
-    // Rounded so that repeated steps land on whole percents rather than drifting off them.
-    let next = (*volume + event.by() as f32 * VOLUME_STEP).clamp(0.0, 1.0);
-    *volume = (next * 100.0).round() / 100.0;
+fn volume(volume: f32) -> Shown {
+    VOLUME.number(percent(volume), volume)
 }

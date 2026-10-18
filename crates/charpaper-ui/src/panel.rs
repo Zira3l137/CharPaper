@@ -11,13 +11,9 @@ use charpaper_settings::UiState;
 use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
-use crate::elements::Chevron;
-use crate::elements::HelpText;
-use crate::elements::StatusText;
-use crate::elements::UiButton;
-use crate::elements::UiContainer;
 use crate::locale::Locale;
 use crate::locale::Tr;
+use crate::row::Row;
 use crate::tabs;
 use crate::theme::*;
 use crate::widgets::*;
@@ -32,13 +28,11 @@ impl Plugin for PanelPlugin {
         app.init_resource::<PanelHovered>()
             .add_systems(PreUpdate, spawn_panels.after(ScreenSync))
             .add_observer(despawn_panel)
-            .add_systems(Update, track_hover)
+            .add_systems(Update, (track_hover, show_status, show_help))
             .add_systems(
                 Update,
-                (show_panel, style_tabs, show_folds)
-                    .run_if(resource_changed::<UiState>.or_eager(new_panel)),
+                (show_panel, style_tabs).run_if(resource_changed::<UiState>.or_eager(new_panel)),
             )
-            .add_systems(Update, show_status)
             .add_observer(on_click);
     }
 }
@@ -48,6 +42,30 @@ impl Plugin for PanelPlugin {
 pub(crate) struct Panel {
     screen: Entity,
 }
+
+// The panel itself, which hides away to the button that brings it back.
+#[derive(Component)]
+struct MainMenu;
+
+// A tab's page. Each scrolls on its own, so a tab is where it was left when you come back to it.
+#[derive(Component)]
+pub(crate) struct Page(pub Tab);
+
+#[derive(Component, Clone, Copy, PartialEq)]
+enum PanelButton {
+    Hide,
+    Reveal,
+    Exit,
+    Tab(Tab),
+}
+
+// The line under the panel's title: the suite's name.
+#[derive(Component)]
+struct StatusText;
+
+// The line at the bottom of the panel saying what the row under the pointer does.
+#[derive(Component)]
+struct HelpText;
 
 // For the systems that fill in what a panel shows. Each only runs on a change of what it
 // shows, which a panel made later, for a monitor switched on, would otherwise wait for.
@@ -95,8 +113,8 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
             .with_children(|panel| {
                 panel.spawn(header());
                 panel.spawn(tab_bar());
-                panel.spawn(page(Tab::Scene, ui.tab, tabs::scene_page()));
-                panel.spawn(page(Tab::Graphics, ui.tab, tabs::graphics_page()));
+                panel.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
+                panel.spawn(page(Tab::Graphics, ui.tab, tabs::graphics::page()));
                 panel.spawn(page(Tab::Sound, ui.tab, tabs::sound::page()));
                 panel.spawn(page(Tab::System, ui.tab, tabs::system::page()));
                 panel.spawn(footer());
@@ -124,7 +142,7 @@ fn reveal_button(closed: bool) -> impl Bundle {
             n.border_radius = BorderRadius::left(PANEL_RADIUS);
             n.display = display(closed);
         })
-        .build(UiButton::RevealMenu)
+        .build(PanelButton::Reveal)
 }
 
 fn main_menu(closed: bool) -> impl Bundle {
@@ -152,7 +170,7 @@ fn main_menu(closed: bool) -> impl Bundle {
         }]),
         // Pickable, unlike most nodes inside it: the pointer anywhere on the panel stops here
         // instead of reaching the scene behind it.
-        UiContainer::MainMenu,
+        MainMenu,
         Hovered::default(),
     )
 }
@@ -184,7 +202,7 @@ fn header() -> impl Bundle {
                     (label("", SMALL_SIZE, TEXT_DIM), StatusText),
                 ],
             ),
-            glyph_button(">", UiButton::HideMenu),
+            glyph_button(">", PanelButton::Hide),
         ],
     )
 }
@@ -196,7 +214,7 @@ fn tab_bar() -> impl Bundle {
                 n.flex_grow = 1.0;
                 n.flex_basis = Val::ZERO;
             })
-            .build(UiButton::Tab(tab))
+            .build(PanelButton::Tab(tab))
     };
     (
         Node {
@@ -212,8 +230,7 @@ fn tab_bar() -> impl Bundle {
     )
 }
 
-// Each page scrolls on its own, so a tab is where it was left when you come back to it. The
-// wheel module does the scrolling.
+// The wheel does the scrolling.
 fn page(tab: Tab, active: Tab, content: impl Bundle) -> impl Bundle {
     (
         Node {
@@ -227,7 +244,7 @@ fn page(tab: Tab, active: Tab, content: impl Bundle) -> impl Bundle {
             overflow: Overflow::scroll_y(),
             ..default()
         },
-        UiContainer::Page(tab),
+        Page(tab),
         content,
     )
 }
@@ -253,40 +270,20 @@ fn footer() -> impl Bundle {
             translated_button(|l| fl!(l, "quit"))
                 .text_color(DANGER_TEXT)
                 .border_color(DANGER_BORDER)
-                .build(UiButton::Exit),
+                .build(PanelButton::Exit),
         ],
     )
 }
 
-// Written only on a real change: UiState changes on every tab switch too, and an untouched
-// Node or Text spares Bevy laying the panel out again.
-fn show_folds(
+fn show_panel(
     ui: Res<UiState>,
-    mut bodies: Query<(&UiContainer, &mut Node)>,
-    mut chevrons: Query<(&Chevron, &mut Text)>,
+    parts: Query<(&mut Node, Option<&Page>, Option<&PanelButton>, Has<MainMenu>)>,
 ) {
-    for (container, mut node) in &mut bodies {
-        if let UiContainer::Body(section) = container {
-            let shown = display(!section.is_folded(&ui));
-            if node.display != shown {
-                node.display = shown;
-            }
-        }
-    }
-    for (chevron, mut text) in &mut chevrons {
-        let arrow = if chevron.0.is_folded(&ui) { "►" } else { "▼" };
-        if text.0 != arrow {
-            text.0 = arrow.to_string();
-        }
-    }
-}
-
-fn show_panel(ui: Res<UiState>, nodes: Query<(&mut Node, AnyOf<(&UiContainer, &UiButton)>)>) {
-    for (mut node, element) in nodes {
-        let shown = match element {
-            (Some(UiContainer::MainMenu), _) => !ui.is_menu_closed,
-            (Some(UiContainer::Page(tab)), _) => *tab == ui.tab,
-            (_, Some(UiButton::RevealMenu)) => ui.is_menu_closed,
+    for (mut node, page, button, menu) in parts {
+        let shown = match (page, button) {
+            (Some(page), _) => page.0 == ui.tab,
+            (_, Some(PanelButton::Reveal)) => ui.is_menu_closed,
+            _ if menu => !ui.is_menu_closed,
             _ => continue,
         };
         node.display = display(shown);
@@ -296,7 +293,7 @@ fn show_panel(ui: Res<UiState>, nodes: Query<(&mut Node, AnyOf<(&UiContainer, &U
 fn style_tabs(
     ui: Res<UiState>,
     tabs: Query<(
-        &UiButton,
+        &PanelButton,
         &Children,
         &mut BaseBackground,
         &mut BackgroundColor,
@@ -305,7 +302,7 @@ fn style_tabs(
     mut texts: Query<&mut TextColor>,
 ) {
     for (button, children, mut base, mut background, mut border) in tabs {
-        let UiButton::Tab(tab) = button else {
+        let PanelButton::Tab(tab) = button else {
             continue;
         };
         let active = *tab == ui.tab;
@@ -350,9 +347,31 @@ fn show_status(
     }
 }
 
+// A sentence about the row under the pointer. With none under it, how the panel works, which is
+// the only place the wheel is mentioned.
+fn show_help(
+    locale: Res<Locale>,
+    rows: Query<(&Row, Ref<Hovered>)>,
+    new_lines: Query<(), Added<HelpText>>,
+    mut lines: Query<&mut Text, With<HelpText>>,
+) {
+    let hover_moved = rows.iter().any(|(_, hovered)| hovered.is_changed());
+    if !locale.is_changed() && !hover_moved && new_lines.is_empty() {
+        return;
+    }
+    let hovered = rows.iter().find(|(_, hovered)| hovered.get()).map(|(row, _)| row.help);
+    let text = match hovered {
+        Some(help) => help(&locale),
+        None => fl!(locale, "help-panel"),
+    };
+    for mut line in &mut lines {
+        line.0.clone_from(&text);
+    }
+}
+
 fn on_click(
     event: On<Pointer<Click>>,
-    buttons: Query<&UiButton>,
+    buttons: Query<&PanelButton>,
     mut ui: ResMut<UiState>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -360,15 +379,13 @@ fn on_click(
         return;
     };
     match button {
-        UiButton::Exit => {
+        PanelButton::Exit => {
             info!("quitting");
             exit.write(AppExit::Success);
         }
-        UiButton::HideMenu => ui.is_menu_closed = true,
-        UiButton::RevealMenu => ui.is_menu_closed = false,
-        UiButton::Tab(tab) => ui.tab = *tab,
-        UiButton::Fold(section) => section.toggle_fold(&mut ui),
-        _ => {}
+        PanelButton::Hide => ui.is_menu_closed = true,
+        PanelButton::Reveal => ui.is_menu_closed = false,
+        PanelButton::Tab(tab) => ui.tab = *tab,
     }
 }
 

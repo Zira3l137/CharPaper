@@ -2,8 +2,10 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 
-use crate::elements::Step;
-use crate::elements::UiButton;
+use super::Change;
+use super::RowOf;
+use super::Step;
+use super::widgets::Arrow;
 
 // How long an arrow is held before it starts repeating, and how often it repeats after that.
 const DELAY: Duration = Duration::from_millis(400);
@@ -28,6 +30,7 @@ struct Pressed(Option<Holding>);
 
 struct Holding {
     arrow: Entity,
+    row: Entity,
     step: Step,
     next: Duration,
 }
@@ -36,18 +39,24 @@ fn press(
     event: On<Pointer<Press>>,
     mut commands: Commands,
     time: Res<Time<Real>>,
-    buttons: Query<&UiButton>,
+    arrows: Query<&Arrow>,
+    row_of: RowOf,
     mut pressed: ResMut<Pressed>,
 ) {
     if event.button != PointerButton::Primary {
         return;
     }
-    let Some(step) = buttons.get(event.entity).ok().and_then(UiButton::step) else {
+    let Ok(&Arrow(by)) = arrows.get(event.entity) else {
         return;
     };
-    commands.trigger(step);
-    let repeated = Step { continuous: true, ..step };
-    pressed.0 = Some(Holding { arrow: event.entity, step: repeated, next: time.elapsed() + DELAY });
+    let Some((row, _)) = row_of.get(event.entity) else {
+        return;
+    };
+    let step = Step { change: Change::By(by), continuous: false };
+    commands.queue(step.on(row));
+    let step = Step { continuous: true, ..step };
+    let next = time.elapsed() + DELAY;
+    pressed.0 = Some(Holding { arrow: event.entity, row, step, next });
 }
 
 fn release(_event: On<Pointer<Release>>, mut pressed: ResMut<Pressed>) {
@@ -69,7 +78,7 @@ fn repeat(mut commands: Commands, time: Res<Time<Real>>, mut pressed: ResMut<Pre
         return;
     }
     if let Some(holding) = pressed.0.as_mut() {
-        commands.trigger(holding.step);
+        commands.queue(holding.step.on(holding.row));
         holding.next = now + INTERVAL;
     }
 }
