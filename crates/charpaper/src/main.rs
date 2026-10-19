@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod logging;
 mod pacing;
+mod restart;
 mod save;
 mod wallpaper;
 

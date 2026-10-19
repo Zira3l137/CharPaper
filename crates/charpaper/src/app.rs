@@ -23,6 +23,9 @@ use crate::config::AppConfig;
 use crate::config::WindowConfig;
 use crate::logging;
 use crate::pacing::PacingPlugin;
+use crate::restart;
+use crate::restart::Restart;
+use crate::restart::RestartPlugin;
 use crate::save::StatePlugin;
 use crate::wallpaper::WallpaperPlugin;
 
@@ -103,13 +106,22 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     // GPU time of each of Bevy's render passes, which Tracy shows beside the CPU's.
     #[cfg(feature = "profile")]
     app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
-    // The benchmark changes settings and the look as it goes, none of which may be saved.
+    // The benchmark changes settings and the look as it goes, none of which may be saved, so
+    // a new mode couldn't be either.
+    let restart = Restart::default();
     if config.benchmark {
         app.add_plugins(BenchmarkPlugin { results: exe_dir.join(benchmark::RESULTS_FILE) });
     } else {
         app.add_plugins(StatePlugin { path: state_path, loaded });
+        app.add_plugins(RestartPlugin { restart: restart.clone() });
     }
     let exit = app.run();
+
+    if restart.asked()
+        && let Err(err) = restart::start_again()
+    {
+        error!("cannot start again in the new mode: {err}");
+    }
 
     match exit {
         AppExit::Success => Ok(()),
