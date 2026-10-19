@@ -1,5 +1,6 @@
 @echo off
-rem Runs CharPaper in an ordinary window instead of behind the desktop icons.
+rem Runs CharPaper in an ordinary window instead of behind the desktop icons, for when the
+rem wallpaper won't show. It stays a window until System > App > Show as switches it back.
 rem Arguments are passed on, e.g.: run-windowed.bat --suite alice --language ru-RU
 
 set "EXE=%~dp0charpaper.exe"
