@@ -9,6 +9,7 @@ use crate::audio::Volumes;
 use crate::render::RenderSettings;
 use crate::screen::ScreenSettings;
 use crate::stage::StageSeeds;
+use crate::system::SystemSettings;
 use crate::ui::UiState;
 
 pub const STATE_FILE: &str = "state.toml";
@@ -17,6 +18,7 @@ pub const STATE_FILE: &str = "state.toml";
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 #[serde(default)]
 pub struct SavedState {
+    pub system: SystemSettings,
     pub ui: UiState,
     pub render: RenderSettings,
     pub screen: ScreenSettings,

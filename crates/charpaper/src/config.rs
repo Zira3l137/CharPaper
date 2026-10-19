@@ -1,4 +1,5 @@
 use charpaper_scene::SceneConfig;
+use charpaper_settings::DisplayMode;
 use charpaper_ui::UiConfig;
 use charpaper_wallpaper::WallpaperConfig;
 
@@ -8,6 +9,8 @@ use crate::wallpaper::BackendOptions;
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
+    // As asked for on the command line. None leaves it to state.toml.
+    pub mode: Option<DisplayMode>,
     pub window: WindowConfig,
     pub scene: SceneConfig,
     pub wallpaper: WallpaperConfig,
@@ -36,6 +39,7 @@ impl Default for WindowConfig {
 impl AppConfig {
     pub fn from_cli(cli: &Cli) -> Self {
         let mut cfg = Self {
+            mode: cli.windowed.then_some(DisplayMode::Windowed),
             window: WindowConfig::default(),
             scene: SceneConfig::default(),
             wallpaper: WallpaperConfig::default(),
@@ -60,18 +64,18 @@ impl AppConfig {
             cfg.window.decorations = true;
         }
 
-        if cli.windowed {
-            cfg.wallpaper.enabled = false;
-            cfg.window.start_hidden = false;
-            cfg.window.decorations = true;
-            cfg.window.skip_taskbar = false;
-        }
-
         // Vsync would hold every frame to the monitor's refresh, hiding what it really costs.
         if cli.benchmark {
             cfg.window.vsync = false;
         }
 
         cfg
+    }
+
+    pub fn run_windowed(&mut self) {
+        self.wallpaper.enabled = false;
+        self.window.start_hidden = false;
+        self.window.decorations = true;
+        self.window.skip_taskbar = false;
     }
 }

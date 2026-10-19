@@ -7,6 +7,7 @@ mod file;
 mod render;
 mod screen;
 mod stage;
+mod system;
 mod ui;
 
 pub use audio::Volumes;
@@ -33,5 +34,8 @@ pub use stage::GazeSettings;
 pub use stage::Picks;
 pub use stage::StageSeed;
 pub use stage::StageSeeds;
+pub use system::DisplayMode;
+pub use system::StartAtLogin;
+pub use system::SystemSettings;
 pub use ui::Tab;
 pub use ui::UiState;

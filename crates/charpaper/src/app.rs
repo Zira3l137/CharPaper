@@ -13,6 +13,7 @@ use charpaper_monitor::MonitorPlugin;
 use charpaper_scene::ARMATURE_SOURCE;
 use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
+use charpaper_settings::DisplayMode;
 use charpaper_settings::STATE_FILE;
 use charpaper_ui::SettingsPanelPlugin;
 
@@ -40,11 +41,18 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     let state_path = exe_dir.join(STATE_FILE);
     let loaded = charpaper_settings::load(&state_path);
     let mut state = loaded.state.clone();
-    // A language asked for on the command line becomes the one chosen, and is saved as such.
+    // A language or mode asked for on the command line becomes the one chosen, and is saved
+    // as such.
     if config.ui.language.is_some() {
         state.ui.language = config.ui.language.clone();
     }
     config.ui.language = state.ui.language.clone();
+    if let Some(mode) = config.mode {
+        state.system.mode = mode;
+    }
+    if state.system.mode == DisplayMode::Windowed {
+        config.run_windowed();
+    }
     if config.benchmark {
         benchmark::unthrottle(&mut state.render);
     }
@@ -70,13 +78,11 @@ pub fn run(mut config: AppConfig) -> Result<()> {
         .register_asset_source(ARMATURE_SOURCE, source())
         .add_plugins(
             DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(window(&config.window)),
-                    ..default()
-                })
+                .set(WindowPlugin { primary_window: Some(window(&config.window)), ..default() })
                 .set(logging::plugin(config.log)),
         )
         // The plugins below start from defaults wherever these aren't inserted first.
+        .insert_resource(state.system)
         .insert_resource(state.ui)
         .insert_resource(state.render)
         .insert_resource(state.screen)

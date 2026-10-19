@@ -28,7 +28,7 @@ pub struct Cli {
     /// Measure how long the scene takes to draw with each render setting, then
     /// exit.
     ///
-    /// Shows the suite as the wallpaper (or in a window with `--windowed`),
+    /// Shows the suite as the wallpaper or in a window, as last chosen,
     /// with no frame-rate limit or vsync, for about two minutes. Each
     /// result changes one setting from your saved ones, which stay unchanged.
     /// Results are printed and written to benchmark.txt next to the executable.
@@ -52,9 +52,10 @@ pub struct Cli {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Skip the wallpaper machinery entirely and run as an ordinary window.
+    /// Run in an ordinary window rather than behind the desktop icons.
     ///
-    /// Use this while working on the scene.
+    /// Remembered like a choice made in the System tab, which switches back.
+    /// Use this while working on the scene, or when the wallpaper won't show.
     #[arg(long)]
     pub windowed: bool,
 

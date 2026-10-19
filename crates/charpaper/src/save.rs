@@ -8,6 +8,7 @@ use charpaper_settings::Loaded;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::SavedState;
 use charpaper_settings::ScreenSettings;
+use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
 use charpaper_settings::Volumes;
 
@@ -37,6 +38,7 @@ impl Plugin for StatePlugin {
             (
                 note_change.run_if(
                     stage_memory_changed
+                        .or_eager(resource_changed::<SystemSettings>)
                         .or_eager(resource_changed::<UiState>)
                         .or_eager(resource_changed::<RenderSettings>)
                         .or_eager(resource_changed::<ScreenSettings>)
@@ -70,6 +72,7 @@ fn report_problem(mut file: ResMut<StateFile>) {
 fn note_change(
     time: Res<Time<Real>>,
     mut file: ResMut<StateFile>,
+    system: Res<SystemSettings>,
     ui: Res<UiState>,
     render: Res<RenderSettings>,
     screen: Res<ScreenSettings>,
@@ -77,6 +80,7 @@ fn note_change(
     stages: StageMemories,
 ) {
     let next = SavedState {
+        system: system.clone(),
         ui: ui.clone(),
         render: render.clone(),
         screen: screen.clone(),
