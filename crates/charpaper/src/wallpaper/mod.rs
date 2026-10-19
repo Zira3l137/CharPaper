@@ -4,7 +4,7 @@ mod cursor;
 mod input;
 mod keeper;
 mod monitors;
-mod platform;
+pub(crate) mod platform;
 mod windows;
 
 use bevy::prelude::*;

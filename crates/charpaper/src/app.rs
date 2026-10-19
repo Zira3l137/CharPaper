@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
@@ -22,6 +20,7 @@ use crate::benchmark::BenchmarkPlugin;
 use crate::config::AppConfig;
 use crate::config::WindowConfig;
 use crate::logging;
+use crate::login::LoginPlugin;
 use crate::pacing::PacingPlugin;
 use crate::restart;
 use crate::restart::Restart;
@@ -38,7 +37,9 @@ const WINDOWED_SIZE: (u32, u32) = (1280, 720);
 // Everything the app reads and writes sits next to the executable: suites in
 // characters/, translations in locales/, the viewer's choices in state.toml.
 pub fn run(mut config: AppConfig) -> Result<()> {
-    let exe_dir = exe_dir()?;
+    let exe = std::env::current_exe().context("cannot locate the executable")?;
+    // Under `cargo run` this is `target/<profile>/`.
+    let exe_dir = exe.parent().context("the executable has no parent folder")?.to_path_buf();
     config.scene.characters_dir = exe_dir.join(CHARACTERS_DIR);
     config.ui.locales_dir = exe_dir.join(LOCALES_DIR);
     let state_path = exe_dir.join(STATE_FILE);
@@ -98,6 +99,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone() },
             PacingPlugin,
+            LoginPlugin { exe },
         ));
     if let Some(err) = log_problem {
         warn!("cannot write {}: {err}", exe_dir.join(logging::LOG_FILE).display());
@@ -143,10 +145,4 @@ fn window(config: &WindowConfig) -> Window {
         present_mode: if config.vsync { PresentMode::default() } else { PresentMode::AutoNoVsync },
         ..default()
     }
-}
-
-// Under `cargo run` this is `target/<profile>/`.
-fn exe_dir() -> Result<PathBuf> {
-    let exe = std::env::current_exe().context("cannot locate the executable")?;
-    Ok(exe.parent().context("the executable has no parent folder")?.to_path_buf())
 }

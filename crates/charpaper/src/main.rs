@@ -6,6 +6,7 @@ mod cli;
 mod commands;
 mod config;
 mod logging;
+mod login;
 mod pacing;
 mod restart;
 mod save;

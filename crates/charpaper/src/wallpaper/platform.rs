@@ -1,3 +1,6 @@
+use std::io;
+use std::path::Path;
+
 use charpaper_wallpaper::WallpaperBackend;
 
 // The only place the app picks an operating system. Supporting another one means a new
@@ -29,4 +32,26 @@ pub fn inspect_report() -> Vec<String> {
 #[cfg(all(not(windows), feature = "diagnostics"))]
 pub fn inspect_report() -> Vec<String> {
     vec![format!("no wallpaper backend for {}; nothing to inspect", std::env::consts::OS)]
+}
+
+// Whether `exe` starts when the user signs in. None where the app can't arrange it, which
+// hides the switch.
+#[cfg(windows)]
+pub fn starts_at_login(exe: &Path) -> Option<io::Result<bool>> {
+    Some(charpaper_windows::starts_at_login(exe))
+}
+
+#[cfg(windows)]
+pub fn set_starts_at_login(exe: &Path, on: bool) -> io::Result<()> {
+    charpaper_windows::set_starts_at_login(exe, on)
+}
+
+#[cfg(not(windows))]
+pub fn starts_at_login(_exe: &Path) -> Option<io::Result<bool>> {
+    None
+}
+
+#[cfg(not(windows))]
+pub fn set_starts_at_login(_exe: &Path, _on: bool) -> io::Result<()> {
+    Err(io::ErrorKind::Unsupported.into())
 }
