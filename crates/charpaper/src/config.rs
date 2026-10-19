@@ -14,6 +14,8 @@ pub struct AppConfig {
     pub backend: BackendOptions,
     pub ui: UiConfig,
     pub log: LogLevels,
+    // Release builds have no console to log to, so they always write the file.
+    pub log_file: bool,
     pub benchmark: bool,
 }
 
@@ -40,6 +42,7 @@ impl AppConfig {
             backend: cli.backend(),
             ui: UiConfig::default(),
             log: LogLevels { ours: cli.log_level, engine: cli.bevy_log_level },
+            log_file: cli.log_file || !cfg!(debug_assertions),
             benchmark: cli.benchmark,
         };
 

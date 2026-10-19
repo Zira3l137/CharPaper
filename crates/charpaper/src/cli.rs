@@ -76,6 +76,11 @@ pub struct Cli {
     #[arg(long, value_enum, default_value = "warn")]
     pub bevy_log_level: LogLevel,
 
+    /// Also write the log to charpaper.log next to the executable, as release
+    /// builds always do. The run before's log is kept as charpaper.previous.log.
+    #[arg(long)]
+    pub log_file: bool,
+
     // The app starts itself with these to leave a keeper behind; see wallpaper/keeper.rs.
     #[arg(long, hide = true, value_name = "PID")]
     pub keep_desktop: Option<u32>,

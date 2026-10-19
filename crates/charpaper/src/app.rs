@@ -55,6 +55,16 @@ pub fn run(mut config: AppConfig) -> Result<()> {
 
     let source = || AssetSourceBuilder::platform_default(characters, None);
     let mut app = App::new();
+    // Reported once the logger exists, which is only after DefaultPlugins.
+    let mut log_problem = None;
+    if config.log_file {
+        match logging::open_file(&exe_dir) {
+            Ok(file) => {
+                app.insert_resource(file);
+            }
+            Err(err) => log_problem = Some(err),
+        }
+    }
     // Must come before DefaultPlugins, which builds the asset sources.
     app.register_asset_source(CHARACTERS_SOURCE, source())
         .register_asset_source(ARMATURE_SOURCE, source())
@@ -80,6 +90,10 @@ pub fn run(mut config: AppConfig) -> Result<()> {
             SettingsPanelPlugin { config: config.ui.clone() },
             PacingPlugin,
         ));
+    if let Some(err) = log_problem {
+        warn!("cannot write {}: {err}", exe_dir.join(logging::LOG_FILE).display());
+    }
+    logging::log_panics();
     // GPU time of each of Bevy's render passes, which Tracy shows beside the CPU's.
     #[cfg(feature = "profile")]
     app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
