@@ -87,6 +87,11 @@ label-character-volume = Character
 
 ## System tab
 
+section-app = APP
+label-mode = Show as
+mode-wallpaper = Wallpaper
+mode-window = Window
+label-start-at-login = Start at sign-in
 section-display = DISPLAY
 # Above the panel, with several stages: which one the panel shows.
 stage-name = Stage { $letter }
@@ -217,6 +222,8 @@ help-fog-resolution = Half draws the fog four times faster. It is soft, so this 
 help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
 help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
 help-pause-battery = Stops the picture and sound while the computer runs on battery.
+help-mode = Wallpaper puts the scene behind the desktop icons, Window in an ordinary window. CharPaper restarts to switch.
+help-start-at-login = Starts CharPaper whenever you sign in to this computer.
 help-layout = For this monitor's stage. Mirror shows the whole scene on each of its monitors. Span spreads one wide view across them, as if they were a single screen.
 help-master-volume = How loud all of CharPaper's sound is.
 help-music-volume = The environment's music.

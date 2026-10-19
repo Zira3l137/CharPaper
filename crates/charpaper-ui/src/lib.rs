@@ -10,6 +10,8 @@ mod theme;
 mod widgets;
 
 use bevy::prelude::*;
+use charpaper_settings::StartAtLogin;
+use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
 
 pub use locale::Locale;
@@ -29,6 +31,8 @@ pub struct SettingsPanelPlugin {
 impl Plugin for SettingsPanelPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<UiState>()
+            .init_resource::<SystemSettings>()
+            .init_resource::<StartAtLogin>()
             .insert_resource(locale::Locale::load(&self.config))
             .insert_resource(locale::Languages::find(&self.config.locales_dir))
             .insert_resource(self.config.clone())

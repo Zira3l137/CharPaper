@@ -23,6 +23,8 @@ use charpaper_settings::Graphics;
 use charpaper_settings::Monitors;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ScreenSettings;
+use charpaper_settings::StartAtLogin;
+use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
 use charpaper_settings::Volumes;
 
@@ -57,10 +59,12 @@ pub(crate) fn sources_changed(
     stages: Query<(), (With<Stage>, Or<StageSources>)>,
     settings: (Res<UiState>, Res<RenderSettings>, Res<ScreenSettings>, Res<Volumes>),
     world: (Res<Monitors>, Res<AvailableSuites>, Res<Held>, Res<Locale>),
+    app: (Res<SystemSettings>, Res<StartAtLogin>),
     new_rows: Query<(), Added<Row>>,
 ) -> bool {
     let (ui, render, screen, volumes) = settings;
     let (monitors, suites, held, locale) = world;
+    let (system, start_at_login) = app;
     focus.is_changed()
         || focus.0.is_some_and(|stage| stages.contains(stage))
         || ui.is_changed()
@@ -71,5 +75,7 @@ pub(crate) fn sources_changed(
         || suites.is_changed()
         || held.is_changed()
         || locale.is_changed()
+        || system.is_changed()
+        || start_at_login.is_changed()
         || !new_rows.is_empty()
 }

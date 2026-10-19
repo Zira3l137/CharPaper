@@ -2,11 +2,14 @@ use bevy::prelude::*;
 use charpaper_scene::StageKey;
 use charpaper_scene::focused_changed;
 use charpaper_settings::ChosenMonitor;
+use charpaper_settings::DisplayMode;
 use charpaper_settings::FpsLimit;
 use charpaper_settings::Monitors;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ScreenSettings;
 use charpaper_settings::StageId;
+use charpaper_settings::StartAtLogin;
+use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
 use i18n_embed_fl::fl;
 
@@ -46,10 +49,52 @@ struct MonitorList;
 #[derive(Component)]
 struct MonitorButton(String);
 
-// Settings of the app itself rather than of what it shows: which monitors it is on and which
-// stage each shows, how often it draws and when it stops, and the panel's language.
+// Settings of the app itself rather than of what it shows: how and when it runs, which
+// monitors it is on and which stage each shows, how often it draws and when it stops, and the
+// panel's language.
 pub(crate) fn page() -> impl Bundle {
-    children![display_section(), frame_rate(), pause(), interface()]
+    children![app_section(), display_section(), frame_rate(), pause(), interface()]
+}
+
+fn app_section() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-app"),
+        Section::App,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-mode"),
+                help: |l| fl!(l, "help-mode"),
+                show: |w, l| {
+                    let mode = w.resource::<SystemSettings>().mode;
+                    Some(choice(&DisplayMode::ALL, &mode, |mode| match mode {
+                        DisplayMode::Wallpaper => fl!(l, "mode-wallpaper"),
+                        DisplayMode::Windowed => fl!(l, "mode-window"),
+                    }))
+                },
+                // The app restarts in the new mode, so a wheel passing over the row mustn't.
+                change: |w, step| {
+                    if !step.continuous {
+                        pick(&DisplayMode::ALL, &mut w.resource_mut::<SystemSettings>().mode, step);
+                    }
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-start-at-login"),
+                help: |l| fl!(l, "help-start-at-login"),
+                show: |w, l| {
+                    let start = w.resource::<StartAtLogin>().0;
+                    Some(switch(l, start == Some(true)).when(start.is_some()))
+                },
+                change: |w, step| {
+                    if let Some(on) = &mut w.resource_mut::<StartAtLogin>().0 {
+                        flip(on, step);
+                    }
+                },
+            }
+            .segments(),
+        ],
+    )
 }
 
 fn display_section() -> impl Bundle {
