@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "charpaper_exporter"
-version = "0.1.0"
+version = "0.2.0"
 name = "CharPaper Exporter"
 tagline = "Export a CharPaper character suite in one click"
 maintainer = "Zirael"
