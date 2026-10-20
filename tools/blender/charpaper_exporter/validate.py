@@ -390,6 +390,22 @@ def _check_environment(entry, add):
     _check_fog(entry.name, objects, add)
     _check_shadows(entry.name, objects, add)
     _check_animated(objects, add)
+    _check_nla(entry.name, objects, add)
+
+
+# Only active actions are exported from an environment, each as a clip the app loops.
+def _check_nla(name, objects, add):
+    def stranded(block):
+        data = getattr(block, "animation_data", None)
+        return data is not None and data.action is None and any(t.strips for t in data.nla_tracks)
+
+    keys = [o.data.shape_keys for o in objects if o.type == "MESH" and o.data.shape_keys]
+    names = [o.name for o in objects if stranded(o)] + [k.user.name for k in keys if stranded(k)]
+    if names:
+        add(Finding(
+            f"environment {name!r}: only active actions are exported, so these play nothing; "
+            f"give each its action back from the NLA: {_examples(names)}",
+        ))
 
 
 def _check_animated(objects, add):

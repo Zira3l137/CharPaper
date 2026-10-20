@@ -37,6 +37,21 @@ saved in the `.blend`.
   character's armature with a bone picked, or on an object of one of its skins, follows that
   bone or object instead. Animated Focus Distance or F-Stop doesn't carry over; animate a
   focus empty instead.
+- **Environment animation:** each object's active action, and the active action of its
+  shape keys, becomes a clip of its own, as long as the action's frame range, and the app
+  loops each clip on its own. A 25-frame loop and a 420-frame one both keep their length.
+  Objects playing the same action share its clip and stay in step. To leave a pause at the
+  end of a loop, give the action a *Manual Frame Range* past its last key. An armature's
+  bones move by its own action, so a rigged prop works the same way with the armature and its
+  meshes in the collection. NLA tracks of environment objects aren't exported, nor is
+  animation of light, material or camera settings. Motion that only comes from constraints
+  or drivers, with no action at all, needs baking into one (*Object > Animation > Bake
+  Action*).
+- **Shared data:** objects sharing a mesh (*Alt+D*, or *Link/Transfer Data*) share it in the
+  file too, and the app keeps it in memory once. An object with modifiers gets a mesh of its
+  own when *Apply Modifiers* is on, since its result is its own. Lights sharing light data
+  share it the same way. A collection instance exports as the instanced collection's objects
+  under its empty, sharing their meshes.
 - **Fog** is any mesh in an environment whose material has a Volume and no Surface. The
   app fills its bounding box with fog set up like its Principled Volume: Color, Density,
   Anisotropy and Absorption Color. Only lights light fog, not the sky: a light whose

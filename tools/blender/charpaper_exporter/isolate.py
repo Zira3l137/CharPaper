@@ -25,7 +25,9 @@ class Isolation:
         self.scene.frame_start, self.scene.frame_end = source.frame_start, source.frame_end
         self.scene.frame_current = source.frame_current
         self.copies = {}
-        self._data = []
+        # Each data block copied once, so objects sharing a mesh or a light still share it in
+        # the file.
+        self._data = {}
         self._renamed = []
 
     def _step_aside(self, block):
@@ -34,35 +36,35 @@ class Isolation:
         self._renamed.append((block, name))
         return name
 
-    def add(self, obj, own_mesh=False, own_light=False, keep_animation=False):
+    def add(self, obj, own_mesh=False, own_light=False, keep_drivers=False):
+        """Copies the object into the scene, without its actions and NLA tracks. An export that
+        wants them adds tracks to the copy. Drivers go too, unless kept: a driven bone or shape
+        key then still moves when the exporter samples the animation."""
         if obj in self.copies:
             return self.copies[obj]
         name = self._step_aside(obj)
         copy = obj.copy()
         copy.name = name
-        if own_mesh and obj.type == "MESH":
-            mesh_name = self._step_aside(obj.data)
-            key = obj.data.shape_keys
-            key_name = self._step_aside(key) if key else None
-            data = obj.data.copy()
-            data.name = mesh_name
-            if data.shape_keys and key_name:
-                data.shape_keys.name = key_name
-            copy.data = data
-            self._data.append(data)
+        _strip(copy, keep_drivers)
         # glTF names a light after its light data, and the app finds lights by that name too.
-        if own_light and obj.type == "LIGHT":
-            light_name = self._step_aside(obj.data)
-            data = obj.data.copy()
-            data.name = light_name
-            copy.data = data
-            self._data.append(data)
-        if not keep_animation:
-            copy.animation_data_clear()
-            if own_mesh and copy.type == "MESH" and copy.data.shape_keys:
-                copy.data.shape_keys.animation_data_clear()
+        if (own_mesh and obj.type == "MESH") or (own_light and obj.type == "LIGHT"):
+            copy.data = self._own(obj.data, keep_drivers)
         self.scene.collection.objects.link(copy)
         self.copies[obj] = copy
+        return copy
+
+    def _own(self, data, keep_drivers):
+        if data in self._data:
+            return self._data[data]
+        name = self._step_aside(data)
+        key = getattr(data, "shape_keys", None)
+        key_name = self._step_aside(key) if key else None
+        copy = data.copy()
+        copy.name = name
+        if key_name and copy.shape_keys:
+            copy.shape_keys.name = key_name
+            _strip(copy.shape_keys, keep_drivers)
+        self._data[data] = copy
         return copy
 
     def add_with_ancestors(self, obj, **kwargs):
@@ -111,7 +113,7 @@ class Isolation:
     def close(self):
         for copy in self.copies.values():
             bpy.data.objects.remove(copy, do_unlink=True)
-        for data in self._data:
+        for data in self._data.values():
             if data.users == 0:
                 blocks = bpy.data.lights if isinstance(data, bpy.types.Light) else bpy.data.meshes
                 blocks.remove(data)
@@ -119,6 +121,19 @@ class Isolation:
         for block, name in reversed(self._renamed):
             block.name = name
         self.copies.clear()
+        self._data.clear()
+
+
+def _strip(block, keep_drivers):
+    data = block.animation_data
+    if data is None:
+        return
+    if not keep_drivers:
+        block.animation_data_clear()
+        return
+    data.action = None
+    for track in list(data.nla_tracks):
+        data.nla_tracks.remove(track)
 
 
 @contextmanager

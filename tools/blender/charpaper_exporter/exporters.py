@@ -53,6 +53,11 @@ def _shape_keyed(obj):
     return obj.type == "MESH" and obj.data.shape_keys is not None
 
 
+def _new_data(obj, objects):
+    # Shape keys belong to the mesh, so objects sharing one get a single track between them.
+    return all(other.data != obj.data for other in objects)
+
+
 def model(context, suite, folder):
     path = target(folder, "", suite.model_name, suite)
     with isolated(context) as iso:
@@ -71,7 +76,7 @@ def skin(context, suite, entry, folder):
         for obj in entry.collection.all_objects:
             if obj.type in {"MESH", "EMPTY"}:
                 copy = iso.add(obj, own_mesh=_shape_keyed(obj))
-                if _shape_keyed(copy):
+                if _shape_keyed(copy) and _new_data(copy, meshes):
                     meshes.append(copy)
         tracks = 0
         for expression in entry.expressions:
@@ -99,7 +104,9 @@ def animation(context, suite, entry, folder):
         if entry.use_correctives and entry.correctives:
             for obj in entry.correctives.all_objects:
                 if _shape_keyed(obj):
-                    meshes.append(iso.add(obj, own_mesh=True))
+                    copy = iso.add(obj, own_mesh=True)
+                    if _new_data(copy, meshes):
+                        meshes.append(copy)
         result_notes = []
         for clip in entry.clips:
             if not (clip.enabled and clip.action):
@@ -132,17 +139,27 @@ def environment(context, suite, entry, folder):
     threshold = context.scene.eevee.light_threshold
     objects = [obj for obj in entry.collection.all_objects if obj.type != "CAMERA"]
     with isolated(context) as iso, animated.stills(objects):
+        tracks = 0
+        keyed = []
         for obj in objects:
-            copy = iso.add(obj, own_light=True, keep_animation=True)
+            copy = iso.add(obj, own_mesh=_shape_keyed(obj), own_light=True, keep_drivers=True)
             if copy.type == "LIGHT":
                 lights.give_range(copy.data, threshold)
+            # Each action becomes a clip of its own, as long as its own keys, and the app loops
+            # each on its own. Merged into one clip, a short loop would wait for the longest.
+            # Objects playing the same action share its clip and stay in step.
+            if anim.active_track(copy, obj):
+                tracks += 1
+            if _shape_keyed(copy) and _new_data(copy, keyed):
+                keyed.append(copy)
+                if anim.active_track(copy.data.shape_keys, obj.data.shape_keys):
+                    tracks += 1
         result = _run(
             context, iso, path,
             _options(
                 suite,
-                export_animations=True,
-                export_animation_mode="ACTIVE_ACTIONS",
-                export_merge_animation="ACTION",
+                export_animations=tracks > 0,
+                export_animation_mode="NLA_TRACKS",
                 export_lights=True,
                 export_cameras=False,
             ),
