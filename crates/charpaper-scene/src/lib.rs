@@ -11,6 +11,7 @@ mod lut;
 mod render;
 mod screens;
 mod shadows;
+mod shape_keys;
 mod soundscape;
 mod span;
 mod stage;
@@ -93,6 +94,7 @@ impl Plugin for ScenePlugin {
                 lut::LutPlugin,
                 render::RenderPlugin,
                 shadows::ShadowsPlugin,
+                shape_keys::ShapeKeysPlugin,
                 gaze::GazePlugin,
                 soundscape::SoundscapePlugin,
                 span::SpanPlugin,
