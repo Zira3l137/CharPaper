@@ -18,6 +18,7 @@ use charpaper_settings::StageSeed;
 use charpaper_settings::StageSeeds;
 use charpaper_settings::ViewSettings;
 
+use crate::camera::ShownOrbit;
 use crate::camera::ShownRig;
 use crate::camera::view_bundle;
 use crate::character::CueClock;
@@ -61,6 +62,7 @@ use crate::suite::starting_suite;
     LookEdited,
     EditedLooks,
     ShownSkin,
+    ShownOrbit,
     SkinObjects,
     Expressions,
     CueClock,
@@ -175,6 +177,7 @@ type StageMemory = (
     &'static GazeSettings,
     &'static ViewSettings,
     &'static MusicSettings,
+    &'static ShownOrbit,
     &'static Remembered,
     &'static EditedLooks,
     &'static Graphics,
@@ -182,12 +185,13 @@ type StageMemory = (
 );
 
 fn seed_of(
-    (_, state, gaze, view, music, remembered, edited, graphics, shown): (
+    (_, state, gaze, view, music, orbit, remembered, edited, graphics, shown): (
         &StageKey,
         &CharacterState,
         &GazeSettings,
         &ViewSettings,
         &MusicSettings,
+        &ShownOrbit,
         &Remembered,
         &EditedLooks,
         &Graphics,
@@ -197,7 +201,7 @@ fn seed_of(
     let mut suites = remembered.0.clone();
     let mut looks = EditedLooks(edited.0.clone());
     if let Some((suite, look)) = shown {
-        suites.entry(suite.folder()).or_default().merge(picks_of(state));
+        suites.entry(suite.folder()).or_default().merge(picks_of(state, orbit));
         looks.keep(suite, look);
     }
     StageSeed {
@@ -240,6 +244,7 @@ pub fn stage_memory_changed(
                 Changed<GazeSettings>,
                 Changed<ViewSettings>,
                 Changed<MusicSettings>,
+                Changed<ShownOrbit>,
                 Added<ActiveSuite>,
                 Changed<ActiveLook>,
                 Changed<Graphics>,

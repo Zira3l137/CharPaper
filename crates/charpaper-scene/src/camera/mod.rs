@@ -8,6 +8,7 @@ use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use charpaper_settings::Graphics;
+use charpaper_settings::OrbitPose;
 pub(crate) use rig::ShownRig;
 pub(crate) use rig::follow_selected;
 
@@ -29,6 +30,7 @@ use crate::stage::StageKey;
 use crate::stage::StageOf;
 use crate::stage::sync_stages;
 use crate::suite::ActiveSuite;
+use crate::suite::Remembered;
 
 const ORBIT_FOCUS: [f32; 3] = [0.0, 1.0, 0.0];
 const ORBIT_RADIUS: f32 = 2.0;
@@ -46,6 +48,10 @@ pub(crate) struct SceneView;
 #[require(Hdr)]
 pub(crate) struct SceneCamera;
 
+// The orbit camera's pose, copied onto its stage, which saves it with its other picks.
+#[derive(Component, Default, PartialEq)]
+pub struct ShownOrbit(pub Option<OrbitPose>);
+
 pub(crate) struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
@@ -58,7 +64,10 @@ impl Plugin for CameraPlugin {
                     .after(sync_stages)
                     .in_set(ScreenSync),
             )
-            .add_systems(Update, (rig::choose_camera, reset_view).in_set(SceneSet::Fill))
+            .add_systems(
+                Update,
+                (rig::choose_camera, reset_view, track_orbit).in_set(SceneSet::Fill),
+            )
             .add_systems(Update, (rig::switch_rig, rig::spawn_rig).chain().in_set(SceneSet::Run))
             // After propagation, so the rig's animated transform is final, and before frusta
             // are built from the camera's. Focus is measured once the camera has moved.
@@ -146,19 +155,20 @@ fn spawn_screen_cameras(
 
 // Back to the orbit camera, placed where the new suite says, whenever a suite is shown.
 fn reset_view(
-    stages: Query<(Entity, &ActiveSuite), Added<ActiveSuite>>,
+    stages: Query<(Entity, &ActiveSuite, &Remembered), Added<ActiveSuite>>,
     mut views: Query<
         (Entity, &mut OrbitCamera, &mut Transform, &mut Following, &ChildOf),
         With<SceneView>,
     >,
     mut cameras: Query<(&mut Projection, &ChildOf), With<SceneCamera>>,
 ) {
-    for (stage, suite) in &stages {
+    for (stage, suite, remembered) in &stages {
+        let pose = suite.remembered(remembered).orbit;
         for (view, mut orbit, mut transform, mut following, parent) in &mut views {
             if parent.parent() != stage {
                 continue;
             }
-            *orbit = orbit_for(Some(&suite.camera));
+            *orbit = pose.map_or_else(|| orbit_for(Some(&suite.camera)), OrbitCamera::from_pose);
             update_camera_transform(&mut transform, &orbit);
             *following = Following::default();
             for (mut projection, _) in cameras.iter_mut().filter(|(_, c)| c.parent() == view) {
@@ -194,6 +204,17 @@ fn reset_history(
         }
         for (mut taa, _) in cameras.iter_mut().filter(|(_, c)| c.parent() == view) {
             taa.reset = true;
+        }
+    }
+}
+
+fn track_orbit(
+    views: Query<(&OrbitCamera, &ChildOf), (With<SceneView>, Changed<OrbitCamera>)>,
+    mut stages: Query<&mut ShownOrbit>,
+) {
+    for (orbit, stage) in &views {
+        if let Ok(mut shown) = stages.get_mut(stage.parent()) {
+            shown.set_if_neq(ShownOrbit(Some(orbit.pose())));
         }
     }
 }

@@ -5,6 +5,8 @@ use bevy::prelude::*;
 use charpaper_settings::Picks;
 use charpaper_suite::ORBIT_CAMERA;
 
+use crate::camera::ShownOrbit;
+
 // What the viewer asked for on a stage. Systems compare it with what is shown and catch up,
 // so writing here is how the UI switches things.
 #[derive(Component, Default, Debug)]
@@ -28,7 +30,7 @@ impl CharacterState {
 }
 
 // What a stage remembers of its picks in a suite, for when it comes back to that suite.
-pub(crate) fn picks_of(state: &CharacterState) -> Picks {
+pub(crate) fn picks_of(state: &CharacterState, orbit: &ShownOrbit) -> Picks {
     Picks {
         skin: state.skin.clone(),
         animation: state.animation.clone(),
@@ -36,6 +38,7 @@ pub(crate) fn picks_of(state: &CharacterState) -> Picks {
         environment: state.environment.clone(),
         hidden: state.hidden.clone(),
         expressions: state.expressions.clone(),
+        orbit: orbit.0,
     }
 }
 

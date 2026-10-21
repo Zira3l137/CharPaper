@@ -10,6 +10,7 @@ use charpaper_suite::Suite;
 
 use crate::SceneSet;
 use crate::camera::SceneCamera;
+use crate::camera::ShownOrbit;
 use crate::camera::ShownRig;
 use crate::character::Character;
 use crate::character::CharacterClips;
@@ -109,6 +110,7 @@ pub(crate) fn switch_suite(
     config: Res<SceneConfig>,
     mut stages: Query<(
         Entity,
+        &ShownOrbit,
         &mut LoadedSuite,
         &mut CharacterState,
         Option<&ActiveSuite>,
@@ -118,13 +120,15 @@ pub(crate) fn switch_suite(
     )>,
     mut teardown: Teardown,
 ) {
-    for (stage, mut loaded, mut state, active, look, mut remembered, mut edited) in &mut stages {
+    for (stage, orbit, mut loaded, mut state, active, look, mut remembered, mut edited) in
+        &mut stages
+    {
         if loaded.0 == state.suite {
             continue;
         }
 
         if let Some(old) = active {
-            remembered.0.entry(old.folder()).or_default().merge(picks_of(&state));
+            remembered.0.entry(old.folder()).or_default().merge(picks_of(&state, orbit));
             if let Some(look) = look {
                 edited.keep(old, look);
             }

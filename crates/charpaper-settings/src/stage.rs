@@ -38,6 +38,14 @@ pub struct GazeSettings {
     pub follow_cursor: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct OrbitPose {
+    pub focus: [f32; 3],
+    pub radius: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
 #[derive(Component, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ViewSettings {
@@ -69,6 +77,8 @@ pub struct Picks {
     pub camera: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orbit: Option<OrbitPose>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub hidden: BTreeMap<String, BTreeSet<String>>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -86,6 +96,7 @@ impl Picks {
         keep(newer.environment, &mut self.environment);
         self.hidden.extend(newer.hidden);
         self.expressions.extend(newer.expressions);
+        self.orbit = newer.orbit.or(self.orbit);
     }
 }
 

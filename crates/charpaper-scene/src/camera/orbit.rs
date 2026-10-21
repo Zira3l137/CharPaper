@@ -1,5 +1,6 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use charpaper_settings::OrbitPose;
 use charpaper_settings::ViewSettings;
 
 use crate::camera::SceneView;
@@ -19,6 +20,27 @@ pub(crate) struct OrbitCamera {
     pub radius: f32,
     pub yaw: f32,
     pub pitch: f32,
+}
+
+impl OrbitCamera {
+    pub(crate) fn pose(&self) -> OrbitPose {
+        OrbitPose {
+            focus: self.focus.to_array(),
+            radius: self.radius,
+            yaw: self.yaw,
+            pitch: self.pitch,
+        }
+    }
+
+    // Clamped, in case state.toml was edited by hand.
+    pub(crate) fn from_pose(pose: OrbitPose) -> Self {
+        Self {
+            focus: Vec3::from_array(pose.focus),
+            radius: pose.radius.clamp(1.0, 100.0),
+            yaw: pose.yaw,
+            pitch: pose.pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT),
+        }
+    }
 }
 
 // On a screen's scene image: the view a drag or scroll over it steers.
