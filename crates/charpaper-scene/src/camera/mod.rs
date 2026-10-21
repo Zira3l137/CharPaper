@@ -3,11 +3,11 @@ mod orbit;
 mod rig;
 
 use bevy::anti_alias::taa::TemporalAntiAliasing;
+use bevy::camera::Hdr;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use charpaper_settings::Graphics;
-
 pub(crate) use rig::ShownRig;
 pub(crate) use rig::follow_selected;
 
@@ -43,6 +43,7 @@ pub(crate) struct SceneView;
 
 // A camera rendering the scene, always a child of the SceneView.
 #[derive(Component)]
+#[require(Hdr)]
 pub(crate) struct SceneCamera;
 
 pub(crate) struct CameraPlugin;

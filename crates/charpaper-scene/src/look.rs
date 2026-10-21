@@ -244,7 +244,6 @@ fn apply_stage_look(
         // A higher EV100 is darker; a higher look exposure is brighter.
         let ev100 = Exposure::EV100_BLENDER - resolved.exposure;
         commands.entity(entity).insert((to_bevy(resolved.tonemapping), Exposure { ev100 }));
-        // Only when asked for: bloom costs an HDR target and extra passes, all day long.
         if resolved.bloom > 0.0 {
             commands.entity(entity).insert(bloom(&resolved));
         } else {
