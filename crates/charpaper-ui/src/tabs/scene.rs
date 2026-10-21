@@ -5,6 +5,7 @@ use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
 use charpaper_settings::GazeSettings;
+use charpaper_settings::ViewSettings;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
@@ -146,7 +147,18 @@ fn camera() -> impl Bundle {
                     }
                 },
             }
-            .picker()
+            .picker(),
+            // Only while the stage looks through the orbit camera.
+            Setting {
+                label: |l| fl!(l, "label-lock-orbit"),
+                help: |l| fl!(l, "help-lock-orbit"),
+                show: |w, l| {
+                    let orbit = w.focused::<CharacterState>()?.camera.is_none();
+                    Some(switch(l, w.focused::<ViewSettings>()?.locked).when(orbit))
+                },
+                change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.locked, step)),
+            }
+            .segments(),
         ],
     )
 }

@@ -26,6 +26,7 @@ use charpaper_settings::ScreenSettings;
 use charpaper_settings::StartAtLogin;
 use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
+use charpaper_settings::ViewSettings;
 use charpaper_settings::Volumes;
 
 use crate::held::Held;
@@ -46,6 +47,7 @@ type StageSources = (
     Changed<ActiveLook>,
     Changed<Graphics>,
     Changed<GazeSettings>,
+    Changed<ViewSettings>,
     Changed<Expressions>,
     Changed<CharacterClips>,
     Changed<StageKey>,

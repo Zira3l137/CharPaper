@@ -34,6 +34,7 @@ section-environment = ENVIRONMENT
 label-environment = Environment
 label-brightness = Brightness
 label-shadows = Shadows
+label-lock-orbit = Lock orbit
 
 ## Graphics tab
 
@@ -185,6 +186,7 @@ value-off = Off
 ## Help line at the bottom of the panel: one short sentence or two about the setting under
 ## the pointer. Kept short so it fits in two lines beside the Quit button.
 
+help-lock-orbit = Keeps the orbit camera where it is: dragging and scrolling over the scene no longer move it.
 help-panel = Point at a setting to see what it does. The mouse wheel over a value changes it.
 help-suite = Which character to show, from the folders in characters.
 help-animation = What the character is doing.

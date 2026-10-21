@@ -1,5 +1,6 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use charpaper_settings::ViewSettings;
 
 use crate::camera::SceneView;
 use crate::state::CharacterState;
@@ -35,14 +36,15 @@ pub(crate) struct Steered<'w, 's> {
         (&'static mut Transform, &'static mut OrbitCamera, &'static ChildOf),
         With<SceneView>,
     >,
-    stages: Query<'w, 's, &'static CharacterState>,
+    stages: Query<'w, 's, (&'static CharacterState, &'static ViewSettings)>,
 }
 
 impl Steered<'_, '_> {
     fn free(&mut self, image: Entity) -> Option<(Mut<'_, Transform>, Mut<'_, OrbitCamera>)> {
         let view = self.images.get(image).ok()?.0;
         let stage = self.views.get(view).ok()?.2.parent();
-        if self.stages.get(stage).ok()?.camera.is_some() {
+        let (state, view_settings) = self.stages.get(stage).ok()?;
+        if state.camera.is_some() || view_settings.locked {
             return None;
         }
         let (transform, orbit, _) = self.views.get_mut(view).ok()?;

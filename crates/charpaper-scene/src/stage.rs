@@ -15,6 +15,7 @@ use charpaper_settings::Graphics;
 use charpaper_settings::StageId;
 use charpaper_settings::StageSeed;
 use charpaper_settings::StageSeeds;
+use charpaper_settings::ViewSettings;
 
 use crate::camera::ShownRig;
 use crate::camera::view_bundle;
@@ -52,6 +53,7 @@ use crate::suite::starting_suite;
     Visibility,
     CharacterState,
     GazeSettings,
+    ViewSettings,
     Remembered,
     LoadedSuite,
     LookEdited,
@@ -167,6 +169,7 @@ type StageMemory = (
     &'static StageKey,
     &'static CharacterState,
     &'static GazeSettings,
+    &'static ViewSettings,
     &'static Remembered,
     &'static EditedLooks,
     &'static Graphics,
@@ -174,10 +177,11 @@ type StageMemory = (
 );
 
 fn seed_of(
-    (_, state, gaze, remembered, edited, graphics, shown): (
+    (_, state, gaze, view, remembered, edited, graphics, shown): (
         &StageKey,
         &CharacterState,
         &GazeSettings,
+        &ViewSettings,
         &Remembered,
         &EditedLooks,
         &Graphics,
@@ -193,6 +197,7 @@ fn seed_of(
     StageSeed {
         suite: state.suite.clone(),
         gaze: gaze.clone(),
+        view: view.clone(),
         suites,
         looks: looks.0,
         graphics: graphics.clone(),
@@ -226,6 +231,7 @@ pub fn stage_memory_changed(
             Or<(
                 Changed<CharacterState>,
                 Changed<GazeSettings>,
+                Changed<ViewSettings>,
                 Added<ActiveSuite>,
                 Changed<ActiveLook>,
                 Changed<Graphics>,

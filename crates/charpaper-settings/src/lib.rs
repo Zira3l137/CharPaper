@@ -34,6 +34,7 @@ pub use stage::GazeSettings;
 pub use stage::Picks;
 pub use stage::StageSeed;
 pub use stage::StageSeeds;
+pub use stage::ViewSettings;
 pub use system::DisplayMode;
 pub use system::StartAtLogin;
 pub use system::SystemSettings;

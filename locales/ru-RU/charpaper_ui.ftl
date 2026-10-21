@@ -31,6 +31,7 @@ section-environment = ОКРУЖЕНИЕ
 label-environment = Окружение
 label-brightness = Яркость
 label-shadows = Тени
+label-lock-orbit = Зафиксировать
 
 ## Graphics tab
 
@@ -178,6 +179,7 @@ value-off = Выкл
 
 ## Подсказка внизу панели
 
+help-lock-orbit = Фиксирует позицию интерактивной камеры, игнорируя взаимодействия с мышью.
 help-panel = Наведите на настройку, чтобы узнать, что она делает. Колесо мыши над значением меняет его.
 help-suite = Какого персонажа показывать, из папок в characters.
 help-animation = Что делает персонаж.

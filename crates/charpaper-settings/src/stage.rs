@@ -16,6 +16,7 @@ pub struct StageSeed {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suite: Option<String>,
     pub gaze: GazeSettings,
+    pub view: ViewSettings,
     // The picks per suite, by the suite's folder.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub suites: BTreeMap<String, Picks>,
@@ -34,6 +35,18 @@ pub struct StageSeeds(pub BTreeMap<StageId, StageSeed>);
 #[serde(default)]
 pub struct GazeSettings {
     pub follow_cursor: bool,
+}
+
+#[derive(Component, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ViewSettings {
+    pub locked: bool,
+}
+
+impl Default for ViewSettings {
+    fn default() -> Self {
+        Self { locked: false }
+    }
 }
 
 impl Default for GazeSettings {
