@@ -17,6 +17,7 @@ pub struct StageSeed {
     pub suite: Option<String>,
     pub gaze: GazeSettings,
     pub view: ViewSettings,
+    pub music: MusicSettings,
     // The picks per suite, by the suite's folder.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub suites: BTreeMap<String, Picks>,
@@ -86,4 +87,24 @@ impl Picks {
         self.hidden.extend(newer.hidden);
         self.expressions.extend(newer.expressions);
     }
+}
+
+#[derive(Component, Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MusicSettings {
+    pub paused: bool,
+    pub order: MusicOrder,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MusicOrder {
+    #[default]
+    InOrder,
+    Shuffle,
+    RepeatOne,
+}
+
+impl MusicOrder {
+    pub const ALL: [Self; 3] = [Self::InOrder, Self::Shuffle, Self::RepeatOne];
 }

@@ -46,6 +46,7 @@ pub(crate) enum Section {
     App,
     Display,
     Sound,
+    Music,
     Interface,
 }
 
@@ -72,6 +73,7 @@ impl Section {
             Section::App => "app",
             Section::Display => "display",
             Section::Sound => "sound",
+            Section::Music => "music",
             Section::Interface => "interface",
         }
     }

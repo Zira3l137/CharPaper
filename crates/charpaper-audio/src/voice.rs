@@ -7,6 +7,7 @@ use rodio::Player;
 use crate::AudioSource;
 use crate::FadeOut;
 use crate::Fader;
+use crate::Pause;
 use crate::Sound;
 use crate::SoundFailed;
 use crate::envelope::Envelope;
@@ -139,6 +140,22 @@ pub(crate) fn fade_out(
             Some(voice) if fade.is_added() => voice.envelope.fade_to(0.0, fade.0),
             Some(voice) if voice.envelope.level() == 0.0 => commands.entity(entity).despawn(),
             Some(_) => {}
+        }
+    }
+}
+
+const PAUSE_FADE: Duration = Duration::from_millis(400);
+
+pub(crate) fn follow_pauses(voices: Query<(&Voice, Has<Pause>), Without<FadeOut>>) {
+    for (voice, paused) in voices {
+        if paused {
+            voice.envelope.fade_to(0.0, PAUSE_FADE);
+            if voice.envelope.level() == 0.0 && !voice.player.is_paused() {
+                voice.player.pause();
+            }
+        } else if voice.player.is_paused() {
+            voice.player.play();
+            voice.envelope.fade_to(1.0, PAUSE_FADE);
         }
     }
 }

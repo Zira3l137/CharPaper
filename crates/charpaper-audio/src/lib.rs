@@ -31,6 +31,7 @@ impl Plugin for SoundPlugin {
                     voice::start_sounds,
                     voice::apply_volumes.run_if(resource_changed::<Volumes>),
                     voice::follow_faders,
+                    voice::follow_pauses,
                     voice::fade_out,
                     voice::despawn_finished,
                 )
@@ -52,6 +53,9 @@ pub struct Sound {
 
 #[derive(Component, Clone, Copy, Debug)]
 pub struct FadeOut(pub Duration);
+
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Pause;
 
 // On an entity whose child sounds rise and fall together, such as everything one scene plays:
 // they go to `level`, from 0 (silent) to 1 (as set), and a change takes `over` across the whole

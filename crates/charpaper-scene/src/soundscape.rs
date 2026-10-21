@@ -5,8 +5,11 @@ use bevy::prelude::*;
 use charpaper_audio::FadeOut;
 use charpaper_audio::Fader;
 use charpaper_audio::Layer;
+use charpaper_audio::Pause;
 use charpaper_audio::Sound;
 use charpaper_audio::SoundFailed;
+use charpaper_settings::MusicOrder;
+use charpaper_settings::MusicSettings;
 
 use crate::SceneSet;
 use crate::assets::asset_path;
@@ -32,19 +35,63 @@ pub(crate) struct SoundscapePlugin;
 impl Plugin for SoundscapePlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(skip_broken_track)
-            .add_systems(Update, (follow_environment, next_track).chain().in_set(SceneSet::Run))
+            .add_observer(play_track)
+            .add_systems(
+                Update,
+                (follow_environment, next_track, follow_pause).chain().in_set(SceneSet::Run),
+            )
             .add_systems(Update, listen.in_set(SceneSet::Run));
     }
 }
 
+#[derive(EntityEvent, Debug, Clone, Copy)]
+pub struct PlayTrack {
+    pub entity: Entity,
+    pub index: usize,
+}
+
+const SKIP_FADE: Duration = Duration::from_millis(500);
+
+fn play_track(
+    event: On<PlayTrack>,
+    mut commands: Commands,
+    mut stages: Query<(&mut Soundscape, &mut MusicSettings)>,
+) {
+    let Ok((mut scape, mut settings)) = stages.get_mut(event.entity) else {
+        return;
+    };
+    if event.index >= scape.music.len() {
+        return;
+    }
+    if let Some((track, _)) = scape.track.take() {
+        commands.entity(track).insert(FadeOut(SKIP_FADE));
+    }
+    scape.requested = Some(event.index);
+    if settings.paused {
+        settings.paused = false;
+    }
+}
+
 #[derive(Component, Default)]
-pub(crate) struct Soundscape {
+pub struct Soundscape {
     // The suite's folder and the environment's name.
     shown: Option<(String, String)>,
     music: Vec<PathBuf>,
     next: usize,
     // The track playing, and its place in `music`.
     track: Option<(Entity, usize)>,
+    requested: Option<usize>,
+}
+
+impl Soundscape {
+    pub fn tracks(&self) -> Vec<String> {
+        let name = |p: &PathBuf| p.file_stem().map(|s| s.to_string_lossy().into_owned());
+        self.music.iter().map(|p| name(p).unwrap_or_default()).collect()
+    }
+
+    pub fn playing(&self) -> Option<usize> {
+        self.track.map(|(_, index)| index)
+    }
 }
 
 // A sound of a stage's environment, as a child of that stage.
@@ -94,12 +141,17 @@ fn follow_environment(
 
 fn next_track(
     mut commands: Commands,
-    mut stages: Query<(Entity, &ActiveSuite, &mut Soundscape)>,
+    mut stages: Query<(Entity, &ActiveSuite, &MusicSettings, &mut Soundscape)>,
     assets: Res<AssetServer>,
     sounds: Query<(), With<Sound>>,
 ) {
-    for (stage, suite, mut scape) in &mut stages {
-        play_next(&mut commands, stage, suite, &assets, &sounds, &mut scape);
+    for (stage, suite, settings, mut scape) in &mut stages {
+        // Read first: touching `scape` mutably marks it changed, and the panel redraws then.
+        let playing = scape.track.is_some_and(|(track, _)| sounds.contains(track));
+        if scape.music.is_empty() || playing || settings.paused {
+            continue;
+        }
+        play_next(&mut commands, stage, suite, &assets, settings.order, &mut scape);
     }
 }
 
@@ -108,13 +160,17 @@ fn play_next(
     stage: Entity,
     suite: &ActiveSuite,
     assets: &AssetServer,
-    sounds: &Query<(), With<Sound>>,
+    order: MusicOrder,
     scape: &mut Soundscape,
 ) {
-    if scape.music.is_empty() || scape.track.is_some_and(|(track, _)| sounds.contains(track)) {
-        return;
-    }
-    let index = scape.next % scape.music.len();
+    let len = scape.music.len();
+    let last = scape.track.map(|(_, index)| index);
+    let index = match (scape.requested.take(), order) {
+        (Some(index), _) => index,
+        (None, MusicOrder::InOrder) => scape.next,
+        (None, MusicOrder::RepeatOne) => last.unwrap_or(scape.next),
+        (None, MusicOrder::Shuffle) => shuffled(len, last),
+    } % len;
     scape.next = index + 1;
     // Only the first track fades in.
     let fade_in = if scape.track.is_none() { CROSSFADE } else { Duration::ZERO };
@@ -133,6 +189,36 @@ fn play_next(
         ))
         .id();
     scape.track = Some((track, index));
+}
+
+fn shuffled(len: usize, last: Option<usize>) -> usize {
+    use std::hash::BuildHasher;
+    let roll = std::hash::RandomState::new().hash_one(()) as usize;
+    match last {
+        Some(last) if len > 1 => (last + 1 + roll % (len - 1)) % len,
+        _ => roll % len,
+    }
+}
+
+fn follow_pause(
+    mut commands: Commands,
+    stages: Query<(&Soundscape, &MusicSettings)>,
+    tracks: Query<Has<Pause>, With<Sound>>,
+) {
+    for (scape, settings) in &stages {
+        let Some((track, _)) = scape.track else {
+            continue;
+        };
+        match (settings.paused, tracks.get(track)) {
+            (true, Ok(false)) => {
+                commands.entity(track).insert(Pause);
+            }
+            (false, Ok(true)) => {
+                commands.entity(track).remove::<Pause>();
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Default)]

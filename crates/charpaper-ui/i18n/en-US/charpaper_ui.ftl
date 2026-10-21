@@ -85,6 +85,15 @@ label-master-volume = Volume
 label-music-volume = Music
 label-ambience-volume = Ambience
 label-character-volume = Character
+section-music = MUSIC
+label-track = Track
+label-playback = Playback
+label-order = Order
+value-play = Play
+value-pause = Pause
+value-in-order = In order
+value-shuffle = Shuffle
+value-repeat-one = Repeat one
 
 ## System tab
 
@@ -185,7 +194,9 @@ value-off = Off
 
 ## Help line at the bottom of the panel: one short sentence or two about the setting under
 ## the pointer. Kept short so it fits in two lines beside the Quit button.
-
+help-track = The environment's music playing now. Pick a track to play it.
+help-playback = Pauses the music, and plays it on from where it stopped.
+help-order = Which track comes next: the following one, any other, or the same again.
 help-lock-orbit = Keeps the orbit camera where it is: dragging and scrolling over the scene no longer move it.
 help-panel = Point at a setting to see what it does. The mouse wheel over a value changes it.
 help-suite = Which character to show, from the folders in characters.

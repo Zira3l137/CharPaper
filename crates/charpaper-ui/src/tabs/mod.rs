@@ -16,11 +16,13 @@ use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
 use charpaper_scene::FocusedStage;
+use charpaper_scene::Soundscape;
 use charpaper_scene::Stage;
 use charpaper_scene::StageKey;
 use charpaper_settings::GazeSettings;
 use charpaper_settings::Graphics;
 use charpaper_settings::Monitors;
+use charpaper_settings::MusicSettings;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ScreenSettings;
 use charpaper_settings::StartAtLogin;
@@ -48,6 +50,8 @@ type StageSources = (
     Changed<Graphics>,
     Changed<GazeSettings>,
     Changed<ViewSettings>,
+    Changed<MusicSettings>,
+    Changed<Soundscape>,
     Changed<Expressions>,
     Changed<CharacterClips>,
     Changed<StageKey>,

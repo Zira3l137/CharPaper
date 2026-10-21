@@ -82,6 +82,15 @@ label-master-volume = Громкость
 label-music-volume = Музыка
 label-ambience-volume = Атмосфера
 label-character-volume = Персонаж
+section-music = МУЗЫКА
+label-track = Трэк
+label-playback = Воспроизведение
+label-order = Порядок
+value-play = Играть
+value-pause = Пауза
+value-in-order = По порядку
+value-shuffle = Случайно
+value-repeat-one = Повтор текущего
 
 ## System tab
 
@@ -179,6 +188,9 @@ value-off = Выкл
 
 ## Подсказка внизу панели
 
+help-track = Музыкальный трэк окружения который проигрывается на данный момент.
+help-playback = Ставит трэк на паузу либо возобновляет проигрывание.
+help-order = По какому порядку воспроизводить следующий трэк: последовательно, случайно или один и тот же.
 help-lock-orbit = Фиксирует позицию интерактивной камеры, игнорируя взаимодействия с мышью.
 help-panel = Наведите на настройку, чтобы узнать, что она делает. Колесо мыши над значением меняет его.
 help-suite = Какого персонажа показывать, из папок в characters.

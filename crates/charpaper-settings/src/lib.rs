@@ -31,6 +31,8 @@ pub use screen::Monitors;
 pub use screen::ScreenSettings;
 pub use screen::StageId;
 pub use stage::GazeSettings;
+pub use stage::MusicOrder;
+pub use stage::MusicSettings;
 pub use stage::Picks;
 pub use stage::StageSeed;
 pub use stage::StageSeeds;

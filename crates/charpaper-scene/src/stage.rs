@@ -12,6 +12,7 @@ use bevy::prelude::*;
 use charpaper_audio::Fader;
 use charpaper_settings::GazeSettings;
 use charpaper_settings::Graphics;
+use charpaper_settings::MusicSettings;
 use charpaper_settings::StageId;
 use charpaper_settings::StageSeed;
 use charpaper_settings::StageSeeds;
@@ -54,6 +55,7 @@ use crate::suite::starting_suite;
     CharacterState,
     GazeSettings,
     ViewSettings,
+    MusicSettings,
     Remembered,
     LoadedSuite,
     LookEdited,
@@ -140,6 +142,7 @@ pub(crate) fn sync_stages(
                 Remembered(seed.suites),
                 EditedLooks(seed.looks),
                 seed.graphics,
+                seed.music,
                 // Every stage stands at the origin, overlapping the others, and only its render
                 // layer keeps it apart. Placed far away instead, its positions would lose the
                 // fraction of a millimetre that layered meshes keep between them, and they would
@@ -170,6 +173,7 @@ type StageMemory = (
     &'static CharacterState,
     &'static GazeSettings,
     &'static ViewSettings,
+    &'static MusicSettings,
     &'static Remembered,
     &'static EditedLooks,
     &'static Graphics,
@@ -177,11 +181,12 @@ type StageMemory = (
 );
 
 fn seed_of(
-    (_, state, gaze, view, remembered, edited, graphics, shown): (
+    (_, state, gaze, view, music, remembered, edited, graphics, shown): (
         &StageKey,
         &CharacterState,
         &GazeSettings,
         &ViewSettings,
+        &MusicSettings,
         &Remembered,
         &EditedLooks,
         &Graphics,
@@ -198,6 +203,7 @@ fn seed_of(
         suite: state.suite.clone(),
         gaze: gaze.clone(),
         view: view.clone(),
+        music: music.clone(),
         suites,
         looks: looks.0,
         graphics: graphics.clone(),
@@ -232,6 +238,7 @@ pub fn stage_memory_changed(
                 Changed<CharacterState>,
                 Changed<GazeSettings>,
                 Changed<ViewSettings>,
+                Changed<MusicSettings>,
                 Added<ActiveSuite>,
                 Changed<ActiveLook>,
                 Changed<Graphics>,
