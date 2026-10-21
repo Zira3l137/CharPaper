@@ -9,21 +9,12 @@ use charpaper_settings::ViewSettings;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
-use super::look::edit_look;
-use super::look::resolved;
-use super::look::shown_environment;
 use super::outfit;
 use crate::held;
 use crate::held::Loads;
 use crate::row::*;
 use crate::section::Section;
 use crate::section::section;
-
-// cd/m², spaced so each step looks about as big as the last.
-const BRIGHTNESS_STOPS: [f32; 15] = [
-    50.0, 100.0, 200.0, 300.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0, 3000.0, 5000.0, 8000.0,
-    12000.0, 20000.0, 30000.0,
-];
 
 // What the focused stage shows, and from where: the suite and what the character wears and
 // does, the camera and the environment. Clicks write to its CharacterState.
@@ -184,48 +175,6 @@ fn environment() -> impl Bundle {
             }
             .picker(),
             // The stops look evenly spaced, so the bar follows them on a log scale too.
-            Setting {
-                label: |l| fl!(l, "label-brightness"),
-                help: |l| fl!(l, "help-brightness"),
-                show: |w, _| {
-                    let lit = shown_environment(w)
-                        .is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
-                    let brightness = resolved(w)?.brightness;
-                    let [min, .., max] = BRIGHTNESS_STOPS;
-                    let text = format!("{brightness:.0}");
-                    Some(number(text, brightness.ln(), min.ln(), max.ln()).when(lit))
-                },
-                change: |w, step| {
-                    edit_look(w, |look, current, environment| {
-                        if let Some(name) = environment {
-                            let brightness =
-                                step_stops(&BRIGHTNESS_STOPS, current.brightness, step.by());
-                            look.environments.entry(name.into()).or_default().brightness =
-                                Some(brightness);
-                        }
-                    });
-                },
-            }
-            .stepper(),
-            Setting {
-                label: |l| fl!(l, "label-shadows"),
-                help: |l| fl!(l, "help-shadows"),
-                show: |w, l| {
-                    let scene = shown_environment(w).is_some_and(|e| e.scene.is_some());
-                    Some(switch(l, resolved(w)?.shadows).when(scene))
-                },
-                change: |w, step| {
-                    edit_look(w, |look, current, environment| {
-                        if let Some(name) = environment {
-                            let mut shadows = current.shadows;
-                            flip(&mut shadows, step);
-                            look.environments.entry(name.into()).or_default().shadows =
-                                Some(shadows);
-                        }
-                    });
-                },
-            }
-            .segments(),
         ],
     )
 }
@@ -284,17 +233,4 @@ fn change_expression(world: &mut World, step: &Step) {
     if let Some(next) = stepped(&options, &current, step) {
         state.expressions.insert(skin, next);
     }
-}
-
-// A value between stops, like one typed into suite.toml, moves to the next stop. Stops at the
-// ends rather than going round.
-fn step_stops(stops: &[f32], current: f32, by: i32) -> f32 {
-    (0..by.unsigned_abs()).fold(current, |value, _| {
-        let next = if by > 0 {
-            stops.iter().copied().find(|&s| s > value * 1.001)
-        } else {
-            stops.iter().rev().copied().find(|&s| s < value * 0.999)
-        };
-        next.unwrap_or(value)
-    })
 }

@@ -25,6 +25,7 @@ use crate::row::percent;
 use crate::row::*;
 use crate::section::Section;
 use crate::section::section;
+use crate::tabs::look::shown_environment;
 use crate::widgets::*;
 
 const EXPOSURE: Scale = Scale { step: 0.5, min: -10.0, max: 10.0, per_unit: 10.0 };
@@ -42,6 +43,11 @@ const SHIFT: Scale = Scale { step: 0.05, min: -1.0, max: 1.0, per_unit: 100.0 };
 const SATURATION: Scale = Scale { step: 0.05, min: 0.0, max: 2.0, per_unit: 100.0 };
 const CONTRAST: Scale = Scale { step: 0.05, min: 0.5, max: 1.5, per_unit: 100.0 };
 const LUT_STRENGTH: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
+// cd/m², spaced so each step looks about as big as the last.
+const BRIGHTNESS_STOPS: [f32; 15] = [
+    50.0, 100.0, 200.0, 300.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0, 3000.0, 5000.0, 8000.0,
+    12000.0, 20000.0, 30000.0,
+];
 
 // The button under the post-processing rows that drops the viewer's look edits.
 pub(crate) struct GraphicsPlugin;
@@ -62,7 +68,75 @@ struct RestoreButton;
 // and how the picture is finished, in its look. Shadow quality is the exception: every stage
 // shares it.
 pub(crate) fn page() -> impl Bundle {
-    children![quality(), fog(), post_processing()]
+    children![quality(), lighting(), fog(), post_processing()]
+}
+
+fn lighting() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-lighting"),
+        Section::Lighting,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-brightness"),
+                help: |l| fl!(l, "help-brightness"),
+                show: |w, _| {
+                    let lit = shown_environment(w)
+                        .is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
+                    let brightness = resolved(w)?.brightness;
+                    let [min, .., max] = BRIGHTNESS_STOPS;
+                    let text = format!("{brightness:.0}");
+                    Some(number(text, brightness.ln(), min.ln(), max.ln()).when(lit))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, environment| {
+                        if let Some(name) = environment {
+                            let brightness =
+                                step_stops(&BRIGHTNESS_STOPS, current.brightness, step.by());
+                            look.environments.entry(name.into()).or_default().brightness =
+                                Some(brightness);
+                        }
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-shadows"),
+                help: |l| fl!(l, "help-shadows"),
+                show: |w, l| {
+                    let scene = shown_environment(w).is_some_and(|e| e.scene.is_some());
+                    Some(switch(l, resolved(w)?.shadows).when(scene))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, environment| {
+                        if let Some(name) = environment {
+                            let mut shadows = current.shadows;
+                            flip(&mut shadows, step);
+                            look.environments.entry(name.into()).or_default().shadows =
+                                Some(shadows);
+                        }
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-shadow-quality"),
+                help: |l| fl!(l, "help-shadow-quality"),
+                show: |w, l| {
+                    let current = w.resource::<RenderSettings>().shadow_quality;
+                    Some(choice(&ShadowQuality::ALL, &current, |quality| match quality {
+                        ShadowQuality::Low => fl!(l, "value-low"),
+                        ShadowQuality::Medium => fl!(l, "value-medium"),
+                        ShadowQuality::High => fl!(l, "value-high"),
+                    }))
+                },
+                change: |w, step| {
+                    let mut settings = w.resource_mut::<RenderSettings>();
+                    pick(&ShadowQuality::ALL, &mut settings.shadow_quality, step);
+                },
+            }
+            .segments(),
+        ],
+    )
 }
 
 fn quality() -> impl Bundle {
@@ -117,23 +191,6 @@ fn quality() -> impl Bundle {
                     w.edit(|g: &mut Graphics| {
                         pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field, step);
                     });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-shadow-quality"),
-                help: |l| fl!(l, "help-shadow-quality"),
-                show: |w, l| {
-                    let current = w.resource::<RenderSettings>().shadow_quality;
-                    Some(choice(&ShadowQuality::ALL, &current, |quality| match quality {
-                        ShadowQuality::Low => fl!(l, "value-low"),
-                        ShadowQuality::Medium => fl!(l, "value-medium"),
-                        ShadowQuality::High => fl!(l, "value-high"),
-                    }))
-                },
-                change: |w, step| {
-                    let mut settings = w.resource_mut::<RenderSettings>();
-                    pick(&ShadowQuality::ALL, &mut settings.shadow_quality, step);
                 },
             }
             .segments(),
@@ -515,4 +572,17 @@ fn on_click(
     if buttons.contains(event.entity) {
         restore.write(RestoreLook);
     }
+}
+
+// A value between stops, like one typed into suite.toml, moves to the next stop. Stops at the
+// ends rather than going round.
+fn step_stops(stops: &[f32], current: f32, by: i32) -> f32 {
+    (0..by.unsigned_abs()).fold(current, |value, _| {
+        let next = if by > 0 {
+            stops.iter().copied().find(|&s| s > value * 1.001)
+        } else {
+            stops.iter().rev().copied().find(|&s| s < value * 0.999)
+        };
+        next.unwrap_or(value)
+    })
 }

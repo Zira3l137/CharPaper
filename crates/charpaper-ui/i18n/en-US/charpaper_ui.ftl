@@ -32,12 +32,13 @@ label-camera = Camera
 camera-orbit = Orbit
 section-environment = ENVIRONMENT
 label-environment = Environment
-label-brightness = Brightness
 label-shadows = Shadows
 label-lock-orbit = Lock orbit
 
 ## Graphics tab
 
+section-lighting = LIGHTING
+label-brightness = Sky Brightness
 section-quality = QUALITY
 label-render-scale = Render scale
 label-anti-aliasing = Anti-aliasing

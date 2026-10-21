@@ -36,6 +36,7 @@ pub(crate) enum Section {
     Environment,
     // Image, color and film together.
     PostProcessing,
+    Lighting,
     Image,
     Color,
     Film,
@@ -63,6 +64,7 @@ impl Section {
             Section::Camera => "camera",
             Section::Environment => "environment",
             Section::PostProcessing => "post_processing",
+            Section::Lighting => "lighting",
             Section::Image => "image",
             Section::Color => "color",
             Section::Film => "film",

@@ -29,12 +29,13 @@ label-camera = Камера
 camera-orbit = Орбита
 section-environment = ОКРУЖЕНИЕ
 label-environment = Окружение
-label-brightness = Яркость
 label-shadows = Тени
 label-lock-orbit = Зафиксировать
 
 ## Graphics tab
 
+section-lighting = ОСВЕЩЕНИЕ
+label-brightness = Яркость неба
 section-quality = КАЧЕСТВО
 label-render-scale = Масштаб
 label-anti-aliasing = Сглаживание
