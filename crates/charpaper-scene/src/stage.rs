@@ -143,6 +143,7 @@ pub(crate) fn sync_stages(
                 EditedLooks(seed.looks),
                 seed.graphics,
                 seed.music,
+                seed.view,
                 // Every stage stands at the origin, overlapping the others, and only its render
                 // layer keeps it apart. Placed far away instead, its positions would lose the
                 // fraction of a millimetre that layered meshes keep between them, and they would
