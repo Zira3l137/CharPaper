@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use bevy::gltf::GltfLoaderSettings;
 use bevy::light::EnvironmentMapLight;
+use bevy::light::NotShadowCaster;
 use bevy::light::Skybox;
 use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
@@ -21,6 +22,7 @@ use crate::SceneSet;
 use crate::assets::GPU_ONLY;
 use crate::assets::asset_path;
 use crate::camera::SceneCamera;
+use crate::look::LightTree;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
@@ -33,6 +35,7 @@ impl Plugin for EnvironmentPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_environment_ready)
             .add_observer(point_sized_spots)
+            .add_observer(uncast_shadows)
             .add_systems(Update, choose_environment.in_set(SceneSet::Fill))
             .add_systems(
                 Update,
@@ -72,16 +75,16 @@ pub(crate) fn shown_environment<'a>(
     suite?.environments.iter().find(|e| e.name == name)
 }
 
-// Whether suite.toml lists a light, by its object's name or its light data's: glTF puts a
-// light on a child of its object, named after the data.
-pub(crate) fn light_listed(
+// Whether suite.toml lists a light or a mesh, by its object's name or its data's: glTF puts
+// both on a child of their object, named after the data.
+pub(crate) fn listed(
     list: &[String],
-    light: Entity,
+    entity: Entity,
     names: &Query<&Name>,
     parents: &Query<&ChildOf>,
 ) -> bool {
     let named = |e: Entity| names.get(e).is_ok_and(|n| list.iter().any(|s| s == n.as_str()));
-    named(light) || parents.get(light).is_ok_and(|p| named(p.parent()))
+    named(entity) || parents.get(entity).is_ok_and(|p| named(p.parent()))
 }
 
 pub(crate) fn choose_environment(
@@ -342,6 +345,36 @@ fn point_sized_spots(
     for entity in children.iter_descendants(ready.entity) {
         if let Ok(mut spot) = spots.get_mut(entity) {
             spot.radius = 0.0;
+        }
+    }
+}
+
+// Objects suite.toml lists under no_shadows. Bevy leaves them out of every shadow map, which
+// also keeps an animated one from making lamps draw their shadows again each frame.
+fn uncast_shadows(
+    ready: On<WorldInstanceReady>,
+    roots: Query<&ChildOf, With<EnvironmentRoot>>,
+    stages: Query<(Option<&ActiveSuite>, &ShownEnvironment)>,
+    meshes: Query<(), With<Mesh3d>>,
+    tree: LightTree,
+    mut commands: Commands,
+) {
+    let Ok(stage) = roots.get(ready.entity) else {
+        return;
+    };
+    let Ok((suite, shown)) = stages.get(stage.parent()) else {
+        return;
+    };
+    let Some(environment) = shown_environment(suite, shown) else {
+        return;
+    };
+    let unshadowed = &environment.settings.no_shadows;
+    if unshadowed.is_empty() {
+        return;
+    }
+    for entity in tree.children.iter_descendants(ready.entity) {
+        if meshes.contains(entity) && listed(unshadowed, entity, &tree.names, &tree.parents) {
+            commands.entity(entity).insert(NotShadowCaster);
         }
     }
 }

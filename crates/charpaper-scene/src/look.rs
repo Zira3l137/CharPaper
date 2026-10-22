@@ -24,7 +24,7 @@ use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::environment::EnvironmentReady;
 use crate::environment::ShownEnvironment;
-use crate::environment::light_listed;
+use crate::environment::listed;
 use crate::environment::shown_environment;
 use crate::environment::spawn_environment_scenes;
 use crate::render::SceneImage;
@@ -222,9 +222,9 @@ pub(crate) fn apply_look(
 
 #[derive(SystemParam)]
 pub(crate) struct LightTree<'w, 's> {
-    children: Query<'w, 's, &'static Children>,
-    parents: Query<'w, 's, &'static ChildOf>,
-    names: Query<'w, 's, &'static Name>,
+    pub children: Query<'w, 's, &'static Children>,
+    pub parents: Query<'w, 's, &'static ChildOf>,
+    pub names: Query<'w, 's, &'static Name>,
 }
 
 fn apply_stage_look(
@@ -287,8 +287,7 @@ fn apply_stage_look(
         let Ok((directional, point, spot)) = lights.get_mut(entity) else {
             continue;
         };
-        let shadows =
-            resolved.shadows && !light_listed(unshadowed, entity, &tree.names, &tree.parents);
+        let shadows = resolved.shadows && !listed(unshadowed, entity, &tree.names, &tree.parents);
         if let Some(mut light) = directional {
             light.shadow_maps_enabled = shadows;
             light.contact_shadows_enabled = shadows;

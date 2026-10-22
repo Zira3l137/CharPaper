@@ -16,7 +16,7 @@ use charpaper_suite::Fog;
 use crate::SceneSet;
 use crate::camera::SceneCamera;
 use crate::environment::ShownEnvironment;
-use crate::environment::light_listed;
+use crate::environment::listed;
 use crate::environment::shown_environment;
 use crate::environment::spawn_environment_scenes;
 use crate::fog::pass::SceneFog;
@@ -179,8 +179,8 @@ fn light_volumes(
         let Ok(directional) = lights.get(entity) else {
             continue;
         };
-        let skip = light_listed(skipped, entity, names, parents);
-        let shadowed = shadows && !light_listed(unshadowed, entity, names, parents);
+        let skip = listed(skipped, entity, names, parents);
+        let shadowed = shadows && !listed(unshadowed, entity, names, parents);
         // A sun lights fog through its shadow map, so without shadows it can't.
         if on && !skip && (shadowed || !directional) {
             commands.entity(entity).insert(VolumetricLight);

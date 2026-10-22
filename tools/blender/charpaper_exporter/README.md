@@ -60,6 +60,10 @@ saved in the `.blend`.
   whose shadows nobody would miss: each point light with shadows draws the scene six more
   times a frame, and a few of them are usually what holds the frame rate down. A light
   without shadows still lights the scene and the fog, just evenly, with no light shafts.
+  Objects cast shadows unless their *Object > Visibility > Ray Visibility > Shadow* is
+  unticked. Untick it on small clutter and on animated props whose shadows nobody would miss:
+  a lamp that sees an animated object draws its shadows again every frame, and one that sees
+  nothing move only now and then.
 - **Lights** reach as far as they do in EEVEE: their *Light > Custom Distance* when it's
   ticked, otherwise the distance where they fade below *Render Properties > Sampling >
   Advanced > Light Threshold*. Every exported point and spot light carries that distance, so
