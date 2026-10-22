@@ -9,6 +9,7 @@ use serde::Serialize;
 pub struct RenderSettings {
     pub fps_limit: FpsLimit,
     pub shadow_quality: ShadowQuality,
+    pub shadow_updates: ShadowUpdates,
     pub pause_when_fullscreen: bool,
     pub pause_when_covered: bool,
     pub pause_on_battery: bool,
@@ -19,6 +20,7 @@ impl Default for RenderSettings {
         Self {
             fps_limit: FpsLimit::default(),
             shadow_quality: ShadowQuality::default(),
+            shadow_updates: ShadowUpdates::default(),
             pause_when_fullscreen: true,
             pause_when_covered: true,
             pause_on_battery: false,
@@ -138,6 +140,29 @@ pub enum ShadowQuality {
 impl ShadowQuality {
     pub const ALL: [ShadowQuality; 3] =
         [ShadowQuality::Low, ShadowQuality::Medium, ShadowQuality::High];
+}
+
+// How often a lamp's shadow is drawn again while only animation changes it: the character
+// breathing, a prop on a loop. Every other frame halves what those shadows cost, and they
+// trail the motion by a frame. A lamp that moves, or an object coming into its light, is
+// drawn at once either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShadowUpdates {
+    #[default]
+    EveryFrame,
+    EveryOtherFrame,
+}
+
+impl ShadowUpdates {
+    pub const ALL: [ShadowUpdates; 2] = [ShadowUpdates::EveryFrame, ShadowUpdates::EveryOtherFrame];
+
+    pub fn period(self) -> u8 {
+        match self {
+            ShadowUpdates::EveryFrame => 1,
+            ShadowUpdates::EveryOtherFrame => 2,
+        }
+    }
 }
 
 // How closely each pixel samples the fog along its ray: one sample per step length, up to a

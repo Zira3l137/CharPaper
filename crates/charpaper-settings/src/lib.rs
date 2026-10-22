@@ -25,6 +25,7 @@ pub use render::Graphics;
 pub use render::RENDER_SCALES;
 pub use render::RenderSettings;
 pub use render::ShadowQuality;
+pub use render::ShadowUpdates;
 pub use screen::ChosenMonitor;
 pub use screen::MonitorEntry;
 pub use screen::Monitors;

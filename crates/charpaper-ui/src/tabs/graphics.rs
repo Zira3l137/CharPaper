@@ -13,6 +13,7 @@ use charpaper_settings::Graphics;
 use charpaper_settings::RENDER_SCALES;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
+use charpaper_settings::ShadowUpdates;
 use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
 use i18n_embed::fluent::FluentLanguageLoader;
@@ -132,6 +133,22 @@ fn lighting() -> impl Bundle {
                 change: |w, step| {
                     let mut settings = w.resource_mut::<RenderSettings>();
                     pick(&ShadowQuality::ALL, &mut settings.shadow_quality, step);
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-shadow-updates"),
+                help: |l| fl!(l, "help-shadow-updates"),
+                show: |w, l| {
+                    let current = w.resource::<RenderSettings>().shadow_updates;
+                    Some(choice(&ShadowUpdates::ALL, &current, |updates| match updates {
+                        ShadowUpdates::EveryFrame => fl!(l, "value-every-frame"),
+                        ShadowUpdates::EveryOtherFrame => fl!(l, "value-every-other-frame"),
+                    }))
+                },
+                change: |w, step| {
+                    let mut settings = w.resource_mut::<RenderSettings>();
+                    pick(&ShadowUpdates::ALL, &mut settings.shadow_updates, step);
                 },
             }
             .segments(),

@@ -24,6 +24,7 @@ use charpaper_settings::Graphics;
 use charpaper_settings::RENDER_SCALES;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
+use charpaper_settings::ShadowUpdates;
 use charpaper_suite::Look;
 
 use crate::wallpaper::Paused;
@@ -276,6 +277,16 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
                 ShadowQuality::High => "shadow quality high",
             };
             rows.push(changed(saved, label, |s| s.render.shadow_quality = quality));
+        }
+        for updates in ShadowUpdates::ALL {
+            if updates == saved.render.shadow_updates {
+                continue;
+            }
+            let label = match updates {
+                ShadowUpdates::EveryFrame => "animated shadows every frame",
+                ShadowUpdates::EveryOtherFrame => "animated shadows every other frame",
+            };
+            rows.push(changed(saved, label, |s| s.render.shadow_updates = updates));
         }
     }
     for anti_aliasing in AntiAliasing::ALL {

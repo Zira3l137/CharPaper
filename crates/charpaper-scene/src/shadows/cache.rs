@@ -9,9 +9,12 @@
 // layer keeps last frame's map.
 //
 // A face is drawn when
-// - a mesh in it moved, or is skinned or has shape keys, since those change every frame;
-// - the meshes in it changed, or its light moved or changed how it casts shadows;
+// - the meshes in it changed, or one of them was given another mesh, or its light moved or
+//   changed how it casts shadows;
 // - it is new, or its light's layer moved, or Bevy made new shadow textures;
+// - a mesh in it moved, or is skinned or has shape keys, since those change every frame. With
+//   ShadowUpdates::EveryOtherFrame such a face is drawn on alternate frames only, half the
+//   faces on each, and once more after the motion stops;
 // - it is among the few that went longest without being drawn, so a change none of this
 //   catches is never stuck for more than about a second.
 //
@@ -41,6 +44,7 @@ use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::render::occlusion_culling::OcclusionCulling;
 use bevy::render::render_resource::TextureId;
 use bevy::render::sync_component::SyncComponent;
+use charpaper_settings::RenderSettings;
 
 // Faces drawn each frame beyond those that changed. 63 faces are all drawn again in about
 // 30 frames.
@@ -70,10 +74,14 @@ impl Plugin for ShadowCachePlugin {
     }
 }
 
-// The faces of a light whose shadow maps must be drawn this frame, one bit each. A spot light
-// has one.
+// The faces of a light whose shadow maps must be drawn again, one bit each: those that
+// changed, and those only animation moved, drawn every `period` frames. A spot light has one.
 #[derive(Component, Clone, Copy, Default)]
-pub(crate) struct StaleFaces(u8);
+pub(crate) struct StaleFaces {
+    changed: u8,
+    animated: u8,
+    period: u8,
+}
 
 impl SyncComponent for StaleFaces {
     type Target = Self;
@@ -128,7 +136,9 @@ fn find_stale_faces(
         Without<PointLight>,
     >,
     meshes: Meshes,
+    settings: Res<RenderSettings>,
 ) {
+    let period = settings.shadow_updates.period();
     for (light, transform, faces, mut watch, mut stale) in &mut points {
         let casting = Casting {
             enabled: light.shadow_maps_enabled,
@@ -138,7 +148,7 @@ fn find_stale_faces(
             angle: 0.0,
         };
         let lists = faces.iter().map(|face| face.entities.as_slice());
-        stale.0 = watch.update(transform, casting, lists, &meshes);
+        *stale = watch.update(transform, casting, lists, &meshes, period);
     }
     for (light, transform, visible, mut watch, mut stale) in &mut spots {
         let casting = Casting {
@@ -149,7 +159,7 @@ fn find_stale_faces(
             angle: light.outer_angle,
         };
         let lists = std::iter::once(visible.entities.as_slice());
-        stale.0 = watch.update(transform, casting, lists, &meshes);
+        *stale = watch.update(transform, casting, lists, &meshes, period);
     }
 }
 
@@ -161,21 +171,26 @@ impl ShadowWatch {
         casting: Casting,
         faces: impl Iterator<Item = &'a [Entity]>,
         meshes: &Meshes,
-    ) -> u8 {
+        period: u8,
+    ) -> StaleFaces {
         let light_changed = self.transform != Some(*transform) || self.casting != Some(casting);
         self.transform = Some(*transform);
         self.casting = Some(casting);
 
-        let mut stale = 0;
+        let mut stale = StaleFaces { period, ..default() };
         for (index, entities) in faces.enumerate() {
             let listed = list_hash(entities);
-            let moved = entities.iter().any(|&entity| {
-                meshes.get(entity).is_ok_and(|(transform, mesh, skinned, morphs)| {
-                    transform.is_changed() || mesh.is_changed() || skinned || morphs
-                })
-            });
-            if light_changed || moved || self.meshes[index] != listed {
-                stale |= 1 << index;
+            let (mut replaced, mut moved) = (false, false);
+            for &entity in entities {
+                if let Ok((transform, mesh, skinned, morphs)) = meshes.get(entity) {
+                    replaced |= mesh.is_changed();
+                    moved |= transform.is_changed() || skinned || morphs;
+                }
+            }
+            if light_changed || replaced || self.meshes[index] != listed {
+                stale.changed |= 1 << index;
+            } else if moved {
+                stale.animated |= 1 << index;
             }
             self.meshes[index] = listed;
         }
@@ -201,7 +216,21 @@ struct DrawnFaces {
     frame: u64,
     textures: Option<[TextureId; 2]>,
     layers: HashMap<Entity, u32>,
-    drawn: HashMap<(Entity, u8), u64>,
+    drawn: HashMap<(Entity, u8), Drawn>,
+}
+
+#[derive(Clone, Copy)]
+struct Drawn {
+    frame: u64,
+    // Animation moved it since, and it waits for its turn.
+    behind: bool,
+}
+
+// Whether it's a face's turn to catch up with animation. Faces take turns by their light and
+// index, so each frame draws its share rather than all of them every `period` frames.
+fn is_turn(frame: u64, (light, face): (Entity, u8), period: u8) -> bool {
+    let period = u64::from(period.max(1));
+    (frame + u64::from(light.index_u32()) + u64::from(face)) % period == 0
 }
 
 // Bevy makes these views anew every frame, each set to draw. Views with occlusion culling are
@@ -244,16 +273,24 @@ fn skip_unchanged_faces(
             layers.insert(light, layer);
         }
         let moved = layer.is_none() || faces.layers.get(&light).is_some_and(|&l| Some(l) != layer);
-        let changed = stale.get(light).map_or(true, |stale| stale.0 & (1 << face) != 0);
         let last = faces.drawn.get(&(light, face)).copied().filter(|_| !moved);
-        candidates.push((index, (light, face), last, changed));
+        let (changed, behind) = match stale.get(light) {
+            Ok(stale) => {
+                let bit = 1 << face;
+                let behind = stale.animated & bit != 0 || last.is_some_and(|l| l.behind);
+                let due = behind && is_turn(faces.frame, (light, face), stale.period);
+                (stale.changed & bit != 0 || due, behind && !due)
+            }
+            Err(_) => (true, false),
+        };
+        candidates.push((index, (light, face), last, changed, behind));
     }
 
     // The ones to draw: changed or never drawn, then the longest waiting of the rest.
     let mut waiting: Vec<_> = candidates
         .iter()
-        .filter(|&&(_, _, _, changed)| !changed)
-        .filter_map(|&(index, _, last, _)| Some((last?, index)))
+        .filter(|&&(_, _, _, changed, _)| !changed)
+        .filter_map(|&(index, _, last, _, _)| Some((last?.frame, index)))
         .collect();
     waiting.sort_unstable();
     let refreshed: Vec<usize> =
@@ -261,11 +298,11 @@ fn skip_unchanged_faces(
 
     let mut drawn = HashMap::with_capacity(candidates.len());
     let mut skip = Vec::new();
-    for (index, key, last, changed) in candidates {
+    for (index, key, last, changed, behind) in candidates {
         if changed || last.is_none() || refreshed.contains(&index) {
-            drawn.insert(key, faces.frame);
+            drawn.insert(key, Drawn { frame: faces.frame, behind: false });
         } else if let Some(last) = last {
-            drawn.insert(key, last);
+            drawn.insert(key, Drawn { frame: last.frame, behind });
             skip.push(index);
         }
     }

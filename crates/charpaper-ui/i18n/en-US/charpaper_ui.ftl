@@ -44,6 +44,7 @@ label-render-scale = Render scale
 label-anti-aliasing = Anti-aliasing
 label-depth-of-field = Depth of field
 label-shadow-quality = Shadow quality
+label-shadow-updates = Animated shadows
 section-fog = FOG
 label-fog = Fog
 label-fog-quality = Quality
@@ -79,6 +80,8 @@ value-ultra = Ultra
 value-full = Full
 value-half = Half
 value-quarter = Quarter
+value-every-frame = Every frame
+value-every-other-frame = Every other frame
 
 ## Sound tab
 
@@ -230,6 +233,7 @@ help-render-scale = Draws the scene at a lower resolution to save power. The pan
 help-anti-aliasing = Smooths jagged edges. TAA is smoothest but can trail behind movement.
 help-depth-of-field = Blurs what's out of focus, like a camera lens. Bokeh looks best, Blur is faster.
 help-shadow-quality = How sharp shadows are, on every stage. Low is fastest, with hard edges. High takes much more video memory.
+help-shadow-updates = How often lamps redraw shadows that only animation moves. Every other frame halves their cost, and they trail the motion by a frame.
 help-fog = Fog and light shafts, where the environment has them.
 help-fog-quality = How finely the fog is drawn. Higher costs more.
 help-fog-dithering = Hides banding in the fog with fine noise.

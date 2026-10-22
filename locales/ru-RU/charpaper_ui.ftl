@@ -41,6 +41,7 @@ label-render-scale = Масштаб
 label-anti-aliasing = Сглаживание
 label-depth-of-field = Глубина резкости
 label-shadow-quality = Качество теней
+label-shadow-updates = Анимированные тени
 section-fog = ТУМАН
 label-fog = Туман
 label-fog-quality = Качество
@@ -76,6 +77,8 @@ value-ultra = Ультра
 value-full = Полное
 value-half = Половина
 value-quarter = Четверть
+value-every-frame = Каждый кадр
+value-every-other-frame = Через кадр
 
 ## Sound tab
 
@@ -224,6 +227,7 @@ help-render-scale = Рисует сцену в меньшем разрешени
 help-anti-aliasing = Сглаживает зубчатые края. TAA сглаживает лучше всех, но может оставлять след за движением.
 help-depth-of-field = Размывает то, что не в фокусе, как объектив. Боке выглядит лучше, размытие быстрее.
 help-shadow-quality = Насколько чёткие тени, на всех сценах. Низкое быстрее всего, но края жёсткие. Высокое занимает намного больше видеопамяти.
+help-shadow-updates = Как часто лампы перерисовывают тени, которые двигает только анимация. Через кадр вдвое дешевле, но тени отстают от движения на кадр.
 help-fog = Туман и лучи света, если они есть в окружении.
 help-fog-quality = Насколько подробно рисуется туман. Чем выше, тем дороже.
 help-fog-dithering = Убирает полосы в тумане мелким шумом.
