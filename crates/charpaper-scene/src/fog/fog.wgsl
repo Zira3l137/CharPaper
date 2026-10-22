@@ -8,8 +8,9 @@
 // A ray takes one step per step length, up to the most allowed, so a short one is cheap.
 // Unlike Bevy's, suns and lamps share one march.
 //
-// At half resolution each fog pixel marches the ray of the top-left screen pixel of the 2×2
-// it covers, which fog_upsample.wgsl relies on.
+// At a lower resolution each fog pixel marches the ray of the top-left screen pixel of the
+// block it covers, which fog_upsample.wgsl relies on. Interleaved, a box only marches the fog
+// pixels whose turn it is, after clear_fragment has emptied them; see pass.rs.
 
 #import bevy_pbr::mesh_view_bindings::{globals, lights, view, clustered_lights}
 #import bevy_pbr::mesh_view_types::{
@@ -52,6 +53,8 @@ struct FogBox {
     scattering_asymmetry: f32,
     light_intensity: f32,
     dithering: f32,
+    phase: u32,
+    interleaved: u32,
 }
 
 @group(1) @binding(0) var<uniform> fog_box: FogBox;
@@ -94,13 +97,33 @@ fn vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 
 // The screen pixel whose ray this fragment marches.
 fn screen_coord(position: vec4<f32>) -> vec4<f32> {
-#ifdef HALF_RESOLUTION
     let screen = vec2<i32>(textureDimensions(depth_texture));
-    let pixel = min(vec2<i32>(floor(position.xy)) * 2, screen - 1);
+    let pixel = min(vec2<i32>(floor(position.xy)) * #{DOWNSCALE}, screen - 1);
     return vec4(vec2<f32>(pixel) + 0.5, position.zw);
-#else
-    return position;
-#endif
+}
+
+// Whether this fog pixel is marched this frame: always, or interleaved, when it is the one of
+// its 2×2 whose turn it is.
+fn marched_now(position: vec4<f32>) -> bool {
+    let texel = vec2<u32>(floor(position.xy));
+    let turn = (texel.x & 1u) | ((texel.y & 1u) << 1u);
+    return fog_box.interleaved == 0u || turn == fog_box.phase;
+}
+
+// A triangle over the whole fog texture.
+@vertex
+fn clear_vertex(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
+    let uv = vec2<f32>(f32(index >> 1u), f32(index & 1u)) * 2.0;
+    return vec4(uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);
+}
+
+// Empties the fog pixels about to be marched again, so the boxes add up from no fog.
+@fragment
+fn clear_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    if (!marched_now(position)) {
+        discard;
+    }
+    return vec4(0.0);
 }
 
 // Henyey-Greenstein: how much light goes on toward the viewer rather than away, which makes
@@ -113,6 +136,9 @@ fn henyey_greenstein(neg_LdotV: f32) -> f32 {
 
 @fragment
 fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+    if (!marched_now(position)) {
+        discard;
+    }
     let density = fog_box.density;
     let extinction = density * (fog_box.absorption + fog_box.scattering);
 

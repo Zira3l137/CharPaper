@@ -78,6 +78,7 @@ value-high = High
 value-ultra = Ultra
 value-full = Full
 value-half = Half
+value-quarter = Quarter
 
 ## Sound tab
 
@@ -232,7 +233,7 @@ help-shadow-quality = How sharp shadows are, on every stage. Low is fastest, wit
 help-fog = Fog and light shafts, where the environment has them.
 help-fog-quality = How finely the fog is drawn. Higher costs more.
 help-fog-dithering = Hides banding in the fog with fine noise.
-help-fog-resolution = Half draws the fog four times faster. It is soft, so this rarely shows.
+help-fog-resolution = Half draws the fog four times faster, and it is soft, so this rarely shows. Quarter is faster again but softens light shafts.
 help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
 help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
 help-pause-battery = Stops the picture and sound while the computer runs on battery.

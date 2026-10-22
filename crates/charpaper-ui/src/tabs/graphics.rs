@@ -243,6 +243,7 @@ fn fog() -> impl Bundle {
                     Some(choice(&FogResolution::ALL, &current, |resolution| match resolution {
                         FogResolution::Full => fl!(l, "value-full"),
                         FogResolution::Half => fl!(l, "value-half"),
+                        FogResolution::Quarter => fl!(l, "value-quarter"),
                     }))
                 },
                 change: |w, step| {

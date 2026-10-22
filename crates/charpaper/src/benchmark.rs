@@ -253,6 +253,7 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
             let label = match resolution {
                 FogResolution::Full => "fog full resolution",
                 FogResolution::Half => "fog half resolution",
+                FogResolution::Quarter => "fog quarter resolution",
             };
             rows.push(changed(saved, label, |s| {
                 s.graphics.fog = true;

@@ -7,9 +7,15 @@
 // Bevy's pass stays idle: it only runs for cameras with Bevy's VolumetricFog component, and
 // the scene cameras get SceneFog instead.
 //
-// At half resolution, the fog is marched into a texture a quarter the size of the screen,
-// then fog_upsample.wgsl lays it over the scene. Fog is soft, so this costs little in looks
-// and saves about three quarters of the fog's work.
+// The fog is marched into a texture of its own, kept from frame to frame, at full, half or a
+// quarter of the screen's resolution, then fog_upsample.wgsl lays it over the scene. Fog is
+// soft, so a lower resolution costs little in looks and saves most of the fog's work.
+//
+// While the camera, the fog boxes and the fog settings stay as they were, only one fog pixel
+// in each 2×2 is marched again each frame, in turn, and the rest keep what they had. A
+// wallpaper's camera is still nearly all the time, so this saves about three quarters of the
+// march nearly all the time. What does change meanwhile, the character moving through the fog
+// or the shadows it casts into it, shows up within four frames, which TAA blends over.
 
 use bevy::asset::embedded_asset;
 use bevy::asset::load_embedded_asset;
@@ -49,12 +55,11 @@ use bevy::render::renderer::RenderDevice;
 use bevy::render::renderer::RenderQueue;
 use bevy::render::renderer::ViewQuery;
 use bevy::render::sync_component::SyncComponent;
-use bevy::render::texture::CachedTexture;
-use bevy::render::texture::TextureCache;
 use bevy::render::view::ExtractedView;
 use bevy::render::view::ViewDepthTexture;
 use bevy::render::view::ViewTarget;
 use bevy::shader::Shader;
+use bevy::shader::ShaderDefVal;
 
 pub(crate) struct FogPassPlugin;
 
@@ -98,15 +103,16 @@ pub(crate) struct SceneFog {
     // Each pixel's ray starts up to a step further in, different every frame, which turns
     // the stripes between steps into noise that TAA smooths out.
     pub dithering: bool,
-    pub half_resolution: bool,
+    // Screen pixels per fog pixel, across and down: 1, 2 or 4.
+    pub downscale: u32,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, PartialEq)]
 pub(crate) struct ExtractedFog {
     max_steps: u32,
     step_length: f32,
     dithering: bool,
-    half_resolution: bool,
+    downscale: u32,
     layers: RenderLayers,
 }
 
@@ -124,7 +130,7 @@ impl ExtractComponent for SceneFog {
             max_steps: fog.max_steps,
             step_length: fog.step_length,
             dithering: fog.dithering,
-            half_resolution: fog.half_resolution,
+            downscale: fog.downscale,
             layers: layers.cloned().unwrap_or_default(),
         })
     }
@@ -134,6 +140,7 @@ impl ExtractComponent for SceneFog {
 #[derive(Resource, Default)]
 struct FogBoxes(Vec<FogBox>);
 
+#[derive(Clone, PartialEq)]
 struct FogBox {
     local_from_world: Affine3A,
     color: Vec3,
@@ -181,6 +188,10 @@ struct FogUniform {
     light_intensity: f32,
     // 1 with dithering, 0 without.
     dithering: f32,
+    // Which fog pixel of each 2×2 is marched this frame, from 0 to 3.
+    phase: u32,
+    // 1 while only that one is, 0 when all are.
+    interleaved: u32,
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
@@ -197,15 +208,16 @@ struct FogPipeline {
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct FogPipelineKey {
     view: MeshPipelineViewLayoutKey,
-    target_format: TextureFormat,
-    half_resolution: bool,
+    downscale: u32,
+    // Clears the fog pixels about to be marched again, rather than marching a box.
+    clear: bool,
 }
 
-// Fog drawn at half resolution is kept in this, light and coverage both. Precise enough for
-// light and blendable on every GPU.
-const HALF_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+// The fog's own texture keeps the fog's light and how much it hides. Precise enough for light
+// and blendable on every GPU.
+const FOG_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
-// Lays half-resolution fog over the scene.
+// Lays the fog's own texture over the scene.
 #[derive(Resource)]
 struct UpsamplePipeline {
     // Without and with MSAA, as for the boxes.
@@ -218,6 +230,7 @@ struct UpsamplePipeline {
 struct UpsamplePipelineKey {
     multisampled: bool,
     target_format: TextureFormat,
+    downscale: u32,
 }
 
 fn init_fog_pipeline(
@@ -269,15 +282,20 @@ impl SpecializedRenderPipeline for FogPipeline {
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         // Bevy's choice too: one hardware-filtered shadow sample per step. Softer filtering
         // costs several samples a step and is lost in the fog anyway.
-        let mut shader_defs = vec!["SHADOW_FILTER_METHOD_HARDWARE_2X2".into()];
+        let mut shader_defs = vec![
+            "SHADOW_FILTER_METHOD_HARDWARE_2X2".into(),
+            ShaderDefVal::UInt("DOWNSCALE".into(), key.downscale),
+        ];
         let multisampled = key.view.contains(MeshPipelineViewLayoutKey::MULTISAMPLED);
         if multisampled {
             shader_defs.push("MULTISAMPLED".into());
         }
-        if key.half_resolution {
-            shader_defs.push("HALF_RESOLUTION".into());
-        }
         let view_layout = self.view_layouts.get_view_layout(key.view);
+        // The clear overwrites; the boxes add up over what's there.
+        let (vertex, fragment, blend) = match key.clear {
+            true => ("clear_vertex", "clear_fragment", None),
+            false => ("vertex", "fragment", Some(fog_blend(true))),
+        };
 
         RenderPipelineDescriptor {
             label: Some("charpaper_fog".into()),
@@ -288,18 +306,23 @@ impl SpecializedRenderPipeline for FogPipeline {
             vertex: VertexState {
                 shader: self.shader.clone(),
                 shader_defs: shader_defs.clone(),
+                entry_point: Some(vertex.into()),
                 ..default()
             },
-            primitive: PrimitiveState { cull_mode: Some(Face::Back), ..default() },
+            // The clear's triangle covers the screen whichever way it faces.
+            primitive: PrimitiveState {
+                cull_mode: (!key.clear).then_some(Face::Back),
+                ..default()
+            },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
                 shader_defs,
+                entry_point: Some(fragment.into()),
                 targets: vec![Some(ColorTargetState {
-                    format: key.target_format,
-                    blend: Some(fog_blend(key.half_resolution)),
+                    format: FOG_FORMAT,
+                    blend,
                     write_mask: ColorWrites::ALL,
                 })],
-                ..default()
             }),
             ..default()
         }
@@ -310,7 +333,10 @@ impl SpecializedRenderPipeline for UpsamplePipeline {
     type Key = UpsamplePipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let shader_defs = if key.multisampled { vec!["MULTISAMPLED".into()] } else { Vec::new() };
+        let mut shader_defs = vec![ShaderDefVal::UInt("DOWNSCALE".into(), key.downscale)];
+        if key.multisampled {
+            shader_defs.push("MULTISAMPLED".into());
+        }
         RenderPipelineDescriptor {
             label: Some("charpaper_fog_upsample".into()),
             layout: vec![self.layouts[usize::from(key.multisampled)].clone()],
@@ -331,8 +357,8 @@ impl SpecializedRenderPipeline for UpsamplePipeline {
 }
 
 // Fog over what's already drawn: its light added, what's behind dimmed by how much the fog
-// hides it. The scene keeps its own alpha. Fog drawn apart from the scene adds up how much
-// it hides instead, so that it can be laid over the scene later in one go.
+// hides it. The scene keeps its own alpha. In the fog's own texture, apart from the scene,
+// how much it hides adds up instead, so that it can be laid over the scene in one go.
 fn fog_blend(apart: bool) -> BlendState {
     let over = BlendComponent {
         src_factor: BlendFactor::One,
@@ -347,17 +373,35 @@ fn fog_blend(apart: bool) -> BlendState {
     BlendState { color: over, alpha: if apart { over } else { keep } }
 }
 
-// What a camera draws this frame: a pipeline, and each fog box on its stage.
+// What a camera draws this frame: the pipelines, and each fog box on its stage.
 #[derive(Component)]
 struct ViewFog {
     pipeline: CachedRenderPipelineId,
+    clear: CachedRenderPipelineId,
+    upsample: CachedRenderPipelineId,
     boxes: Vec<ViewFogBox>,
-    half: Option<HalfFog>,
+    texture: TextureView,
+    // Only some fog pixels are marched again, the rest kept.
+    interleaved: bool,
 }
 
-struct HalfFog {
-    texture: CachedTexture,
-    upsample: CachedRenderPipelineId,
+// A camera's fog texture, kept from frame to frame, and what its fog was last marched for.
+#[derive(Component)]
+struct FogHistory {
+    _texture: Texture,
+    view: TextureView,
+    size: UVec2,
+    marched_for: MarchedFor,
+    phase: u32,
+}
+
+// Everything but the lights and the scene's depth that decides how the fog comes out.
+#[derive(PartialEq)]
+struct MarchedFor {
+    world_from_view: GlobalTransform,
+    clip_from_view: Mat4,
+    fog: ExtractedFog,
+    boxes: Vec<FogBox>,
 }
 
 struct ViewFogBox {
@@ -379,17 +423,17 @@ fn prepare_fog(
     fog_pipeline: Res<FogPipeline>,
     mut upsample_pipelines: ResMut<SpecializedRenderPipelines<UpsamplePipeline>>,
     upsample_pipeline: Res<UpsamplePipeline>,
-    mut textures: ResMut<TextureCache>,
     mut uniforms: ResMut<FogUniforms>,
     boxes: Res<FogBoxes>,
     views: Query<(Entity, &ExtractedView, &ExtractedFog)>,
-    stale: Query<Entity, (With<ViewFog>, Without<ExtractedFog>)>,
+    mut histories: Query<&mut FogHistory>,
+    stale: Query<Entity, (Or<(With<ViewFog>, With<FogHistory>)>, Without<ExtractedFog>)>,
     view_keys: Res<ViewKeyCache>,
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
 ) {
     for view in &stale {
-        commands.entity(view).remove::<ViewFog>();
+        commands.entity(view).remove::<(ViewFog, FogHistory)>();
     }
     let count = views.iter().map(|(_, _, fog)| on_stage(&boxes, fog).count()).sum();
     let Some(mut writer) = uniforms.get_writer(count, &device, &queue) else {
@@ -404,23 +448,48 @@ fn prepare_fog(
             continue;
         };
         let view_key: MeshPipelineViewLayoutKey = (*view_key).into();
-        let half = fog.half_resolution.then(|| {
-            let upsample = upsample_pipelines.specialize(
-                &pipeline_cache,
-                &upsample_pipeline,
-                UpsamplePipelineKey {
-                    multisampled: view_key.contains(MeshPipelineViewLayoutKey::MULTISAMPLED),
-                    target_format: view.target_format,
-                },
-            );
-            HalfFog { texture: half_texture(&mut textures, &device, view.viewport.zw()), upsample }
-        });
-        let key = FogPipelineKey {
-            view: view_key,
-            target_format: if half.is_some() { HALF_FORMAT } else { view.target_format },
-            half_resolution: half.is_some(),
+        let upsample = upsample_pipelines.specialize(
+            &pipeline_cache,
+            &upsample_pipeline,
+            UpsamplePipelineKey {
+                multisampled: view_key.contains(MeshPipelineViewLayoutKey::MULTISAMPLED),
+                target_format: view.target_format,
+                downscale: fog.downscale,
+            },
+        );
+        let key = |clear| FogPipelineKey { view: view_key, downscale: fog.downscale, clear };
+        let pipeline = pipelines.specialize(&pipeline_cache, &fog_pipeline, key(false));
+        let clear = pipelines.specialize(&pipeline_cache, &fog_pipeline, key(true));
+
+        // Rounded up, so the last row and column of an odd-sized screen still have fog.
+        let screen = view.viewport.zw();
+        let size = ((screen + UVec2::splat(fog.downscale - 1)) / fog.downscale).max(UVec2::ONE);
+        let marched_for = MarchedFor {
+            world_from_view: view.world_from_view,
+            clip_from_view: view.clip_from_view,
+            fog: fog.clone(),
+            boxes: on_stage(&boxes, fog).cloned().collect(),
         };
-        let pipeline = pipelines.specialize(&pipeline_cache, &fog_pipeline, key);
+        let (texture, interleaved, phase) = match histories.get_mut(entity) {
+            Ok(mut history) if history.size == size => {
+                let interleaved = history.marched_for == marched_for;
+                history.marched_for = marched_for;
+                history.phase = (history.phase + 1) % 4;
+                (history.view.clone(), interleaved, history.phase)
+            }
+            // New, or the screen changed size: every fog pixel is marched afresh.
+            _ => {
+                let (texture, view) = fog_texture(&device, size);
+                commands.entity(entity).insert(FogHistory {
+                    _texture: texture,
+                    view: view.clone(),
+                    size,
+                    marched_for,
+                    phase: 0,
+                });
+                (view, false, 0)
+            }
+        };
 
         let world_from_view = view.world_from_view.affine();
         let boxes = on_stage(&boxes, fog)
@@ -447,34 +516,36 @@ fn prepare_fog(
                     scattering_asymmetry: fog_box.asymmetry,
                     light_intensity: fog_box.light_intensity,
                     dithering: if fog.dithering { 1.0 } else { 0.0 },
+                    phase,
+                    interleaved: u32::from(interleaved),
                 });
                 ViewFogBox { uniform_offset, outside: !inside }
             })
             .collect();
-        commands.entity(entity).insert(ViewFog { pipeline, boxes, half });
+        commands.entity(entity).insert(ViewFog {
+            pipeline,
+            clear,
+            upsample,
+            boxes,
+            texture,
+            interleaved,
+        });
     }
 }
 
-// Rounded up, so the last row and column of an odd-sized screen still have fog.
-fn half_texture(
-    textures: &mut TextureCache,
-    device: &RenderDevice,
-    screen: UVec2,
-) -> CachedTexture {
-    let size = ((screen + UVec2::ONE) / 2).max(UVec2::ONE);
-    textures.get(
-        device,
-        TextureDescriptor {
-            label: Some("charpaper_fog_half"),
-            size: Extent3d { width: size.x, height: size.y, depth_or_array_layers: 1 },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: HALF_FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        },
-    )
+fn fog_texture(device: &RenderDevice, size: UVec2) -> (Texture, TextureView) {
+    let texture = device.create_texture(&TextureDescriptor {
+        label: Some("charpaper_fog"),
+        size: Extent3d { width: size.x, height: size.y, depth_or_array_layers: 1 },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: FOG_FORMAT,
+        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&TextureViewDescriptor::default());
+    (texture, view)
 }
 
 fn on_stage<'a>(boxes: &'a FogBoxes, fog: &'a ExtractedFog) -> impl Iterator<Item = &'a FogBox> {
@@ -497,14 +568,19 @@ fn draw_fog(
     mut ctx: RenderContext,
 ) {
     let (target, depth, fog, view_bind_group, msaa) = view.into_inner();
-    let (Some(pipeline), Some(uniform)) =
-        (pipeline_cache.get_render_pipeline(fog.pipeline), uniforms.binding())
+    let pipelines = (
+        pipeline_cache.get_render_pipeline(fog.pipeline),
+        pipeline_cache.get_render_pipeline(fog.clear),
+        pipeline_cache.get_render_pipeline(fog.upsample),
+    );
+    let ((Some(pipeline), Some(clear), Some(upsample)), Some(uniform)) =
+        (pipelines, uniforms.binding())
     else {
         return;
     };
-    if fog.boxes.is_empty() {
+    let Some(first) = fog.boxes.first() else {
         return;
-    }
+    };
     let multisampled = usize::from(!matches!(*msaa, Msaa::Off));
     let box_bind_group = ctx.render_device().create_bind_group(
         "charpaper_fog_box",
@@ -512,35 +588,29 @@ fn draw_fog(
         &BindGroupEntries::sequential((uniform, BindingResource::TextureView(depth.view()))),
     );
 
-    // Half resolution starts from clear, no fog at all, rather than from the scene.
-    let (fog_target, clear) = match &fog.half {
-        Some(half) => (&half.texture.default_view, true),
-        None => (target.main_texture_view(), false),
-    };
     {
-        let attachment = attachment(fog_target, clear);
+        // Every fog pixel marched this frame starts from no fog at all. Interleaved, the
+        // others keep what they had, so only those are cleared, which the first box's uniform
+        // says.
+        let attachment = attachment(&fog.texture, !fog.interleaved);
         let mut pass = ctx.command_encoder().begin_render_pass(&color_pass(&attachment));
-        pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &view_bind_group.main, &view_bind_group.main_offsets);
+        if fog.interleaved {
+            pass.set_pipeline(clear);
+            pass.set_bind_group(1, &box_bind_group, &[first.uniform_offset]);
+            pass.draw(0..3, 0..1);
+        }
+        pass.set_pipeline(pipeline);
         for fog_box in &fog.boxes {
             pass.set_bind_group(1, &box_bind_group, &[fog_box.uniform_offset]);
             pass.draw(fog_box.vertices(), 0..1);
         }
     }
 
-    let Some(half) = &fog.half else {
-        return;
-    };
-    let Some(upsample) = pipeline_cache.get_render_pipeline(half.upsample) else {
-        return;
-    };
     let upsample_bind_group = ctx.render_device().create_bind_group(
         "charpaper_fog_upsample",
         &pipeline_cache.get_bind_group_layout(&upsample_pipeline.layouts[multisampled]),
-        &BindGroupEntries::sequential((
-            &half.texture.default_view,
-            BindingResource::TextureView(depth.view()),
-        )),
+        &BindGroupEntries::sequential((&fog.texture, BindingResource::TextureView(depth.view()))),
     );
     let attachment = attachment(target.main_texture_view(), false);
     let mut pass = ctx.command_encoder().begin_render_pass(&color_pass(&attachment));

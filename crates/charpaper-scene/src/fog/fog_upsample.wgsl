@@ -1,7 +1,8 @@
-// Lays half-resolution fog over the full-resolution scene. Each fog pixel was marched for the
-// top-left screen pixel of the 2×2 it covers. A screen pixel blends the nearest ones, but
-// leans on those whose surface is as far away as its own, so fog behind the character
-// doesn't bleed over its outline, and fog in front of a wall doesn't bleed around it.
+// Lays the fog's own texture over the full-resolution scene. At a lower resolution, each fog
+// pixel was marched for the top-left screen pixel of the DOWNSCALE × DOWNSCALE block it
+// covers. A screen pixel blends the nearest ones, but leans on those whose surface is as far
+// away as its own, so fog behind the character doesn't bleed over its outline, and fog in
+// front of a wall doesn't bleed around it. At full resolution it takes its own fog pixel.
 
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 
@@ -39,17 +40,17 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let fog_size = vec2<i32>(textureDimensions(fog_texture));
     let depth = depth_at(pixel);
 
-    // A pixel at even coordinates is exactly where a fog pixel was marched; one at odd
-    // coordinates lies halfway to the next.
-    let base = pixel / 2;
-    let between = vec2<f32>(pixel - base * 2) * 0.5;
+    // A pixel at a multiple of DOWNSCALE is exactly where a fog pixel was marched; the others
+    // lie part of the way to the next.
+    let base = pixel / #{DOWNSCALE};
+    let between = vec2<f32>(pixel - base * #{DOWNSCALE}) / f32(#{DOWNSCALE});
 
     var fog = vec4(0.0);
     var total = 0.0;
     for (var y = 0; y < 2; y += 1) {
         for (var x = 0; x < 2; x += 1) {
             let texel = min(base + vec2(x, y), fog_size - 1);
-            let marched_at = min(texel * 2, screen - 1);
+            let marched_at = min(texel * #{DOWNSCALE}, screen - 1);
             let bilinear = select(1.0 - between.x, between.x, x == 1) *
                 select(1.0 - between.y, between.y, y == 1);
             // Never quite zero, so that a pixel unlike all of its neighbors still takes the

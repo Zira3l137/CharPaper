@@ -10,7 +10,6 @@ use bevy::light::FogVolume;
 use bevy::light::VolumetricLight;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
-use charpaper_settings::FogResolution;
 use charpaper_settings::Graphics;
 use charpaper_suite::Fog;
 
@@ -196,6 +195,6 @@ fn scene_fog(graphics: &Graphics) -> SceneFog {
         max_steps: graphics.fog_quality.max_steps(),
         step_length: graphics.fog_quality.step_length(),
         dithering: graphics.fog_dithering,
-        half_resolution: graphics.fog_resolution == FogResolution::Half,
+        downscale: graphics.fog_resolution.downscale(),
     }
 }

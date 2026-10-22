@@ -188,17 +188,29 @@ impl FogQuality {
     }
 }
 
-// Fog is soft, so one fog pixel can stand for a few on screen. Half draws one for every four,
-// about four times cheaper, and spreads it back out without blurring across the edges of
-// what's in front of it.
+// Fog is soft, so one fog pixel can stand for a few on screen. Half draws one for every 2×2,
+// about four times cheaper, and Quarter one for every 4×4, about sixteen times. Each is spread
+// back out without blurring across the edges of what's in front of it; Quarter softens light
+// shafts noticeably.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FogResolution {
     Full,
     #[default]
     Half,
+    Quarter,
 }
 
 impl FogResolution {
-    pub const ALL: [FogResolution; 2] = [FogResolution::Full, FogResolution::Half];
+    pub const ALL: [FogResolution; 3] =
+        [FogResolution::Full, FogResolution::Half, FogResolution::Quarter];
+
+    // Screen pixels per fog pixel, across and down.
+    pub fn downscale(self) -> u32 {
+        match self {
+            FogResolution::Full => 1,
+            FogResolution::Half => 2,
+            FogResolution::Quarter => 4,
+        }
+    }
 }
