@@ -92,16 +92,20 @@ impl Plugin for FogPassPlugin {
 // On a scene camera while it draws fog.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SceneFog {
-    pub steps: u32,
-    // How far, in meters, a pixel's first step may be pushed in.
-    pub jitter: f32,
+    pub max_steps: u32,
+    // In meters.
+    pub step_length: f32,
+    // Each pixel's ray starts up to a step further in, different every frame, which turns
+    // the stripes between steps into noise that TAA smooths out.
+    pub dithering: bool,
     pub half_resolution: bool,
 }
 
 #[derive(Component)]
 pub(crate) struct ExtractedFog {
-    steps: u32,
-    jitter: f32,
+    max_steps: u32,
+    step_length: f32,
+    dithering: bool,
     half_resolution: bool,
     layers: RenderLayers,
 }
@@ -117,8 +121,9 @@ impl ExtractComponent for SceneFog {
 
     fn extract_component((fog, layers): QueryItem<'_, '_, Self::QueryData>) -> Option<Self::Out> {
         Some(ExtractedFog {
-            steps: fog.steps,
-            jitter: fog.jitter,
+            max_steps: fog.max_steps,
+            step_length: fog.step_length,
+            dithering: fog.dithering,
             half_resolution: fog.half_resolution,
             layers: layers.cloned().unwrap_or_default(),
         })
@@ -166,14 +171,16 @@ struct FogUniform {
     far_planes: [Vec4; 6],
     fog_color: Vec3,
     light_tint: Vec3,
-    step_count: u32,
+    max_steps: u32,
+    step_length: f32,
     bounding_radius: f32,
     absorption: f32,
     scattering: f32,
     density: f32,
     scattering_asymmetry: f32,
     light_intensity: f32,
-    jitter_strength: f32,
+    // 1 with dithering, 0 without.
+    dithering: f32,
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
@@ -430,7 +437,8 @@ fn prepare_fog(
                     far_planes: far_planes(&view_from_local),
                     fog_color: fog_box.color,
                     light_tint: fog_box.light_tint,
-                    step_count: fog.steps,
+                    max_steps: fog.max_steps,
+                    step_length: fog.step_length,
                     // Of the sphere around the box.
                     bounding_radius: view_from_local.transform_vector3a(Vec3A::splat(0.5)).length(),
                     absorption: fog_box.absorption,
@@ -438,7 +446,7 @@ fn prepare_fog(
                     density: fog_box.density,
                     scattering_asymmetry: fog_box.asymmetry,
                     light_intensity: fog_box.light_intensity,
-                    jitter_strength: fog.jitter,
+                    dithering: if fog.dithering { 1.0 } else { 0.0 },
                 });
                 ViewFogBox { uniform_offset, outside: !inside }
             })

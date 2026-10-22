@@ -140,9 +140,11 @@ impl ShadowQuality {
         [ShadowQuality::Low, ShadowQuality::Medium, ShadowQuality::High];
 }
 
-// How many samples each pixel takes through the fog. Too few show as stripes wherever
-// shadows cross it; each step up doubles the cost. Very low is meant for dithering with TAA,
-// which blends the noise of a few frames into a smooth result.
+// How closely each pixel samples the fog along its ray: one sample per step length, up to a
+// most a ray may take. Too few show as stripes wherever shadows cross the fog; each step up
+// halves the step and doubles the most, so long rays cost twice as much. Short rays, such as
+// fog just in front of a wall, stay cheap at any quality. Very low is meant for dithering
+// with TAA, which blends the noise of a few frames into a smooth result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FogQuality {
@@ -163,13 +165,25 @@ impl FogQuality {
         FogQuality::Ultra,
     ];
 
-    pub fn steps(self) -> u32 {
+    pub fn max_steps(self) -> u32 {
         match self {
             FogQuality::VeryLow => 16,
             FogQuality::Low => 32,
             FogQuality::Medium => 64,
             FogQuality::High => 128,
             FogQuality::Ultra => 256,
+        }
+    }
+
+    // In meters. A ray longer than the most steps allow, about 10 m at any quality, takes
+    // longer steps instead.
+    pub fn step_length(self) -> f32 {
+        match self {
+            FogQuality::VeryLow => 0.6,
+            FogQuality::Low => 0.3,
+            FogQuality::Medium => 0.15,
+            FogQuality::High => 0.075,
+            FogQuality::Ultra => 0.0375,
         }
     }
 }

@@ -9,7 +9,6 @@ use bevy::camera::primitives::Aabb;
 use bevy::light::FogVolume;
 use bevy::light::VolumetricLight;
 use bevy::prelude::*;
-use bevy::transform::TransformSystems;
 use bevy::world_serialization::WorldInstanceReady;
 use charpaper_settings::FogResolution;
 use charpaper_settings::Graphics;
@@ -32,16 +31,13 @@ pub(crate) struct FogPlugin;
 
 impl Plugin for FogPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(pass::FogPassPlugin)
-            .add_observer(spawn_fog)
-            .add_systems(
-                Update,
-                light_fog
-                    .run_if(look_needs_applying.or_eager(any_match_filter::<Changed<Graphics>>))
-                    .in_set(SceneSet::Run)
-                    .after(spawn_environment_scenes),
-            )
-            .add_systems(PostUpdate, sample_fog.after(TransformSystems::Propagate));
+        app.add_plugins(pass::FogPassPlugin).add_observer(spawn_fog).add_systems(
+            Update,
+            light_fog
+                .run_if(look_needs_applying.or_eager(any_match_filter::<Changed<Graphics>>))
+                .in_set(SceneSet::Run)
+                .after(spawn_environment_scenes),
+        );
     }
 }
 
@@ -146,7 +142,7 @@ fn light_fog(
         let on = graphics.fog && has_fog;
         for camera in cameras.iter().filter(|&camera| stage_of.get(camera) == Some(stage)) {
             if on {
-                commands.entity(camera).insert(scene_fog(graphics, 0.0));
+                commands.entity(camera).insert(scene_fog(graphics));
             } else {
                 commands.entity(camera).remove::<SceneFog>();
             }
@@ -195,31 +191,11 @@ fn light_volumes(
     }
 }
 
-// Every frame, once transforms are final, since fog boxes can move and scale.
-fn sample_fog(
-    volumes: Query<&GlobalTransform, With<FogVolume>>,
-    mut fogs: Query<(Entity, &mut SceneFog)>,
-    stage_of: StageOf,
-    graphics: Query<&Graphics>,
-) {
-    // Starting each pixel's samples up to one step further along turns the stripes between
-    // steps into fine noise. Bevy wants that as a distance, so the step is measured along the
-    // longest way through any fog box: its diagonal.
-    let longest = volumes.iter().map(|v| v.scale().length()).fold(0.0, f32::max);
-    for (camera, mut fog) in &mut fogs {
-        let Some(graphics) = stage_of.get(camera).and_then(|s| graphics.get(s).ok()) else {
-            continue;
-        };
-        let steps = graphics.fog_quality.steps();
-        let jitter = if graphics.fog_dithering { longest / steps as f32 } else { 0.0 };
-        fog.set_if_neq(scene_fog(graphics, jitter));
-    }
-}
-
-fn scene_fog(graphics: &Graphics, jitter: f32) -> SceneFog {
+fn scene_fog(graphics: &Graphics) -> SceneFog {
     SceneFog {
-        steps: graphics.fog_quality.steps(),
-        jitter,
+        max_steps: graphics.fog_quality.max_steps(),
+        step_length: graphics.fog_quality.step_length(),
+        dithering: graphics.fog_dithering,
         half_resolution: graphics.fog_resolution == FogResolution::Half,
     }
 }
