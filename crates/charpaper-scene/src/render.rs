@@ -24,6 +24,7 @@ use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
 
 use crate::SceneSet;
+use crate::ambient_occlusion::ambient_occlusion;
 use crate::camera::SceneCamera;
 use crate::screens::Screen;
 use crate::screens::Unseen;
@@ -236,7 +237,7 @@ pub(crate) fn apply_anti_aliasing(
             camera.remove::<(TemporalAntiAliasing, TemporalJitter, MipBias, MotionVectorPrepass)>();
         }
         if ssao {
-            camera.insert(ScreenSpaceAmbientOcclusion::default());
+            camera.insert(ambient_occlusion(&graphics));
         } else {
             camera.remove::<(ScreenSpaceAmbientOcclusion, NormalPrepass)>();
         }

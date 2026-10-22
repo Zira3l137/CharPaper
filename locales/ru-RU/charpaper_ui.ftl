@@ -43,6 +43,8 @@ label-depth-of-field = Глубина резкости
 label-shadow-quality = Качество теней
 label-shadow-updates = Анимированные тени
 label-ambient-occlusion = Затенение окружения
+label-ambient-occlusion-quality = Качество затенения
+label-ambient-occlusion-softness = Мягкость затенения
 section-fog = ТУМАН
 label-fog = Туман
 label-fog-quality = Качество
@@ -80,6 +82,8 @@ value-half = Половина
 value-quarter = Четверть
 value-every-frame = Каждый кадр
 value-every-other-frame = Через кадр
+value-sharp = Резкое
+value-soft = Мягкое
 
 ## Sound tab
 
@@ -230,6 +234,8 @@ help-depth-of-field = Размывает то, что не в фокусе, ка
 help-shadow-quality = Насколько чёткие тени, на всех сценах. Низкое быстрее всего, но края жёсткие. Высокое занимает намного больше видеопамяти.
 help-shadow-updates = Как часто лампы перерисовывают тени, которые двигает только анимация. Через кадр вдвое дешевле, но тени отстают от движения на кадр.
 help-ambient-occlusion = Затемняет складки и углы, куда не достаёт свет неба, например там, где персонаж касается пола. Работает со сглаживанием Выкл или TAA, с TAA выглядит глаже.
+help-ambient-occlusion-quality = Сколько выборок затеняют каждый пиксель. Ниже быстрее, но зернистее; TAA скрывает почти всё зерно.
+help-ambient-occlusion-softness = Насколько далеко затенение расходится от складок и касаний. Резкое держит его в углах, мягкое растягивает на большую площадь.
 help-fog = Туман и лучи света, если они есть в окружении.
 help-fog-quality = Насколько подробно рисуется туман. Чем выше, тем дороже.
 help-fog-dithering = Убирает полосы в тумане мелким шумом.

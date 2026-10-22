@@ -1,3 +1,4 @@
+mod ambient_occlusion;
 mod animated;
 mod assets;
 mod camera;
@@ -85,6 +86,7 @@ impl Plugin for ScenePlugin {
             .configure_sets(Update, (SceneSet::Switch, SceneSet::Fill, SceneSet::Run).chain())
             .add_plugins((
                 stage::StagePlugin,
+                ambient_occlusion::AmbientOcclusionPlugin,
                 suite::SuitePlugin,
                 character::CharacterPlugin,
                 camera::CameraPlugin,

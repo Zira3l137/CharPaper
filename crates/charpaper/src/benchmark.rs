@@ -15,6 +15,7 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedMut;
 use charpaper_scene::Resolved;
+use charpaper_settings::AmbientOcclusionQuality;
 use charpaper_settings::AntiAliasing;
 use charpaper_settings::DepthOfFieldQuality;
 use charpaper_settings::FogQuality;
@@ -293,6 +294,21 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
         let on = saved.graphics.ambient_occlusion;
         let label = if on { "ambient occlusion off" } else { "ambient occlusion on" };
         rows.push(changed(saved, label, |s| s.graphics.ambient_occlusion = !on));
+        for quality in AmbientOcclusionQuality::ALL {
+            if on && quality == saved.graphics.ambient_occlusion_quality {
+                continue;
+            }
+            let label = match quality {
+                AmbientOcclusionQuality::Low => "ambient occlusion low",
+                AmbientOcclusionQuality::Medium => "ambient occlusion medium",
+                AmbientOcclusionQuality::High => "ambient occlusion high",
+                AmbientOcclusionQuality::Ultra => "ambient occlusion ultra",
+            };
+            rows.push(changed(saved, label, |s| {
+                s.graphics.ambient_occlusion = true;
+                s.graphics.ambient_occlusion_quality = quality;
+            }));
+        }
     }
     for anti_aliasing in AntiAliasing::ALL {
         if anti_aliasing != saved.graphics.anti_aliasing {

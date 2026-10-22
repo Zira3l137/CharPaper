@@ -5,6 +5,8 @@ use charpaper_scene::Focused;
 use charpaper_scene::LookEdited;
 use charpaper_scene::RestoreLook;
 use charpaper_scene::focused_changed;
+use charpaper_settings::AmbientOcclusionQuality;
+use charpaper_settings::AmbientOcclusionSoftness;
 use charpaper_settings::AntiAliasing;
 use charpaper_settings::DepthOfFieldQuality;
 use charpaper_settings::FogQuality;
@@ -155,17 +157,63 @@ fn lighting() -> impl Bundle {
             Setting {
                 label: |l| fl!(l, "label-ambient-occlusion"),
                 help: |l| fl!(l, "help-ambient-occlusion"),
-                // It only darkens the sky's light, and there is none without its maps.
                 show: |w, l| {
-                    let lit = shown_environment(w)
-                        .is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
-                    Some(switch(l, w.focused::<Graphics>()?.ambient_occlusion).when(lit))
+                    Some(switch(l, w.focused::<Graphics>()?.ambient_occlusion).when(sky_lit(w)))
                 },
                 change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.ambient_occlusion, step)),
             }
             .segments(),
+            Setting {
+                label: |l| fl!(l, "label-ambient-occlusion-quality"),
+                help: |l| fl!(l, "help-ambient-occlusion-quality"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let current = graphics.ambient_occlusion_quality;
+                    let shown = graphics.ambient_occlusion && sky_lit(w);
+                    let label = |quality: &AmbientOcclusionQuality| match quality {
+                        AmbientOcclusionQuality::Low => fl!(l, "value-low"),
+                        AmbientOcclusionQuality::Medium => fl!(l, "value-medium"),
+                        AmbientOcclusionQuality::High => fl!(l, "value-high"),
+                        AmbientOcclusionQuality::Ultra => fl!(l, "value-ultra"),
+                    };
+                    Some(choice(&AmbientOcclusionQuality::ALL, &current, label).when(shown))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        pick(&AmbientOcclusionQuality::ALL, &mut g.ambient_occlusion_quality, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-ambient-occlusion-softness"),
+                help: |l| fl!(l, "help-ambient-occlusion-softness"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let current = graphics.ambient_occlusion_softness;
+                    let shown = graphics.ambient_occlusion && sky_lit(w);
+                    let label = |softness: &AmbientOcclusionSoftness| match softness {
+                        AmbientOcclusionSoftness::Sharp => fl!(l, "value-sharp"),
+                        AmbientOcclusionSoftness::Medium => fl!(l, "value-medium"),
+                        AmbientOcclusionSoftness::Soft => fl!(l, "value-soft"),
+                    };
+                    Some(choice(&AmbientOcclusionSoftness::ALL, &current, label).when(shown))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let softness = &mut g.ambient_occlusion_softness;
+                        pick(&AmbientOcclusionSoftness::ALL, softness, step);
+                    });
+                },
+            }
+            .segments(),
         ],
     )
+}
+
+// Ambient occlusion only darkens the sky's light, and there is none without its maps.
+fn sky_lit(world: &World) -> bool {
+    shown_environment(world).is_some_and(|e| e.sky().is_some() || e.reflections().is_some())
 }
 
 fn quality() -> impl Bundle {

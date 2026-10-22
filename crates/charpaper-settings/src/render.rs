@@ -40,6 +40,8 @@ pub struct Graphics {
     pub fog_dithering: bool,
     pub fog_resolution: FogResolution,
     pub ambient_occlusion: bool,
+    pub ambient_occlusion_quality: AmbientOcclusionQuality,
+    pub ambient_occlusion_softness: AmbientOcclusionSoftness,
 }
 
 impl Default for Graphics {
@@ -53,6 +55,8 @@ impl Default for Graphics {
             fog_dithering: false,
             fog_resolution: FogResolution::default(),
             ambient_occlusion: false,
+            ambient_occlusion_quality: AmbientOcclusionQuality::default(),
+            ambient_occlusion_softness: AmbientOcclusionSoftness::default(),
         }
     }
 }
@@ -163,6 +167,56 @@ impl ShadowUpdates {
         match self {
             ShadowUpdates::EveryFrame => 1,
             ShadowUpdates::EveryOtherFrame => 2,
+        }
+    }
+}
+
+// How many samples each pixel takes around itself, Bevy's four levels: 4, 8, 18 and 54. Fewer
+// show as grain, which TAA smooths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AmbientOcclusionQuality {
+    Low,
+    Medium,
+    #[default]
+    High,
+    Ultra,
+}
+
+impl AmbientOcclusionQuality {
+    pub const ALL: [AmbientOcclusionQuality; 4] = [
+        AmbientOcclusionQuality::Low,
+        AmbientOcclusionQuality::Medium,
+        AmbientOcclusionQuality::High,
+        AmbientOcclusionQuality::Ultra,
+    ];
+}
+
+// How far from a crease or contact the darkening spreads. Sharp keeps it a thin line in the
+// corners, Soft lets it fade over a wide area, with a little more grain for the same samples.
+// Medium is Bevy's own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AmbientOcclusionSoftness {
+    Sharp,
+    #[default]
+    Medium,
+    Soft,
+}
+
+impl AmbientOcclusionSoftness {
+    pub const ALL: [AmbientOcclusionSoftness; 3] = [
+        AmbientOcclusionSoftness::Sharp,
+        AmbientOcclusionSoftness::Medium,
+        AmbientOcclusionSoftness::Soft,
+    ];
+
+    /// In meters.
+    pub fn radius(self) -> f32 {
+        match self {
+            AmbientOcclusionSoftness::Sharp => 0.3,
+            AmbientOcclusionSoftness::Medium => 0.7285,
+            AmbientOcclusionSoftness::Soft => 1.5,
         }
     }
 }

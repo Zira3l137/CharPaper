@@ -46,6 +46,8 @@ label-depth-of-field = Depth of field
 label-shadow-quality = Shadow quality
 label-shadow-updates = Animated shadows
 label-ambient-occlusion = Ambient occlusion
+label-ambient-occlusion-quality = Occlusion quality
+label-ambient-occlusion-softness = Occlusion softness
 section-fog = FOG
 label-fog = Fog
 label-fog-quality = Quality
@@ -83,6 +85,8 @@ value-half = Half
 value-quarter = Quarter
 value-every-frame = Every frame
 value-every-other-frame = Every other frame
+value-sharp = Sharp
+value-soft = Soft
 
 ## Sound tab
 
@@ -236,6 +240,8 @@ help-depth-of-field = Blurs what's out of focus, like a camera lens. Bokeh looks
 help-shadow-quality = How sharp shadows are, on every stage. Low is fastest, with hard edges. High takes much more video memory.
 help-shadow-updates = How often lamps redraw shadows that only animation moves. Every other frame halves their cost, and they trail the motion by a frame.
 help-ambient-occlusion = Darkens creases and corners the sky's light can't reach, like where the character meets the floor. Needs anti-aliasing off or TAA, and looks smoothest with TAA.
+help-ambient-occlusion-quality = How many samples shade each pixel. Lower is faster and grainier; TAA hides most of the grain.
+help-ambient-occlusion-softness = How far the darkening spreads from creases and contacts. Sharp keeps it tight in the corners, Soft fades it over a wide area.
 help-fog = Fog and light shafts, where the environment has them.
 help-fog-quality = How finely the fog is drawn. Higher costs more.
 help-fog-dithering = Hides banding in the fog with fine noise.

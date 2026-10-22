@@ -16,6 +16,8 @@ pub use file::STATE_FILE;
 pub use file::SavedState;
 pub use file::load;
 pub use file::write;
+pub use render::AmbientOcclusionQuality;
+pub use render::AmbientOcclusionSoftness;
 pub use render::AntiAliasing;
 pub use render::DepthOfFieldQuality;
 pub use render::FogQuality;
