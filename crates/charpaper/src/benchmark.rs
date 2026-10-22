@@ -289,6 +289,11 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
             rows.push(changed(saved, label, |s| s.render.shadow_updates = updates));
         }
     }
+    if saved.graphics.anti_aliasing != AntiAliasing::Msaa4 {
+        let on = saved.graphics.ambient_occlusion;
+        let label = if on { "ambient occlusion off" } else { "ambient occlusion on" };
+        rows.push(changed(saved, label, |s| s.graphics.ambient_occlusion = !on));
+    }
     for anti_aliasing in AntiAliasing::ALL {
         if anti_aliasing != saved.graphics.anti_aliasing {
             let label = format!("anti-aliasing {}", anti_aliasing_name(anti_aliasing));

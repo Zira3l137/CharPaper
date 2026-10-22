@@ -152,6 +152,18 @@ fn lighting() -> impl Bundle {
                 },
             }
             .segments(),
+            Setting {
+                label: |l| fl!(l, "label-ambient-occlusion"),
+                help: |l| fl!(l, "help-ambient-occlusion"),
+                // It only darkens the sky's light, and there is none without its maps.
+                show: |w, l| {
+                    let lit = shown_environment(w)
+                        .is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
+                    Some(switch(l, w.focused::<Graphics>()?.ambient_occlusion).when(lit))
+                },
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.ambient_occlusion, step)),
+            }
+            .segments(),
         ],
     )
 }

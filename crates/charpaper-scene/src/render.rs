@@ -3,10 +3,12 @@ use bevy::asset::embedded_asset;
 use bevy::camera::RenderTarget;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::prepass::MotionVectorPrepass;
+use bevy::core_pipeline::prepass::NormalPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::light::DirectionalLightShadowMap;
 use bevy::light::PointLightShadowMap;
 use bevy::light::ShadowFilteringMethod;
+use bevy::pbr::ScreenSpaceAmbientOcclusion;
 use bevy::prelude::*;
 use bevy::render::camera::MipBias;
 use bevy::render::camera::TemporalJitter;
@@ -205,9 +207,11 @@ fn rest_unseen(
     }
 }
 
-// TAA can't run with MSAA. Inserting it brings the prepasses and camera jitter it needs, but
-// removing it leaves them behind, so they go explicitly. Only new cameras, and those of a stage
-// whose graphics changed, are touched.
+// TAA and SSAO can't run with MSAA. Inserting them brings the prepasses and camera jitter they
+// need, but removing them leaves those behind, so they go explicitly, once neither needs them.
+// SSAO only darkens light from the sky and its reflections, and is smoothest with TAA, which
+// blends away its noise. Only new cameras, and those of a stage whose graphics changed, are
+// touched.
 pub(crate) fn apply_anti_aliasing(
     mut commands: Commands,
     cameras: Query<(Entity, Ref<SceneCamera>)>,
@@ -222,18 +226,22 @@ pub(crate) fn apply_anti_aliasing(
         if !new && !graphics.is_changed() {
             continue;
         }
+        let taa = graphics.anti_aliasing == AntiAliasing::Taa;
+        let ssao = graphics.ambient_occlusion && graphics.anti_aliasing != AntiAliasing::Msaa4;
         let mut camera = commands.entity(camera);
         camera.insert(msaa(graphics.anti_aliasing));
-        if graphics.anti_aliasing == AntiAliasing::Taa {
+        if taa {
             camera.insert(TemporalAntiAliasing::default());
         } else {
-            camera.remove::<(
-                TemporalAntiAliasing,
-                TemporalJitter,
-                MipBias,
-                DepthPrepass,
-                MotionVectorPrepass,
-            )>();
+            camera.remove::<(TemporalAntiAliasing, TemporalJitter, MipBias, MotionVectorPrepass)>();
+        }
+        if ssao {
+            camera.insert(ScreenSpaceAmbientOcclusion::default());
+        } else {
+            camera.remove::<(ScreenSpaceAmbientOcclusion, NormalPrepass)>();
+        }
+        if !taa && !ssao {
+            camera.remove::<DepthPrepass>();
         }
     }
 }

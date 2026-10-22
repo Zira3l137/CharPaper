@@ -39,6 +39,7 @@ pub struct Graphics {
     pub fog_quality: FogQuality,
     pub fog_dithering: bool,
     pub fog_resolution: FogResolution,
+    pub ambient_occlusion: bool,
 }
 
 impl Default for Graphics {
@@ -51,6 +52,7 @@ impl Default for Graphics {
             fog_quality: FogQuality::default(),
             fog_dithering: false,
             fog_resolution: FogResolution::default(),
+            ambient_occlusion: false,
         }
     }
 }
