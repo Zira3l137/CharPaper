@@ -89,10 +89,17 @@ impl Plugin for FogPassPlugin {
             )
             .add_systems(
                 Core3d,
-                draw_fog.after(Core3dSystems::MainPass).before(Core3dSystems::EarlyPostProcess),
+                draw_fog
+                    .in_set(FogPass)
+                    .after(Core3dSystems::MainPass)
+                    .before(Core3dSystems::EarlyPostProcess),
             );
     }
 }
+
+// Where the fog is drawn over the scene, for passes that must come before or after it.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct FogPass;
 
 // On a scene camera while it draws fog.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]

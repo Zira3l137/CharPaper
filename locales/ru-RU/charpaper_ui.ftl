@@ -50,6 +50,12 @@ label-fog = Туман
 label-fog-quality = Качество
 label-fog-dithering = Дизеринг
 label-fog-resolution = Разрешение
+section-strokes = ШТРИХИ
+label-strokes = Штрихи
+label-stroke-width = Толщина
+label-stroke-strength = Сила
+label-stroke-creases = Сгибы
+label-stroke-hand-drawn = От руки
 section-post-processing = ПОСТОБРАБОТКА
 section-image = ИЗОБРАЖЕНИЕ
 label-tonemapping = Тонмаппинг
@@ -84,6 +90,10 @@ value-every-frame = Каждый кадр
 value-every-other-frame = Через кадр
 value-sharp = Резкое
 value-soft = Мягкое
+value-thin = Тонкие
+value-thick = Толстые
+value-light = Слабая
+value-strong = Сильная
 
 ## Sound tab
 
@@ -240,6 +250,11 @@ help-fog = Туман и лучи света, если они есть в окр
 help-fog-quality = Насколько подробно рисуется туман. Чем выше, тем дороже.
 help-fog-dithering = Убирает полосы в тумане мелким шумом.
 help-fog-resolution = В половинном разрешении туман рисуется в четыре раза быстрее. Он мягкий, поэтому разница почти не видна. Четверть ещё быстрее, но размывает лучи света.
+help-strokes = Обводит края того, что на экране, как на рисунке: контуры вокруг форм и линии там, где поверхность сгибается.
+help-stroke-width = Толщина линий. При меньшем масштабе рендера они на экране толще.
+help-stroke-strength = Насколько линии затемняют то, что под ними. Цвет сохраняется, как у туши.
+help-stroke-creases = Рисует линии и там, где поверхность резко изгибается, — складки и углы, а не только контуры.
+help-stroke-hand-drawn = Линии немного гуляют и меняют толщину и перерисовываются несколько раз в секунду, как в рисованной анимации.
 help-pause-fullscreen = Останавливает картинку и звук, пока приложение, например игра, открыто на весь экран.
 help-pause-covered = Останавливает картинку и звук, пока окна закрывают весь рабочий стол.
 help-pause-battery = Останавливает картинку и звук, пока компьютер работает от батареи.

@@ -53,6 +53,12 @@ label-fog = Fog
 label-fog-quality = Quality
 label-fog-dithering = Dithering
 label-fog-resolution = Resolution
+section-strokes = STROKES
+label-strokes = Strokes
+label-stroke-width = Width
+label-stroke-strength = Strength
+label-stroke-creases = Creases
+label-stroke-hand-drawn = Hand-drawn
 section-post-processing = POST PROCESSING
 section-image = IMAGE
 label-tonemapping = Tonemapping
@@ -87,6 +93,10 @@ value-every-frame = Every frame
 value-every-other-frame = Every other frame
 value-sharp = Sharp
 value-soft = Soft
+value-thin = Thin
+value-thick = Thick
+value-light = Light
+value-strong = Strong
 
 ## Sound tab
 
@@ -246,6 +256,11 @@ help-fog = Fog and light shafts, where the environment has them.
 help-fog-quality = How finely the fog is drawn. Higher costs more.
 help-fog-dithering = Hides banding in the fog with fine noise.
 help-fog-resolution = Half draws the fog four times faster, and it is soft, so this rarely shows. Quarter is faster again but softens light shafts.
+help-strokes = Inks the edges of what's on screen for a drawn look: outlines around shapes, and lines where surfaces fold.
+help-stroke-width = How wide the lines are. A lower render scale makes them wider on screen.
+help-stroke-strength = How much the lines darken what's under them. They keep its color, like ink.
+help-stroke-creases = Also draws lines where a surface bends sharply, like folds and corners, not just around outlines.
+help-stroke-hand-drawn = Lets the lines wander and swell a little and redraws them a few times a second, like hand-drawn animation.
 help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
 help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
 help-pause-battery = Stops the picture and sound while the computer runs on battery.

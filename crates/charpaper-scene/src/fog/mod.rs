@@ -5,6 +5,8 @@
 
 mod pass;
 
+pub(crate) use pass::FogPass;
+
 use bevy::camera::primitives::Aabb;
 use bevy::light::FogVolume;
 use bevy::light::VolumetricLight;

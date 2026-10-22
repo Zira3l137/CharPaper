@@ -310,6 +310,8 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
             }));
         }
     }
+    let label = if saved.graphics.strokes { "strokes off" } else { "strokes on" };
+    rows.push(changed(saved, label, |s| s.graphics.strokes = !s.graphics.strokes));
     for anti_aliasing in AntiAliasing::ALL {
         if anti_aliasing != saved.graphics.anti_aliasing {
             let label = format!("anti-aliasing {}", anti_aliasing_name(anti_aliasing));

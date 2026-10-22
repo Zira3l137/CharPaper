@@ -16,6 +16,8 @@ use charpaper_settings::RENDER_SCALES;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
 use charpaper_settings::ShadowUpdates;
+use charpaper_settings::StrokeStrength;
+use charpaper_settings::StrokeWidth;
 use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
 use i18n_embed::fluent::FluentLanguageLoader;
@@ -71,7 +73,7 @@ struct RestoreButton;
 // and how the picture is finished, in its look. Shadow quality is the exception: every stage
 // shares it.
 pub(crate) fn page() -> impl Bundle {
-    children![quality(), lighting(), fog(), post_processing()]
+    children![quality(), lighting(), fog(), strokes(), post_processing()]
 }
 
 fn lighting() -> impl Bundle {
@@ -269,6 +271,80 @@ fn quality() -> impl Bundle {
                         pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field, step);
                     });
                 },
+            }
+            .segments(),
+        ],
+    )
+}
+
+fn strokes() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-strokes"),
+        Section::Strokes,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-strokes"),
+                help: |l| fl!(l, "help-strokes"),
+                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.strokes)),
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.strokes, step)),
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-width"),
+                help: |l| fl!(l, "help-stroke-width"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let label = |width: &StrokeWidth| match width {
+                        StrokeWidth::Thin => fl!(l, "value-thin"),
+                        StrokeWidth::Medium => fl!(l, "value-medium"),
+                        StrokeWidth::Thick => fl!(l, "value-thick"),
+                    };
+                    let current = graphics.stroke_width;
+                    Some(choice(&StrokeWidth::ALL, &current, label).when(graphics.strokes))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| pick(&StrokeWidth::ALL, &mut g.stroke_width, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-strength"),
+                help: |l| fl!(l, "help-stroke-strength"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let label = |strength: &StrokeStrength| match strength {
+                        StrokeStrength::Light => fl!(l, "value-light"),
+                        StrokeStrength::Medium => fl!(l, "value-medium"),
+                        StrokeStrength::Strong => fl!(l, "value-strong"),
+                    };
+                    let current = graphics.stroke_strength;
+                    Some(choice(&StrokeStrength::ALL, &current, label).when(graphics.strokes))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        pick(&StrokeStrength::ALL, &mut g.stroke_strength, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-creases"),
+                help: |l| fl!(l, "help-stroke-creases"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    Some(switch(l, graphics.stroke_creases).when(graphics.strokes))
+                },
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_creases, step)),
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-hand-drawn"),
+                help: |l| fl!(l, "help-stroke-hand-drawn"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    Some(switch(l, graphics.stroke_hand_drawn).when(graphics.strokes))
+                },
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_hand_drawn, step)),
             }
             .segments(),
         ],

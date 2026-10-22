@@ -29,6 +29,8 @@ use crate::camera::SceneCamera;
 use crate::screens::Screen;
 use crate::screens::Unseen;
 use crate::stage::StageOf;
+use crate::strokes::SceneStrokes;
+use crate::strokes::scene_strokes;
 
 pub(crate) struct RenderPlugin;
 
@@ -209,7 +211,8 @@ fn rest_unseen(
 }
 
 // TAA and SSAO can't run with MSAA. Inserting them brings the prepasses and camera jitter they
-// need, but removing them leaves those behind, so they go explicitly, once neither needs them.
+// need, but removing them leaves those behind, so they go explicitly, once nothing needs them.
+// Strokes need the depth and normal prepasses too, with or without MSAA.
 // SSAO only darkens light from the sky and its reflections, and is smoothest with TAA, which
 // blends away its noise. Only new cameras, and those of a stage whose graphics changed, are
 // touched.
@@ -239,9 +242,17 @@ pub(crate) fn apply_anti_aliasing(
         if ssao {
             camera.insert(ambient_occlusion(&graphics));
         } else {
-            camera.remove::<(ScreenSpaceAmbientOcclusion, NormalPrepass)>();
+            camera.remove::<ScreenSpaceAmbientOcclusion>();
         }
-        if !taa && !ssao {
+        if graphics.strokes {
+            camera.insert((scene_strokes(&graphics), DepthPrepass, NormalPrepass));
+        } else {
+            camera.remove::<SceneStrokes>();
+        }
+        if !ssao && !graphics.strokes {
+            camera.remove::<NormalPrepass>();
+        }
+        if !taa && !ssao && !graphics.strokes {
             camera.remove::<DepthPrepass>();
         }
     }

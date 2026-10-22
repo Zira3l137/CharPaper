@@ -42,6 +42,11 @@ pub struct Graphics {
     pub ambient_occlusion: bool,
     pub ambient_occlusion_quality: AmbientOcclusionQuality,
     pub ambient_occlusion_softness: AmbientOcclusionSoftness,
+    pub strokes: bool,
+    pub stroke_width: StrokeWidth,
+    pub stroke_strength: StrokeStrength,
+    pub stroke_creases: bool,
+    pub stroke_hand_drawn: bool,
 }
 
 impl Default for Graphics {
@@ -57,6 +62,11 @@ impl Default for Graphics {
             ambient_occlusion: false,
             ambient_occlusion_quality: AmbientOcclusionQuality::default(),
             ambient_occlusion_softness: AmbientOcclusionSoftness::default(),
+            strokes: false,
+            stroke_width: StrokeWidth::default(),
+            stroke_strength: StrokeStrength::default(),
+            stroke_creases: true,
+            stroke_hand_drawn: false,
         }
     }
 }
@@ -217,6 +227,52 @@ impl AmbientOcclusionSoftness {
             AmbientOcclusionSoftness::Sharp => 0.3,
             AmbientOcclusionSoftness::Medium => 0.7285,
             AmbientOcclusionSoftness::Soft => 1.5,
+        }
+    }
+}
+
+// How wide the lines drawn along edges are, in pixels of the scene image, so a lower render
+// scale draws them wider on screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StrokeWidth {
+    Thin,
+    #[default]
+    Medium,
+    Thick,
+}
+
+impl StrokeWidth {
+    pub const ALL: [StrokeWidth; 3] = [StrokeWidth::Thin, StrokeWidth::Medium, StrokeWidth::Thick];
+
+    pub fn pixels(self) -> f32 {
+        match self {
+            StrokeWidth::Thin => 1.0,
+            StrokeWidth::Medium => 2.0,
+            StrokeWidth::Thick => 3.0,
+        }
+    }
+}
+
+// How much a line darkens what it's drawn over: a share of its brightness taken away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StrokeStrength {
+    Light,
+    #[default]
+    Medium,
+    Strong,
+}
+
+impl StrokeStrength {
+    pub const ALL: [StrokeStrength; 3] =
+        [StrokeStrength::Light, StrokeStrength::Medium, StrokeStrength::Strong];
+
+    pub fn darkening(self) -> f32 {
+        match self {
+            StrokeStrength::Light => 0.35,
+            StrokeStrength::Medium => 0.6,
+            StrokeStrength::Strong => 0.9,
         }
     }
 }

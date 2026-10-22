@@ -17,6 +17,7 @@ mod soundscape;
 mod span;
 mod stage;
 mod state;
+mod strokes;
 mod suite;
 
 pub use assets::ARMATURE_SOURCE;
@@ -103,6 +104,7 @@ impl Plugin for ScenePlugin {
                 gaze::GazePlugin,
                 soundscape::SoundscapePlugin,
                 span::SpanPlugin,
+                strokes::StrokesPlugin,
             ));
     }
 }
