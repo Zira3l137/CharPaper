@@ -92,6 +92,8 @@ impl Plugin for ScenePlugin {
                 camera::CameraPlugin,
                 environment::EnvironmentPlugin,
                 animated::AnimatedPlugin,
+            ))
+            .add_plugins((
                 fog::FogPlugin,
                 look::LookPlugin,
                 lut::LutPlugin,
