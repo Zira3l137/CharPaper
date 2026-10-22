@@ -46,17 +46,33 @@ fn normal_at(pixel: vec2<i32>) -> vec3<f32> {
     return textureLoad(normal_texture, clamped(pixel), 0).xyz * 2.0 - 1.0;
 }
 
-fn hash(cell: vec2<f32>) -> f32 {
-    return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+// PCG, from "Hash Functions for GPU Rendering" (Jarzynski and Olano, 2020). Integer hashing is
+// exact for any input; the usual fract(sin(…)) hash loses precision as its input grows, and
+// lines that boiled from an ever-growing seed stopped wobbling after a few minutes.
+fn pcg(value: u32) -> u32 {
+    let state = value * 747796405u + 2891336453u;
+    let word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+fn hash(cell: vec2<i32>) -> f32 {
+    return f32(pcg(bitcast<u32>(cell.x) ^ pcg(bitcast<u32>(cell.y)))) / 4294967295.0;
 }
 
 // Value noise: neighboring points get nearly the same value, so lines bend rather than fray.
 fn smooth_noise(point: vec2<f32>) -> f32 {
-    let cell = floor(point);
+    let cell = vec2<i32>(floor(point));
     let t = smoothstep(vec2(0.0), vec2(1.0), fract(point));
-    let top = mix(hash(cell), hash(cell + vec2(1.0, 0.0)), t.x);
-    let bottom = mix(hash(cell + vec2(0.0, 1.0)), hash(cell + vec2(1.0, 1.0)), t.x);
+    let top = mix(hash(cell), hash(cell + vec2(1, 0)), t.x);
+    let bottom = mix(hash(cell + vec2(0, 1)), hash(cell + vec2(1, 1)), t.x);
     return mix(top, bottom, t.y);
+}
+
+// Where in the noise this step of the boil reads, kept within a thousand cells so the points
+// stay precise however long the app runs.
+fn boil_offset(salt: u32) -> vec2<f32> {
+    let boil = u32(strokes.seed) * 2u + salt;
+    return vec2(f32(pcg(boil) & 1023u), f32(pcg(boil ^ 0x9e3779b9u) & 1023u));
 }
 
 fn outline(center: vec2<i32>, depth: f32, reach: i32) -> f32 {
@@ -87,7 +103,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let pixel = vec2<i32>(in.position.xy);
     var center = pixel;
     if (strokes.wobble > 0.0) {
-        let point = in.position.xy * 0.03 + strokes.seed * vec2(17.3, 5.9);
+        let point = in.position.xy * 0.03 + boil_offset(0u);
         let wander = vec2(smooth_noise(point), smooth_noise(point + vec2(41.0, 23.0))) - 0.5;
         center = pixel + vec2<i32>(round(wander * 2.0 * strokes.wobble));
     }
@@ -100,7 +116,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let reach = max(i32(round(strokes.width)), 1);
     var line = max(outline(center, depth, reach), crease(center, reach));
     if (strokes.wobble > 0.0) {
-        line *= mix(0.6, 1.0, smooth_noise(in.position.xy * 0.01 + strokes.seed * 3.1));
+        line *= mix(0.6, 1.0, smooth_noise(in.position.xy * 0.01 + boil_offset(1u)));
     }
     if (strokes.fade_depth > 0.0) {
         line *= clamp(depth / strokes.fade_depth, 0.0, 1.0);
