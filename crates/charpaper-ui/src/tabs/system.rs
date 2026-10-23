@@ -5,6 +5,8 @@ use charpaper_settings::ChosenMonitor;
 use charpaper_settings::DisplayMode;
 use charpaper_settings::FpsLimit;
 use charpaper_settings::Monitors;
+use charpaper_settings::Palette;
+use charpaper_settings::PanelSide;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ScreenSettings;
 use charpaper_settings::StageId;
@@ -15,7 +17,9 @@ use i18n_embed_fl::fl;
 
 use crate::locale::Languages;
 use crate::locale::Locale;
+use crate::locale::Tr;
 use crate::panel::new_panel;
+use crate::row::percent;
 use crate::row::*;
 use crate::section::Content;
 use crate::section::Section;
@@ -51,7 +55,7 @@ struct MonitorButton(String);
 
 // Settings of the app itself rather than of what it shows: how and when it runs, which
 // monitors it is on and which stage each shows, how often it draws and when it stops, and the
-// panel's language.
+// panel's language and looks.
 pub(crate) fn page() -> impl Bundle {
     children![app_section(), display_section(), frame_rate(), pause(), interface()]
 }
@@ -233,9 +237,112 @@ fn interface() -> impl Bundle {
                     pick(&options, &mut w.resource_mut::<UiState>().language, step);
                 },
             }
-            .picker()
+            .picker(),
+            Setting {
+                label: |l| fl!(l, "label-theme"),
+                help: |l| fl!(l, "help-theme"),
+                show: |w, l| {
+                    let palette = w.resource::<UiState>().theme.palette;
+                    Some(choice(&Palette::ALL, &palette, |palette| match palette {
+                        Palette::Slate => fl!(l, "theme-slate"),
+                        Palette::Midnight => fl!(l, "theme-midnight"),
+                        Palette::Light => fl!(l, "theme-light"),
+                    }))
+                },
+                change: |w, step| {
+                    pick(&Palette::ALL, &mut w.resource_mut::<UiState>().theme.palette, step);
+                },
+            }
+            .segments(),
+            accent(),
+            Setting {
+                label: |l| fl!(l, "label-opacity"),
+                help: |l| fl!(l, "help-opacity"),
+                show: |w, _| {
+                    let opacity = w.resource::<UiState>().theme.opacity;
+                    Some(OPACITY.number(percent(opacity), opacity))
+                },
+                change: |w, step| {
+                    let mut ui = w.resource_mut::<UiState>();
+                    ui.theme.opacity = OPACITY.nudge(ui.theme.opacity, step);
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-size"),
+                help: |l| fl!(l, "help-size"),
+                show: |w, _| {
+                    let size = w.resource::<UiState>().theme.size;
+                    Some(SIZE.number(percent(size), size))
+                },
+                change: |w, step| {
+                    let mut ui = w.resource_mut::<UiState>();
+                    ui.theme.size = SIZE.nudge(ui.theme.size, step);
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-side"),
+                help: |l| fl!(l, "help-side"),
+                show: |w, l| {
+                    let side = w.resource::<UiState>().theme.side;
+                    Some(choice(&PanelSide::ALL, &side, |side| match side {
+                        PanelSide::Left => fl!(l, "side-left"),
+                        PanelSide::Right => fl!(l, "side-right"),
+                    }))
+                },
+                change: |w, step| {
+                    pick(&PanelSide::ALL, &mut w.resource_mut::<UiState>().theme.side, step);
+                },
+            }
+            .segments(),
         ],
     )
+}
+
+const OPACITY: Scale = Scale { step: 0.05, min: 0.4, max: 1.0, per_unit: 100.0 };
+const SIZE: Scale = Scale { step: 0.05, min: 0.75, max: 1.5, per_unit: 100.0 };
+// In fives: a step of one would take over two hundred clicks across the range.
+const CHANNEL: Scale = Scale { step: 5.0, min: 0.0, max: 255.0, per_unit: 1.0 };
+
+// The value is the accent as hex. Its red, green and blue are rows in a drawer under it, which
+// change it; the wheel over the value itself does nothing.
+fn accent() -> impl Bundle {
+    Setting {
+        label: |l| fl!(l, "label-accent"),
+        help: |l| fl!(l, "help-accent"),
+        show: |w, _| {
+            let hex = w.resource::<UiState>().theme.accent.hex();
+            Some(choice(std::slice::from_ref(&hex), &hex, String::clone))
+        },
+        change: |_, _| {},
+    }
+    .drawer(
+        ACCENT,
+        children![
+            channel::<0>(|l| fl!(l, "label-red")),
+            channel::<1>(|l| fl!(l, "label-green")),
+            channel::<2>(|l| fl!(l, "label-blue")),
+        ],
+    )
+}
+
+// C is the channel's place in the color: 0 red, 1 green, 2 blue.
+fn channel<const C: usize>(label: Tr) -> impl Bundle {
+    Setting {
+        label,
+        help: |l| fl!(l, "help-channel"),
+        show: |w, _| {
+            let value = f32::from(w.resource::<UiState>().theme.accent.0[C]);
+            Some(CHANNEL.number(format!("{value:.0}"), value))
+        },
+        change: |w, step| {
+            let mut ui = w.resource_mut::<UiState>();
+            let value = f32::from(ui.theme.accent.0[C]);
+            ui.theme.accent.0[C] = CHANNEL.nudge(value, step) as u8;
+        },
+    }
+    .stepper()
 }
 
 // None, following the system's languages, comes first.

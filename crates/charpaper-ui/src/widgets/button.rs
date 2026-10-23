@@ -3,12 +3,14 @@ use bevy::text::FontSource;
 
 use crate::locale::Localized;
 use crate::locale::Tr;
+use crate::theme::*;
 
 const HOVER: f32 = 0.08;
 const PRESS: f32 = -0.08;
 
-// A button's resting fill. Hover and press feedback brighten or darken from it.
-#[derive(Component, Debug, Clone, Copy)]
+// A button's resting fill, which `repaint` keeps as its Fill's color. Hover and press feedback
+// brighten or darken from it.
+#[derive(Component, Debug, Clone, Copy, Default)]
 pub(crate) struct BaseBackground(pub Color);
 
 pub(crate) struct ButtonBuilder {
@@ -16,9 +18,9 @@ pub(crate) struct ButtonBuilder {
     text: String,
     translated: Option<Tr>,
     font: TextFont,
-    text_color: TextColor,
-    fill: Color,
-    border_color: Color,
+    text_color: Swatch,
+    fill: Swatch,
+    border_color: Swatch,
 }
 
 impl ButtonBuilder {
@@ -28,9 +30,9 @@ impl ButtonBuilder {
             text: text.into(),
             translated: None,
             font: TextFont { font: FontSource::SystemUi, ..default() },
-            text_color: TextColor::default(),
-            fill: Color::default(),
-            border_color: Color::NONE,
+            text_color: TEXT,
+            fill: BUTTON_BG,
+            border_color: CLEAR,
         }
     }
 
@@ -48,18 +50,18 @@ impl ButtonBuilder {
         self
     }
 
-    pub(crate) fn text_color(mut self, color: Color) -> Self {
-        self.text_color.0 = color;
+    pub(crate) fn text_color(mut self, color: Swatch) -> Self {
+        self.text_color = color;
         self
     }
 
-    pub(crate) fn fill(mut self, color: Color) -> Self {
+    pub(crate) fn fill(mut self, color: Swatch) -> Self {
         self.fill = color;
         self
     }
 
     // Only visible with a non-zero border width on the node.
-    pub(crate) fn border_color(mut self, color: Color) -> Self {
+    pub(crate) fn border_color(mut self, color: Swatch) -> Self {
         self.border_color = color;
         self
     }
@@ -68,14 +70,14 @@ impl ButtonBuilder {
     pub(crate) fn build(self, action: impl Bundle) -> impl Bundle {
         (
             self.node,
-            BaseBackground(self.fill),
-            BackgroundColor(self.fill),
-            BorderColor::all(self.border_color),
+            BaseBackground::default(),
+            Fill(self.fill),
+            Stroke(self.border_color),
             action,
             children![(
                 Text::new(self.text),
                 self.font,
-                self.text_color,
+                Ink(self.text_color),
                 Pickable::IGNORE,
                 Localized(self.translated),
             )],
@@ -116,5 +118,7 @@ fn lighten(color: Color, delta: f32) -> Color {
         return color;
     }
     let hsla: Hsla = color.into();
+    // Near-white fills, as in the light palette, darken instead: brightening them shows nothing.
+    let delta = if hsla.lightness > 0.75 { -delta } else { delta };
     Color::from(hsla.with_lightness((hsla.lightness + delta).clamp(0.0, 1.0)))
 }

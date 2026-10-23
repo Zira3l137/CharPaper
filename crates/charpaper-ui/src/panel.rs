@@ -6,6 +6,7 @@ use charpaper_scene::Focused;
 use charpaper_scene::ScreenSync;
 use charpaper_scene::ScreenUi;
 use charpaper_scene::StageKey;
+use charpaper_settings::PanelSide;
 use charpaper_settings::Tab;
 use charpaper_settings::UiState;
 use i18n_embed_fl::fl;
@@ -31,7 +32,8 @@ impl Plugin for PanelPlugin {
             .add_systems(Update, (track_hover, show_status, show_help))
             .add_systems(
                 Update,
-                (show_panel, style_tabs).run_if(resource_changed::<UiState>.or_eager(new_panel)),
+                (show_panel, style_tabs, dock_panels)
+                    .run_if(resource_changed::<UiState>.or_eager(new_panel)),
             )
             .add_observer(on_click);
     }
@@ -123,6 +125,7 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
     });
 }
 
+// Which edge it sits on, and which way its arrow points, is up to `dock_panels`.
 fn reveal_button(closed: bool) -> impl Bundle {
     ButtonBuilder::new("<")
         .font_size(GLYPH_SIZE)
@@ -131,15 +134,12 @@ fn reveal_button(closed: bool) -> impl Bundle {
         .border_color(BORDER)
         .node(|n| {
             n.position_type = PositionType::Absolute;
-            n.right = Val::ZERO;
             n.top = Val::Percent(50.0);
             n.margin.top = Val::Px(-40.0);
             n.width = Val::Px(40.0);
             n.height = Val::Px(80.0);
             n.justify_content = JustifyContent::Center;
             n.align_items = AlignItems::Center;
-            n.border = UiRect { right: Val::ZERO, ..UiRect::all(LINE) };
-            n.border_radius = BorderRadius::left(PANEL_RADIUS);
             n.display = display(closed);
         })
         .build(PanelButton::Reveal)
@@ -151,7 +151,6 @@ fn main_menu(closed: bool) -> impl Bundle {
             display: display(!closed),
             position_type: PositionType::Absolute,
             top: PANEL_MARGIN,
-            right: PANEL_MARGIN,
             bottom: PANEL_MARGIN,
             width: PANEL_WIDTH,
             flex_direction: FlexDirection::Column,
@@ -159,8 +158,8 @@ fn main_menu(closed: bool) -> impl Bundle {
             border_radius: BorderRadius::all(PANEL_RADIUS),
             ..default()
         },
-        BackgroundColor(PANEL_BG),
-        BorderColor::all(BORDER),
+        Fill(PANEL_BG),
+        Stroke(BORDER),
         BoxShadow(vec![ShadowStyle {
             color: Color::linear_rgba(0.0, 0.0, 0.0, 0.50),
             x_offset: Val::Px(-2.0),
@@ -186,7 +185,7 @@ fn header() -> impl Bundle {
             border: UiRect::bottom(LINE),
             ..default()
         },
-        BorderColor::all(BORDER),
+        Stroke(BORDER),
         Pickable::IGNORE,
         children![
             (
@@ -224,7 +223,7 @@ fn tab_bar() -> impl Bundle {
             border: UiRect::bottom(LINE),
             ..default()
         },
-        BorderColor::all(BORDER),
+        Stroke(BORDER),
         Pickable::IGNORE,
         children![tab(Tab::Scene), tab(Tab::Graphics), tab(Tab::Sound), tab(Tab::System)],
     )
@@ -259,7 +258,7 @@ fn footer() -> impl Bundle {
             border: UiRect::top(LINE),
             ..default()
         },
-        BorderColor::all(BORDER),
+        Stroke(BORDER),
         Pickable::IGNORE,
         children![
             (
@@ -292,27 +291,78 @@ fn show_panel(
 
 fn style_tabs(
     ui: Res<UiState>,
-    tabs: Query<(
-        &PanelButton,
-        &Children,
-        &mut BaseBackground,
-        &mut BackgroundColor,
-        &mut BorderColor,
-    )>,
-    mut texts: Query<&mut TextColor>,
+    tabs: Query<(&PanelButton, &Children, &mut Fill, &mut Stroke)>,
+    mut texts: Query<&mut Ink>,
 ) {
-    for (button, children, mut base, mut background, mut border) in tabs {
+    for (button, children, mut fill, mut border) in tabs {
         let PanelButton::Tab(tab) = button else {
             continue;
         };
         let active = *tab == ui.tab;
-        let (fill, outline, text) =
+        let (background, outline, text) =
             if active { (ACCENT, ACCENT, ON_ACCENT) } else { (BUTTON_BG, BORDER, TEXT_DIM) };
-        paint(&mut base, &mut background, fill);
-        *border = BorderColor::all(outline);
+        fill.set_if_neq(Fill(background));
+        border.set_if_neq(Stroke(outline));
         for &child in &**children {
-            if let Ok(mut color) = texts.get_mut(child) {
-                color.0 = text;
+            if let Ok(mut ink) = texts.get_mut(child) {
+                ink.set_if_neq(Ink(text));
+            }
+        }
+    }
+}
+
+// Keeps the panel to the edge of the screen the theme picks, with the button that brings it
+// back on that edge, and points both arrows the way the panel moves.
+fn dock_panels(
+    ui: Res<UiState>,
+    parts: Query<(&mut Node, Option<&PanelButton>, Has<MainMenu>, Option<&Children>)>,
+    mut texts: Query<&mut Text>,
+) {
+    let left = ui.theme.side == PanelSide::Left;
+    let (hide, reveal) = if left { ("<", ">") } else { (">", "<") };
+    for (mut node, button, menu, children) in parts {
+        let glyph = match button {
+            Some(PanelButton::Hide) => hide,
+            Some(PanelButton::Reveal) => {
+                // Flush with the edge, so the side touching it has no border or rounding.
+                let (near, far) =
+                    if left { (Val::ZERO, Val::Auto) } else { (Val::Auto, Val::ZERO) };
+                let mut border = UiRect::all(LINE);
+                let radius = if left {
+                    border.left = Val::ZERO;
+                    BorderRadius::right(PANEL_RADIUS)
+                } else {
+                    border.right = Val::ZERO;
+                    BorderRadius::left(PANEL_RADIUS)
+                };
+                if (node.left, node.right, node.border, node.border_radius)
+                    != (near, far, border, radius)
+                {
+                    node.left = near;
+                    node.right = far;
+                    node.border = border;
+                    node.border_radius = radius;
+                }
+                reveal
+            }
+            _ if menu => {
+                let gap = if left { (PANEL_MARGIN, Val::Auto) } else { (Val::Auto, PANEL_MARGIN) };
+                if (node.left, node.right) != gap {
+                    node.left = gap.0;
+                    node.right = gap.1;
+                }
+                continue;
+            }
+            _ => continue,
+        };
+        let Some(children) = children else {
+            continue;
+        };
+        for &child in &**children {
+            if let Ok(mut text) = texts.get_mut(child)
+                && text.0 != glyph
+            {
+                text.0 = glyph.to_string();
             }
         }
     }
@@ -351,15 +401,21 @@ fn show_status(
 // the only place the wheel is mentioned.
 fn show_help(
     locale: Res<Locale>,
-    rows: Query<(&Row, Ref<Hovered>)>,
+    rows: Query<(Entity, &Row, Ref<Hovered>)>,
+    parents: Query<&ChildOf>,
     new_lines: Query<(), Added<HelpText>>,
     mut lines: Query<&mut Text, With<HelpText>>,
 ) {
-    let hover_moved = rows.iter().any(|(_, hovered)| hovered.is_changed());
+    let hover_moved = rows.iter().any(|(_, _, hovered)| hovered.is_changed());
     if !locale.is_changed() && !hover_moved && new_lines.is_empty() {
         return;
     }
-    let hovered = rows.iter().find(|(_, hovered)| hovered.get()).map(|(row, _)| row.help);
+    // A row in a drawer is hovered along with the row holding it: the innermost one is meant.
+    let hovered = rows
+        .iter()
+        .filter(|(_, _, hovered)| hovered.get())
+        .max_by_key(|&(row, _, _)| parents.iter_ancestors(row).count())
+        .map(|(_, row, _)| row.help);
     let text = match hovered {
         Some(help) => help(&locale),
         None => fl!(locale, "help-panel"),

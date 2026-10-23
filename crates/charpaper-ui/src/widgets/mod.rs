@@ -12,8 +12,8 @@ use crate::locale::Tr;
 use crate::theme::*;
 
 // Ignored by picking, so a click on the text reaches the button under it.
-pub(crate) fn label(text: impl Into<String>, size: FontSize, color: Color) -> impl Bundle {
-    (Text::new(text), font(size), TextColor(color), Pickable::IGNORE)
+pub(crate) fn label(text: impl Into<String>, size: FontSize, color: Swatch) -> impl Bundle {
+    (Text::new(text), font(size), Ink(color), Pickable::IGNORE)
 }
 
 // The system's UI font (Segoe UI on Windows) rather than Bevy's built-in one, which covers
@@ -23,7 +23,7 @@ pub(crate) fn font(size: FontSize) -> TextFont {
 }
 
 // Filled in, and filled in again on a language change, by `locale::relabel`.
-pub(crate) fn translated(text: Tr, size: FontSize, color: Color) -> impl Bundle {
+pub(crate) fn translated(text: Tr, size: FontSize, color: Swatch) -> impl Bundle {
     (label("", size, color), Localized(Some(text)))
 }
 
@@ -55,12 +55,6 @@ pub(crate) fn glyph_button(glyph: &str, action: impl Bundle) -> impl Bundle {
             n.flex_shrink = 0.0;
         })
         .build(action)
-}
-
-// Changes a button's resting fill along with what it shows right now.
-pub(crate) fn paint(base: &mut BaseBackground, background: &mut BackgroundColor, fill: Color) {
-    base.0 = fill;
-    background.0 = fill;
 }
 
 pub(crate) fn display(shown: bool) -> Display {

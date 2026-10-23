@@ -107,8 +107,8 @@ fn overlay(screen: Entity, camera: Entity) -> impl Bundle {
                 border_radius: BorderRadius::all(PANEL_RADIUS),
                 ..default()
             },
-            BackgroundColor(PANEL_BG),
-            BorderColor::all(BORDER),
+            Fill(PANEL_BG),
+            Stroke(BORDER),
             Pickable::IGNORE,
             children![
                 column(Column::Labels, Justify::Left, TEXT_LABEL),

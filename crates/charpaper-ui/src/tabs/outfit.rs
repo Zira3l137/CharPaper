@@ -120,17 +120,14 @@ fn fill_skins(
     }
 }
 
-fn style_skins(
-    state: Focused<CharacterState>,
-    tiles: Query<(&SkinTile, &mut BaseBackground, &mut BackgroundColor, &mut BorderColor)>,
-) {
+fn style_skins(state: Focused<CharacterState>, tiles: Query<(&SkinTile, &mut Fill, &mut Stroke)>) {
     let Some(state) = state.get() else {
         return;
     };
-    for (tile, mut base, mut background, mut border) in tiles {
+    for (tile, mut fill, mut border) in tiles {
         let worn = state.skin.as_ref() == Some(&tile.0);
-        paint(&mut base, &mut background, if worn { SELECTED_BG } else { BUTTON_BG });
-        *border = BorderColor::all(if worn { ACCENT } else { BORDER });
+        fill.set_if_neq(Fill(if worn { SELECTED_BG } else { BUTTON_BG }));
+        border.set_if_neq(Stroke(if worn { ACCENT } else { BORDER }));
     }
 }
 

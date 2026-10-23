@@ -18,6 +18,7 @@ use crate::section::Content;
 use crate::widgets::*;
 
 use widgets::Choose;
+use widgets::Drawer;
 use widgets::FillBar;
 use widgets::Open;
 use widgets::PickerList;
@@ -316,6 +317,7 @@ fn show_rows(world: &mut World, rows: &mut QueryState<(Entity, &'static Row)>) {
 fn draw_rows(
     mut commands: Commands,
     mut rows: Query<(Entity, &Shown, &mut Node), (With<Row>, Changed<Shown>)>,
+    nested: Query<(), With<Row>>,
     children: Query<&Children>,
     mut values: Query<&mut Text, With<Value>>,
     mut bars: Query<&mut Node, (With<FillBar>, Without<Row>)>,
@@ -337,7 +339,7 @@ fn draw_rows(
         };
         let (left, width) =
             if centered { (fill.min(0.5), (fill - 0.5).abs()) } else { (0.0, fill) };
-        for part in children.iter_descendants(row) {
+        for part in own_parts(row, &children, &nested) {
             if let Ok(mut value) = values.get_mut(part) {
                 value.0 = text.to_string();
             }
@@ -366,10 +368,28 @@ fn draw_rows(
     }
 }
 
+// Everything inside a row but the rows in a drawer of it, which draw themselves.
+fn own_parts(row: Entity, children: &Query<&Children>, rows: &Query<(), With<Row>>) -> Vec<Entity> {
+    let mut parts = Vec::new();
+    let mut next = vec![row];
+    while let Some(entity) = next.pop() {
+        let Ok(inside) = children.get(entity) else {
+            continue;
+        };
+        for &part in &**inside {
+            if !rows.contains(part) {
+                parts.push(part);
+                next.push(part);
+            }
+        }
+    }
+    parts
+}
+
 fn show_open_list(
     open: Res<OpenPicker>,
     row_of: RowOf,
-    mut lists: Query<(Entity, &mut Node), With<PickerList>>,
+    mut lists: Query<(Entity, &mut Node), Or<(With<PickerList>, With<Drawer>)>>,
 ) {
     for (list, mut node) in &mut lists {
         let row = row_of.get(list).map(|(row, _)| row);

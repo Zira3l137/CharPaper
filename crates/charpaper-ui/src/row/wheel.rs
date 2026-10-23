@@ -139,13 +139,13 @@ fn scroll(pages: &mut Query<(&mut ScrollPosition, &ComputedNode)>, page: Entity,
 fn light_controls(
     controls: Query<(Entity, &Hovered), (With<Control>, Changed<Hovered>)>,
     children: Query<&Children>,
-    mut wells: Query<&mut BorderColor, With<Well>>,
+    mut wells: Query<&mut Stroke, With<Well>>,
 ) {
     for (control, hovered) in &controls {
         let color = if hovered.get() { LIVE_BORDER } else { BORDER };
         for part in std::iter::once(control).chain(children.iter_descendants(control)) {
             if let Ok(mut border) = wells.get_mut(part) {
-                *border = BorderColor::all(color);
+                border.set_if_neq(Stroke(color));
             }
         }
     }

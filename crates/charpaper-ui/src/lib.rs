@@ -49,6 +49,7 @@ impl Plugin for SettingsPanelPlugin {
                 row::RowsPlugin,
                 held::HeldPlugin,
                 tabs::TabsPlugin,
+                theme::ThemePlugin,
             ));
     }
 }

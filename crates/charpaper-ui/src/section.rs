@@ -152,8 +152,8 @@ fn fold_header(title: Tr, section: Section) -> impl Bundle {
             border_radius: BorderRadius::all(RADIUS),
             ..default()
         },
-        BaseBackground(PANEL_BG),
-        BackgroundColor(PANEL_BG),
+        BaseBackground::default(),
+        Fill(PANEL_BG),
         Fold(section),
         children![
             // Fixed width: the two arrows differ, and the title shouldn't shift between them.

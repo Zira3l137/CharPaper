@@ -142,6 +142,20 @@ section-interface = INTERFACE
 label-language = Language
 # The choice that follows the system's languages instead of naming one.
 language-system = System
+label-theme = Theme
+theme-slate = Slate
+theme-midnight = Midnight
+theme-light = Light
+label-accent = Accent
+label-red = Red
+label-green = Green
+label-blue = Blue
+label-opacity = Opacity
+label-size = Size
+# Which edge of the screen the panel keeps to.
+label-side = Side
+side-left = Left
+side-right = Right
 
 ## Performance monitor, shown at the top of the screen. Units after numbers.
 
@@ -272,3 +286,9 @@ help-music-volume = The environment's music.
 help-ambience-volume = The environment's background sounds, such as rain or wind.
 help-character-volume = Sounds the character's animations make, such as footsteps.
 help-language = The panel's language. System follows the system's language.
+help-theme = The panel's colors. Light is easier to read over a bright scene.
+help-accent = The color of what is picked or open. Click to set its red, green and blue.
+help-channel = How much of this color is in the accent, from 0 to 255.
+help-opacity = How much of the scene shows through the panel and the performance monitor.
+help-size = How big the panel and the performance monitor are drawn.
+help-side = The edge of the screen the panel keeps to.

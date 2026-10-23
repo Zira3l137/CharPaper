@@ -136,6 +136,19 @@ label-pause-battery = От батареи
 section-interface = ИНТЕРФЕЙС
 label-language = Язык
 language-system = Системный
+label-theme = Тема
+theme-slate = Графит
+theme-midnight = Полночь
+theme-light = Светлая
+label-accent = Акцент
+label-red = Красный
+label-green = Зелёный
+label-blue = Синий
+label-opacity = Непрозрачность
+label-size = Размер
+label-side = Сторона
+side-left = Слева
+side-right = Справа
 
 ## Performance monitor, shown at the top of the screen. Units after numbers.
 
@@ -266,3 +279,9 @@ help-music-volume = Музыка окружения.
 help-ambience-volume = Фоновые звуки окружения, например дождь или ветер.
 help-character-volume = Звуки анимаций персонажа, например шаги.
 help-language = Язык панели. «Системный» следует языку системы.
+help-theme = Цвета панели. «Светлую» легче читать поверх яркой сцены.
+help-accent = Цвет выбранного и открытого. Нажмите, чтобы задать его красный, зелёный и синий.
+help-channel = Сколько этого цвета в акценте, от 0 до 255.
+help-opacity = Насколько сквозь панель и монитор производительности видна сцена.
+help-size = Насколько крупно нарисованы панель и монитор производительности.
+help-side = Край экрана, у которого стоит панель.
