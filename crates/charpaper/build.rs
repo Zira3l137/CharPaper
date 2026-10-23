@@ -18,7 +18,5 @@ fn embed_windows_icon() {
     // Absolute, so the .ico is found whichever directory the resource compiler runs in.
     let icon_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/icon");
     let params = embed_resource::ParamsIncludeDirs(&[icon_dir]);
-    embed_resource::compile("icon/charpaper.rc", params)
-        .manifest_optional()
-        .unwrap();
+    embed_resource::compile("icon/charpaper.rc", params).manifest_optional().unwrap();
 }
