@@ -113,6 +113,8 @@ schemars = { version = "1.2", default-features = false, features = ["std", "deri
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
 
 tracing = { version = "0.1", default-features = false, features = ["std"] }
+# Builds the app icon into the Windows executable, from the app's build script.
+embed-resource = "3.0"
 
 charpaper-audio = { path = "crates/charpaper-audio" }
 charpaper-monitor = { path = "crates/charpaper-monitor" }

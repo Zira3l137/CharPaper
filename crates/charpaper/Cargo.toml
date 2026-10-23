@@ -28,6 +28,11 @@ profile = ["bevy/trace_tracy"]
 # every allocation.
 diagnostics = ["charpaper-monitor/diagnostics"]
 
+# Not in a cfg(windows) table: for build dependencies, that would match the machine doing
+# the build rather than the target. It does nothing when the target isn't Windows.
+[build-dependencies]
+embed-resource.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 charpaper-windows.workspace = true
 
