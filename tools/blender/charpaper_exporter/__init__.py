@@ -1,3 +1,4 @@
+from . import front
 from . import operators
 from . import props
 from . import ui
@@ -16,10 +17,12 @@ bl_info = {
 def register():
     props.register()
     operators.register()
+    front.register()
     ui.register()
 
 
 def unregister():
     ui.unregister()
+    front.unregister()
     operators.unregister()
     props.unregister()

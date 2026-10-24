@@ -395,6 +395,19 @@
             "type": "string"
           }
         },
+        "front": {
+          "description": "Which way her face points while she stands in her rest pose, in\nBlender's world axes as exported: `[0, -1, 0]` faces Blender's front\nview, which is also what she's taken to face without it. The exporter's\n\"She faces me\" button sets it. Only its horizontal part counts.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
         "head": {
           "description": "The head bone. Without it, only the neck and eyes turn.",
           "type": [

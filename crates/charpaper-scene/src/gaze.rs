@@ -24,8 +24,9 @@ use crate::suite::ActiveSuite;
 // are worked out from the pose. The eyes turn first; the head and neck share what the eyes
 // cannot reach.
 //
-// All the aiming happens in the armature's own space, where the character faces +Z and her
-// left is +X (Blender's -Y front, as the glTF exporter converts it).
+// All the aiming happens in the armature's own space, which is Blender's world as exported,
+// with +Y up. She faces the way suite.toml's gaze `front` says, Blender's -Y (+Z here) without
+// one. Yaw is a turn about +Y, so a positive one turns her to her left whichever way she faces.
 
 pub(crate) struct GazePlugin;
 
@@ -125,6 +126,7 @@ fn build_rig(
     let Some(gaze) = suite.and_then(|s| s.gaze.clone()) else {
         return;
     };
+    let front = Vec3::from_array(gaze.front_gltf()).with_y(0.0).normalize_or(Vec3::Z);
 
     let find = |name: &str| {
         children
@@ -142,7 +144,7 @@ fn build_rig(
         let rotation = transforms.get(bone).map_or(Quat::IDENTITY, |t| t.rotation);
         Some(Part {
             bone,
-            forward: rest.inverse() * Vec3::Z,
+            forward: rest.inverse() * front,
             limits: Vec2::new(yaw.to_radians(), pitch.to_radians()).abs(),
             angles: Vec2::ZERO,
             base: rotation,
@@ -453,7 +455,8 @@ fn pose(
     pose
 }
 
-// Yaw towards her left (+X) and pitch upwards, in radians.
+// Yaw about +Y and pitch upwards, in radians. A positive yaw turns towards her left whichever way
+// she faces; only differences between two of these are used, so where yaw 0 lies doesn't matter.
 fn angles(direction: Vec3) -> Vec2 {
     let d = direction.normalize_or(Vec3::Z);
     Vec2::new(d.x.atan2(d.z), d.y.clamp(-1.0, 1.0).asin())

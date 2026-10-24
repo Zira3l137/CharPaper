@@ -8,6 +8,7 @@ from . import anim
 from . import animated
 from . import cues
 from . import env_settings
+from . import front
 from . import gltf
 from . import lens
 from . import manifest
@@ -120,6 +121,21 @@ def _check_gaze(suite, armature, add):
         if eye in bones:
             _check_eye_pivot(suite, armature, bones[eye], add)
 
+    facing = front.world_front(armature, gaze.front)
+    if facing is None:
+        add(Finding(
+            "gaze: her front isn't set, so she's taken to face -Y; look her in the face in the "
+            "viewport and click She faces me",
+            armature,
+        ))
+    elif abs(facing.z) > 0.7:
+        add(Finding(
+            "gaze: her front points up or down; she has to stand upright for gaze to turn her",
+            armature,
+        ))
+    _check_gaze_clips(suite, set(eyes), add)
+    _check_gaze_lenses(suite, add)
+
     keys = set()
     for skin in suite.skins:
         if skin.collection:
@@ -130,6 +146,48 @@ def _check_gaze(suite, armature, add):
         key = getattr(gaze, "key_" + side)
         if key and key not in keys:
             add(Finding(f"gaze: no skin has a shape key named {key!r}, so it never moves"))
+
+
+# Gaze turns the eyes on top of what a clip does with them, from where it has them point, so a
+# clip that has her look aside leaves little of the eyes' reach towards the cursor.
+def _check_gaze_clips(suite, eyes, add):
+    for entry in suite.animations:
+        if not entry.enabled:
+            continue
+        for clip in entry.clips:
+            if not (clip.enabled and clip.gaze and clip.action):
+                continue
+            moved = {
+                bone
+                for curve in anim.fcurves(clip.action)
+                for bone in eyes
+                if curve.data_path.startswith(f'pose.bones["{bone}"].rotation')
+            }
+            if moved:
+                add(Finding(
+                    f"gaze: clip {clip.name or clip.action.name!r} turns {_examples(moved)}; with "
+                    "gaze on, the eyes start from where it points them. Remove those keys, or "
+                    "untick the clip's Gaze",
+                    suite.armature,
+                ))
+
+
+# Gaze looks halfway along the line from the camera to the cursor, so a long lens, which sees
+# a narrow slice of the scene, leaves her little to turn for.
+def _check_gaze_lenses(suite, add):
+    for entry in suite.cameras:
+        camera = entry.camera
+        if not entry.enabled or camera is None or camera.data.type != "PERSP":
+            continue
+        width = camera.data.sensor_width or 36.0
+        equivalent = camera.data.lens * 36.0 / width
+        if equivalent >= 85.0:
+            add(Finding(
+                f"camera {entry.name!r}: a {equivalent:.0f} mm lens shows little of the scene, "
+                "so she follows the cursor only a little through it",
+                camera,
+                severity="INFO",
+            ))
 
 
 def _check_eye_pivot(suite, armature, bone, add):

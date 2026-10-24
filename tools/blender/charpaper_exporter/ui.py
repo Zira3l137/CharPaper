@@ -252,6 +252,13 @@ class CHARPAPER_PT_gaze(_Sidebar, Panel):
         col.prop(gaze, "head")
         col.prop(gaze, "neck")
 
+        col = layout.column(align=True)
+        col.label(text="Front: look her in the face, then click", icon="ORIENTATION_VIEW")
+        row = col.row(align=True)
+        row.operator("charpaper.gaze_front_from_view", icon="HIDE_OFF")
+        row.prop(gaze, "front", text="")
+        row.prop(gaze, "show_front", text="", icon="EMPTY_SINGLE_ARROW")
+
         grid = layout.grid_flow(columns=2, even_columns=True, align=True)
         for part in ("eye", "head", "neck"):
             grid.prop(gaze, part + "_yaw", text=f"{part.title()} yaw °")

@@ -19,6 +19,13 @@ def suite_of(context):
     return context.scene.charpaper
 
 
+def redraw_views():
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == "VIEW_3D":
+                area.tag_redraw()
+
+
 def file_stem(name):
     return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip().rstrip(".") or "unnamed"
 
@@ -174,6 +181,27 @@ class CHARPAPER_PG_gaze(PropertyGroup):
     neck_yaw: FloatProperty(name="Neck yaw", default=25.0, min=0.0, max=180.0)
     neck_pitch: FloatProperty(name="Neck pitch", default=15.0, min=0.0, max=90.0)
     head_share: FloatProperty(name="Head share", default=0.7, min=0.0, max=1.0, subtype="FACTOR")
+    front: EnumProperty(
+        name="Front",
+        description="Which of the armature's axes her face points along. Set it with She faces me",
+        items=(
+            ("NONE", "Not set", "She's taken to face Blender's front view, -Y"),
+            ("NEG_Y", "-Y", ""),
+            ("POS_Y", "+Y", ""),
+            ("NEG_X", "-X", ""),
+            ("POS_X", "+X", ""),
+            ("NEG_Z", "-Z", ""),
+            ("POS_Z", "+Z", ""),
+        ),
+        default="NONE",
+        update=lambda self, context: redraw_views(),
+    )
+    show_front: BoolProperty(
+        name="Show front",
+        description="Draw an arrow from her head the way gaze takes her to face",
+        default=False,
+        update=lambda self, context: redraw_views(),
+    )
     key_left: StringProperty(name="Left", search=_search(shape_key_names))
     key_right: StringProperty(name="Right", search=_search(shape_key_names))
     key_up: StringProperty(name="Up", search=_search(shape_key_names))

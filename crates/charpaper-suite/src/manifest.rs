@@ -136,6 +136,11 @@ pub struct Gaze {
     /// With both a head and a neck: the head's share of what the eyes cannot
     /// reach, from 0 to 1. The neck takes the rest. Defaults to 0.7.
     pub head_share: Option<f32>,
+    /// Which way her face points while she stands in her rest pose, in
+    /// Blender's world axes as exported: `[0, -1, 0]` faces Blender's front
+    /// view, which is also what she's taken to face without it. The exporter's
+    /// "She faces me" button sets it. Only its horizontal part counts.
+    pub front: Option<[f32; 3]>,
     /// Shape keys that follow the eyes, such as eyelids. Each is set in
     /// proportion to how far the eyes turn that way, reaching 1 at the eyes'
     /// limit. Any may be left out, and a skin without one ignores it.
@@ -144,6 +149,13 @@ pub struct Gaze {
 }
 
 impl Gaze {
+    /// `front` in glTF's axes, which are Bevy's: Blender's +Z up is +Y, its -Y
+    /// front is +Z.
+    pub fn front_gltf(&self) -> [f32; 3] {
+        let [x, y, z] = self.front.unwrap_or([0.0, -1.0, 0.0]);
+        [x, z, -y]
+    }
+
     pub fn eye_limits_deg(&self) -> [f32; 2] {
         [self.eye_yaw_deg.unwrap_or(30.0), self.eye_pitch_deg.unwrap_or(20.0)]
     }

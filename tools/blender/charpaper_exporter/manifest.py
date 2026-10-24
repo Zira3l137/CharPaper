@@ -3,8 +3,10 @@ import shutil
 from pathlib import PurePosixPath
 
 import bpy
+from mathutils import Vector
 
 from . import env_settings
+from . import front
 from . import toml_io
 from .props import file_stem
 
@@ -30,7 +32,7 @@ def _set_or_keep(table, key, value):
         table[key] = value
 
 
-def gaze_table(gaze):
+def gaze_table(gaze, armature):
     table = {"eyes": [e.bone for e in gaze.eyes if e.bone]}
     if gaze.head:
         table["head"] = gaze.head
@@ -47,6 +49,10 @@ def gaze_table(gaze):
         table[key] = float(getattr(gaze, attr))
     if gaze.head and gaze.neck:
         table["head_share"] = float(gaze.head_share)
+    # As the model is exported: the armature turned as it stands in the scene.
+    facing = front.world_front(armature, gaze.front) if armature else None
+    if facing is not None:
+        table["front"] = [round(v, 4) + 0.0 for v in facing]
     keys = {
         side: getattr(gaze, "key_" + side)
         for side in ("left", "right", "up", "down")
@@ -130,7 +136,7 @@ def update(
         data.pop("cameras", None)
 
     if suite.gaze.mode == "WRITE":
-        data["gaze"] = gaze_table(suite.gaze)
+        data["gaze"] = gaze_table(suite.gaze, suite.armature)
     elif suite.gaze.mode == "REMOVE":
         data.pop("gaze", None)
     return data
@@ -198,6 +204,11 @@ def load_into(suite, data):
         g.neck_yaw = gaze.get("neck_yaw_deg", 25.0)
         g.neck_pitch = gaze.get("neck_pitch_deg", 15.0)
         g.head_share = gaze.get("head_share", 0.7)
+        facing = gaze.get("front")
+        if facing is not None and suite.armature is not None and len(facing) == 3:
+            g.front = front.nearest_axis(suite.armature, Vector(facing))
+        else:
+            g.front = "NONE"
         keys = gaze.get("shape_keys", {})
         for side in ("left", "right", "up", "down"):
             setattr(g, "key_" + side, keys.get(side, ""))
