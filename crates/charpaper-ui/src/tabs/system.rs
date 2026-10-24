@@ -4,6 +4,7 @@ use charpaper_scene::focused_changed;
 use charpaper_settings::ChosenMonitor;
 use charpaper_settings::DisplayMode;
 use charpaper_settings::FpsLimit;
+use charpaper_settings::Hsv;
 use charpaper_settings::Monitors;
 use charpaper_settings::Palette;
 use charpaper_settings::PanelSide;
@@ -17,7 +18,6 @@ use i18n_embed_fl::fl;
 
 use crate::locale::Languages;
 use crate::locale::Locale;
-use crate::locale::Tr;
 use crate::panel::new_panel;
 use crate::row::percent;
 use crate::row::*;
@@ -302,11 +302,11 @@ fn interface() -> impl Bundle {
 
 const OPACITY: Scale = Scale { step: 0.05, min: 0.4, max: 1.0, per_unit: 100.0 };
 const SIZE: Scale = Scale { step: 0.05, min: 0.75, max: 1.5, per_unit: 100.0 };
-// In fives: a step of one would take over two hundred clicks across the range.
-const CHANNEL: Scale = Scale { step: 5.0, min: 0.0, max: 255.0, per_unit: 1.0 };
+const HUE_STEP: f32 = 5.0;
+const PART: Scale = Scale { step: 0.02, min: 0.0, max: 1.0, per_unit: 100.0 };
 
-// The value is the accent as hex. Its red, green and blue are rows in a drawer under it, which
-// change it; the wheel over the value itself does nothing.
+// The value is the accent as hex. Its hue, saturation and brightness are rows in a drawer under
+// it, which change it; the wheel over the value itself does nothing.
 fn accent() -> impl Bundle {
     Setting {
         label: |l| fl!(l, "label-accent"),
@@ -320,29 +320,52 @@ fn accent() -> impl Bundle {
     .drawer(
         ACCENT,
         children![
-            channel::<0>(|l| fl!(l, "label-red")),
-            channel::<1>(|l| fl!(l, "label-green")),
-            channel::<2>(|l| fl!(l, "label-blue")),
+            Setting {
+                label: |l| fl!(l, "label-accent-hue"),
+                help: |l| fl!(l, "help-accent-hue"),
+                show: |w, _| {
+                    let hue = w.resource::<UiState>().theme.accent.hue;
+                    Some(number(format!("{hue:.0}°"), hue, 0.0, 360.0))
+                },
+                // Round the color wheel and past 360 back to 0, either way.
+                change: |w, step| {
+                    let mut ui = w.resource_mut::<UiState>();
+                    let accent = &mut ui.theme.accent;
+                    let hue = (accent.hue + step.by() as f32 * HUE_STEP).round();
+                    *accent = Hsv::new(hue, accent.saturation, accent.value);
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-accent-saturation"),
+                help: |l| fl!(l, "help-accent-saturation"),
+                show: |w, _| {
+                    let saturation = w.resource::<UiState>().theme.accent.saturation;
+                    Some(PART.number(percent(saturation), saturation))
+                },
+                change: |w, step| {
+                    let mut ui = w.resource_mut::<UiState>();
+                    let accent = &mut ui.theme.accent;
+                    accent.saturation = PART.nudge(accent.saturation, step);
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-accent-brightness"),
+                help: |l| fl!(l, "help-accent-brightness"),
+                show: |w, _| {
+                    let value = w.resource::<UiState>().theme.accent.value;
+                    Some(PART.number(percent(value), value))
+                },
+                change: |w, step| {
+                    let mut ui = w.resource_mut::<UiState>();
+                    let accent = &mut ui.theme.accent;
+                    accent.value = PART.nudge(accent.value, step);
+                },
+            }
+            .stepper(),
         ],
     )
-}
-
-// C is the channel's place in the color: 0 red, 1 green, 2 blue.
-fn channel<const C: usize>(label: Tr) -> impl Bundle {
-    Setting {
-        label,
-        help: |l| fl!(l, "help-channel"),
-        show: |w, _| {
-            let value = f32::from(w.resource::<UiState>().theme.accent.0[C]);
-            Some(CHANNEL.number(format!("{value:.0}"), value))
-        },
-        change: |w, step| {
-            let mut ui = w.resource_mut::<UiState>();
-            let value = f32::from(ui.theme.accent.0[C]);
-            ui.theme.accent.0[C] = CHANNEL.nudge(value, step) as u8;
-        },
-    }
-    .stepper()
 }
 
 // None, following the system's languages, comes first.

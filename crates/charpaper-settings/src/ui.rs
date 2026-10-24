@@ -38,7 +38,7 @@ pub struct UiState {
 #[serde(default)]
 pub struct UiTheme {
     pub palette: Palette,
-    pub accent: Rgb,
+    pub accent: Hsv,
     // How solid the panel's background is, from 0 to 1.
     pub opacity: f32,
     // How big everything is drawn, 1 being as designed.
@@ -50,7 +50,7 @@ impl Default for UiTheme {
     fn default() -> Self {
         Self {
             palette: Palette::Slate,
-            accent: Rgb::DEFAULT_ACCENT,
+            accent: Hsv::DEFAULT_ACCENT,
             opacity: 0.95,
             size: 1.0,
             side: PanelSide::Right,
@@ -85,39 +85,56 @@ impl PanelSide {
     pub const ALL: [Self; 2] = [Self::Left, Self::Right];
 }
 
-// A color as it's written in state.toml: "#5AA6F2".
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Rgb(pub [u8; 3]);
+// A color as its hue in degrees, and saturation and value from 0 to 1, which is what the panel
+// changes. Kept as these rather than as RGB, which loses the hue and saturation of a color
+// turned all the way to black, so turning it back up would start from gray.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Hsv {
+    pub hue: f32,
+    pub saturation: f32,
+    pub value: f32,
+}
 
-impl Rgb {
-    pub const DEFAULT_ACCENT: Self = Self([0x5A, 0xA6, 0xF2]);
+impl Hsv {
+    // #5AA6F2.
+    pub const DEFAULT_ACCENT: Self = Self { hue: 210.0, saturation: 0.63, value: 0.95 };
+
+    pub fn new(hue: f32, saturation: f32, value: f32) -> Self {
+        Self {
+            hue: hue.rem_euclid(360.0),
+            saturation: saturation.clamp(0.0, 1.0),
+            value: value.clamp(0.0, 1.0),
+        }
+    }
+
+    pub fn color(self) -> Color {
+        Color::hsv(self.hue, self.saturation, self.value)
+    }
 
     pub fn hex(self) -> String {
-        let [r, g, b] = self.0;
-        format!("#{r:02X}{g:02X}{b:02X}")
-    }
-
-    pub fn parse(text: &str) -> Option<Self> {
-        let digits = text.trim().strip_prefix('#')?;
-        if digits.len() != 6 {
-            return None;
-        }
-        let channel = |at: usize| u8::from_str_radix(digits.get(at..at + 2)?, 16).ok();
-        Some(Self([channel(0)?, channel(2)?, channel(4)?]))
+        self.color().to_srgba().to_hex()
     }
 }
 
-impl Serialize for Rgb {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.hex())
-    }
-}
-
-// A mistyped color falls back to the default accent instead of failing: a value the app can't
-// read makes it put the whole of state.toml aside.
-impl<'de> Deserialize<'de> for Rgb {
+// Also reads the hex string 0.2.6 wrote. Anything else falls back to the default accent instead
+// of failing: a value the app can't read makes it put the whole of state.toml aside.
+impl<'de> Deserialize<'de> for Hsv {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let text = String::deserialize(deserializer)?;
-        Ok(Self::parse(&text).unwrap_or(Self::DEFAULT_ACCENT))
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Written {
+            Parts { hue: f32, saturation: f32, value: f32 },
+            Hex(String),
+            Other(serde::de::IgnoredAny),
+        }
+        let color = match Written::deserialize(deserializer)? {
+            Written::Parts { hue, saturation, value } => Some(Self::new(hue, saturation, value)),
+            Written::Hex(hex) => Srgba::hex(hex).ok().map(|rgb| {
+                let hsv = Hsva::from(rgb);
+                Self::new(hsv.hue, hsv.saturation, hsv.value)
+            }),
+            Written::Other(_) => None,
+        };
+        Ok(color.unwrap_or(Self::DEFAULT_ACCENT))
     }
 }

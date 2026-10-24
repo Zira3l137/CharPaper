@@ -119,8 +119,7 @@ impl Default for Theme {
 impl Theme {
     fn new(settings: &UiTheme) -> Self {
         let base = Base::of(settings.palette);
-        let [r, g, b] = settings.accent.0;
-        let accent = Color::srgb_u8(r, g, b);
+        let accent = settings.accent.color();
         Self(std::array::from_fn(|i| match Swatch::ALL[i] {
             Swatch::Clear => Color::NONE,
             Swatch::PanelBg => with_alpha(base.panel, settings.opacity.clamp(0.0, 1.0)),
