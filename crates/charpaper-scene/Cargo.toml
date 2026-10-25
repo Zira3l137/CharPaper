@@ -7,6 +7,7 @@ edition.workspace = true
 bevy.workspace = true
 charpaper-audio.workspace = true
 charpaper-bake.workspace = true
+charpaper-drivers.workspace = true
 charpaper-settings.workspace = true
 charpaper-suite.workspace = true
 crossbeam-channel.workspace = true

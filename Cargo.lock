@@ -1948,6 +1948,7 @@ dependencies = [
  "bevy",
  "charpaper-audio",
  "charpaper-bake",
+ "charpaper-drivers",
  "charpaper-settings",
  "charpaper-suite",
  "crossbeam-channel",

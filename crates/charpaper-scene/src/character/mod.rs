@@ -2,12 +2,14 @@ mod animation;
 mod binding;
 mod correctives;
 mod cues;
+mod drivers;
 mod expression;
 mod skin;
 
 use std::time::Duration;
 
 use bevy::prelude::*;
+use bevy::transform::TransformSystems;
 
 pub use animation::CharacterClips;
 pub(crate) use animation::PendingClips;
@@ -33,6 +35,8 @@ pub(crate) struct CharacterPlugin;
 impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(binding::mark_ready)
+            .add_observer(drivers::keep_rest_pose)
+            .add_systems(PostUpdate, drivers::drive_shape_keys.after(TransformSystems::Propagate))
             .add_systems(Update, (spawn_character, animation::load_clips).in_set(SceneSet::Fill))
             .add_systems(
                 Update,
@@ -50,6 +54,7 @@ impl Plugin for CharacterPlugin {
                         binding::bind_skins,
                         skin::list_skin_objects,
                         skin::apply_hidden_objects,
+                        drivers::bind_drivers,
                     )
                         .chain(),
                     (skin::switch_skin, expression::spawn_skin_scenes).chain(),
