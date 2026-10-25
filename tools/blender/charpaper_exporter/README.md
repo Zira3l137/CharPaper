@@ -22,7 +22,7 @@ saved in the `.blend`.
 |-------------|---------------------------------------------------------|------------------------------|
 | Model file  | the armature alone                                      | `<model>.glb` next to suite.toml |
 | Skin        | the armature + every mesh in its collection, plus ticked expressions | `skins/<name>.glb` |
-| Animation   | the armature + ticked clips, plus corrective meshes if turned on | `animations/<name>.glb` |
+| Animation   | the armature + ticked clips, plus corrective meshes if turned on, without materials or textures | `animations/<name>.glb` |
 | Environment | everything in its collection except cameras, with active actions | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/` |
 | Camera      | the camera, the empties it hangs from, its focus object, and one action | `cameras/<name>.glb` |
 

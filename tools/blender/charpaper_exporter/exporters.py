@@ -14,6 +14,20 @@ ANIMATIONS_DIR = "animations"
 CAMERAS_DIR = "cameras"
 ENVIRONMENT_DIR = "environment"
 
+# An animation file's corrective meshes are only there for their shape keys' weights to be
+# keyed on: the app plays the keys on the worn skin's own meshes and never draws these. So they
+# leave out what only drawing needs, above all their materials' textures, which would otherwise
+# be copied into every animation file.
+CARRIER_MESHES = {
+    "export_materials": "NONE",
+    "export_image_format": "NONE",
+    "export_texcoords": False,
+    "export_vertex_color": "NONE",
+    "export_tangents": False,
+    "export_morph_normal": False,
+    "export_morph_tangent": False,
+}
+
 
 class Result:
     def __init__(self, path):
@@ -128,6 +142,7 @@ def animation(context, suite, entry, folder):
                 export_animation_mode="NLA_TRACKS",
                 export_lights=False,
                 export_cameras=False,
+                **CARRIER_MESHES,
             ),
         )
         result.notes.extend(result_notes)
