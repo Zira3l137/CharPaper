@@ -2,24 +2,38 @@
 # run. glTF has no place for drivers, and running them in the app rather than baking them into
 # clips makes them follow whatever moves the bones: clips, blends between them, and gaze.
 #
-# Only what the app can run is written: Blender's simple expressions, and the variable types
-# below. A driver reading a bone the export leaves out, like a pose reader's helper bone, reads
-# a stand-in: the nearest exported bone above it, turned the way the left-out bone sits from it
-# in the rest pose. That holds while nothing in between moves on its own, which is checked.
+# Only what the app can run is written: average, sum, min, max and simple-expression drivers,
+# reading bones of the suite's armature (Rotational Difference, Transform Channel, Distance, or
+# a Single Property that is a bone's location, rotation or scale) or other shape keys of the
+# skin (Single Property). A driver reading a bone the export leaves out, like a pose reader's
+# helper bone, reads a stand-in: the nearest exported bone above it, turned the way the left-out
+# bone sits from it in the rest pose. That holds while nothing in between moves on its own,
+# which is checked.
 #
-# Rotations are written in glTF's axes, as the model is exported: Blender's world with +Y up,
-# so (x, y, z) becomes (x, z, -y).
+# Positions and the stand-ins' turns are written in glTF's axes, as the model is exported:
+# Blender's world with +Y up, so (x, y, z) becomes (x, z, -y). Each bone a Transform Channel or
+# Distance reads also gets its rest rotation in Blender's own axes, from which the app works out
+# how the exported bone's axes relate to Blender's.
 
 import json
 import math
 import os
 import re
 
+import bpy
+
 from . import anim
 
 VERSION = 1
 KINDS = {"SCRIPTED": "scripted", "AVERAGE": "average", "SUM": "sum", "MIN": "min", "MAX": "max"}
 KEY_VALUE = re.compile(r'^key_blocks\["(.+)"\]\.value$')
+BONE_CHANNEL = re.compile(
+    r'^pose\.bones\["(.+)"\]\.(location|rotation_euler|rotation_quaternion|scale)\[(\d)\]$'
+)
+SPACES = {"WORLD_SPACE": "world", "TRANSFORM_SPACE": "local", "LOCAL_SPACE": "local"}
+EULERS = {"XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"}
+ROTATIONS = {"QUATERNION": "quaternion", "SWING_TWIST_X": "swing_twist_x",
+             "SWING_TWIST_Y": "swing_twist_y", "SWING_TWIST_Z": "swing_twist_z"}
 CURVE_SAMPLES = 64
 
 
@@ -49,7 +63,7 @@ def driven_count(objects):
 def collect(suite, armature, objects):
     """The drivers file's contents for these objects, None without a driver the app can run,
     and what can't be carried over."""
-    found = _Found(suite, armature)
+    found = _Found(suite, armature, objects)
     for obj in objects:
         key = obj.data.shape_keys if obj.type == "MESH" else None
         if key is None or key.animation_data is None:
@@ -64,7 +78,12 @@ def collect(suite, armature, objects):
                 found.entries.append(entry)
     if not found.entries:
         return None, found.problems
-    data = {"version": VERSION, "drivers": found.entries, "stand_ins": found.stand_ins}
+    data = {
+        "version": VERSION,
+        "drivers": found.entries,
+        "stand_ins": found.stand_ins,
+        "bones": found.bones,
+    }
     return data, found.problems
 
 
@@ -78,17 +97,43 @@ def write(suite, entry, skin_path):
         if os.path.exists(path):
             os.remove(path)
         return [], notes
+    _blender_rest_values(suite.armature, data["drivers"])
     with open(path, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=1)
     return [path], notes
 
 
+# What each shape key comes to in the rest pose by Blender's own driver evaluation, which the
+# app checks itself against. The armature shows its rest pose only while this reads it.
+def _blender_rest_values(armature, entries):
+    data = armature.data
+    before = data.pose_position
+    data.pose_position = "REST"
+    try:
+        bpy.context.view_layer.update()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        for entry in entries:
+            obj = bpy.data.objects.get(entry["object"])
+            if obj is None or "rest" not in entry:
+                continue
+            try:
+                key = obj.data.shape_keys.evaluated_get(depsgraph)
+                entry["rest"]["value"] = key.key_blocks[entry["key"]].value
+            except (AttributeError, KeyError, RuntimeError):
+                pass
+    finally:
+        data.pose_position = before
+        bpy.context.view_layer.update()
+
+
 class _Found:
-    def __init__(self, suite, armature):
+    def __init__(self, suite, armature, objects):
         self.suite = suite
         self.armature = armature
+        self.objects = objects
         self.entries = []
         self.stand_ins = {}
+        self.bones = {}
         self.problems = []
         self._checked = set()
 
@@ -135,23 +180,119 @@ class _Found:
             entry["rest"] = rest
         return entry
 
+    def _unsupported(self, obj, where, var, why):
+        self.problem(f"{where}: variable {var.name} {why}", obj)
+        return None
+
     def _variable(self, obj, where, var):
-        if var.type != "ROTATION_DIFF":
-            label = var.type.replace("_", " ").title()
-            self.problem(f"{where}: variable {var.name} is a {label}; the app only reads Rotational Difference so far", obj)
+        bones = self.armature.data.bones
+        targets = list(var.targets)
+
+        def bone_of(target):
+            if target.id == self.armature and target.bone_target in bones:
+                return bones[target.bone_target]
             return None
-        bones = []
-        for target in var.targets[:2]:
-            if target.id != self.armature or target.bone_target not in self.armature.data.bones:
-                self.problem(f"{where}: variable {var.name} reads something other than a bone of {self.armature.name}", obj)
-                return None
-            bones.append(self._bone(self.armature.data.bones[target.bone_target]))
-        return {"name": var.name, "type": "rotation_difference", "bones": bones}
+
+        if var.type == "ROTATION_DIFF":
+            found = [bone_of(t) for t in targets[:2]]
+            if None in found:
+                return self._unsupported(obj, where, var, f"reads something other than two bones of {self.armature.name}")
+            return {"name": var.name, "type": "rotation_difference", "bones": [self._bone(b) for b in found]}
+
+        if var.type == "TRANSFORM_CHANNEL":
+            target = targets[0]
+            bone = bone_of(target)
+            space = SPACES.get(target.transform_space)
+            if bone is None:
+                return self._unsupported(obj, where, var, f"reads something other than a bone of {self.armature.name}")
+            if space is None:
+                return self._unsupported(obj, where, var, f"reads {target.transform_space.replace('_', ' ').lower()}, which the app can't")
+            return {
+                "name": var.name,
+                "type": "transform_channel",
+                "bone": self._bone(bone, axes=True),
+                "channel": target.transform_type.lower(),
+                "space": space,
+                "rotation": self._rotation(bone, target.rotation_mode),
+            }
+
+        if var.type == "LOC_DIFF":
+            found = [bone_of(t) for t in targets[:2]]
+            spaces = [SPACES.get(t.transform_space) for t in targets[:2]]
+            if None in found:
+                return self._unsupported(obj, where, var, f"measures from something other than bones of {self.armature.name}")
+            if None in spaces:
+                return self._unsupported(obj, where, var, "measures in a space the app can't")
+            return {
+                "name": var.name,
+                "type": "distance",
+                "bones": [self._bone(b, axes=True) for b in found],
+                "spaces": spaces,
+            }
+
+        if var.type == "SINGLE_PROP":
+            return self._single_property(obj, where, var, targets[0])
+
+        label = var.type.replace("_", " ").title()
+        return self._unsupported(obj, where, var, f"is a {label}, which the app can't read")
+
+    # A bone's own location, rotation or scale reads as a Transform Channel in local space; a
+    # shape key's value reads that shape key.
+    def _single_property(self, obj, where, var, target):
+        path = target.data_path
+        if target.id_type == "KEY" and KEY_VALUE.match(path):
+            name = KEY_VALUE.match(path).group(1)
+            owner = next((o for o in self.objects if o.data.shape_keys == target.id), None)
+            if owner is None:
+                return self._unsupported(obj, where, var, f"reads a shape key of a mesh outside this skin ({name})")
+            return {"name": var.name, "type": "shape_key", "object": owner.name, "key": name}
+        match = BONE_CHANNEL.match(path)
+        bones = self.armature.data.bones
+        if target.id != self.armature or match is None or match.group(1) not in bones:
+            return self._unsupported(
+                obj, where, var,
+                f"reads {path or 'nothing'}; the app only reads a bone's location, rotation or scale, or a shape key",
+            )
+        bone, prop, index = bones[match.group(1)], match.group(2), int(match.group(3))
+        pose_bone = self.armature.pose.bones[bone.name]
+        if prop == "rotation_euler" and pose_bone.rotation_mode not in EULERS:
+            return self._unsupported(obj, where, var, f"reads {bone.name}'s Euler rotation, which it doesn't use")
+        channel = {
+            "location": "loc_" + "xyz"[min(index, 2)],
+            "scale": "scale_" + "xyz"[min(index, 2)],
+            "rotation_euler": "rot_" + "xyz"[min(index, 2)],
+            "rotation_quaternion": "rot_" + "wxyz"[min(index, 3)],
+        }[prop]
+        rotation = "quaternion" if prop == "rotation_quaternion" else self._rotation(bone, "AUTO")
+        return {
+            "name": var.name,
+            "type": "transform_channel",
+            "bone": self._bone(bone, axes=True),
+            "channel": channel,
+            "space": "local",
+            "rotation": rotation,
+        }
+
+    # Auto means the bone's own Euler order, or XYZ for a bone that turns some other way.
+    def _rotation(self, bone, mode):
+        if mode in ROTATIONS:
+            return ROTATIONS[mode]
+        if mode in EULERS:
+            return mode.lower()
+        own = self.armature.pose.bones[bone.name].rotation_mode
+        return own.lower() if own in EULERS else "xyz"
 
     def _exported(self, bone):
         return not self.suite.gltf.deform_bones_only or bone.use_deform
 
-    def _bone(self, bone):
+    def _world(self):
+        return self.armature.matrix_world.to_3x3().normalized().to_quaternion()
+
+    def _bone(self, bone, axes=False):
+        world = self._world()
+        if axes and bone.name not in self.bones:
+            rest = world @ bone.matrix_local.to_quaternion()
+            self.bones[bone.name] = {"rest": [rest.x, rest.y, rest.z, rest.w]}
         if self._exported(bone) or bone.name in self.stand_ins:
             return bone.name
         between = [bone]
@@ -159,12 +300,13 @@ class _Found:
         while anchor is not None and not self._exported(anchor):
             between.append(anchor)
             anchor = anchor.parent
-        world = self.armature.matrix_world.to_3x3().normalized().to_quaternion()
         anchor_rest = world @ anchor.matrix_local.to_quaternion() if anchor else world
         turn = (world @ bone.matrix_local.to_quaternion()) @ anchor_rest.inverted()
+        head = self.armature.matrix_world @ bone.head_local
         self.stand_ins[bone.name] = {
             "parent": anchor.name if anchor else self.armature.name,
             "turn": [turn.x, turn.z, -turn.y, turn.w],
+            "head": [head.x, head.z, -head.y],
         }
         for still in between:
             self._check_still(still)
@@ -196,26 +338,48 @@ class _Found:
                     )
                     return
 
-    # What the driver gives in the rest pose, from the real bones, for the app to compare.
+    # What the driver's variables read in the rest pose, from the real bones, for the app to
+    # compare. The value itself comes from Blender's own evaluation once the file is written;
+    # this one, worked out here, stands in where that fails.
     def _rest(self, driver, kind, fcurve, entry):
-        bones = self.armature.data.bones
-        values = []
-        for var in driver.variables:
-            first, second = (bones[t.bone_target].matrix_local.to_quaternion() for t in var.targets[:2])
-            values.append(_rotation_difference(first, second))
+        values = [self._rest_variable(v) for v in entry["variables"]]
+        if None in values:
+            return {"variables": values, "value": 0.0}
         if kind == "scripted":
-            names = {v.name: value for v, value in zip(driver.variables, values)}
+            names = {v["name"]: value for v, value in zip(entry["variables"], values)}
             try:
                 raw = float(eval(driver.expression, {"__builtins__": {}}, {**_FUNCTIONS, **names}))
             except Exception:
-                return None
+                return {"variables": values, "value": 0.0}
         elif not values:
             raw = 0.0
         else:
-            raw = {"average": sum(values) / len(values), "sum": sum(values), "min": min(values), "max": max(values)}[kind]
+            raw = {"average": sum(values) / len(values), "sum": sum(values),
+                   "min": min(values), "max": max(values)}[kind]
         value = fcurve.evaluate(raw) if entry["curve"] is not None else raw
         low, high = entry["range"]
         return {"variables": values, "value": min(max(value, min(low, high)), max(low, high))}
+
+    def _rest_variable(self, variable):
+        bones = self.armature.data.bones
+        kind = variable["type"]
+        if kind == "rotation_difference":
+            first, second = (bones[b].matrix_local.to_quaternion() for b in variable["bones"])
+            return _rotation_difference(first, second)
+        if kind == "transform_channel":
+            matrix = self._rest_matrix(bones[variable["bone"]], variable["space"])
+            return _channel(matrix, variable["channel"], variable["rotation"])
+        if kind == "distance":
+            heads = [self._rest_matrix(bones[b], s).translation for b, s in zip(variable["bones"], variable["spaces"])]
+            return (heads[0] - heads[1]).length
+        return None
+
+    def _rest_matrix(self, bone, space):
+        from mathutils import Matrix
+
+        if space == "local":
+            return Matrix.Identity(4)
+        return self.armature.matrix_world @ bone.matrix_local
 
 
 # As Blender computes Rotational Difference (dvar_eval_rotDiff): the angle of the turn from one
@@ -225,6 +389,33 @@ def _rotation_difference(a, b):
     between.normalize()
     angle = abs(2.0 * math.acos(max(-1.0, min(1.0, between.w))))
     return 2.0 * math.pi - angle if angle > math.pi else angle
+
+
+# As Blender reads a Transform Channel off a matrix (dvar_eval_transChan and
+# BKE_driver_target_matrix_to_rot_channels).
+def _channel(matrix, channel, rotation):
+    axis = channel[-1]
+    if channel.startswith("loc_"):
+        return matrix.translation["xyz".index(axis)]
+    if channel == "scale_avg":
+        volume = matrix.to_3x3().determinant()
+        return math.copysign(abs(volume) ** (1.0 / 3.0), volume)
+    if channel.startswith("scale_"):
+        return matrix.col["xyz".index(axis)].to_3d().length
+    index = "wxyz".index(axis)
+    turn = matrix.to_3x3().normalized()
+    if rotation == "quaternion":
+        return turn.to_quaternion()[index]
+    if rotation.startswith("swing_twist_"):
+        twist_axis = rotation[-1].upper()
+        swing, twist = turn.to_quaternion().to_swing_twist(twist_axis)
+        if index == "XYZ".index(twist_axis) + 1:
+            return twist
+        value = max(-1.0, min(1.0, swing[index]))
+        return 2.0 * math.acos(value) if index == 0 else 2.0 * math.asin(value)
+    if index == 0:
+        return 0.0
+    return turn.to_euler(rotation.upper())[index - 1]
 
 
 def _curve(fcurve):

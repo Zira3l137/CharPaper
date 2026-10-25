@@ -35,10 +35,15 @@ saved in the `.blend`.
   drives, are written next to the skin as `skins/<name>.drivers.json`, and the app runs the
   drivers itself every frame. So they follow every clip, blends between clips and gaze, with no
   keys to export. The app runs what Blender runs without Python: average, sum, min, max and
-  simple-expression drivers, reading Rotational Difference variables. A driver may read a bone
-  the export leaves out, such as an `MCH-reader` bone, as long as nothing between it and the
-  nearest exported bone above it is animated or constrained. Validation names every driver the
-  app can't run, and the app's log says whether its drivers match Blender in the rest pose.
+  simple-expression drivers, whose variables read bones of the suite's armature (Rotational
+  Difference; Transform Channel and Distance in world, transform or local space, in any
+  rotation mode; a Single Property that is a bone's location, rotation or scale) or another
+  shape key of the same skin (a Single Property). It can't read objects other than bones,
+  custom properties, context properties or `frame`. A driver may read a bone the export
+  leaves out, such as an `MCH-reader` bone, as long as nothing between it and the nearest
+  exported bone above it is animated or constrained; such a bone reads as still in local
+  space. Validation names every driver the app can't run, and the app's log says whether its
+  drivers match Blender in the rest pose.
 - **Depth of field** comes from the camera's own *Depth of Field* panel: F-Stop, and either
   Focus Distance or a Focus Object. A focus object goes into the camera's file with the
   empties it hangs from, and its animation joins the camera's clip. Focusing on the

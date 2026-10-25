@@ -4,6 +4,9 @@ use glam::Quat;
 use serde::Deserialize;
 
 use crate::curve::Curve;
+use crate::transform::Channel;
+use crate::transform::RotationMode;
+use crate::transform::Space;
 
 /// What the exporter writes as `<skin>.drivers.json`. Rotations are in glTF's axes, the way the
 /// model is exported: Blender's world, with +Y up.
@@ -15,6 +18,10 @@ pub struct DriversFile {
     /// Bones the drivers read that the export leaves out, by name.
     #[serde(default)]
     pub stand_ins: BTreeMap<String, StandIn>,
+    /// The bones Transform Channel and Distance variables read, by name, with their rest
+    /// rotation as Blender has it, which ties the app's axes of each to Blender's.
+    #[serde(default)]
+    pub bones: BTreeMap<String, BoneAxes>,
 }
 
 impl DriversFile {
@@ -74,6 +81,13 @@ pub struct Variable {
 pub enum Source {
     /// The angle between two bones' rotations, in radians from 0 to π.
     RotationDifference { bones: [String; 2] },
+    /// One number of a bone's location, rotation or scale. A Single Property variable reading
+    /// a bone's location, rotation or scale is one of these too, in local space.
+    TransformChannel { bone: String, channel: Channel, space: Space, rotation: RotationMode },
+    /// How far apart two bones' heads are, each in its own space.
+    Distance { bones: [String; 2], spaces: [Space; 2] },
+    /// Another shape key's value, which a Single Property variable reads.
+    ShapeKey { object: String, key: String },
 }
 
 /// A bone the export leaves out, such as a pose reader's helper bone, which keeps still
@@ -83,6 +97,9 @@ pub struct StandIn {
     pub parent: String,
     /// The turn from the parent's rest rotation to the bone's, in world axes, as x, y, z, w.
     pub turn: [f32; 4],
+    /// Where the bone's head is in the rest pose, for variables that read where it is.
+    #[serde(default)]
+    pub head: Option<[f32; 3]>,
 }
 
 impl StandIn {
@@ -97,10 +114,17 @@ impl StandIn {
     }
 }
 
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct BoneAxes {
+    /// In Blender's own axes, as x, y, z, w.
+    pub rest: [f32; 4],
+}
+
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct RestCheck {
-    /// Each variable's value, in order.
-    pub variables: Vec<f32>,
+    /// Each variable's value, in order; none for one the exporter can't work out at rest, such
+    /// as another shape key's value.
+    pub variables: Vec<Option<f32>>,
     pub value: f32,
 }
 
@@ -124,13 +148,47 @@ mod tests {
                 "curve": {"from": 0.0, "to": 1.0, "values": [0.0, 1.0],
                           "slope_before": 0.0, "slope_after": 0.0},
                 "range": [0.0, 1.0],
-                "rest": {"variables": [2.07445], "value": 0.0}
+                "rest": {"variables": [2.07445, null], "value": 0.0}
             }],
             "stand_ins": {"MCH-reader_C_ArmUp_L": {"parent": "shoulder.L", "turn": [0, 0, 0, 1]}}
         }"#;
         let file = DriversFile::parse(text).unwrap();
         assert_eq!(file.drivers[0].kind, Kind::Scripted);
         assert_eq!(file.stand_ins["MCH-reader_C_ArmUp_L"].parent, "shoulder.L");
+    }
+
+    #[test]
+    fn reads_every_variable_type() {
+        let text = r#"{
+            "version": 1,
+            "drivers": [{
+                "object": "Body", "key": "K", "kind": "sum", "curve": null, "range": [0, 1],
+                "variables": [
+                    {"name": "a", "type": "transform_channel", "bone": "shin.L",
+                     "channel": "rot_x", "space": "local", "rotation": "swing_twist_y"},
+                    {"name": "b", "type": "distance", "bones": ["hand.L", "hip.L"],
+                     "spaces": ["world", "world"]},
+                    {"name": "c", "type": "shape_key", "object": "Body", "key": "Blink"}
+                ]
+            }],
+            "bones": {"shin.L": {"rest": [0, 0, 0, 1]}}
+        }"#;
+        let file = DriversFile::parse(text).unwrap();
+        let sources: Vec<&Source> = file.drivers[0].variables.iter().map(|v| &v.source).collect();
+        assert!(matches!(
+            sources[0],
+            Source::TransformChannel {
+                channel: Channel::RotX,
+                rotation: RotationMode::SwingTwistY,
+                ..
+            }
+        ));
+        assert!(matches!(
+            sources[1],
+            Source::Distance { spaces: [Space::World, Space::World], .. }
+        ));
+        assert!(matches!(sources[2], Source::ShapeKey { .. }));
+        assert_eq!(file.bones["shin.L"].rest, [0.0, 0.0, 0.0, 1.0]);
     }
 
     #[test]
@@ -150,7 +208,8 @@ mod tests {
         let own_axes = Quat::from_euler(EulerRot::XYZ, 0.7, 0.1, -0.5);
         let app = |q: Quat| to_gltf * q * own_axes;
 
-        let stand_in = StandIn { parent: String::new(), turn: [turn.x, turn.z, -turn.y, turn.w] };
+        let stand_in =
+            StandIn { parent: String::new(), turn: [turn.x, turn.z, -turn.y, turn.w], head: None };
         assert!(stand_in.rest(app(parent)).angle_between(app(reader)) < 1e-4);
 
         // Hanging still from its parent, it follows wherever the parent turns.
