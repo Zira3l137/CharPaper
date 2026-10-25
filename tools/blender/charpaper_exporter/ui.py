@@ -4,6 +4,7 @@ import bpy
 from bpy.types import Panel
 from bpy.types import UIList
 
+from . import anim
 from . import cues
 from . import drivers
 from .props import suite_of
@@ -189,15 +190,11 @@ class CHARPAPER_PT_animations(_Sidebar, Panel):
             col.prop(clip, "action")
             col.prop(clip, "mode")
             col.prop(clip, "gaze")
-            sub = col.column()
-            sub.active = entry.use_correctives
-            sub.prop(clip, "corrective")
-
-        row = layout.row(heading="Correctives")
-        row.prop(entry, "use_correctives", text="")
-        sub = row.row()
-        sub.active = entry.use_correctives
-        sub.prop(entry, "correctives", text="")
+            col.prop(clip, "corrective")
+            if clip.corrective is None and clip.action is not None:
+                keyed = anim.key_names(clip.action)
+                if keyed:
+                    col.label(text=f"Keyed in this clip: {len(keyed)} shape key(s)", icon="SHAPEKEY_DATA")
 
 
 class CHARPAPER_PT_environments(_Sidebar, Panel):

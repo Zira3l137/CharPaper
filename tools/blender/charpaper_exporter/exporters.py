@@ -15,10 +15,10 @@ ANIMATIONS_DIR = "animations"
 CAMERAS_DIR = "cameras"
 ENVIRONMENT_DIR = "environment"
 
-# An animation file's corrective meshes are only there for their shape keys' weights to be
-# keyed on: the app plays the keys on the worn skin's own meshes and never draws these. So they
-# leave out what only drawing needs, above all their materials' textures, which would otherwise
-# be copied into every animation file.
+# An animation file's meshes are only there for their shape keys' weights to be keyed on: the
+# app plays the keys on the worn skin's own meshes and never draws these. So they leave out
+# what only drawing needs, above all their materials' textures, which would otherwise be copied
+# into every animation file.
 CARRIER_MESHES = {
     "export_materials": "NONE",
     "export_image_format": "NONE",
@@ -116,30 +116,38 @@ def skin(context, suite, entry, folder):
     return result
 
 
+# Shape keys a clip keys by hand go in with it, on copies of the skins' meshes that have them,
+# which the app matches to the worn skin's own meshes by name. Driven shape keys need nothing
+# here: the skin's drivers file carries them.
 def animation(context, suite, entry, folder):
     path = target(folder, ANIMATIONS_DIR, entry.name, suite)
+    clips = [c for c in entry.clips if c.enabled and c.action]
+    sources = [anim.shape_key_source(c) for c in clips]
+    keyed = set()
+    for source in sources:
+        if source is not None:
+            keyed |= anim.key_names(source)
     with isolated(context) as iso:
         armature = iso.add_with_ancestors(suite.armature)
         meshes = []
-        if entry.use_correctives and entry.correctives:
-            for obj in entry.correctives.all_objects:
-                if _shape_keyed(obj):
-                    copy = iso.add(obj, own_mesh=True)
-                    if _new_data(copy, meshes):
-                        meshes.append(copy)
+        for obj in anim.shape_keyed_skin_meshes(suite):
+            if keyed & set(obj.data.shape_keys.key_blocks.keys()):
+                copy = iso.add(obj, own_mesh=True)
+                if _new_data(copy, meshes):
+                    meshes.append(copy)
         result_notes = []
-        for clip in entry.clips:
-            if not (clip.enabled and clip.action):
-                continue
+        for clip, source in zip(clips, sources):
             name = clip.action.name
             anim.object_track(armature, name, clip.action)
-            if clip.corrective and meshes:
+            if source is not None and meshes:
                 # The glTF exporter slides each object's strip to frame 0 on its own, so the
-                # correctives must start and end with the body or they drift out of step.
+                # shape keys must start and end with the body or they drift out of step.
                 span = tuple(clip.action.frame_range)
-                tracks = [anim.key_track(mesh, name, clip.corrective, span) for mesh in meshes]
+                tracks = [anim.key_track(mesh, name, source, span) for mesh in meshes]
                 if not any(tracks):
-                    result_notes.append(f"{name}: {clip.corrective.name} keys none of the corrective meshes")
+                    result_notes.append(f"{name}: its shape keys are on none of the skins' meshes")
+            elif source is not None:
+                result_notes.append(f"{name}: its shape keys are on none of the skins' meshes")
         result = _run(
             context, iso, path,
             _options(

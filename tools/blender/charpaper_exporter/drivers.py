@@ -60,6 +60,14 @@ def driven_count(objects):
     return keys, meshes
 
 
+def driven_keys(obj):
+    """The names of an object's shape keys that have drivers."""
+    key = obj.data.shape_keys if obj.type == "MESH" else None
+    if key is None or key.animation_data is None:
+        return set()
+    return {m.group(1) for d in key.animation_data.drivers if (m := KEY_VALUE.match(d.data_path))}
+
+
 def collect(suite, armature, objects):
     """The drivers file's contents for these objects, None without a driver the app can run,
     and what can't be carried over."""
@@ -328,7 +336,7 @@ class _Found:
         for entry in self.suite.animations:
             for clip in entry.clips:
                 if clip.enabled and clip.action and any(
-                    c.data_path.startswith(path) for c in anim.fcurves(clip.action)
+                    c.data_path.startswith(path) and _moves(c) for c in anim.fcurves(clip.action)
                 ):
                     self.problem(
                         f"{bone.name} isn't exported but clip {clip.name or clip.action.name!r} "
@@ -380,6 +388,27 @@ class _Found:
         if space == "local":
             return Matrix.Identity(4)
         return self.armature.matrix_world @ bone.matrix_local
+
+
+# Rest values of a bone's transform channels, by property and index.
+_REST = {"location": 0.0, "rotation_euler": 0.0, "scale": 1.0, "rotation_quaternion": (1.0, 0.0, 0.0, 0.0),
+         "rotation_axis_angle": (0.0, 0.0, 1.0, 0.0)}
+
+
+# Whether a curve takes its bone away from the rest pose. Keying every bone keys helper bones
+# too, at rest, which moves nothing.
+def _moves(fcurve):
+    prop = fcurve.data_path.rsplit(".", 1)[-1]
+    rest = _REST.get(prop)
+    if rest is None:
+        return True
+    if isinstance(rest, tuple):
+        rest = rest[min(fcurve.array_index, len(rest) - 1)]
+    for point in fcurve.keyframe_points:
+        values = (point.co.y, point.handle_left.y, point.handle_right.y)
+        if any(abs(v - rest) > 1e-4 for v in values):
+            return True
+    return len(fcurve.modifiers) > 0
 
 
 # As Blender computes Rotational Difference (dvar_eval_rotDiff): the angle of the turn from one

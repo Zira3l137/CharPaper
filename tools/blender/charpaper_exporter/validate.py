@@ -380,42 +380,40 @@ def _check_animation(suite, entry, armature, add):
                     armature,
                 ))
     _check_cues(suite, clips, add)
+    _check_clip_shape_keys(suite, clips, add)
 
-    if not entry.use_correctives:
-        if any(c.corrective for c in clips):
-            add(Finding(
-                f"animation file {entry.name!r}: some clips name correctives, but Correctives is off",
-                severity="INFO",
-            ))
-        return
-    if entry.correctives is None:
-        add(Finding(f"animation file {entry.name!r}: Correctives is on but no collection is picked"))
-        return
-    skin_meshes = {
-        o for s in suite.skins if s.collection for o in s.collection.all_objects if o.type == "MESH"
-    }
-    meshes = [o for o in entry.correctives.all_objects if o.type == "MESH" and o.data.shape_keys]
-    if not meshes:
-        add(Finding(f"animation file {entry.name!r}: {entry.correctives.name} has no shape-keyed meshes"))
-    keyed = set()
+
+# Shape keys a clip keys by hand: on which skin meshes they land, and what overrides them there.
+def _check_clip_shape_keys(suite, clips, add):
+    meshes = anim.shape_keyed_skin_meshes(suite)
     for clip in clips:
-        if clip.corrective:
-            keyed |= anim.key_names(clip.corrective)
-    for obj in meshes:
-        if obj not in skin_meshes:
-            add(Finding(f"{obj.name} is in no skin, so its correctives move nothing", obj))
-        keys = set(obj.data.shape_keys.key_blocks.keys())
-        if not keyed & keys:
-            add(Finding(f"{obj.name}: no clip keys its shape keys, so it only takes up space", obj))
-        for skin in suite.skins:
-            if skin.collection is None or obj.name not in skin.collection.all_objects:
-                continue
-            if any(e.enabled and e.action and anim.key_names(e.action) & keys for e in skin.expressions):
+        source = anim.shape_key_source(clip)
+        if source is None:
+            continue
+        name = clip.name or clip.action.name
+        keyed = anim.key_names(source)
+        landing = [o for o in meshes if keyed & set(o.data.shape_keys.key_blocks.keys())]
+        if not landing:
+            add(Finding(f"clip {name!r} keys shape keys no skin's mesh has: {_examples(keyed)}"))
+            continue
+        for obj in landing:
+            driven = keyed & drivers.driven_keys(obj)
+            if driven:
                 add(Finding(
-                    f"{obj.name}: skin {skin.name!r}'s expressions key its shape keys, so with that "
-                    "skin this file's correctives on it do nothing",
+                    f"clip {name!r} keys {_examples(driven)} on {obj.name}, which drivers drive; "
+                    "the drivers win, so those keys do nothing",
                     obj,
                 ))
+            keys = set(obj.data.shape_keys.key_blocks.keys())
+            for skin in suite.skins:
+                if skin.collection is None or obj.name not in skin.collection.all_objects:
+                    continue
+                if any(e.enabled and e.action and anim.key_names(e.action) & keys for e in skin.expressions):
+                    add(Finding(
+                        f"clip {name!r} keys shape keys on {obj.name}, whose shape keys skin "
+                        f"{skin.name!r}'s expressions play, so with that skin they do nothing",
+                        obj,
+                    ))
 
 
 def _check_cues(suite, clips, add):

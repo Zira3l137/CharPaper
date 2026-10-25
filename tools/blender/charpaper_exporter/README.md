@@ -22,15 +22,20 @@ saved in the `.blend`.
 |-------------|---------------------------------------------------------|------------------------------|
 | Model file  | the armature alone                                      | `<model>.glb` next to suite.toml |
 | Skin        | the armature + every mesh in its collection, plus ticked expressions | `skins/<name>.glb` |
-| Animation   | the armature + ticked clips, plus corrective meshes if turned on, without materials or textures | `animations/<name>.glb` |
+| Animation   | the armature + ticked clips, plus copies of the skins' meshes whose shape keys the clips key, without materials or textures | `animations/<name>.glb` |
 | Environment | everything in its collection except cameras, with active actions | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/` |
 | Camera      | the camera, the empties it hangs from, its focus object, and one action | `cameras/<name>.glb` |
 
 - **Clips** and **expressions** are named after their Blender actions. *Shown as* renames a
   clip in the app only.
-- **Correctives:** tick *Correctives*, pick the collection of meshes they key, then give each
-  clip that needs them a shape key action. It plays together with the clip under the clip's
-  name.
+- **Shape keys keyed in a clip** play with it, for what a driver can't do, like a cheek puff in
+  frames 40–60 of one clip. In Blender 4.4 and newer, key them in the clip's own action:
+  select the mesh, assign that action in the Shape Key Editor, let Blender give it a slot for
+  the shape keys, and key them there. Export finds them; the clip shows *Keyed in this clip*.
+  In older Blender, or to use a separate shape key action, pick it in the clip's *Shape keys*
+  field, which then wins over the clip's own. Export puts copies of the skins' meshes that
+  have those shape keys into the animation file to carry them. A shape key that also has a
+  driver follows the driver, as in Blender; validation points it out.
 - **Driven shape keys:** a skin's shape keys driven by bones, like correctives a pose reader
   drives, are written next to the skin as `skins/<name>.drivers.json`, and the app runs the
   drivers itself every frame. So they follow every clip, blends between clips and gaze, with no

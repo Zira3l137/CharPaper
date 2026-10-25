@@ -123,11 +123,15 @@ class CHARPAPER_PG_clip(PropertyGroup):
         default=True,
         description="Let her follow the cursor during this clip. Turn off for dances or lying poses",
     )
+    # Named for what it first held; kept so older .blend files keep their choice.
     corrective: PointerProperty(
         type=bpy.types.Action,
         poll=_is_shape_key_action,
-        name="Correctives",
-        description="Shape key action played together with this clip on the corrective meshes",
+        name="Shape keys",
+        description=(
+            "A shape key action played together with this clip. Leave empty to use the shape "
+            "keys keyed in the clip's own action, or none. Driven shape keys need nothing here"
+        ),
     )
 
 
@@ -139,16 +143,6 @@ class CHARPAPER_PG_animation(PropertyGroup):
         name="Pattern",
         default="*",
         description="Tick the clips whose action name matches, like Loco_*",
-    )
-    use_correctives: BoolProperty(
-        name="Correctives",
-        default=False,
-        description="Export corrective meshes and the shape key actions the clips name",
-    )
-    correctives: PointerProperty(
-        type=bpy.types.Collection,
-        name="Corrective meshes",
-        description="Meshes whose shape keys the clips key. They must be the same objects the skins use",
     )
 
 

@@ -68,6 +68,29 @@ def shape_key_actions(meshes):
     return [a for a in bpy.data.actions if key_names(a) & keys]
 
 
+def shape_key_source(clip):
+    """Where a clip's hand-keyed shape keys come from: the action picked for them, or else the
+    clip's own action when it keys shape keys too, in a slot of their own (Blender 4.4 and
+    newer). None when the clip keys none."""
+    if clip.corrective is not None:
+        return clip.corrective
+    if clip.action is not None and key_names(clip.action):
+        return clip.action
+    return None
+
+
+def shape_keyed_skin_meshes(suite):
+    """Every mesh with shape keys in a skin's collection, each once."""
+    meshes = []
+    for skin in suite.skins:
+        if skin.collection is None:
+            continue
+        for obj in skin.collection.all_objects:
+            if obj.type == "MESH" and obj.data.shape_keys and obj not in meshes:
+                meshes.append(obj)
+    return meshes
+
+
 def users(action, obj):
     data = obj.animation_data
     if data is None:
