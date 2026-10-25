@@ -2,6 +2,7 @@ import os
 
 from . import anim
 from . import animated
+from . import drivers
 from . import gltf
 from . import lens
 from . import lights
@@ -98,7 +99,7 @@ def skin(context, suite, entry, folder):
                 for mesh in meshes:
                     if anim.key_track(mesh, expression.action.name, expression.action):
                         tracks += 1
-        return _run(
+        result = _run(
             context, iso, path,
             _options(
                 suite,
@@ -108,6 +109,11 @@ def skin(context, suite, entry, folder):
                 export_cameras=False,
             ),
         )
+    # Read from the originals, once they have their names back.
+    written, notes = drivers.write(suite, entry, path)
+    result.written.extend(written)
+    result.notes.extend(notes)
+    return result
 
 
 def animation(context, suite, entry, folder):

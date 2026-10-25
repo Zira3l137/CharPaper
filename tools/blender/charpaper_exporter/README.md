@@ -31,6 +31,14 @@ saved in the `.blend`.
 - **Correctives:** tick *Correctives*, pick the collection of meshes they key, then give each
   clip that needs them a shape key action. It plays together with the clip under the clip's
   name.
+- **Driven shape keys:** a skin's shape keys driven by bones, like correctives a pose reader
+  drives, are written next to the skin as `skins/<name>.drivers.json`, and the app runs the
+  drivers itself every frame. So they follow every clip, blends between clips and gaze, with no
+  keys to export. The app runs what Blender runs without Python: average, sum, min, max and
+  simple-expression drivers, reading Rotational Difference variables. A driver may read a bone
+  the export leaves out, such as an `MCH-reader` bone, as long as nothing between it and the
+  nearest exported bone above it is animated or constrained. Validation names every driver the
+  app can't run, and the app's log says whether its drivers match Blender in the rest pose.
 - **Depth of field** comes from the camera's own *Depth of Field* panel: F-Stop, and either
   Focus Distance or a Focus Object. A focus object goes into the camera's file with the
   empties it hangs from, and its animation joins the camera's clip. Focusing on the

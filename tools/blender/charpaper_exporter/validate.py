@@ -7,6 +7,7 @@ import bpy
 from . import anim
 from . import animated
 from . import cues
+from . import drivers
 from . import env_settings
 from . import front
 from . import gltf
@@ -348,6 +349,11 @@ def _check_skin(suite, entry, armature, add):
     others = [o.name for o in entry.collection.all_objects if o.type not in {"MESH", "EMPTY", "ARMATURE"}]
     if others:
         add(Finding(f"skin {entry.name!r}: left out (not meshes): {_examples(others)}", severity="INFO"))
+
+    if armature is not None:
+        _, problems = drivers.collect(suite, armature, meshes)
+        for problem in problems:
+            add(Finding(f"skin {entry.name!r}: {problem.message}", problem.obj, problem.bone))
 
     keys = set()
     for obj in meshes:

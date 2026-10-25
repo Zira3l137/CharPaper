@@ -5,6 +5,7 @@ from bpy.types import Panel
 from bpy.types import UIList
 
 from . import cues
+from . import drivers
 from .props import suite_of
 
 
@@ -135,6 +136,10 @@ class CHARPAPER_PT_skins(_Sidebar, Panel):
             return
         layout = self.layout
         layout.prop(entry, "collection", text="Collection")
+        if entry.collection:
+            keys, meshes = drivers.driven_count(entry.collection.all_objects)
+            if keys:
+                layout.label(text=f"Drivers: {keys} shape key(s) on {meshes} mesh(es)", icon="DRIVER")
         box = layout.box()
         row = box.row()
         row.label(text="Expressions", icon="SHAPEKEY_DATA")
