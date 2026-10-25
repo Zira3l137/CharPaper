@@ -207,7 +207,7 @@ class _Found:
                 return self._unsupported(obj, where, var, f"reads something other than two bones of {self.armature.name}")
             return {"name": var.name, "type": "rotation_difference", "bones": [self._bone(b) for b in found]}
 
-        if var.type == "TRANSFORM_CHANNEL":
+        if var.type == "TRANSFORMS":
             target = targets[0]
             bone = bone_of(target)
             space = SPACES.get(target.transform_space)
@@ -241,8 +241,8 @@ class _Found:
         if var.type == "SINGLE_PROP":
             return self._single_property(obj, where, var, targets[0])
 
-        label = var.type.replace("_", " ").title()
-        return self._unsupported(obj, where, var, f"is a {label}, which the app can't read")
+        label = var.bl_rna.properties["type"].enum_items[var.type].name
+        return self._unsupported(obj, where, var, f"is a {label} variable, which the app can't read")
 
     # A bone's own location, rotation or scale reads as a Transform Channel in local space; a
     # shape key's value reads that shape key.
