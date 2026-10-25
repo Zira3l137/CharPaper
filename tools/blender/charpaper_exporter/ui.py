@@ -253,7 +253,7 @@ class CHARPAPER_PT_gaze(_Sidebar, Panel):
         col.prop(gaze, "neck")
 
         col = layout.column(align=True)
-        col.label(text="Front: look her in the face, then click", icon="ORIENTATION_VIEW")
+        col.label(text="Front, in her rest pose: look her in the face", icon="ORIENTATION_VIEW")
         row = col.row(align=True)
         row.operator("charpaper.gaze_front_from_view", icon="HIDE_OFF")
         row.prop(gaze, "front", text="")

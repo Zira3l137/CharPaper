@@ -19,6 +19,15 @@ def suite_of(context):
     return context.scene.charpaper
 
 
+# Gaze needs her front as she stands in her rest pose, which a clip may turn her away from, so
+# while the arrow shows, so does her rest pose.
+def _show_front_changed(gaze, context):
+    armature = context.scene.charpaper.armature
+    if armature is not None and armature.type == "ARMATURE":
+        armature.data.pose_position = "REST" if gaze.show_front else "POSE"
+    redraw_views()
+
+
 def redraw_views():
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
@@ -198,9 +207,9 @@ class CHARPAPER_PG_gaze(PropertyGroup):
     )
     show_front: BoolProperty(
         name="Show front",
-        description="Draw an arrow from her head the way gaze takes her to face",
+        description="Show her rest pose, with an arrow from her head the way gaze takes her to face",
         default=False,
-        update=lambda self, context: redraw_views(),
+        update=_show_front_changed,
     )
     key_left: StringProperty(name="Left", search=_search(shape_key_names))
     key_right: StringProperty(name="Right", search=_search(shape_key_names))

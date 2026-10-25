@@ -3,6 +3,9 @@
 # armature's own axes, so turning the armature, or the whole scene, afterwards keeps it right,
 # and export writes it into suite.toml in world axes, as the model is exported. An arrow from
 # her head shows it in the viewport.
+#
+# It is her front in her rest pose, which is what the app's gaze turns from; a clip may turn her
+# around entirely. So the arrow shows on her rest pose, and the button only works there.
 
 import bpy
 import gpu
@@ -51,10 +54,25 @@ def _head(suite, armature):
     gaze = suite.gaze
     names = [gaze.head, gaze.neck] + [e.bone for e in gaze.eyes]
     for name in names:
-        bone = armature.pose.bones.get(name) if name else None
+        bone = armature.data.bones.get(name) if name else None
         if bone is not None:
-            return armature.matrix_world @ bone.head
+            return armature.matrix_world @ bone.head_local
     return armature.matrix_world.translation
+
+
+def rest_ahead(suite, armature):
+    """Which way, in the armature's axes, her eyes sit from her head in the rest pose, level
+    with the ground; None when the bones don't say."""
+    gaze = suite.gaze
+    bones = armature.data.bones
+    eyes = [bones[e.bone].head_local for e in gaze.eyes if e.bone in bones]
+    pivot = next((bones[n] for n in (gaze.head, gaze.neck) if n in bones), None)
+    if not eyes or pivot is None:
+        return None
+    ahead = sum(eyes, Vector()) / len(eyes) - pivot.head_local
+    up = _rotation(armature).inverted() @ Vector((0, 0, 1))
+    ahead -= up * ahead.dot(up)
+    return ahead.normalized() if ahead.length > 1e-5 else None
 
 
 def _draw():
@@ -110,6 +128,10 @@ class CHARPAPER_OT_gaze_front_from_view(Operator):
     def execute(self, context):
         gaze = suite_of(context).gaze
         armature = suite_of(context).armature
+        if armature.data.pose_position != "REST":
+            gaze.show_front = True
+            self.report({"WARNING"}, "This is her rest pose: look her in the face and click again")
+            return {"CANCELLED"}
         view = context.space_data.region_3d.view_rotation @ Vector((0, 0, -1))
         gaze.front = nearest_axis(armature, -view)
         gaze.show_front = True

@@ -133,6 +133,14 @@ def _check_gaze(suite, armature, add):
             "gaze: her front points up or down; she has to stand upright for gaze to turn her",
             armature,
         ))
+    else:
+        ahead = front.rest_ahead(suite, armature)
+        if ahead is not None and ahead.dot(front.AXES[gaze.front]) < 0.0:
+            add(Finding(
+                "gaze: Front points to the back of her head in her rest pose, so she'll turn away "
+                "from the cursor. Turn on the arrow to see her rest pose and click She faces me again",
+                armature,
+            ))
     _check_gaze_clips(suite, set(eyes), add)
     _check_gaze_lenses(suite, add)
 

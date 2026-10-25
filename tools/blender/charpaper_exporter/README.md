@@ -86,10 +86,11 @@ saved in the `.blend`.
   in `sounds/` yourself. Markers outside the action's frame range play nothing. The clip
   list shows how many markers a clip has.
 - **Gaze** turns her eyes, head and neck towards the mouse cursor, on top of her animation.
-  The app has to know which way her face points: in the Gaze section, look her in the face
-  in the viewport and click *She faces me*. It's kept as one of the armature's axes, so
-  turning her or the scene later keeps it right; the arrow button shows it from her head,
-  green once set, orange while she's taken to face -Y. A clip that animates the eye bones
+  The app has to know which way her face points in her rest pose, which a clip can turn her
+  away from: in the Gaze section, turn on the arrow, which shows her rest pose, look her in
+  the face in the viewport and click *She faces me*. It's kept as one of the armature's axes,
+  so turning her or the scene later keeps it right. The arrow is green once set, orange while
+  she's taken to face -Y; turning it off shows her pose again. A clip that animates the eye bones
   leaves the eyes less room to follow the cursor, and a long camera lens makes the whole
   effect subtle; validation points out both.
 - Your scene is never changed. Each file is exported from temporary copies in a throwaway
