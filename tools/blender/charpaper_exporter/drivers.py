@@ -35,6 +35,8 @@ EULERS = {"XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"}
 ROTATIONS = {"QUATERNION": "quaternion", "SWING_TWIST_X": "swing_twist_x",
              "SWING_TWIST_Y": "swing_twist_y", "SWING_TWIST_Z": "swing_twist_z"}
 CURVE_SAMPLES = 64
+# Simple expressions may read the current frame, which means nothing to the app.
+FRAME = re.compile(r"(?<![\w.])frame(?!\w)")
 
 
 class Problem:
@@ -106,13 +108,17 @@ def write(suite, entry, skin_path):
             os.remove(path)
         return [], notes
     _blender_rest_values(suite.armature, data["drivers"])
+    for driver in data["drivers"]:
+        driver.pop("_raw", None)
     with open(path, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=1)
     return [path], notes
 
 
 # What each shape key comes to in the rest pose by Blender's own driver evaluation, which the
-# app checks itself against. The armature shows its rest pose only while this reads it.
+# app checks itself against. The armature shows its rest pose only while this reads it. Drivers
+# reading a bone's own channels are left with the value worked out here: Rest Position doesn't
+# reset those channels, so Blender would read whatever frame the scene is on.
 def _blender_rest_values(armature, entries):
     data = armature.data
     before = data.pose_position
@@ -122,7 +128,7 @@ def _blender_rest_values(armature, entries):
         depsgraph = bpy.context.evaluated_depsgraph_get()
         for entry in entries:
             obj = bpy.data.objects.get(entry["object"])
-            if obj is None or "rest" not in entry:
+            if obj is None or "rest" not in entry or entry.get("_raw"):
                 continue
             try:
                 key = obj.data.shape_keys.evaluated_get(depsgraph)
@@ -144,6 +150,7 @@ class _Found:
         self.bones = {}
         self.problems = []
         self._checked = set()
+        self._raw = False
 
     def problem(self, message, obj=None, bone=""):
         self.problems.append(Problem(message, obj, bone))
@@ -166,6 +173,11 @@ class _Found:
                 obj,
             )
             return None
+        names = {v.name for v in driver.variables}
+        if kind == "scripted" and "frame" not in names and FRAME.search(driver.expression):
+            self.problem(f"{where}: its expression reads the frame, which the app doesn't have", obj)
+            return None
+        self._raw = False
         variables = []
         for var in driver.variables:
             variable = self._variable(obj, where, var)
@@ -186,7 +198,21 @@ class _Found:
         rest = self._rest(driver, kind, fcurve, entry)
         if rest is not None:
             entry["rest"] = rest
+        if self._raw:
+            entry["_raw"] = True
         return entry
+
+    # Transform Space and a Single Property read a bone's own channels, before its constraints;
+    # the app only sees where the constraints leave it.
+    def _reads_channels(self, obj, where, var, bone):
+        self._raw = True
+        pose = self.armature.pose.bones.get(bone.name)
+        if pose and any(c.enabled and c.influence > 0.0 for c in pose.constraints):
+            self.problem(
+                f"{where}: variable {var.name} reads {bone.name}'s own channels, which Blender "
+                "reads before its constraints and the app after them; use Local Space instead",
+                obj,
+            )
 
     def _unsupported(self, obj, where, var, why):
         self.problem(f"{where}: variable {var.name} {why}", obj)
@@ -215,6 +241,8 @@ class _Found:
                 return self._unsupported(obj, where, var, f"reads something other than a bone of {self.armature.name}")
             if space is None:
                 return self._unsupported(obj, where, var, f"reads {target.transform_space.replace('_', ' ').lower()}, which the app can't")
+            if target.transform_space == "TRANSFORM_SPACE":
+                self._reads_channels(obj, where, var, bone)
             return {
                 "name": var.name,
                 "type": "transform_channel",
@@ -231,6 +259,9 @@ class _Found:
                 return self._unsupported(obj, where, var, f"measures from something other than bones of {self.armature.name}")
             if None in spaces:
                 return self._unsupported(obj, where, var, "measures in a space the app can't")
+            for target, bone in zip(targets[:2], found):
+                if target.transform_space == "TRANSFORM_SPACE":
+                    self._reads_channels(obj, where, var, bone)
             return {
                 "name": var.name,
                 "type": "distance",
@@ -272,6 +303,7 @@ class _Found:
             "rotation_quaternion": "rot_" + "wxyz"[min(index, 3)],
         }[prop]
         rotation = "quaternion" if prop == "rotation_quaternion" else self._rotation(bone, "AUTO")
+        self._reads_channels(obj, where, var, bone)
         return {
             "name": var.name,
             "type": "transform_channel",
@@ -472,6 +504,11 @@ def _clamp(x, low=0.0, high=1.0):
     return max(low, min(high, x))
 
 
+# C's round, as simple expressions use: halves go away from zero, where Python's go to even.
+def _round(x):
+    return math.copysign(math.floor(abs(x) + 0.5), x)
+
+
 def _smoothstep(edge0, edge1, x):
     t = _clamp((x - edge0) / (edge1 - edge0))
     return t * t * (3.0 - 2.0 * t)
@@ -486,7 +523,7 @@ _FUNCTIONS = {
     "abs": abs,
     "min": min,
     "max": max,
-    "round": round,
+    "round": _round,
     "int": int,
     "clamp": _clamp,
     "lerp": lambda a, b, t: a + (b - a) * t,

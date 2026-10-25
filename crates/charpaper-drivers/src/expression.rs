@@ -99,7 +99,7 @@ impl Function {
             "floor" => (Floor, 1, 1),
             "ceil" => (Ceil, 1, 1),
             "trunc" | "int" => (Trunc, 1, 1),
-            "round" => (Round, 1, 2),
+            "round" => (Round, 1, 1),
             "abs" | "fabs" => (Abs, 1, 1),
             "fmod" => (Fmod, 2, 2),
             "radians" => (Radians, 1, 1),
@@ -135,11 +135,8 @@ impl Function {
             Floor => a[0].floor(),
             Ceil => a[0].ceil(),
             Trunc => a[0].trunc(),
-            Round if a.len() == 2 => {
-                let scale = 10f64.powf(a[1].trunc());
-                (a[0] * scale).round_ties_even() / scale
-            }
-            Round => a[0].round_ties_even(),
+            // C's round, which simple expressions call: halves go away from zero.
+            Round => a[0].round(),
             Abs => a[0].abs(),
             Fmod => a[0] % a[1],
             Radians => a[0].to_radians(),
@@ -563,7 +560,8 @@ mod tests {
         assert!(close(value("lerp(2, 4, 0.25)", &[], &[]), 2.5));
         assert!(close(value("smoothstep(0, 1, 0.5)", &[], &[]), 0.5));
         assert!(close(value("degrees(pi)", &[], &[]), 180.0));
-        assert!(close(value("round(2.5)", &[], &[]), 2.0));
+        assert!(close(value("round(2.5)", &[], &[]), 3.0));
+        assert!(close(value("round(-2.5)", &[], &[]), -3.0));
         assert!(close(value("int(-1.7)", &[], &[]), -1.0));
         assert!(close(value("min(3, a, 5)", &["a"], &[1.0]), 1.0));
         assert!(close(value("log(8, 2)", &[], &[]), 3.0));

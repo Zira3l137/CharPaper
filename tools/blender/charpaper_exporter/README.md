@@ -47,8 +47,10 @@ saved in the `.blend`.
   custom properties, context properties or `frame`. A driver may read a bone the export
   leaves out, such as an `MCH-reader` bone, as long as nothing between it and the nearest
   exported bone above it is animated or constrained; such a bone reads as still in local
-  space. Validation names every driver the app can't run, and the app's log says whether its
-  drivers match Blender in the rest pose.
+  space. Transform space and a bone's Single Property read the bone's own channels, which
+  Blender reads before its constraints and the app after them, so validation flags them on a
+  constrained bone. Validation names every driver the app can't run, and the app's log says
+  whether its drivers match Blender in the rest pose.
 - **Depth of field** comes from the camera's own *Depth of Field* panel: F-Stop, and either
   Focus Distance or a Focus Object. A focus object goes into the camera's file with the
   empties it hangs from, and its animation joins the camera's clip. Focusing on the

@@ -22,12 +22,16 @@ impl Driver {
         Ok(Self { kind: entry.kind, expression, curve: entry.curve.clone(), range: entry.range })
     }
 
-    /// The shape key's value for these variable values, in the entry's order. None when the
-    /// formula has no answer, such as a division by zero, which is an error in Blender too.
+    /// The shape key's value for these variable values, in the entry's order. None when it
+    /// isn't a number, as when a variable isn't one.
     pub fn evaluate(&self, variables: &[f32]) -> Option<f32> {
         let values = variables.iter().map(|&v| v as f64);
         let raw = match self.kind {
-            Kind::Scripted => self.expression.as_ref()?.evaluate(variables),
+            // Blender reads a formula with no answer, like a division by zero, as 0.
+            Kind::Scripted => {
+                let value = self.expression.as_ref()?.evaluate(variables);
+                if value.is_finite() { value } else { 0.0 }
+            }
             Kind::Sum => values.sum(),
             Kind::Average if variables.is_empty() => 0.0,
             Kind::Average => values.sum::<f64>() / variables.len() as f64,
@@ -92,9 +96,16 @@ mod tests {
     }
 
     #[test]
-    fn no_answer_leaves_it_unset() {
-        let driver = Driver::new(&entry(Kind::Scripted, "1 / v0", 1, None)).unwrap();
-        assert_eq!(driver.evaluate(&[0.0]), None);
+    fn no_answer_reads_as_zero() {
+        let curve = Curve {
+            from: 0.0,
+            to: 1.0,
+            values: vec![0.5, 1.0],
+            slope_before: 0.0,
+            slope_after: 0.0,
+        };
+        let driver = Driver::new(&entry(Kind::Scripted, "1 / v0", 1, Some(curve))).unwrap();
+        assert_eq!(driver.evaluate(&[0.0]), Some(0.5));
     }
 
     #[test]
