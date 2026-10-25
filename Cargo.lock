@@ -1924,6 +1924,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "charpaper-drivers"
+version = "0.2.6"
+dependencies = [
+ "glam",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "charpaper-monitor"
 version = "0.2.6"
 dependencies = [

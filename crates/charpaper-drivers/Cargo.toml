@@ -1,0 +1,10 @@
+[package]
+name = "charpaper-drivers"
+version.workspace = true
+edition.workspace = true
+
+# Bevy-free on purpose, so the evaluator is tested on its own.
+[dependencies]
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
