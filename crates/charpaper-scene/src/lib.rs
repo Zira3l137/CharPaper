@@ -1,6 +1,7 @@
 mod ambient_occlusion;
 mod animated;
 mod assets;
+mod bevy_fixes;
 mod camera;
 mod character;
 mod config;
@@ -93,6 +94,7 @@ impl Plugin for ScenePlugin {
                 camera::CameraPlugin,
                 environment::EnvironmentPlugin,
                 animated::AnimatedPlugin,
+                bevy_fixes::BevyFixesPlugin,
             ))
             .add_plugins((
                 fog::FogPlugin,
