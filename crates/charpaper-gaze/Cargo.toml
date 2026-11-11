@@ -1,0 +1,8 @@
+[package]
+name = "charpaper-gaze"
+version.workspace = true
+edition.workspace = true
+
+# Bevy-free on purpose, so the aiming is tested on its own.
+[dependencies]
+glam.workspace = true
