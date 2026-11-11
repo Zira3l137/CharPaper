@@ -36,6 +36,18 @@ pub struct StageSeeds(pub BTreeMap<StageId, StageSeed>);
 #[serde(default)]
 pub struct GazeSettings {
     pub follow_cursor: bool,
+    // How readily she turns for the cursor: 1 is as her author set her up.
+    pub strength: f32,
+}
+
+impl GazeSettings {
+    pub const WEAKEST: f32 = 0.25;
+    pub const STRONGEST: f32 = 2.0;
+
+    // Clamped, in case state.toml was edited by hand.
+    pub fn strength(&self) -> f32 {
+        self.strength.clamp(Self::WEAKEST, Self::STRONGEST)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -60,7 +72,7 @@ impl Default for ViewSettings {
 
 impl Default for GazeSettings {
     fn default() -> Self {
-        Self { follow_cursor: true }
+        Self { follow_cursor: true, strength: 1.0 }
     }
 }
 

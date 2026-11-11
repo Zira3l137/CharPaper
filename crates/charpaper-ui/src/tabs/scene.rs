@@ -12,9 +12,13 @@ use i18n_embed_fl::fl;
 use super::outfit;
 use crate::held;
 use crate::held::Loads;
+use crate::row::percent;
 use crate::row::*;
 use crate::section::Section;
 use crate::section::section;
+
+const GAZE_STRENGTH: Scale =
+    Scale { step: 0.25, min: GazeSettings::WEAKEST, max: GazeSettings::STRONGEST, per_unit: 100.0 };
 
 // What the focused stage shows, and from where: the suite and what the character wears and
 // does, the camera and the environment. Clicks write to its CharacterState.
@@ -110,7 +114,25 @@ fn gaze() -> impl Bundle {
                     w.edit(|gaze: &mut GazeSettings| flip(&mut gaze.follow_cursor, step));
                 },
             }
-            .segments()
+            .segments(),
+            // Does nothing while she doesn't follow.
+            Setting {
+                label: |l| fl!(l, "label-gaze-strength"),
+                help: |l| fl!(l, "help-gaze-strength"),
+                show: |w, _| {
+                    let gaze = w.focused::<GazeSettings>()?;
+                    let has_gaze = w.focused::<ActiveSuite>().is_some_and(|s| s.gaze.is_some());
+                    let strength = gaze.strength();
+                    let shown = GAZE_STRENGTH.number(percent(strength), strength);
+                    Some(shown.when(has_gaze && gaze.follow_cursor))
+                },
+                change: |w, step| {
+                    w.edit(|gaze: &mut GazeSettings| {
+                        gaze.strength = GAZE_STRENGTH.nudge(gaze.strength(), step);
+                    });
+                },
+            }
+            .stepper()
         ],
     )
 }

@@ -418,7 +418,7 @@ fn aim_stage(
     if let Some((at, (camera, camera_global))) = seen {
         let eyes = armature_global.transform_point(eyes_at(rig, armature, bones));
         let at = at * graphics.scale_percent() as f32 / 100.0;
-        if let Some(direction) = look_from(camera, camera_global, at, eyes) {
+        if let Some(direction) = look_from(camera, camera_global, at, eyes, settings.strength()) {
             let to_armature = armature_global.affine().inverse();
             rig.direction = Some(to_armature.transform_vector3(direction).normalize_or(Vec3::Z));
         }
@@ -524,6 +524,7 @@ fn look_from(
     camera_global: &GlobalTransform,
     at: Vec2,
     eyes: Vec3,
+    strength: f32,
 ) -> Option<Vec3> {
     let eyes_at = camera.world_to_viewport(camera_global, eyes).ok()?;
     let half_height = camera.logical_viewport_size()?.y / 2.0;
@@ -534,7 +535,7 @@ fn look_from(
         View { toward: -*sight.direction, right: *camera_global.right(), up: *camera_global.up() };
     // The picture's y runs down.
     let offset = (at - eyes_at) / half_height * Vec2::new(1.0, -1.0);
-    Some(charpaper_gaze::look_direction(&view, offset, 1.0))
+    Some(charpaper_gaze::look_direction(&view, offset, strength))
 }
 
 // Where her eyes are in the armature's space: between the eye bones, or without any, at the
