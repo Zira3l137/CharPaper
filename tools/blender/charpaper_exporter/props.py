@@ -11,6 +11,7 @@ from bpy.props import StringProperty
 from bpy.types import PropertyGroup
 
 from . import anim
+from . import gaze as gaze_preview
 
 ORBIT = "orbit"
 
@@ -22,9 +23,26 @@ def suite_of(context):
 # Gaze needs her front as she stands in her rest pose, which a clip may turn her away from, so
 # while the arrow shows, so does her rest pose.
 def _show_front_changed(gaze, context):
+    if gaze.show_front and gaze.preview:
+        gaze.preview = False
     armature = context.scene.charpaper.armature
     if armature is not None and armature.type == "ARMATURE":
         armature.data.pose_position = "REST" if gaze.show_front else "POSE"
+    redraw_views()
+
+
+# The preview shows what the fields say, so it follows every change to them.
+def _gaze_changed(self, context):
+    if context.scene.charpaper.gaze.preview:
+        gaze_preview.refresh(context)
+    redraw_views()
+
+
+# The arrow shows her rest pose, where a preview would not be seen.
+def _preview_changed(gaze, context):
+    if gaze.preview and gaze.show_front:
+        gaze.show_front = False
+    gaze_preview.refresh(context)
     redraw_views()
 
 
@@ -161,7 +179,7 @@ class CHARPAPER_PG_camera(PropertyGroup):
 
 
 class CHARPAPER_PG_bone(PropertyGroup):
-    bone: StringProperty(name="Bone", search=_bone_search)
+    bone: StringProperty(name="Bone", search=_bone_search, update=_gaze_changed)
 
 
 class CHARPAPER_PG_gaze(PropertyGroup):
@@ -175,20 +193,77 @@ class CHARPAPER_PG_gaze(PropertyGroup):
         default="KEEP",
     )
     eyes: CollectionProperty(type=CHARPAPER_PG_bone)
-    head: StringProperty(name="Head", search=_bone_search)
-    neck: StringProperty(name="Neck", search=_bone_search)
-    eye_yaw: FloatProperty(name="Eye yaw", default=30.0, min=0.0, max=180.0)
-    eye_pitch: FloatProperty(name="Eye pitch", default=20.0, min=0.0, max=90.0)
-    head_yaw: FloatProperty(name="Head yaw", default=50.0, min=0.0, max=180.0)
-    head_pitch: FloatProperty(name="Head pitch", default=25.0, min=0.0, max=90.0)
-    neck_yaw: FloatProperty(name="Neck yaw", default=25.0, min=0.0, max=180.0)
-    neck_pitch: FloatProperty(name="Neck pitch", default=15.0, min=0.0, max=90.0)
-    head_share: FloatProperty(name="Head share", default=0.7, min=0.0, max=1.0, subtype="FACTOR")
+    eye_kind: EnumProperty(
+        name="Eyes are",
+        description="What the eye bones turn. Detect bones sets it from the eyes' shape",
+        items=(
+            ("BALL", "Eyeballs", "Round balls that turn in their sockets. They are aimed exactly"),
+            (
+                "DRAWN",
+                "Drawn",
+                "Anything else, like irises that slide over a flat eye. Aimed, they would shoot "
+                "past, so they move in proportion to how far aside she looks",
+            ),
+        ),
+        default="BALL",
+        update=_gaze_changed,
+    )
+    head: StringProperty(name="Head", search=_bone_search, update=_gaze_changed)
+    neck: StringProperty(name="Neck", search=_bone_search, update=_gaze_changed)
+    eye_yaw: FloatProperty(
+        name="Eye yaw",
+        description="How far the eye bones turn sideways",
+        default=30.0, min=0.0, max=180.0, update=_gaze_changed,
+    )
+    eye_pitch: FloatProperty(
+        name="Eye pitch",
+        description="How far the eye bones turn up or down",
+        default=20.0, min=0.0, max=90.0, update=_gaze_changed,
+    )
+    head_yaw: FloatProperty(
+        name="Head yaw",
+        description=(
+            "How far the head itself turns sideways. With the neck's, it is how far the head may "
+            "point from the bone above the neck, whether a clip or gaze turned it there"
+        ),
+        default=50.0, min=0.0, max=180.0, update=_gaze_changed,
+    )
+    head_pitch: FloatProperty(
+        name="Head pitch",
+        description="How far the head itself turns up or down",
+        default=25.0, min=0.0, max=90.0, update=_gaze_changed,
+    )
+    neck_yaw: FloatProperty(
+        name="Neck yaw",
+        description="How far the neck turns sideways",
+        default=25.0, min=0.0, max=180.0, update=_gaze_changed,
+    )
+    neck_pitch: FloatProperty(
+        name="Neck pitch",
+        description="How far the neck turns up or down",
+        default=15.0, min=0.0, max=90.0, update=_gaze_changed,
+    )
+    head_share: FloatProperty(
+        name="Head share",
+        description="The head's share of a turn. The neck takes the rest, up to its limit",
+        default=0.7, min=0.0, max=1.0, subtype="FACTOR", update=_gaze_changed,
+    )
+    head_turn: FloatProperty(
+        name="Head turn",
+        description=(
+            "How much of the way to the cursor the head and neck go; the eyes cover the rest. "
+            "At 0 the head only moves for what the eyes can't reach, at 1 it points straight there"
+        ),
+        default=0.6, min=0.0, max=1.0, subtype="FACTOR", update=_gaze_changed,
+    )
     front: EnumProperty(
         name="Front",
-        description="Which of the armature's axes her face points along. Set it with She faces me",
+        description=(
+            "Which way her face points in her rest pose. Automatic works it out from where her "
+            "eye bones sit; pick one of the armature's axes only if the arrow points wrong"
+        ),
         items=(
-            ("NONE", "Not set", "She's taken to face Blender's front view, -Y"),
+            ("NONE", "Automatic", "Worked out from her eye and head bones, as the app does"),
             ("NEG_Y", "-Y", ""),
             ("POS_Y", "+Y", ""),
             ("NEG_X", "-X", ""),
@@ -197,7 +272,7 @@ class CHARPAPER_PG_gaze(PropertyGroup):
             ("POS_Z", "+Z", ""),
         ),
         default="NONE",
-        update=lambda self, context: redraw_views(),
+        update=_gaze_changed,
     )
     show_front: BoolProperty(
         name="Show front",
@@ -205,10 +280,29 @@ class CHARPAPER_PG_gaze(PropertyGroup):
         default=False,
         update=_show_front_changed,
     )
-    key_left: StringProperty(name="Left", search=_search(shape_key_names))
-    key_right: StringProperty(name="Right", search=_search(shape_key_names))
-    key_up: StringProperty(name="Up", search=_search(shape_key_names))
-    key_down: StringProperty(name="Down", search=_search(shape_key_names))
+    key_left: StringProperty(name="Left", search=_search(shape_key_names), update=_gaze_changed)
+    key_right: StringProperty(name="Right", search=_search(shape_key_names), update=_gaze_changed)
+    key_up: StringProperty(name="Up", search=_search(shape_key_names), update=_gaze_changed)
+    key_down: StringProperty(name="Down", search=_search(shape_key_names), update=_gaze_changed)
+    preview: BoolProperty(
+        name="Preview",
+        description=(
+            "Pose her as the app would for the look below, to set the limits by eye. Her own "
+            "pose is put back when this is turned off, on a frame change and before saving"
+        ),
+        default=False,
+        update=_preview_changed,
+    )
+    look_side: FloatProperty(
+        name="Sideways",
+        description="-1 is as far to her right as she can look, 1 as far to her left",
+        default=0.0, min=-1.0, max=1.0, update=_gaze_changed,
+    )
+    look_up: FloatProperty(
+        name="Up",
+        description="-1 is as far down as she can look, 1 as far up",
+        default=0.0, min=-1.0, max=1.0, update=_gaze_changed,
+    )
 
 
 class CHARPAPER_PG_gltf(PropertyGroup):

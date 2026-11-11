@@ -1,11 +1,9 @@
-# Which way her face points, for gaze. The app can't tell from the rig, so the author shows it:
-# look her in the face in the viewport and click "She faces me". It is kept as one of the
+# Which way her face points in her rest pose, for gaze, which turns from there. It is worked
+# out from where her eye bones sit, as the app does it, and an arrow from her head shows the
+# result on her rest pose. Where that is wrong, or she has no eye bones, the author shows it:
+# look her in the face in the viewport and click "She faces me". That is kept as one of the
 # armature's own axes, so turning the armature, or the whole scene, afterwards keeps it right,
-# and export writes it into suite.toml in world axes, as the model is exported. An arrow from
-# her head shows it in the viewport.
-#
-# It is her front in her rest pose, which is what the app's gaze turns from; a clip may turn her
-# around entirely. So the arrow shows on her rest pose, and the button only works there.
+# and only then does export write it into suite.toml, in world axes, as the model is exported.
 
 import bpy
 import gpu
@@ -13,22 +11,14 @@ from bpy.types import Operator
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
 
+from . import gaze as gaze_bones
+from .gaze import AXES
 from .props import redraw_views
 from .props import suite_of
 
-AXES = {
-    "POS_X": Vector((1, 0, 0)),
-    "NEG_X": Vector((-1, 0, 0)),
-    "POS_Y": Vector((0, 1, 0)),
-    "NEG_Y": Vector((0, -1, 0)),
-    "POS_Z": Vector((0, 0, 1)),
-    "NEG_Z": Vector((0, 0, -1)),
-}
-# What the app takes her to face without one: Blender's front view looks along +Y.
-DEFAULT = Vector((0, -1, 0))
-
-SET_COLOR = (0.3, 0.9, 0.4, 1.0)
-UNSET_COLOR = (1.0, 0.55, 0.1, 1.0)
+# Green for a front she is known to have, orange for the guess made when nothing says.
+KNOWN_COLOR = (0.3, 0.9, 0.4, 1.0)
+GUESSED_COLOR = (1.0, 0.55, 0.1, 1.0)
 
 _handle = None
 
@@ -38,7 +28,7 @@ def _rotation(armature):
 
 
 def world_front(armature, axis):
-    """The front in world axes, or None while it isn't set."""
+    """A front picked by hand, in world axes. None while it is left to be worked out."""
     if axis not in AXES:
         return None
     return (_rotation(armature) @ AXES[axis]).normalized()
@@ -60,30 +50,15 @@ def _head(suite, armature):
     return armature.matrix_world.translation
 
 
-def rest_ahead(suite, armature):
-    """Which way, in the armature's axes, her eyes sit from her head in the rest pose, level
-    with the ground; None when the bones don't say."""
-    gaze = suite.gaze
-    bones = armature.data.bones
-    eyes = [bones[e.bone].head_local for e in gaze.eyes if e.bone in bones]
-    pivot = next((bones[n] for n in (gaze.head, gaze.neck) if n in bones), None)
-    if not eyes or pivot is None:
-        return None
-    ahead = sum(eyes, Vector()) / len(eyes) - pivot.head_local
-    up = _rotation(armature).inverted() @ Vector((0, 0, 1))
-    ahead -= up * ahead.dot(up)
-    return ahead.normalized() if ahead.length > 1e-5 else None
-
-
 def _draw():
     context = bpy.context
     suite = getattr(context.scene, "charpaper", None)
     if suite is None or not suite.gaze.show_front or suite.armature is None:
         return
     armature = suite.armature
-    front = world_front(armature, suite.gaze.front)
-    color = SET_COLOR if front is not None else UNSET_COLOR
-    front = front if front is not None else DEFAULT
+    local, source = gaze_bones.front(suite.gaze, armature)
+    color = GUESSED_COLOR if source == "default" else KNOWN_COLOR
+    front = (_rotation(armature) @ local).normalized()
     start = _head(suite, armature)
     length = max(armature.dimensions.z, 1.0) * 0.3
     end = start + front * length
@@ -110,8 +85,8 @@ class CHARPAPER_OT_gaze_front_from_view(Operator):
     bl_idname = "charpaper.gaze_front_from_view"
     bl_label = "She faces me"
     bl_description = (
-        "Look her in the face in this viewport, then click: the way you look at her becomes her "
-        "front, rounded to the nearest of the armature's axes"
+        "For when the arrow points wrong. Look her in the face in this viewport, then click: the "
+        "way you look at her becomes her front, rounded to the nearest of the armature's axes"
     )
     bl_options = {"REGISTER", "UNDO"}
 

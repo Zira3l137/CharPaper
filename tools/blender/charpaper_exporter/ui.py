@@ -240,6 +240,8 @@ class CHARPAPER_PT_gaze(_Sidebar, Panel):
         layout.prop(gaze, "mode", expand=True)
         if gaze.mode != "WRITE":
             return
+        layout.operator("charpaper.gaze_detect", icon="VIEWZOOM")
+
         col = layout.column(align=True)
         col.label(text="Eyes", icon="HIDE_OFF")
         for i, eye in enumerate(gaze.eyes):
@@ -247,6 +249,9 @@ class CHARPAPER_PT_gaze(_Sidebar, Panel):
             row.prop(eye, "bone", text="")
             row.operator("charpaper.eye_remove", text="", icon="X").index = i
         col.operator("charpaper.eye_add", text="Add eye", icon="ADD")
+        row = layout.row()
+        row.active = any(eye.bone for eye in gaze.eyes)
+        row.prop(gaze, "eye_kind", expand=True)
 
         col = layout.column()
         col.use_property_split = True
@@ -255,26 +260,35 @@ class CHARPAPER_PT_gaze(_Sidebar, Panel):
         col.prop(gaze, "neck")
 
         col = layout.column(align=True)
-        col.label(text="Front, in her rest pose: look her in the face", icon="ORIENTATION_VIEW")
-        row = col.row(align=True)
-        row.operator("charpaper.gaze_front_from_view", icon="HIDE_OFF")
-        row.prop(gaze, "front", text="")
-        row.prop(gaze, "show_front", text="", icon="EMPTY_SINGLE_ARROW")
-
-        grid = layout.grid_flow(columns=2, even_columns=True, align=True)
-        for part in ("eye", "head", "neck"):
-            grid.prop(gaze, part + "_yaw", text=f"{part.title()} yaw °")
-            grid.prop(gaze, part + "_pitch", text=f"{part.title()} pitch °")
-        row = layout.row()
-        row.active = bool(gaze.head and gaze.neck)
-        row.prop(gaze, "head_share")
-
-        col = layout.column(align=True)
         col.label(text="Shape keys that follow the eyes", icon="SHAPEKEY_DATA")
         col.use_property_split = True
         col.use_property_decorate = False
         for side in ("left", "right", "up", "down"):
             col.prop(gaze, "key_" + side)
+
+        box = layout.box()
+        box.prop(gaze, "preview", toggle=True, icon="HIDE_OFF")
+        col = box.column(align=True)
+        col.active = gaze.preview
+        col.prop(gaze, "look_side", slider=True)
+        col.prop(gaze, "look_up", slider=True)
+
+        grid = layout.grid_flow(columns=2, even_columns=True, align=True)
+        for part in ("eye", "head", "neck"):
+            grid.prop(gaze, part + "_yaw", text=f"{part.title()} yaw °")
+            grid.prop(gaze, part + "_pitch", text=f"{part.title()} pitch °")
+        col = layout.column(align=True)
+        col.prop(gaze, "head_turn")
+        row = col.row(align=True)
+        row.active = bool(gaze.head and gaze.neck)
+        row.prop(gaze, "head_share")
+
+        col = layout.column(align=True)
+        col.label(text="Front, in her rest pose", icon="ORIENTATION_VIEW")
+        row = col.row(align=True)
+        row.prop(gaze, "front", text="")
+        row.prop(gaze, "show_front", text="", icon="EMPTY_SINGLE_ARROW")
+        row.operator("charpaper.gaze_front_from_view", text="", icon="HIDE_OFF")
 
 
 class CHARPAPER_PT_gltf(_Sidebar, Panel):

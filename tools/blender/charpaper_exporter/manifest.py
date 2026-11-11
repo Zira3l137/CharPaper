@@ -7,6 +7,7 @@ from mathutils import Vector
 
 from . import env_settings
 from . import front
+from . import gaze as gaze_bones
 from . import toml_io
 from .props import file_stem
 
@@ -33,7 +34,12 @@ def _set_or_keep(table, key, value):
 
 
 def gaze_table(gaze, armature):
-    table = {"eyes": [e.bone for e in gaze.eyes if e.bone]}
+    table = {}
+    eyes = [e.bone for e in gaze.eyes if e.bone]
+    if eyes:
+        table["eyes"] = eyes
+        if gaze.eye_kind == "DRAWN":
+            table["eye_kind"] = "drawn"
     if gaze.head:
         table["head"] = gaze.head
     if gaze.neck:
@@ -49,15 +55,14 @@ def gaze_table(gaze, armature):
         table[key] = float(getattr(gaze, attr))
     if gaze.head and gaze.neck:
         table["head_share"] = float(gaze.head_share)
-    # As the model is exported: the armature turned as it stands in the scene.
+    keys = gaze_bones.eye_keys(gaze)
+    if eyes or keys:
+        table["head_turn"] = float(gaze.head_turn)
+    # Only a front picked by hand is written; left out, the app works it out as the panel
+    # does. As the model is exported: the armature turned as it stands in the scene.
     facing = front.world_front(armature, gaze.front) if armature else None
     if facing is not None:
         table["front"] = [round(v, 4) + 0.0 for v in facing]
-    keys = {
-        side: getattr(gaze, "key_" + side)
-        for side in ("left", "right", "up", "down")
-        if getattr(gaze, "key_" + side)
-    }
     if keys:
         table["shape_keys"] = keys
     return table
@@ -204,6 +209,8 @@ def load_into(suite, data):
         g.neck_yaw = gaze.get("neck_yaw_deg", 25.0)
         g.neck_pitch = gaze.get("neck_pitch_deg", 15.0)
         g.head_share = gaze.get("head_share", 0.7)
+        g.head_turn = gaze.get("head_turn", 0.6)
+        g.eye_kind = "DRAWN" if gaze.get("eye_kind") == "drawn" else "BALL"
         facing = gaze.get("front")
         if facing is not None and suite.armature is not None and len(facing) == 3:
             g.front = front.nearest_axis(suite.armature, Vector(facing))

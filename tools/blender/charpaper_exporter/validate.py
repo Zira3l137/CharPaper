@@ -10,6 +10,7 @@ from . import cues
 from . import drivers
 from . import env_settings
 from . import front
+from . import gaze as gaze_bones
 from . import gltf
 from . import lens
 from . import manifest
@@ -103,8 +104,13 @@ def _check_gaze(suite, armature, add):
     gaze = suite.gaze
     bones = armature.data.bones
     eyes = [e.bone for e in gaze.eyes if e.bone]
-    if not eyes:
-        add(Finding("gaze lists no eye bones, so she never follows the cursor", armature))
+    keys = gaze_bones.eye_keys(gaze)
+    if not (eyes or keys or gaze.head or gaze.neck):
+        add(Finding(
+            "gaze names no bones and no shape keys, so she never follows the cursor; "
+            "try Detect bones",
+            armature,
+        ))
     for name in eyes + [gaze.head, gaze.neck]:
         if name and name not in bones:
             add(Finding(f"gaze: {name!r} is not a bone of {armature.name}; gaze will be off", armature))
@@ -120,45 +126,46 @@ def _check_gaze(suite, armature, add):
 
     for eye in eyes:
         if eye in bones:
-            _check_eye_pivot(suite, armature, bones[eye], add)
+            _check_eye(suite, armature, bones[eye], add)
+    _check_gaze_front(gaze, armature, add)
+    _check_gaze_clips(suite, set(eyes), add)
 
+    on_skins = set()
+    for skin in suite.skins:
+        if skin.collection:
+            for obj in skin.collection.all_objects:
+                if obj.type == "MESH" and obj.data.shape_keys:
+                    on_skins.update(obj.data.shape_keys.key_blocks.keys())
+    for key in keys.values():
+        if key not in on_skins:
+            add(Finding(f"gaze: no skin has a shape key named {key!r}, so it never moves"))
+
+
+def _check_gaze_front(gaze, armature, add):
+    worked_out = gaze_bones.worked_out_front(gaze, armature)
     facing = front.world_front(armature, gaze.front)
     if facing is None:
-        add(Finding(
-            "gaze: her front isn't set, so she's taken to face -Y; look her in the face in the "
-            "viewport and click She faces me",
-            armature,
-        ))
+        if worked_out is None:
+            add(Finding(
+                "gaze: her bones don't say which way she faces, so she's taken to face -Y. If she "
+                "faces another way, turn on the arrow, look her in the face and click She faces me",
+                armature,
+                severity="INFO",
+            ))
     elif abs(facing.z) > 0.7:
         add(Finding(
             "gaze: her front points up or down; she has to stand upright for gaze to turn her",
             armature,
         ))
-    else:
-        ahead = front.rest_ahead(suite, armature)
-        if ahead is not None and ahead.dot(front.AXES[gaze.front]) < 0.0:
-            add(Finding(
-                "gaze: Front points to the back of her head in her rest pose, so she'll turn away "
-                "from the cursor. Turn on the arrow to see her rest pose and click She faces me again",
-                armature,
-            ))
-    _check_gaze_clips(suite, set(eyes), add)
-    _check_gaze_lenses(suite, add)
-
-    keys = set()
-    for skin in suite.skins:
-        if skin.collection:
-            for obj in skin.collection.all_objects:
-                if obj.type == "MESH" and obj.data.shape_keys:
-                    keys.update(obj.data.shape_keys.key_blocks.keys())
-    for side in ("left", "right", "up", "down"):
-        key = getattr(gaze, "key_" + side)
-        if key and key not in keys:
-            add(Finding(f"gaze: no skin has a shape key named {key!r}, so it never moves"))
+    elif worked_out is not None and worked_out.dot(gaze_bones.AXES[gaze.front]) < 0.0:
+        add(Finding(
+            "gaze: Front points to the back of her head, going by her eye bones, so she'll turn "
+            "away from the cursor. Set Front back to Automatic",
+            armature,
+        ))
 
 
-# Gaze turns the eyes on top of what a clip does with them, from where it has them point, so a
-# clip that has her look aside leaves little of the eyes' reach towards the cursor.
+# While gaze is on it sets the eye bones itself, so what a clip keys on them doesn't show.
 def _check_gaze_clips(suite, eyes, add):
     for entry in suite.animations:
         if not entry.enabled:
@@ -174,69 +181,41 @@ def _check_gaze_clips(suite, eyes, add):
             }
             if moved:
                 add(Finding(
-                    f"gaze: clip {clip.name or clip.action.name!r} turns {_examples(moved)}; with "
-                    "gaze on, the eyes start from where it points them. Remove those keys, or "
-                    "untick the clip's Gaze",
+                    f"gaze: clip {clip.name or clip.action.name!r} keys {_examples(moved)}, which "
+                    "gaze sets itself while she follows the cursor; untick the clip's Gaze for "
+                    "its own eye movement to show",
                     suite.armature,
+                    severity="INFO",
                 ))
 
 
-# Gaze looks halfway along the line from the camera to the cursor, so a long lens, which sees
-# a narrow slice of the scene, leaves her little to turn for.
-def _check_gaze_lenses(suite, add):
-    for entry in suite.cameras:
-        camera = entry.camera
-        if not entry.enabled or camera is None or camera.data.type != "PERSP":
-            continue
-        width = camera.data.sensor_width or 36.0
-        equivalent = camera.data.lens * 36.0 / width
-        if equivalent >= 85.0:
+def _check_eye(suite, armature, bone, add):
+    fit = gaze_bones.eyeball(suite, armature, bone)
+    if fit is None:
+        return
+    ball = gaze_bones.is_ball(fit)
+    if suite.gaze.eye_kind == "DRAWN":
+        if ball:
             add(Finding(
-                f"camera {entry.name!r}: a {equivalent:.0f} mm lens shows little of the scene, "
-                "so she follows the cursor only a little through it",
-                camera,
+                f"gaze: {bone.name} turns a round eyeball, which Eyeballs would aim exactly; "
+                "Drawn only moves it in proportion",
+                armature,
+                bone.name,
                 severity="INFO",
             ))
-
-
-def _check_eye_pivot(suite, armature, bone, add):
-    import numpy
-
-    points = []
-    to_armature = armature.matrix_world.inverted()
-    for skin in suite.skins:
-        if skin.collection is None:
-            continue
-        for obj in skin.collection.all_objects:
-            if obj.type != "MESH" or not _deformed_by(obj, armature):
-                continue
-            group = obj.vertex_groups.get(bone.name)
-            if group is None:
-                continue
-            matrix = to_armature @ obj.matrix_world
-            index = group.index
-            for vertex in obj.data.vertices:
-                for g in vertex.groups:
-                    if g.group == index and g.weight >= 0.5:
-                        points.append(matrix @ vertex.co)
-                        break
-    if len(points) < 8:
         return
-    # Fits a sphere, so a half-shell or an iris cap still finds the eyeball's center.
-    p = numpy.array([tuple(v) for v in points])
-    a = numpy.column_stack((2 * p, numpy.ones(len(p))))
-    b = (p * p).sum(axis=1)
-    solution = numpy.linalg.lstsq(a, b, rcond=None)[0]
-    center = solution[:3]
-    radius_sq = solution[3] + center.dot(center)
-    if radius_sq <= 0:
-        return
-    radius = radius_sq ** 0.5
-    offset = numpy.linalg.norm(center - numpy.array(tuple(bone.head_local)))
-    if offset > max(0.0005, radius * 0.05):
+    round_enough = fit["stray"] <= gaze_bones.BALL_STRAY and fit["covers"] >= gaze_bones.BALL_COVERS
+    if round_enough and fit["offset"] > max(0.0005, fit["radius"] * 0.05):
         add(Finding(
-            f"gaze: {bone.name}'s head is {offset * 1000:.1f} mm from its eyeball's center; "
+            f"gaze: {bone.name}'s head is {fit['offset'] * 1000:.1f} mm from its eyeball's center; "
             "the eye will swing instead of spin",
+            armature,
+            bone.name,
+        ))
+    elif not round_enough:
+        add(Finding(
+            f"gaze: {bone.name}'s eye is no ball turning about the bone, so aiming it will shoot "
+            "past; set Eyes are to Drawn",
             armature,
             bone.name,
         ))

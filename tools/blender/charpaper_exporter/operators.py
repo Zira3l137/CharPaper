@@ -11,6 +11,7 @@ from . import anim
 from . import cues
 from . import env_settings
 from . import exporters
+from . import gaze
 from . import gltf
 from . import lens
 from . import manifest
@@ -182,6 +183,8 @@ class CHARPAPER_OT_eye_remove(Operator):
 
     def execute(self, context):
         suite_of(context).gaze.eyes.remove(self.index)
+        if suite_of(context).gaze.preview:
+            gaze.refresh(context)
         return {"FINISHED"}
 
 
@@ -245,6 +248,8 @@ class CHARPAPER_OT_export(Operator):
             return {"CANCELLED"}
         folder = os.path.normpath(bpy.path.abspath(suite.folder))
         os.makedirs(folder, exist_ok=True)
+        # A previewed look is not her pose, and must not be exported or validated as it.
+        gaze.stop(context)
 
         findings = validate.check(context, suite)
         _store(suite, findings)
