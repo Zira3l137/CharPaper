@@ -3,6 +3,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use charpaper_suite::ClipSet;
+use charpaper_suite::EyeKind;
 use charpaper_suite::Suite;
 use charpaper_suite::SuiteError;
 
@@ -524,6 +525,25 @@ up = "brows_up"
     let keys = charpaper_suite::mesh_shape_keys(&fixture.0.join("skins/casual.gltf")).unwrap();
     assert_eq!(keys[0].node, "Face");
     assert_eq!(keys[0].keys, ["mouth_corner_up", "brows_up"]);
+}
+
+#[test]
+fn gaze_needs_no_eye_bones() {
+    let manifest = "schema = 1\n[gaze]\nhead = \"Head\"\n[gaze.shape_keys]\nleft = \"look_l\"";
+    let gaze = Fixture::new("gaze-no-eyes", manifest).load().unwrap().gaze.unwrap();
+    assert!(gaze.eyes.is_empty());
+    assert_eq!(gaze.bones().collect::<Vec<_>>(), ["Head"]);
+    assert_eq!(gaze.head_turn(), 0.6);
+}
+
+#[test]
+fn eyes_are_eyeballs_unless_said_otherwise() {
+    let manifest = |kind: &str| format!("schema = 1\n[gaze]\neyes = [\"Head\"]\n{kind}");
+    let load = |name: &str, kind: &str| Fixture::new(name, &manifest(kind)).load();
+    assert_eq!(load("gaze-ball", "").unwrap().gaze.unwrap().eye_kind, EyeKind::Ball);
+    let drawn = load("gaze-drawn", "eye_kind = \"drawn\"").unwrap().gaze.unwrap();
+    assert_eq!(drawn.eye_kind, EyeKind::Drawn);
+    assert!(load("gaze-other", "eye_kind = \"glass\"").is_err());
 }
 
 #[test]

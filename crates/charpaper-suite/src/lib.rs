@@ -44,6 +44,7 @@ pub use manifest::Camera;
 pub use manifest::CameraEntry;
 pub use manifest::Cue;
 pub use manifest::EnvironmentEntry;
+pub use manifest::EyeKind;
 pub use manifest::Fog;
 pub use manifest::Gaze;
 pub use manifest::GazeShapeKeys;

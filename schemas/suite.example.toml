@@ -80,6 +80,7 @@ sensor_height_mm = 20.25
 eyes = ["Eye.L", "Eye.R"]
 head = "Head"
 neck = "Neck"
+head_turn = 0.6
 eye_yaw_deg = 30.0
 eye_pitch_deg = 20.0
 

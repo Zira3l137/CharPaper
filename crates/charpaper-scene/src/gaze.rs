@@ -11,6 +11,7 @@ use charpaper_gaze::Spring;
 use charpaper_gaze::View;
 use charpaper_settings::GazeSettings;
 use charpaper_settings::Graphics;
+use charpaper_suite::EyeKind;
 
 use crate::SceneSet;
 use crate::camera::SceneCamera;
@@ -70,10 +71,9 @@ const IDLE_SECS: f32 = 5.0;
 // once and wait there for the head, as eyes do.
 const HEAD_SECS: f32 = 0.5;
 const EYE_SECS: f32 = 0.06;
-// How much of the way to the cursor the head and neck go; the eyes cover the rest.
-const HEAD_TURN: f32 = 0.6;
-// Eyes moved by shape keys alone are at their fullest for a target this far aside.
-const KEYS_REACH_DEG: [f32; 2] = [35.0, 25.0];
+// Eyes that are no eyeballs, or are moved by shape keys alone, are at their fullest for a
+// target this far aside.
+const DRAWN_REACH_DEG: [f32; 2] = [35.0, 25.0];
 
 struct Bone {
     entity: Entity,
@@ -199,12 +199,13 @@ fn build_rig(
         (neck, None) => (None, neck, neck_limit, Vec2::ZERO),
     };
     let eye_limit = radians(gaze.eye_limits_deg());
-    let eyes_setup = if !eyes.is_empty() {
-        Some(Eyes { limit: eye_limit, reach: eye_limit })
-    } else if eye_keys {
-        Some(Eyes { limit: Vec2::ZERO, reach: radians(KEYS_REACH_DEG) })
-    } else {
-        None
+    let drawn_reach = radians(DRAWN_REACH_DEG);
+    let eyes_setup = match gaze.eye_kind {
+        _ if eyes.is_empty() && !eye_keys => None,
+        _ if eyes.is_empty() => Some(Eyes { limit: Vec2::ZERO, reach: drawn_reach }),
+        EyeKind::Ball => Some(Eyes { limit: eye_limit, reach: eye_limit }),
+        // Never less than the limit: the bone would turn further than she looks.
+        EyeKind::Drawn => Some(Eyes { limit: eye_limit, reach: drawn_reach.max(eye_limit) }),
     };
 
     let eyes_at: Vec<Vec3> = eyes.iter().map(|&eye| rest(eye).translation).collect();
@@ -234,7 +235,7 @@ fn build_rig(
         turn_limit,
         neck_limit,
         head_share: gaze.head_share(),
-        head_turn: HEAD_TURN,
+        head_turn: gaze.head_turn(),
         eyes: eyes_setup,
     };
     rig.chest = neck.or(head).and_then(above);

@@ -319,6 +319,21 @@
       },
       "additionalProperties": false
     },
+    "EyeKind": {
+      "description": "What the eye bones turn. Defaults to `ball`.",
+      "oneOf": [
+        {
+          "description": "A round eyeball in its socket. It is aimed exactly, up to its limits.",
+          "type": "string",
+          "const": "ball"
+        },
+        {
+          "description": "Anything else, like an iris that slides over a flat eye. Aimed, such\na bone would shoot past, so it turns in proportion to how far aside\nshe looks instead, reaching its limits for a look about 35° aside.",
+          "type": "string",
+          "const": "drawn"
+        }
+      ]
+    },
     "Fog": {
       "description": "A box of fog, set up like Blender's Principled Volume. Colors are linear,\nas the node shows them.",
       "type": "object",
@@ -369,11 +384,14 @@
       "additionalProperties": false
     },
     "Gaze": {
-      "description": "Looking towards the mouse cursor. The eyes turn first; the head and neck\ntake over what the eyes cannot reach. Every turn is added on top of the\nanimation playing, and angles are measured from where it has her look.",
+      "description": "Looking towards the mouse cursor. Where she looks comes from where the\ncursor is on screen: on her eyes she looks at the viewer, and the further\nfrom them it is, the further aside she looks. Her head and neck go part\nof the way and her eyes cover the rest. The head's angles are measured\nfrom the bone above the neck, with the animation's own turn counted in,\nand the eyes' from the head. A cursor she can't turn to she lets go of.",
       "type": "object",
       "properties": {
+        "eye_kind": {
+          "$ref": "#/$defs/EyeKind"
+        },
         "eye_pitch_deg": {
-          "description": "How far the eyes turn up or down, in degrees. Defaults to 20.",
+          "description": "How far the eye bones turn up or down, in degrees. Defaults to 20.",
           "type": [
             "number",
             "null"
@@ -381,7 +399,7 @@
           "format": "float"
         },
         "eye_yaw_deg": {
-          "description": "How far the eyes turn sideways, in degrees. Defaults to 30.",
+          "description": "How far the eye bones turn sideways, in degrees. Defaults to 30.",
           "type": [
             "number",
             "null"
@@ -389,14 +407,15 @@
           "format": "float"
         },
         "eyes": {
-          "description": "The eye bones, usually two.",
+          "description": "The eye bones, usually two. Gaze sets them outright while it is on,\nso an animation's own keys on them only show in a clip with\n`gaze = false`. May be left out: eyes can follow by `shape_keys`\nalone, and a head can follow without eyes.",
           "type": "array",
+          "default": [],
           "items": {
             "type": "string"
           }
         },
         "front": {
-          "description": "Which way her face points while she stands in her rest pose, in\nBlender's world axes as exported: `[0, -1, 0]` faces Blender's front\nview, which is also what she's taken to face without it. The exporter's\n\"She faces me\" button sets it. Only its horizontal part counts.",
+          "description": "Which way her face points while she stands in her rest pose, in\nBlender's world axes as exported: `[0, -1, 0]` faces Blender's front\nview. Rarely needed: it is worked out from where the eye bones sit\nfrom the head bone. Without those and without this, she's taken to\nface Blender's front view. Only its horizontal part counts.",
           "type": [
             "array",
             "null"
@@ -416,7 +435,7 @@
           ]
         },
         "head_pitch_deg": {
-          "description": "How far the head turns up or down, in degrees. Defaults to 25.",
+          "description": "How far the head itself turns up or down, in degrees. Defaults to 25.",
           "type": [
             "number",
             "null"
@@ -424,7 +443,15 @@
           "format": "float"
         },
         "head_share": {
-          "description": "With both a head and a neck: the head's share of what the eyes cannot\nreach, from 0 to 1. The neck takes the rest. Defaults to 0.7.",
+          "description": "With both a head and a neck: the head's share of their turn, from 0\nto 1. The neck takes the rest, up to its limit. Defaults to 0.7.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "head_turn": {
+          "description": "How much of the way to where she looks the head and neck go, from 0\nto 1, leaving the rest to the eyes. At 0 the head only moves for what\nthe eyes can't reach; at 1 it points straight there and the eyes stay\ncentered. Defaults to 0.6. Without eyes the head goes all the way.",
           "type": [
             "number",
             "null"
@@ -432,7 +459,7 @@
           "format": "float"
         },
         "head_yaw_deg": {
-          "description": "How far the head turns sideways, in degrees. Defaults to 50.",
+          "description": "How far the head itself turns sideways, in degrees. Together with the\nneck's, it is how far the head may point from the bone above the\nneck, whether an animation or gaze turned it there. Defaults to 50.",
           "type": [
             "number",
             "null"
@@ -440,7 +467,7 @@
           "format": "float"
         },
         "neck": {
-          "description": "The neck bone. Without it, the head takes all of what the eyes cannot\nreach.",
+          "description": "The neck bone. Without it, the head does all of the turning.",
           "type": [
             "string",
             "null"
@@ -463,14 +490,11 @@
           "format": "float"
         },
         "shape_keys": {
-          "description": "Shape keys that follow the eyes, such as eyelids. Each is set in\nproportion to how far the eyes turn that way, reaching 1 at the eyes'\nlimit. Any may be left out, and a skin without one ignores it.",
+          "description": "Shape keys that follow the eyes: eyelids, or on a character without\neye bones, the eyes themselves. Each is set in proportion to how far\nshe looks that way, reaching 1 at a full look. Any may be left out,\nand a skin without one ignores it.",
           "$ref": "#/$defs/GazeShapeKeys"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "eyes"
-      ]
+      "additionalProperties": false
     },
     "GazeShapeKeys": {
       "description": "Shape keys set as the eyes turn, by direction. Left and right are the\ncharacter's own, as in Blender's `.L` and `.R`.",

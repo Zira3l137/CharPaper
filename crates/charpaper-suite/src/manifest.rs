@@ -108,44 +108,74 @@ pub struct Cue {
     pub sound: String,
 }
 
-/// Looking towards the mouse cursor. The eyes turn first; the head and neck
-/// take over what the eyes cannot reach. Every turn is added on top of the
-/// animation playing, and angles are measured from where it has her look.
+/// Looking towards the mouse cursor. Where she looks comes from where the
+/// cursor is on screen: on her eyes she looks at the viewer, and the further
+/// from them it is, the further aside she looks. Her head and neck go part
+/// of the way and her eyes cover the rest. The head's angles are measured
+/// from the bone above the neck, with the animation's own turn counted in,
+/// and the eyes' from the head. A cursor she can't turn to she lets go of.
 #[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Gaze {
-    /// The eye bones, usually two.
+    /// The eye bones, usually two. Gaze sets them outright while it is on,
+    /// so an animation's own keys on them only show in a clip with
+    /// `gaze = false`. May be left out: eyes can follow by `shape_keys`
+    /// alone, and a head can follow without eyes.
+    #[serde(default)]
     pub eyes: Vec<String>,
+    #[serde(default)]
+    pub eye_kind: EyeKind,
     /// The head bone. Without it, only the neck and eyes turn.
     pub head: Option<String>,
-    /// The neck bone. Without it, the head takes all of what the eyes cannot
-    /// reach.
+    /// The neck bone. Without it, the head does all of the turning.
     pub neck: Option<String>,
-    /// How far the eyes turn sideways, in degrees. Defaults to 30.
+    /// How far the eye bones turn sideways, in degrees. Defaults to 30.
     pub eye_yaw_deg: Option<f32>,
-    /// How far the eyes turn up or down, in degrees. Defaults to 20.
+    /// How far the eye bones turn up or down, in degrees. Defaults to 20.
     pub eye_pitch_deg: Option<f32>,
-    /// How far the head turns sideways, in degrees. Defaults to 50.
+    /// How far the head itself turns sideways, in degrees. Together with the
+    /// neck's, it is how far the head may point from the bone above the
+    /// neck, whether an animation or gaze turned it there. Defaults to 50.
     pub head_yaw_deg: Option<f32>,
-    /// How far the head turns up or down, in degrees. Defaults to 25.
+    /// How far the head itself turns up or down, in degrees. Defaults to 25.
     pub head_pitch_deg: Option<f32>,
     /// How far the neck turns sideways, in degrees. Defaults to 25.
     pub neck_yaw_deg: Option<f32>,
     /// How far the neck turns up or down, in degrees. Defaults to 15.
     pub neck_pitch_deg: Option<f32>,
-    /// With both a head and a neck: the head's share of what the eyes cannot
-    /// reach, from 0 to 1. The neck takes the rest. Defaults to 0.7.
+    /// With both a head and a neck: the head's share of their turn, from 0
+    /// to 1. The neck takes the rest, up to its limit. Defaults to 0.7.
     pub head_share: Option<f32>,
+    /// How much of the way to where she looks the head and neck go, from 0
+    /// to 1, leaving the rest to the eyes. At 0 the head only moves for what
+    /// the eyes can't reach; at 1 it points straight there and the eyes stay
+    /// centered. Defaults to 0.6. Without eyes the head goes all the way.
+    pub head_turn: Option<f32>,
     /// Which way her face points while she stands in her rest pose, in
     /// Blender's world axes as exported: `[0, -1, 0]` faces Blender's front
-    /// view, which is also what she's taken to face without it. The exporter's
-    /// "She faces me" button sets it. Only its horizontal part counts.
+    /// view. Rarely needed: it is worked out from where the eye bones sit
+    /// from the head bone. Without those and without this, she's taken to
+    /// face Blender's front view. Only its horizontal part counts.
     pub front: Option<[f32; 3]>,
-    /// Shape keys that follow the eyes, such as eyelids. Each is set in
-    /// proportion to how far the eyes turn that way, reaching 1 at the eyes'
-    /// limit. Any may be left out, and a skin without one ignores it.
+    /// Shape keys that follow the eyes: eyelids, or on a character without
+    /// eye bones, the eyes themselves. Each is set in proportion to how far
+    /// she looks that way, reaching 1 at a full look. Any may be left out,
+    /// and a skin without one ignores it.
     #[serde(default)]
     pub shape_keys: GazeShapeKeys,
+}
+
+/// What the eye bones turn. Defaults to `ball`.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EyeKind {
+    /// A round eyeball in its socket. It is aimed exactly, up to its limits.
+    #[default]
+    Ball,
+    /// Anything else, like an iris that slides over a flat eye. Aimed, such
+    /// a bone would shoot past, so it turns in proportion to how far aside
+    /// she looks instead, reaching its limits for a look about 35° aside.
+    Drawn,
 }
 
 impl Gaze {
@@ -170,6 +200,10 @@ impl Gaze {
 
     pub fn head_share(&self) -> f32 {
         self.head_share.unwrap_or(0.7).clamp(0.0, 1.0)
+    }
+
+    pub fn head_turn(&self) -> f32 {
+        self.head_turn.unwrap_or(0.6).clamp(0.0, 1.0)
     }
 
     /// Every bone the section names.
