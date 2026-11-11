@@ -105,23 +105,54 @@ saved in the `.blend`.
   copied, anything else is converted to Ogg Vorbis. A marker may also name an .ogg you put
   in `sounds/` yourself. Markers outside the action's frame range play nothing. The clip
   list shows how many markers a clip has.
-- **Gaze** turns her eyes, head and neck towards the mouse cursor, on top of her animation.
-  The app has to know which way her face points in her rest pose, which a clip can turn her
-  away from: in the Gaze section, turn on the arrow, which shows her rest pose, look her in
-  the face in the viewport and click *She faces me*. It's kept as one of the armature's axes,
-  so turning her or the scene later keeps it right. The arrow is green once set, orange while
-  she's taken to face -Y; turning it off shows her pose again. A clip that animates the eye bones
-  leaves the eyes less room to follow the cursor, and a long camera lens makes the whole
-  effect subtle; validation points out both.
+- **Gaze** has her look towards the mouse cursor, on top of her animation. Where she looks
+  comes from where the cursor is on screen: on her eyes she looks at the viewer, and the
+  further from them it is, the further aside she looks, whatever the camera's lens or
+  distance. Her head and neck go *Head turn* of the way, split between them by *Head
+  share*, and her eyes cover the rest.
+  - *Detect bones* reads bone names word by word (`mixamorig:LeftEye` is mixamorig, left,
+    eye), skips controls and helpers, and where a rig has several bones per eye takes the
+    ones that move the mesh. The head is the bone named so above the eyes, or else the
+    nearest deforming bone above them; the neck is the bone named so above the head. It
+    finds no neck on Rigify's deform bones, which are named `DEF-spine`; pick it by hand.
+  - *Eyes are* is set by Detect bones from the eyes' shape. An eye counts as an eyeball
+    when the vertices its bone moves lie on a ball, the bone sits near the ball's center
+    and the vertices cover a good part of it. *Eyeballs* are aimed exactly, up to their
+    limits. *Drawn* eyes turn in proportion instead, reaching their limits for a look
+    about 35° aside, because aiming a bone that isn't at the center of a ball shoots past.
+  - The head's and neck's limits add up to how far her head may point from the bone above
+    the neck, with the clip's own turn counted in. The eyes' limits are measured from the
+    head. A cursor further round than she can turn, she lets go of.
+  - Gaze sets the eye bones outright while she follows, so the eyes can't leave their
+    sockets and a clip's own keys on them don't show; validation notes such clips. Untick
+    the clip's *Gaze* to see them.
+  - Eye bones are optional. A head alone follows, and so do eyes moved by the four shape
+    keys alone, which also move in proportion.
+  - *Front* is which way she faces in her rest pose, which is where gaze turns from; a
+    clip may turn her around entirely. *Automatic* works it out as the app does: level,
+    square to the line between her eye bones, on the side of the head bone they are on.
+    The arrow button shows her rest pose with an arrow from her head, green when her front
+    is known and orange when nothing says and she's taken to face -Y. Where it points
+    wrong, look her in the face in the viewport and click *She faces me*: that front is
+    kept as one of the armature's axes, so turning her or the scene later keeps it right,
+    and only a front set this way is written to suite.toml.
+  - *Preview* poses her as the app would, on top of the pose she is in, with the same
+    maths. The two sliders are the look: at -1 and 1 every part is at its limit. Changing a
+    field updates the pose, and named shape keys are set too. Her own pose and shape key
+    values are put back when it is turned off, on a frame change, before a save and at
+    export.
 - Your scene is never changed. Each file is exported from temporary copies in a throwaway
-  scene, so your NLA tracks, active actions and selection stay as they were.
+  scene, so your NLA tracks, active actions and selection stay as they were. Only the gaze
+  preview poses her, and it puts her pose back.
 
 ## suite.toml
 
 Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.bak`:
 
 - It writes the name, the model file, the *Starts with* defaults, every exported clip (file,
-  action, mode, gaze, cues), and `[gaze]` when Gaze is set to *Write*.
+  action, mode, gaze, cues), and `[gaze]` when Gaze is set to *Write*. In `[gaze]`, `eyes`
+  is written only when she has eye bones, `eye_kind` only for Drawn eyes, and `front` only
+  when it was set by hand.
 - A clip's cues come from its pose markers. An action without any keeps the cues already
   in suite.toml, so cues typed by hand survive an export.
 - An empty field leaves the matching key in the file alone.

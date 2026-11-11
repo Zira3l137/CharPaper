@@ -101,7 +101,7 @@ it and brings it back.
 
 | Tab | What's there |
 |-----|--------------|
-| **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor, camera, environment and shadows. |
+| **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
 | **Graphics** | Sky brightness, quality settings (render scale, anti-aliasing, depth of field, shadows, ambient occlusion, fog), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start at sign-in, monitors, frame rate limit, performance monitor, when to pause, and the panel's language, colors, size and side. |
@@ -387,23 +387,55 @@ If a shape key has both, the driver wins, as in Blender.
 
 ### Following the cursor (gaze)
 
-The character's eyes, then head, then neck, turn towards the mouse pointer on top of
-whatever animation plays. After the pointer has been still for a few seconds she goes back
-to what the animation has her do.
+The character looks towards the mouse pointer, on top of whatever animation plays. With
+the pointer on her face she looks at you. The further from her face it is, the further
+aside she looks: her head and neck turn part of the way and her eyes cover the rest. It
+works the same through any camera, near or far.
+
+She goes back to what the animation has her do once the pointer has been still for a few
+seconds, and she lets go of a pointer she can't turn to, such as one behind her back.
 
 1. Open **Gaze** in the add-on and set it to **Write**.
-2. Add the eye bones, and pick the head and neck bones. Head and neck are optional.
-3. Turn on the arrow button. It shows the rest pose. Look the character in the face in
-   the viewport and click **She faces me**. The arrow turns green.
+2. Click **Detect bones**. It fills in her eye, head and neck bones, and whether her eyes
+   are eyeballs. Check what it found, and fix by hand what it got wrong.
+3. Turn on **Preview** and drag the two sliders. She is posed the way the app will pose
+   her. At −1 and 1 everything is at its limit, so tune the limits until that looks right.
 4. Optionally name shape keys that should follow the eyes, such as eyelids.
 
-- The eye bones must be children of the head bone, and each eye bone should sit at the
-  center of its eyeball. Otherwise the eye swings instead of spinning.
-- Untick **Gaze** on clips where she must look somewhere on purpose: a dance, sleeping.
-- A clip that animates the eye bones leaves the eyes less room to follow.
-- Through a long lens the whole effect gets subtle.
-- Without a gaze section the character never follows the cursor, and the app hides the
-  switch.
+What the fields mean:
+
+- **Eyes are** says what the eye bones turn. *Eyeballs* are round balls in their sockets,
+  and are aimed exactly. *Drawn* is anything else, like irises that slide over a flat or
+  shallow eye: aimed, those would shoot past, so they move in proportion to how far aside
+  she looks. Drawn eyes usually want small limits, a few degrees.
+- **Eye yaw** and **Eye pitch** are how far the eye bones turn, sideways and up or down.
+- **Head** and **Neck** yaw and pitch add up to how far her head may point away from her
+  chest. That holds for the animation and gaze together, so a clip that already turns her
+  head leaves gaze less to add, and she can't end up with her head on backwards.
+- **Head turn** is how much of the way to the pointer the head and neck go. At 0 the head
+  only moves for what the eyes can't reach; at 1 it points straight there.
+- **Head share** splits that turn between head and neck.
+- **Front** is which way she faces in her rest pose. *Automatic* works it out from where
+  her eye bones sit. The arrow button shows her rest pose with an arrow from her head:
+  green when her front is known, orange when it's a guess. If it points wrong, look her in
+  the face in the viewport and click **She faces me**, the eye icon next to the arrow.
+
+Good to know:
+
+- **She needs no eye bones.** A head alone follows, and so do eyes moved only by shape
+  keys: name the four shape keys and leave the eye list empty.
+- **Gaze moves the eye bones itself** while she follows, so a clip's own eye animation
+  doesn't show. Untick **Gaze** on that clip to see it, and on any clip where she must
+  look somewhere on purpose: a dance, sleeping.
+- Eye bones must be children of the head bone, and an eyeball's bone should sit at the
+  center of the ball. Otherwise the eye swings instead of spinning.
+- **The preview is temporary.** Her own pose comes back when you turn it off, change the
+  frame, save or export.
+- Detect bones reads bone names, so it can miss a bone with an unusual name. On Rigify's
+  deform bones it finds no neck; pick it by hand.
+- The viewer can switch following off, or change its **Strength**, in the Scene tab.
+- Without a gaze section the character never follows the cursor, and the app hides
+  those rows.
 
 ### An environment
 
@@ -588,7 +620,7 @@ which line.
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
-| `[gaze]` | Which bones follow the cursor and how far they turn. The add-on fills it in. |
+| `[gaze]` | Which bones and shape keys follow the cursor, how far they turn, and how head, neck and eyes share a look. The add-on fills it in. |
 
 Things worth knowing:
 
@@ -657,8 +689,11 @@ render.
 | Shape keys vanished from a mesh | It has modifiers and *Apply modifiers* is on. Apply them by hand. |
 | An expression isn't listed | Its action also keys bones, or it wasn't ticked for that skin. An expression keys only shape keys. |
 | A clip's shape keys do nothing on the face | That mesh is used by expressions. Use a driver, or put the keys on another mesh. |
-| The eyes swing out of the head with gaze on | The eye bones don't sit at the eyeballs' centers. |
-| She turns away from the cursor | Her front is set wrong. Click **She faces me** again, with the arrow on. |
+| The eyes swing out of the head with gaze on | The eye bones don't sit at the eyeballs' centers, or the eyes aren't eyeballs: set **Eyes are** to *Drawn*. |
+| The irises slide too far, or out of sight | The eye limits are too big for her eyes. Turn on **Preview**, drag a slider to 1 and lower *Eye yaw* and *Eye pitch*. |
+| Only her eyes follow, not her head | No head bone is named in Gaze, or *Head turn* is 0. |
+| She turns away from the cursor | Her front is wrong. Set **Front** back to *Automatic*; if the arrow still points wrong, set it by hand. |
+| A clip's eye animation doesn't show | Gaze moves the eyes while she follows. Untick the clip's **Gaze**. |
 | The fog doesn't show | No lamp lights it. The sky doesn't light fog, and a sun only does with *Shadow* on. |
 | A light does nothing | It's an area light. Use a spot or point light. |
 | The sky didn't change after replacing the `.hdr` | Delete `skybox.ktx2`, `specular.ktx2` and `diffuse.ktx2` next to it. |
@@ -725,6 +760,7 @@ added beside it:
 | `charpaper-suite` | Reads a suite folder and suite.toml. No engine inside, so it's quick to test. |
 | `charpaper-bake` | Makes the sky files from a panorama. |
 | `charpaper-drivers` | Runs Blender's shape key drivers. |
+| `charpaper-gaze` | Works out where the character looks, and how neck, head and eyes share the turn. |
 | `charpaper-audio` | Sound. |
 | `charpaper-settings` | What `state.toml` holds. |
 | `charpaper-monitor` | Measurements for the performance monitor. |
