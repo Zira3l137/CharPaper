@@ -1956,6 +1956,7 @@ dependencies = [
  "charpaper-audio",
  "charpaper-bake",
  "charpaper-drivers",
+ "charpaper-gaze",
  "charpaper-settings",
  "charpaper-suite",
  "crossbeam-channel",

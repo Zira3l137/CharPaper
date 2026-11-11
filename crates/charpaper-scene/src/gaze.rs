@@ -4,6 +4,11 @@ use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy::world_serialization::WorldInstanceReady;
+use charpaper_gaze::Eyes;
+use charpaper_gaze::Frame;
+use charpaper_gaze::Setup;
+use charpaper_gaze::Spring;
+use charpaper_gaze::View;
 use charpaper_settings::GazeSettings;
 use charpaper_settings::Graphics;
 
@@ -15,18 +20,22 @@ use crate::character::ShownSkin;
 use crate::character::SkinObjects;
 use crate::render::ScreenParts;
 use crate::screens::Screen;
+use crate::screens::ScreenPlace;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
 
 // Turns the neck, head and eyes towards the mouse cursor, on top of whatever animation is
 // playing: after the animation has posed the bones this frame, before their final positions
-// are worked out from the pose. The eyes turn first; the head and neck share what the eyes
-// cannot reach.
+// are worked out from the pose.
 //
-// All the aiming happens in the armature's own space, which is Blender's world as exported,
-// with +Y up. She faces the way suite.toml's gaze `front` says, Blender's -Y (+Z here) without
-// one. Yaw is a turn about +Y, so a positive one turns her to her left whichever way she faces.
+// Where she looks comes from the picture: how far the cursor is from her eyes on screen, and
+// which way. charpaper-gaze turns that into a direction and shares the turn out between neck,
+// head and eyes. This file reads the pose for it and writes the bones and shape keys.
+//
+// Everything is measured in the armature's own space, which is Blender's world as exported,
+// with +Y up, and against bones rather than the world: the head from the bone above the neck,
+// the eyes from the head. So it holds while she leans, lies down or turns away.
 
 pub(crate) struct GazePlugin;
 
@@ -54,43 +63,60 @@ pub struct CursorAt {
     pub position: Vec2,
 }
 
-// Where along the ray from the camera through the cursor she looks, as a share of the distance
-// to her head: 1 looks at the cursor as if it were beside her, near 0 at the camera itself, and
-// she barely moves.
-const TARGET_DEPTH: f32 = 0.5;
 const FADE_SECS: f32 = 0.4;
 // With the cursor still this long, she goes back to what the animation has her do.
 const IDLE_SECS: f32 = 5.0;
-// How quickly each part catches up with where it should look.
+// About how long the head and neck take to get where they should point. The eyes answer at
+// once and wait there for the head, as eyes do.
+const HEAD_SECS: f32 = 0.5;
 const EYE_SECS: f32 = 0.06;
-const HEAD_SECS: f32 = 0.25;
-const NECK_SECS: f32 = 0.35;
+// How much of the way to the cursor the head and neck go; the eyes cover the rest.
+const HEAD_TURN: f32 = 0.6;
+// Eyes moved by shape keys alone are at their fullest for a target this far aside.
+const KEYS_REACH_DEG: [f32; 2] = [35.0, 25.0];
 
-struct Part {
-    bone: Entity,
-    // The way the face points, in the bone's own space, from the rest pose.
-    forward: Vec3,
-    limits: Vec2,
-    // Yaw and pitch this part adds on top of the animation, smoothed, in radians.
-    angles: Vec2,
-    // The animation's rotation before the turn was added, and the rotation written. A clip
-    // that does not key this bone leaves the written one in place, which must not be turned
-    // again on top.
+struct Bone {
+    entity: Entity,
+    // In the armature's space, in the rest pose.
+    rest: Quat,
+    // The animation's rotation before gaze changed it, and the rotation written. A clip that
+    // does not key this bone leaves the written one in place, which must not be turned again
+    // on top.
     base: Quat,
     written: Quat,
 }
 
+// A bone something is measured from, with its rotation in the rest pose.
+type Anchor = Option<(Entity, Quat)>;
+
 #[derive(Component, Default)]
 pub(crate) struct GazeRig {
     armature: Option<Entity>,
-    neck: Option<Part>,
-    head: Option<Part>,
-    eyes: Vec<Part>,
-    head_share: f32,
+    frame: Frame,
+    setup: Setup,
+    // The bone above the neck: the head's turn and its limits are measured from it. Without
+    // one, from the armature.
+    chest: Anchor,
+    // Only beside a head. A rig with a neck alone has it stand in as the head.
+    neck: Option<Bone>,
+    head: Option<Bone>,
+    eyes: Vec<Bone>,
+    // What the eyes turn in: the head, or what they hang from.
+    socket: Anchor,
     // Left, right, up, down: every (mesh, weight index) of that shape key in the worn skin.
     keys: [Vec<(Entity, usize)>; 4],
     weight: f32,
-    target: Option<Vec3>,
+    // Whether the cursor is where she can turn to. Out of reach she lets go of it.
+    in_reach: bool,
+    // The way she looks, kept while no screen of hers sees the cursor.
+    direction: Option<Vec3>,
+    // How far head and neck should turn from where the clip points the head, and how far
+    // they have.
+    turn_goal: Vec2,
+    turned: Spring,
+    // The eyes' look, each way from -1 to 1.
+    look_goal: Vec2,
+    look: Vec2,
     last_cursor: Option<CursorAt>,
     still_secs: f32,
     keys_written: bool,
@@ -126,52 +152,99 @@ fn build_rig(
     let Some(gaze) = suite.and_then(|s| s.gaze.clone()) else {
         return;
     };
-    let front = Vec3::from_array(gaze.front_gltf()).with_y(0.0).normalize_or(Vec3::Z);
 
+    // A bone that is named but missing turns gaze off rather than aiming with what is left.
     let find = |name: &str| {
-        children
+        let bone = children
             .iter_descendants(armature)
-            .find(|&e| names.get(e).is_ok_and(|n| n.as_str() == name))
-    };
-    let part = |name: &str, [yaw, pitch]: [f32; 2]| -> Option<Part> {
-        let Some(bone) = find(name) else {
+            .find(|&e| names.get(e).is_ok_and(|n| n.as_str() == name));
+        if bone.is_none() {
             warn!(
                 "gaze: the armature has no bone {name:?}; the character will not follow the cursor"
             );
-            return None;
-        };
-        let rest = pose(bone, armature, &parents, &transforms).rotation;
-        let rotation = transforms.get(bone).map_or(Quat::IDENTITY, |t| t.rotation);
-        Some(Part {
-            bone,
-            forward: rest.inverse() * front,
-            limits: Vec2::new(yaw.to_radians(), pitch.to_radians()).abs(),
-            angles: Vec2::ZERO,
-            base: rotation,
-            written: rotation,
-        })
+        }
+        bone
     };
-
-    // A bone that is named but missing turns gaze off rather than aiming with what is left.
-    let optional = |name: Option<&str>, limits| match name {
-        Some(name) => part(name, limits).map(Some),
+    let optional = |name: Option<&str>| match name {
+        Some(name) => find(name).map(Some),
         None => Some(None),
     };
-    let eyes: Option<Vec<Part>> =
-        gaze.eyes.iter().map(|eye| part(eye, gaze.eye_limits_deg())).collect();
-    let head = optional(gaze.head.as_deref(), gaze.head_limits_deg());
-    let neck = optional(gaze.neck.as_deref(), gaze.neck_limits_deg());
-    let (Some(eyes), Some(head), Some(neck)) = (eyes, head, neck) else {
+    let eyes: Option<Vec<Entity>> = gaze.eyes.iter().map(|eye| find(eye)).collect();
+    let (Some(eyes), Some(head), Some(neck)) =
+        (eyes, optional(gaze.head.as_deref()), optional(gaze.neck.as_deref()))
+    else {
         return;
     };
-    if eyes.is_empty() {
+    let eye_keys = gaze.shape_keys.named().next().is_some();
+    if eyes.is_empty() && head.is_none() && neck.is_none() && !eye_keys {
         return;
     }
+
+    let rest = |bone: Entity| pose(bone, armature, &parents, &transforms);
+    let bone = |entity: Entity| {
+        let rotation = transforms.get(entity).map_or(Quat::IDENTITY, |t| t.rotation);
+        Bone { entity, rest: rest(entity).rotation, base: rotation, written: rotation }
+    };
+    let above = |bone: Entity| {
+        let parent = parents.get(bone).ok()?.parent();
+        (parent != armature).then(|| (parent, rest(parent).rotation))
+    };
+    let radians = |[yaw, pitch]: [f32; 2]| Vec2::new(yaw.to_radians(), pitch.to_radians()).abs();
+
+    let head_limit = radians(gaze.head_limits_deg());
+    let neck_limit = radians(gaze.neck_limits_deg());
+    let (neck, head, turn_limit, neck_limit) = match (neck, head) {
+        (Some(neck), Some(head)) => (Some(neck), Some(head), head_limit + neck_limit, neck_limit),
+        (None, Some(head)) => (None, Some(head), head_limit, Vec2::ZERO),
+        (neck, None) => (None, neck, neck_limit, Vec2::ZERO),
+    };
+    let eye_limit = radians(gaze.eye_limits_deg());
+    let eyes_setup = if !eyes.is_empty() {
+        Some(Eyes { limit: eye_limit, reach: eye_limit })
+    } else if eye_keys {
+        Some(Eyes { limit: Vec2::ZERO, reach: radians(KEYS_REACH_DEG) })
+    } else {
+        None
+    };
+
+    let eyes_at: Vec<Vec3> = eyes.iter().map(|&eye| rest(eye).translation).collect();
+    let stated = gaze.front.is_some().then(|| Vec3::from_array(gaze.front_gltf()));
+    let worked_out = head
+        .map(|head| rest(head).translation)
+        .and_then(|pivot| charpaper_gaze::front_from_eyes(pivot, &eyes_at, Vec3::Y));
+    let front = stated.or(worked_out).unwrap_or(Vec3::Z);
+    let how = match (stated, worked_out) {
+        (Some(_), _) => "as suite.toml says",
+        (None, Some(_)) => "worked out from her eye bones",
+        (None, None) => "taken as Blender's front view, since her bones don't say",
+    };
+    info!("gaze: she faces {front:.2} in her rest pose, {how}");
+    if let (Some(stated), Some(worked_out)) = (stated, worked_out)
+        && stated.dot(worked_out) < 0.0
+    {
+        warn!(
+            "gaze: suite.toml's `front` points to the back of her head, going by her eye bones; \
+             she will turn away from the cursor. Remove it to have it worked out"
+        );
+    }
+
     rig.armature = Some(armature);
-    rig.eyes = eyes;
-    rig.head = head;
-    rig.neck = neck;
-    rig.head_share = gaze.head_share();
+    rig.frame = Frame::facing(front, Vec3::Y).unwrap_or_default();
+    rig.setup = Setup {
+        turn_limit,
+        neck_limit,
+        head_share: gaze.head_share(),
+        head_turn: HEAD_TURN,
+        eyes: eyes_setup,
+    };
+    rig.chest = neck.or(head).and_then(above);
+    rig.socket = match head {
+        Some(head) => Some((head, rest(head).rotation)),
+        None => eyes.first().copied().and_then(above),
+    };
+    rig.neck = neck.map(bone);
+    rig.head = head.map(bone);
+    rig.eyes = eyes.into_iter().map(bone).collect();
 }
 
 // Which meshes of the worn skin carry the shape keys that follow the eyes. Bevy keeps no
@@ -246,27 +319,47 @@ fn aim(
         &Graphics,
         &mut GazeRig,
     )>,
-    screens: Query<(&Screen, &ScreenParts)>,
+    screens: Query<(&Screen, &ScreenParts, Option<&ScreenPlace>)>,
     cameras: Query<(&Camera, &GlobalTransform), With<SceneCamera>>,
     stage_of: StageOf,
     mut bones: Bones,
 ) {
     for (stage, settings, state, clips, graphics, mut rig) in &mut stages {
-        // Through the camera of the screen the cursor is measured from, if that screen shows
-        // this stage.
         let seen = cursor.0.and_then(|at| {
-            let (_, parts) = screens.iter().find(|(screen, _)| screen.window == at.window)?;
-            if stage_of.get(parts.camera) != Some(stage) {
-                return None;
-            }
-            Some((at.position, cameras.get(parts.camera).ok()?))
+            let (position, camera) = seen_from(stage, at, &screens, &stage_of)?;
+            Some((position, cameras.get(camera).ok()?))
         });
         let watched = Watched { cursor: cursor.0, seen, settings, state, clips };
         aim_stage(&time, graphics, watched, &mut rig, &mut bones);
     }
 }
 
-// What the character watches: the cursor, and how it looks through the stage's camera.
+// Where the cursor is for one of the stage's own screens, and that screen's camera: the screen
+// the cursor is on, or, with the cursor on a monitor that shows something else, the stage's
+// nearest one, so that she looks across to it.
+fn seen_from(
+    stage: Entity,
+    at: CursorAt,
+    screens: &Query<(&Screen, &ScreenParts, Option<&ScreenPlace>)>,
+    stage_of: &StageOf,
+) -> Option<(Vec2, Entity)> {
+    let (_, on, on_place) = screens.iter().find(|(screen, ..)| screen.window == at.window)?;
+    if stage_of.get(on.camera) == Some(stage) {
+        return Some((at.position, on.camera));
+    }
+    let desktop = on_place?.0.min.as_vec2() + at.position;
+    let away = |place: &IRect| {
+        (desktop - desktop.clamp(place.min.as_vec2(), place.max.as_vec2())).length()
+    };
+    screens
+        .iter()
+        .filter(|(_, parts, _)| stage_of.get(parts.camera) == Some(stage))
+        .filter_map(|(_, parts, place)| Some((place?.0, parts.camera)))
+        .min_by(|(a, _), (b, _)| away(a).total_cmp(&away(b)))
+        .map(|(place, camera)| (desktop - place.min.as_vec2(), camera))
+}
+
+// What the character watches: the cursor, and how one of the stage's screens sees it.
 struct Watched<'a> {
     cursor: Option<CursorAt>,
     seen: Option<(Vec2, (&'a Camera, &'a GlobalTransform))>,
@@ -285,10 +378,11 @@ fn aim_stage(
     let Some(armature) = rig.armature else {
         return;
     };
-    let Ok(armature_global) = bones.globals.get(armature) else {
+    let Ok(armature_global) = bones.globals.get(armature).copied() else {
         return;
     };
     let dt = time.delta_secs();
+    let (frame, setup) = (rig.frame, rig.setup);
 
     if cursor.is_some() && cursor != rig.last_cursor {
         rig.last_cursor = cursor;
@@ -303,90 +397,92 @@ fn aim_stage(
         .is_none_or(|clip| clip.gaze);
     let wanted =
         settings.follow_cursor && cursor.is_some() && allowed && rig.still_secs < IDLE_SECS;
-    let step = dt / FADE_SECS;
-    let goal = if wanted { 1.0 } else { 0.0 };
-    rig.weight += (goal - rig.weight).clamp(-step, step);
 
-    for part in rig.parts_mut() {
-        let Ok(mut transform) = bones.transforms.get_mut(part.bone) else {
+    for bone in rig.bones_mut() {
+        let Ok(mut transform) = bones.transforms.get_mut(bone.entity) else {
             return;
         };
-        if transform.rotation == part.written {
-            transform.rotation = part.base;
+        if transform.rotation == bone.written {
+            transform.rotation = bone.base;
         }
-        part.base = transform.rotation;
-        part.written = transform.rotation;
+        bone.base = transform.rotation;
+        bone.written = transform.rotation;
     }
-    if rig.weight <= 0.0 && !rig.keys_written {
-        for part in rig.parts_mut() {
-            part.angles = Vec2::ZERO;
-        }
+    if !wanted && rig.weight <= 0.0 && !rig.keys_written {
+        rig.start_over();
         return;
     }
 
-    let reference = rig.head.as_ref().or(rig.neck.as_ref()).unwrap_or(&rig.eyes[0]);
-    let (reference_bone, reference_forward) = (reference.bone, reference.forward);
-    let to_model = armature_global.affine().inverse();
+    // From here on the bones hold what the clip gave them.
     if let Some((at, (camera, camera_global))) = seen {
-        let scale = graphics.scale_percent() as f32 / 100.0;
-        if let Ok(ray) = camera.viewport_to_world(camera_global, at * scale) {
-            let head =
-                pose(reference_bone, armature, &bones.parents, &bones.transforms.as_readonly());
-            let head_world = armature_global.transform_point(head.translation);
-            let distance = (head_world - ray.origin).dot(*ray.direction).max(0.0);
-            let point = ray.origin + *ray.direction * distance * TARGET_DEPTH;
-            rig.target = Some(to_model.transform_point3(point));
+        let eyes = armature_global.transform_point(eyes_at(rig, armature, bones));
+        let at = at * graphics.scale_percent() as f32 / 100.0;
+        if let Some(direction) = look_from(camera, camera_global, at, eyes) {
+            let to_armature = armature_global.affine().inverse();
+            rig.direction = Some(to_armature.transform_vector3(direction).normalize_or(Vec3::Z));
         }
     }
-    let Some(target) = rig.target else {
+    let Some(direction) = rig.direction else {
         return;
     };
 
-    let face = pose(reference_bone, armature, &bones.parents, &bones.transforms.as_readonly());
-    let face_forward = face.rotation * reference_forward;
-    let total = difference(angles(target - face.translation), angles(face_forward));
-    let eye_limits = rig.eyes[0].limits;
-    let beyond = total - total.clamp(-eye_limits, eye_limits);
-    let (head_goal, neck_goal) = match (&rig.head, &rig.neck) {
-        (Some(_), Some(_)) => (beyond * rig.head_share, beyond * (1.0 - rig.head_share)),
-        (Some(_), None) => (beyond, Vec2::ZERO),
-        (None, Some(_)) => (Vec2::ZERO, beyond),
-        (None, None) => (Vec2::ZERO, Vec2::ZERO),
-    };
+    let chest = turn_of(rig.chest, armature, bones);
+    let target = frame.angles(chest.inverse() * direction);
+    rig.in_reach = setup.in_reach(target, rig.in_reach);
+    let step = dt / FADE_SECS;
+    let goal = if wanted && rig.in_reach { 1.0 } else { 0.0 };
+    rig.weight += (goal - rig.weight).clamp(-step, step);
+    if rig.weight <= 0.0 && !rig.keys_written {
+        rig.start_over();
+        return;
+    }
     let weight = rig.weight;
 
     // Neck before head before eyes: each turn moves the bones below it, and the next part
     // works from where that left it.
-    for (part, goal, secs) in
-        [(&mut rig.neck, neck_goal, NECK_SECS), (&mut rig.head, head_goal, HEAD_SECS)]
-    {
-        if let Some(part) = part {
-            part.angles = follow(part.angles, goal.clamp(-part.limits, part.limits), secs, dt);
-            let by = part.angles * weight;
-            turn(part, by, face_forward, armature, &bones.parents, &mut bones.transforms);
+    if let Some(head) = &mut rig.head {
+        let head_turn = turn_of(head.anchor(), armature, bones);
+        let clip = frame.angles(chest.inverse() * head_turn * frame.front);
+        // Out of reach the goal stays as it was, so she eases back from where she looked
+        // rather than swinging after a target that passes behind her.
+        if rig.in_reach {
+            rig.turn_goal = setup.head(target, clip) - clip;
+        }
+        rig.turned.step(rig.turn_goal, HEAD_SECS, dt);
+        let head_at = clip + rig.turned.value * weight;
+        let neck_at = setup.neck(clip, head_at);
+        // The turns are worked out as the chest stood in the rest pose, and go wherever the
+        // clip has taken the chest since.
+        let carried = |turn: Quat| charpaper_gaze::carried(chest, turn);
+        if let Some(neck) = &mut rig.neck {
+            turn(neck, carried(frame.turn(clip, neck_at)), armature, bones);
+        }
+        turn(head, carried(frame.turn(neck_at, head_at)), armature, bones);
+    }
+
+    let Some(eyes) = setup.eyes else {
+        rig.keys_written = false;
+        return;
+    };
+    let socket = turn_of(rig.socket, armature, bones);
+    if rig.in_reach {
+        rig.look_goal = eyes.look(frame.angles(socket.inverse() * direction));
+    }
+    rig.look = charpaper_gaze::follow(rig.look, rig.look_goal, EYE_SECS, dt);
+    // Set outright rather than added to the clip's own turn, so the eyes can't leave their
+    // sockets. Both get the same turn: aimed at a point close by, they would cross.
+    let aimed = socket * frame.toward(eyes.turn(rig.look));
+    for eye in &mut rig.eyes {
+        let parent = parent_rotation(eye.entity, armature, bones);
+        if let Ok(mut transform) = bones.transforms.get_mut(eye.entity) {
+            let set = charpaper_gaze::turned_from_rest(aimed, eye.rest, parent);
+            transform.rotation = transform.rotation.slerp(set, weight).normalize();
+            eye.written = transform.rotation;
         }
     }
 
-    let mut eye_angles = Vec2::ZERO;
-    for eye in &mut rig.eyes {
-        let eye_pose = pose(eye.bone, armature, &bones.parents, &bones.transforms.as_readonly());
-        let forward = eye_pose.rotation * eye.forward;
-        let goal = difference(angles(target - eye_pose.translation), angles(forward));
-        eye.angles = follow(eye.angles, goal.clamp(-eye.limits, eye.limits), EYE_SECS, dt);
-        let by = eye.angles * weight;
-        turn(eye, by, forward, armature, &bones.parents, &mut bones.transforms);
-        eye_angles += by;
-    }
-    eye_angles /= rig.eyes.len() as f32;
-
-    let share =
-        |amount: f32, limit: f32| if limit > 0.0 { (amount / limit).clamp(0.0, 1.0) } else { 0.0 };
-    let values = [
-        share(eye_angles.x, eye_limits.x),
-        share(-eye_angles.x, eye_limits.x),
-        share(eye_angles.y, eye_limits.y),
-        share(-eye_angles.y, eye_limits.y),
-    ];
+    let look = rig.look * weight;
+    let values = [look.x.max(0.0), (-look.x).max(0.0), look.y.max(0.0), (-look.y).max(0.0)];
     for (targets, value) in rig.keys.iter().zip(values) {
         for &(mesh, index) in targets {
             if let Ok(mut morph) = bones.morphs.get_mut(mesh)
@@ -400,35 +496,81 @@ fn aim_stage(
     rig.keys_written = weight > 0.0;
 }
 
-impl GazeRig {
-    fn parts_mut(&mut self) -> impl Iterator<Item = &mut Part> {
-        self.neck.iter_mut().chain(self.head.iter_mut()).chain(self.eyes.iter_mut())
+impl Bone {
+    fn anchor(&self) -> Anchor {
+        Some((self.entity, self.rest))
     }
 }
 
-// Adds `by` (yaw, pitch) to the bone's rotation, as turns about the armature's up axis and
-// the face's sideways axis, around the bone's own pivot.
-fn turn(
-    part: &mut Part,
-    by: Vec2,
-    face: Vec3,
-    armature: Entity,
-    parents: &Query<&ChildOf>,
-    transforms: &mut Query<&mut Transform>,
-) {
-    let sideways = Vec3::Y.cross(Vec3::new(face.x, 0.0, face.z)).normalize_or(Vec3::X);
-    // Pitching up is a negative turn about the sideways axis, which points to her left.
-    let turn = Quat::from_rotation_y(by.x) * Quat::from_axis_angle(sideways, -by.y);
-    let parent = parents
-        .get(part.bone)
-        .ok()
-        .filter(|p| p.parent() != armature)
-        .map_or(Quat::IDENTITY, |p| {
-            pose(p.parent(), armature, parents, &transforms.as_readonly()).rotation
-        });
-    if let Ok(mut transform) = transforms.get_mut(part.bone) {
-        transform.rotation = (parent.inverse() * turn * parent * transform.rotation).normalize();
-        part.written = transform.rotation;
+impl GazeRig {
+    fn bones_mut(&mut self) -> impl Iterator<Item = &mut Bone> {
+        self.neck.iter_mut().chain(self.head.iter_mut()).chain(self.eyes.iter_mut())
+    }
+
+    // Nothing is carried over to the next time she looks up.
+    fn start_over(&mut self) {
+        self.turn_goal = Vec2::ZERO;
+        self.turned = Spring::default();
+        self.look_goal = Vec2::ZERO;
+        self.look = Vec2::ZERO;
+    }
+}
+
+// The direction she looks in, in world space, for a cursor at `at` in the camera's picture,
+// with her eyes at `eyes`. None while her eyes are behind the camera.
+fn look_from(
+    camera: &Camera,
+    camera_global: &GlobalTransform,
+    at: Vec2,
+    eyes: Vec3,
+) -> Option<Vec3> {
+    let eyes_at = camera.world_to_viewport(camera_global, eyes).ok()?;
+    let half_height = camera.logical_viewport_size()?.y / 2.0;
+    // The line of sight to her eyes, whatever the lens: through an orthographic one it isn't
+    // the line to the camera.
+    let sight = camera.viewport_to_world(camera_global, eyes_at).ok()?;
+    let view =
+        View { toward: -*sight.direction, right: *camera_global.right(), up: *camera_global.up() };
+    // The picture's y runs down.
+    let offset = (at - eyes_at) / half_height * Vec2::new(1.0, -1.0);
+    Some(charpaper_gaze::look_direction(&view, offset, 1.0))
+}
+
+// Where her eyes are in the armature's space: between the eye bones, or without any, at the
+// joint of the head or of whatever stands in for it.
+fn eyes_at(rig: &GazeRig, armature: Entity, bones: &Bones) -> Vec3 {
+    let at = |bone: Entity| {
+        pose(bone, armature, &bones.parents, &bones.transforms.as_readonly()).translation
+    };
+    if rig.eyes.is_empty() {
+        let stand_in =
+            rig.head.as_ref().map(|head| head.entity).or(rig.socket.map(|(bone, _)| bone));
+        return stand_in.map_or(Vec3::ZERO, at);
+    }
+    rig.eyes.iter().map(|eye| at(eye.entity)).sum::<Vec3>() / rig.eyes.len() as f32
+}
+
+// How far the bone has turned from its rest pose, in the armature's space. Without a bone,
+// not at all.
+fn turn_of(anchor: Anchor, armature: Entity, bones: &Bones) -> Quat {
+    anchor.map_or(Quat::IDENTITY, |(bone, rest)| {
+        let now = pose(bone, armature, &bones.parents, &bones.transforms.as_readonly()).rotation;
+        charpaper_gaze::turn_from_rest(now, rest)
+    })
+}
+
+fn parent_rotation(bone: Entity, armature: Entity, bones: &Bones) -> Quat {
+    bones.parents.get(bone).ok().filter(|p| p.parent() != armature).map_or(Quat::IDENTITY, |p| {
+        pose(p.parent(), armature, &bones.parents, &bones.transforms.as_readonly()).rotation
+    })
+}
+
+// Turns the bone by `by`, a turn in the armature's space, around the bone's own pivot.
+fn turn(bone: &mut Bone, by: Quat, armature: Entity, bones: &mut Bones) {
+    let parent = parent_rotation(bone.entity, armature, bones);
+    if let Ok(mut transform) = bones.transforms.get_mut(bone.entity) {
+        transform.rotation = charpaper_gaze::turned_by(transform.rotation, by, parent);
+        bone.written = transform.rotation;
     }
 }
 
@@ -453,24 +595,4 @@ fn pose(
         pose = local.mul_transform(pose);
     }
     pose
-}
-
-// Yaw about +Y and pitch upwards, in radians. A positive yaw turns towards her left whichever way
-// she faces; only differences between two of these are used, so where yaw 0 lies doesn't matter.
-fn angles(direction: Vec3) -> Vec2 {
-    let d = direction.normalize_or(Vec3::Z);
-    Vec2::new(d.x.atan2(d.z), d.y.clamp(-1.0, 1.0).asin())
-}
-
-fn difference(to: Vec2, from: Vec2) -> Vec2 {
-    let yaw = (to.x - from.x + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
-        - std::f32::consts::PI;
-    Vec2::new(yaw, to.y - from.y)
-}
-
-fn follow(current: Vec2, goal: Vec2, secs: f32, dt: f32) -> Vec2 {
-    if secs <= 0.0 {
-        return goal;
-    }
-    current + (goal - current) * (1.0 - (-dt / secs).exp())
 }
