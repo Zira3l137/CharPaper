@@ -1,3 +1,6 @@
+![banner](resources/images/Banner.png)
+
+
 <h1 align="center">CharPaper</h1>
 
 <p align="center">
