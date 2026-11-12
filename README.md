@@ -7,6 +7,11 @@
   A live 3D character for your Windows desktop, behind your icons.
 </p>
 
+<p align="center">
+  <a href="https://zira3l137.github.io/CharPaper/"><img alt="Website: zira3l137.github.io/CharPaper"
+    src="https://img.shields.io/badge/Website-zira3l137.github.io%2FCharPaper-5AA6F2?style=flat-square&logo=githubpages&logoColor=white"></a>
+</p>
+
 <br>
 
 <p align="center">
