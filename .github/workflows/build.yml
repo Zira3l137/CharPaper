@@ -65,6 +65,18 @@ jobs:
       - name: Build
         run: cargo build --locked --release --target ${{ matrix.target }} -p charpaper
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9
+
+      # Lists every library built into this platform's app with its license, as MIT and Apache
+      # require of a download. Fails on a license packaging/licenses/about.toml doesn't accept.
+      - name: Third-party licenses
+        run: >
+          cargo about generate --locked --fail --target ${{ matrix.target }}
+          -c packaging/licenses/about.toml -m crates/charpaper/Cargo.toml
+          -o THIRD-PARTY-LICENSES.html packaging/licenses/about.hbs
+
       - name: Package
         env:
           STAGE: charpaper-${{ inputs.label }}-${{ matrix.name }}
@@ -74,6 +86,7 @@ jobs:
           mkdir -p "dist/$STAGE/characters"
           cp "$bin" "dist/$STAGE/"
           cp -r locales schemas "dist/$STAGE/"
+          cp LICENSE-MIT LICENSE-APACHE THIRD-PARTY-LICENSES.html "dist/$STAGE/"
           cp -r "${{ matrix.extras }}/." "dist/$STAGE/"
           cd dist
           case ${{ matrix.archive }} in

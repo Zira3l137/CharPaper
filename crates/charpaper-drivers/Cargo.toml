@@ -2,6 +2,7 @@
 name = "charpaper-drivers"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 # Bevy-free on purpose, so the evaluator is tested on its own.
 [dependencies]

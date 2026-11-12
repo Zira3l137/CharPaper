@@ -5,6 +5,7 @@ resolver = "3"
 [workspace.package]
 version = "0.3.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 # Only what the app uses. tonemapping_luts is required: Camera3d's default tonemapper

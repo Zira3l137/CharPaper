@@ -2,6 +2,7 @@
 name = "charpaper-wallpaper"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 # Bevy-free on purpose, so the OS half builds without the engine.
 [dependencies]

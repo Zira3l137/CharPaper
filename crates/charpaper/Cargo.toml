@@ -2,6 +2,7 @@
 name = "charpaper"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 charpaper-audio.workspace = true

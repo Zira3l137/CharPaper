@@ -12,6 +12,7 @@ tags = ["Import-Export"]
 blender_version_min = "4.2.0"
 
 license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 Zirael"]
 
 [permissions]
 files = "Writes glTF files, sound files and suite.toml into the suite folder"

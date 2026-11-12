@@ -10,6 +10,8 @@
 <p align="center">
   <a href="https://zira3l137.github.io/CharPaper/"><img alt="Website: zira3l137.github.io/CharPaper"
     src="https://img.shields.io/badge/Website-zira3l137.github.io%2FCharPaper-5AA6F2?style=flat-square&logo=githubpages&logoColor=white"></a>
+  <a href="#license"><img alt="License: MIT or Apache-2.0"
+    src="https://img.shields.io/badge/License-MIT%20or%20Apache--2.0-5C6475?style=flat-square"></a>
 </p>
 
 <br>
@@ -72,6 +74,7 @@ If you are a 3D artist, [Making a character](#making-a-character) is written for
   - [Command line](#command-line)
   - [Translating the panel](#translating-the-panel)
   - [Building from source](#building-from-source)
+  - [License](#license)
 
 # Using CharPaper
 
@@ -179,6 +182,8 @@ turn it on again after moving the folder.
 | `locales\` | Translations of the panel. |
 | `schemas\` | Reference files for people making characters. |
 | `run-windowed.bat` | Starts CharPaper in an ordinary window. |
+| `LICENSE-MIT`, `LICENSE-APACHE` | CharPaper's license: either one, your choice. |
+| `THIRD-PARTY-LICENSES.html` | Every library inside CharPaper, and its license. |
 
 ## When something goes wrong
 
@@ -779,3 +784,24 @@ added beside it:
 
 The Blender add-on is in [`tools/blender/charpaper_exporter`](tools/blender/charpaper_exporter).
 [RELEASING.md](RELEASING.md) explains how versions and nightly builds are made.
+
+## License
+
+- **The app**, which is everything in `crates/`, `locales/`, `schemas/` and `packaging/`, is
+  under your choice of the [MIT](LICENSE-MIT) or the [Apache 2.0](LICENSE-APACHE) license.
+- **The Blender add-on** is under the [GPL 3.0 or later](tools/blender/charpaper_exporter/LICENSE),
+  as add-ons that run inside Blender must be.
+- **The artwork** is © Zirael, all rights reserved: the app icon in `crates/charpaper/icon/`,
+  the banner in `resources/images/`, and the images in `site/`. The licenses above don't
+  cover it, so a fork needs its own icon and images. Sharing CharPaper's official downloads
+  as they are is fine.
+- **The website's fonts**, Inter, Space Grotesk and JetBrains Mono, are under the SIL Open
+  Font License. Their licenses are in [`site/fonts/`](site/fonts).
+- **Characters you make** are yours. CharPaper's licenses don't cover them, or the files the
+  add-on exports for them.
+
+Every release download includes the license texts and `THIRD-PARTY-LICENSES.html`, which
+lists every library built into the app and its license.
+
+Unless you say otherwise, anything you contribute to the app is licensed as MIT or Apache 2.0
+like the rest of it, and anything you contribute to the add-on as GPL 3.0 or later.

@@ -2,6 +2,7 @@
 name = "charpaper-windows"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 # No bevy: the backend calls Win32 itself, through windows-sys's declarations.
 [dependencies]
