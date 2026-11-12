@@ -1,9 +1,9 @@
-//! Where a character looks while she follows the cursor, and how her neck, head and eyes share
+//! Where a character looks while it follows the cursor, and how its neck, head and eyes share
 //! the turn. Plain maths on vectors and rotations, without Bevy: the app reads the pose and
 //! writes the bones, and the Blender add-on's preview is checked against the same numbers.
 //!
 //! A look takes three steps. `look_direction` turns the cursor's place in the picture into a
-//! direction. `Setup` says how far towards it the head and neck point, measured from her
+//! direction. `Setup` says how far towards it the head and neck point, measured from the
 //! chest, and what that leaves to the eyes. `Frame` turns those angles into rotations, which
 //! the functions for bones fit onto a chain of them.
 

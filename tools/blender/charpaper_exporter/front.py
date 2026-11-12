@@ -1,7 +1,8 @@
-# Which way her face points in her rest pose, for gaze, which turns from there. It is worked
-# out from where her eye bones sit, as the app does it, and an arrow from her head shows the
-# result on her rest pose. Where that is wrong, or she has no eye bones, the author shows it:
-# look her in the face in the viewport and click "She faces me". That is kept as one of the
+# Which way the character's face points in the rest pose, for gaze, which turns from there. It
+# is worked out from where the eye bones sit, as the app does it, and an arrow from the head
+# shows the result on the rest pose. Where that is wrong, or there are no eye bones, the author
+# shows it: look the character in the face in the viewport and click "Front from view". That
+# is kept as one of the
 # armature's own axes, so turning the armature, or the whole scene, afterwards keeps it right,
 # and only then does export write it into suite.toml, in world axes, as the model is exported.
 
@@ -16,7 +17,7 @@ from .gaze import AXES
 from .props import redraw_views
 from .props import suite_of
 
-# Green for a front she is known to have, orange for the guess made when nothing says.
+# Green for a front that is known, orange for the guess made when nothing says.
 KNOWN_COLOR = (0.3, 0.9, 0.4, 1.0)
 GUESSED_COLOR = (1.0, 0.55, 0.1, 1.0)
 
@@ -74,7 +75,7 @@ def _draw():
     shader.uniform_float("viewportSize", tuple(float(v) for v in gpu.state.viewport_get()[2:]))
     shader.uniform_float("lineWidth", 3.0)
     shader.uniform_float("color", color)
-    # Drawn over her, or the arrow would start hidden inside her head.
+    # Drawn over the character, or the arrow would start hidden inside the head.
     depth_test = gpu.state.depth_test_get()
     gpu.state.depth_test_set("NONE")
     batch_for_shader(shader, "LINES", {"pos": points}).draw(shader)
@@ -83,10 +84,11 @@ def _draw():
 
 class CHARPAPER_OT_gaze_front_from_view(Operator):
     bl_idname = "charpaper.gaze_front_from_view"
-    bl_label = "She faces me"
+    bl_label = "Front from view"
     bl_description = (
-        "For when the arrow points wrong. Look her in the face in this viewport, then click: the "
-        "way you look at her becomes her front, rounded to the nearest of the armature's axes"
+        "For when the arrow points wrong. Look the character in the face in this viewport, then "
+        "click: the way you look at it becomes its front, rounded to the nearest of the "
+        "armature's axes"
     )
     bl_options = {"REGISTER", "UNDO"}
 
@@ -105,13 +107,13 @@ class CHARPAPER_OT_gaze_front_from_view(Operator):
         armature = suite_of(context).armature
         if armature.data.pose_position != "REST":
             gaze.show_front = True
-            self.report({"WARNING"}, "This is her rest pose: look her in the face and click again")
+            self.report({"WARNING"}, "This is the rest pose: look the character in the face and click again")
             return {"CANCELLED"}
         view = context.space_data.region_3d.view_rotation @ Vector((0, 0, -1))
         gaze.front = nearest_axis(armature, -view)
         gaze.show_front = True
         label = gaze.front.replace("POS_", "+").replace("NEG_", "-")
-        self.report({"INFO"}, f"Her front is {armature.name}'s {label} axis")
+        self.report({"INFO"}, f"The front is {armature.name}'s {label} axis")
         redraw_views()
         return {"FINISHED"}
 

@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn the_head_ends_up_pointing_where_it_was_sent() {
         let frame = Frame::facing(Vec3::new(0.2, 0.0, 1.0), Vec3::Y).unwrap();
-        // Standing, leaning, and lying on her back.
+        // Standing, leaning, and lying on its back.
         for chest in [euler(2.0, -5.0, 1.0), euler(25.0, 30.0, -10.0), euler(-90.0, 15.0, 0.0)] {
             let mut chain = Chain::new(chest);
             let direction = chain.turn(CHEST) * frame.direction(degrees(-50.0, 30.0));

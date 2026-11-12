@@ -43,19 +43,19 @@ pub struct Setup {
 // The eyes are counted on for this much of their reach; the head makes up the rest, so a look
 // far aside doesn't leave them pressed against their limit.
 const EYE_COMFORT: f32 = 0.9;
-// She follows a target up to this far past what she can turn to, looking as far as she can,
-// and then lets go of it. She picks it up again a little earlier than that, so a target on
-// the edge doesn't have her start and stop.
+// The character follows a target up to this far past what it can turn to, looking as far as
+// it can, and then lets go. It picks the target up again a little earlier than that, so one
+// on the edge doesn't make it start and stop.
 const PAST_REACH: f32 = 20.0 * PI / 180.0;
 const BACK_IN_REACH: f32 = 15.0 * PI / 180.0;
-// However little of her turns, she follows what is beside her; however much, not what is
-// right behind her, where left and right would swap.
+// However little of the character turns, it follows what is beside it; however much, not
+// what is right behind it, where left and right would swap.
 const LEAST_REACH: f32 = 90.0 * PI / 180.0;
 const MOST_REACH: f32 = 140.0 * PI / 180.0;
 
 impl Setup {
-    /// Whether she follows a target at these angles from her chest, given whether she did a
-    /// moment ago.
+    /// Whether the character follows a target at these angles from its chest, given whether
+    /// it did a moment ago.
     pub fn in_reach(&self, target: Vec2, was: bool) -> bool {
         let eyes = self.eyes.map_or(0.0, |eyes| eyes.reach.x);
         let reach = (self.turn_limit.x + eyes).clamp(LEAST_REACH, MOST_REACH) + PAST_REACH;
@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn she_lets_go_of_what_is_behind_her_and_never_swaps_sides() {
+    fn a_target_behind_is_let_go_of_and_never_swaps_sides() {
         let setup = person();
         // 75 of head and neck and 30 of eyes reach 105, followed to 125, picked up at 110.
         assert!(setup.in_reach(degrees(120.0, 0.0), true));
@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn eyes_alone_still_follow_what_is_beside_her() {
+    fn eyes_alone_still_follow_a_target_to_the_side() {
         let setup = Setup { eyes: Some(eyeballs()), ..Setup::default() };
         assert!(setup.in_reach(degrees(80.0, 0.0), false));
         assert!(!setup.in_reach(degrees(115.0, 0.0), true));

@@ -388,18 +388,19 @@ If a shape key has both, the driver wins, as in Blender.
 ### Following the cursor (gaze)
 
 The character looks towards the mouse pointer, on top of whatever animation plays. With
-the pointer on her face she looks at you. The further from her face it is, the further
-aside she looks: her head and neck turn part of the way and her eyes cover the rest. It
-works the same through any camera, near or far.
+the pointer on its face it looks at you. The further from the face the pointer is, the
+further aside it looks: the head and neck turn part of the way and the eyes cover the
+rest. It works the same through any camera, near or far.
 
-She goes back to what the animation has her do once the pointer has been still for a few
-seconds, and she lets go of a pointer she can't turn to, such as one behind her back.
+The character goes back to what the animation has it do once the pointer has been still
+for a few seconds, and lets go of a pointer it can't turn to, such as one behind its back.
 
 1. Open **Gaze** in the add-on and set it to **Write**.
-2. Click **Detect bones**. It fills in her eye, head and neck bones, and whether her eyes
+2. Click **Detect bones**. It fills in the eye, head and neck bones, and whether the eyes
    are eyeballs. Check what it found, and fix by hand what it got wrong.
-3. Turn on **Preview** and drag the two sliders. She is posed the way the app will pose
-   her. At −1 and 1 everything is at its limit, so tune the limits until that looks right.
+3. Turn on **Preview** and drag the two sliders. The character is posed the way the app
+   will pose it. At −1 and 1 everything is at its limit, so tune the limits until that
+   looks right.
 4. Optionally name shape keys that should follow the eyes, such as eyelids.
 
 What the fields mean:
@@ -407,29 +408,30 @@ What the fields mean:
 - **Eyes are** says what the eye bones turn. *Eyeballs* are round balls in their sockets,
   and are aimed exactly. *Drawn* is anything else, like irises that slide over a flat or
   shallow eye: aimed, those would shoot past, so they move in proportion to how far aside
-  she looks. Drawn eyes usually want small limits, a few degrees.
+  the character looks. Drawn eyes usually want small limits, a few degrees.
 - **Eye yaw** and **Eye pitch** are how far the eye bones turn, sideways and up or down.
-- **Head** and **Neck** yaw and pitch add up to how far her head may point away from her
-  chest. That holds for the animation and gaze together, so a clip that already turns her
-  head leaves gaze less to add, and she can't end up with her head on backwards.
+- **Head** and **Neck** yaw and pitch add up to how far the head may point away from the
+  chest. That holds for the animation and gaze together, so a clip that already turns the
+  head leaves gaze less to add, and the head can't end up on backwards.
 - **Head turn** is how much of the way to the pointer the head and neck go. At 0 the head
   only moves for what the eyes can't reach; at 1 it points straight there.
 - **Head share** splits that turn between head and neck.
-- **Front** is which way she faces in her rest pose. *Automatic* works it out from where
-  her eye bones sit. The arrow button shows her rest pose with an arrow from her head:
-  green when her front is known, orange when it's a guess. If it points wrong, look her in
-  the face in the viewport and click **She faces me**, the eye icon next to the arrow.
+- **Front** is which way the character faces in the rest pose. *Automatic* works it out
+  from where the eye bones sit. The arrow button shows the rest pose with an arrow from
+  the head: green when the front is known, orange when it's a guess. If it points wrong,
+  look the character in the face in the viewport and click **Front from view**, the eye
+  icon next to the arrow.
 
 Good to know:
 
-- **She needs no eye bones.** A head alone follows, and so do eyes moved only by shape
+- **Eye bones are optional.** A head alone follows, and so do eyes moved only by shape
   keys: name the four shape keys and leave the eye list empty.
-- **Gaze moves the eye bones itself** while she follows, so a clip's own eye animation
-  doesn't show. Untick **Gaze** on that clip to see it, and on any clip where she must
-  look somewhere on purpose: a dance, sleeping.
+- **Gaze moves the eye bones itself** while the character follows, so a clip's own eye
+  animation doesn't show. Untick **Gaze** on that clip to see it, and on any clip where
+  the character must look somewhere on purpose: a dance, sleeping.
 - Eye bones must be children of the head bone, and an eyeball's bone should sit at the
   center of the ball. Otherwise the eye swings instead of spinning.
-- **The preview is temporary.** Her own pose comes back when you turn it off, change the
+- **The preview is temporary.** The character's own pose comes back when you turn it off, change the
   frame, save or export.
 - Detect bones reads bone names, so it can miss a bone with an unusual name. On Rigify's
   deform bones it finds no neck; pick it by hand.
@@ -690,10 +692,10 @@ render.
 | An expression isn't listed | Its action also keys bones, or it wasn't ticked for that skin. An expression keys only shape keys. |
 | A clip's shape keys do nothing on the face | That mesh is used by expressions. Use a driver, or put the keys on another mesh. |
 | The eyes swing out of the head with gaze on | The eye bones don't sit at the eyeballs' centers, or the eyes aren't eyeballs: set **Eyes are** to *Drawn*. |
-| The irises slide too far, or out of sight | The eye limits are too big for her eyes. Turn on **Preview**, drag a slider to 1 and lower *Eye yaw* and *Eye pitch*. |
-| Only her eyes follow, not her head | No head bone is named in Gaze, or *Head turn* is 0. |
-| She turns away from the cursor | Her front is wrong. Set **Front** back to *Automatic*; if the arrow still points wrong, set it by hand. |
-| A clip's eye animation doesn't show | Gaze moves the eyes while she follows. Untick the clip's **Gaze**. |
+| The irises slide too far, or out of sight | The eye limits are too big for the eyes. Turn on **Preview**, drag a slider to 1 and lower *Eye yaw* and *Eye pitch*. |
+| Only the eyes follow, not the head | No head bone is named in Gaze, or *Head turn* is 0. |
+| The character turns away from the cursor | Its front is wrong. Set **Front** back to *Automatic*; if the arrow still points wrong, set it by hand. |
+| A clip's eye animation doesn't show | Gaze moves the eyes while the character follows. Untick the clip's **Gaze**. |
 | The fog doesn't show | No lamp lights it. The sky doesn't light fog, and a sun only does with *Shadow* on. |
 | A light does nothing | It's an area light. Use a spot or point light. |
 | The sky didn't change after replacing the `.hdr` | Delete `skybox.ktx2`, `specular.ktx2` and `diffuse.ktx2` next to it. |

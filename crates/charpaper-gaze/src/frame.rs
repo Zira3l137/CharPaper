@@ -2,8 +2,9 @@ use glam::Quat;
 use glam::Vec2;
 use glam::Vec3;
 
-/// Her own left, up and front in the rest pose, in the armature's space. Angles are measured
-/// against it, in radians: yaw, in `x`, turns towards her left, and pitch, in `y`, upwards.
+/// The character's own left, up and front in the rest pose, in the armature's space. Angles
+/// are measured against it, in radians: yaw, in `x`, turns towards the left, and pitch, in
+/// `y`, upwards.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame {
     pub side: Vec3,
@@ -48,11 +49,12 @@ impl Frame {
 }
 
 // Eyes this close to straight above the pivot, as a share of their distance from it, don't say
-// which way she faces.
+// which way the character faces.
 const LEAST_AHEAD: f32 = 0.05;
 
-/// Which way she faces, from where her eyes sit in the rest pose: level, square to the line
-/// between the eyes, on the side of `pivot`, the head's joint, that they are on. With one eye,
+/// Which way the character faces, from where the eyes sit in the rest pose: level, square to
+/// the line between them, on the side of `pivot`, the head's joint, that they are on. With one
+/// eye,
 /// straight from the pivot to it. None when the bones don't say.
 pub fn front_from_eyes(pivot: Vec3, eyes: &[Vec3], up: Vec3) -> Option<Vec3> {
     let (first, last) = (*eyes.first()?, *eyes.last()?);
@@ -91,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn positive_yaw_is_her_left_and_positive_pitch_is_up() {
+    fn positive_yaw_is_to_the_left_and_positive_pitch_is_up() {
         let frame = Frame::default();
         assert!(close(frame.direction(Vec2::new(FRAC_PI_2, 0.0)), Vec3::X));
         assert!(close(frame.direction(Vec2::new(0.0, FRAC_PI_2)), Vec3::Y));
@@ -103,7 +105,7 @@ mod tests {
         let (from, to) = (Vec2::new(0.3, -0.2), Vec2::new(-0.9, 0.5));
         let turn = frame.turn(from, to);
         assert!(close(turn * frame.direction(from), frame.direction(to)));
-        // Her left stays level: no roll came in.
+        // The side axis stays level: no roll came in.
         let side = turn * (frame.toward(from) * frame.side);
         assert!(side.dot(frame.up).abs() < 1e-4);
     }

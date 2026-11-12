@@ -55,7 +55,7 @@ pub struct Manifest {
     #[serde(default)]
     pub cameras: BTreeMap<String, CameraEntry>,
     /// Makes the character look towards the mouse cursor. Without this
-    /// section she never does.
+    /// section it never does.
     pub gaze: Option<Gaze>,
 }
 
@@ -88,7 +88,7 @@ pub struct ClipEntry {
     #[serde(default)]
     pub mode: PlayMode,
     /// Whether the character may look towards the cursor while this plays.
-    /// Defaults to true. Turn it off where she has to look somewhere on
+    /// Defaults to true. Turn it off where the character has to look somewhere on
     /// purpose, like a dance or a sleeping pose.
     pub gaze: Option<bool>,
     /// Sounds to play as the clip passes given moments. A looping clip plays
@@ -108,12 +108,13 @@ pub struct Cue {
     pub sound: String,
 }
 
-/// Looking towards the mouse cursor. Where she looks comes from where the
-/// cursor is on screen: on her eyes she looks at the viewer, and the further
-/// from them it is, the further aside she looks. Her head and neck go part
-/// of the way and her eyes cover the rest. The head's angles are measured
-/// from the bone above the neck, with the animation's own turn counted in,
-/// and the eyes' from the head. A cursor she can't turn to she lets go of.
+/// Looking towards the mouse cursor. Where the character looks comes from
+/// where the cursor is on screen: with the cursor on its eyes it looks at
+/// the viewer, and the further from them the cursor is, the further aside
+/// it looks. The head and neck go part of the way and the eyes cover the
+/// rest. The head's angles are measured from the bone above the neck, with
+/// the animation's own turn counted in, and the eyes' from the head. A
+/// cursor the character can't turn to, it lets go of.
 #[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Gaze {
@@ -146,21 +147,21 @@ pub struct Gaze {
     /// With both a head and a neck: the head's share of their turn, from 0
     /// to 1. The neck takes the rest, up to its limit. Defaults to 0.7.
     pub head_share: Option<f32>,
-    /// How much of the way to where she looks the head and neck go, from 0
-    /// to 1, leaving the rest to the eyes. At 0 the head only moves for what
+    /// How much of the way to where the character looks the head and neck
+    /// go, from 0 to 1, leaving the rest to the eyes. At 0 the head only moves for what
     /// the eyes can't reach; at 1 it points straight there and the eyes stay
     /// centered. Defaults to 0.6. Without eyes the head goes all the way.
     pub head_turn: Option<f32>,
-    /// Which way her face points while she stands in her rest pose, in
-    /// Blender's world axes as exported: `[0, -1, 0]` faces Blender's front
-    /// view. Rarely needed: it is worked out from where the eye bones sit
-    /// from the head bone. Without those and without this, she's taken to
-    /// face Blender's front view. Only its horizontal part counts.
+    /// Which way the character's face points in the rest pose, in Blender's
+    /// world axes as exported: `[0, -1, 0]` faces Blender's front view.
+    /// Rarely needed: it is worked out from where the eye bones sit from
+    /// the head bone. Without those and without this, the character is
+    /// taken to face Blender's front view. Only its horizontal part counts.
     pub front: Option<[f32; 3]>,
     /// Shape keys that follow the eyes: eyelids, or on a character without
     /// eye bones, the eyes themselves. Each is set in proportion to how far
-    /// she looks that way, reaching 1 at a full look. Any may be left out,
-    /// and a skin without one ignores it.
+    /// the character looks that way, reaching 1 at a full look. Any may be
+    /// left out, and a skin without one ignores it.
     #[serde(default)]
     pub shape_keys: GazeShapeKeys,
 }
@@ -174,7 +175,8 @@ pub enum EyeKind {
     Ball,
     /// Anything else, like an iris that slides over a flat eye. Aimed, such
     /// a bone would shoot past, so it turns in proportion to how far aside
-    /// she looks instead, reaching its limits for a look about 35° aside.
+    /// the character looks instead, reaching its limits for a look about
+    /// 35° aside.
     Drawn,
 }
 

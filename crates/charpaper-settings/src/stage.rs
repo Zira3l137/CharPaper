@@ -36,7 +36,7 @@ pub struct StageSeeds(pub BTreeMap<StageId, StageSeed>);
 #[serde(default)]
 pub struct GazeSettings {
     pub follow_cursor: bool,
-    // How readily she turns for the cursor: 1 is as her author set her up.
+    // How readily the character turns for the cursor: 1 is as its author set it up.
     pub strength: f32,
 }
 

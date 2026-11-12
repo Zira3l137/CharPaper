@@ -3,9 +3,9 @@ import math
 from mathutils import Quaternion
 from mathutils import Vector
 
-# Where she looks and who turns how far, as the app works it out: a port of the app's
+# Where the character looks and who turns how far, as the app works it out: a port of the app's
 # charpaper-gaze crate, kept the same line for line so the preview shows what the app will.
-# Angles are (yaw, pitch) in radians: yaw towards her left, pitch upwards.
+# Angles are (yaw, pitch) in radians: yaw towards the character's left, pitch upwards.
 
 # The eyes are counted on for this much of their reach; the head makes up the rest.
 EYE_COMFORT = 0.9
@@ -13,7 +13,7 @@ EYE_COMFORT = 0.9
 # target this far aside.
 DRAWN_REACH = Vector((math.radians(35.0), math.radians(25.0)))
 # Eyes this close to straight above the pivot, as a share of their distance from it, don't
-# say which way she faces.
+# say which way the character faces.
 LEAST_AHEAD = 0.05
 
 
@@ -22,7 +22,7 @@ def _clamp(value, low, high):
 
 
 class Frame:
-    """Her own left, up and front in the rest pose. Angles are measured against it."""
+    """The character's own left, up and front in the rest pose. Angles are measured against it."""
 
     def __init__(self, front, up):
         self.up = up.normalized()
@@ -47,8 +47,8 @@ class Frame:
 
 
 def front_from_eyes(pivot, eyes, up):
-    """Which way she faces, from where her eyes sit in the rest pose: level, square to the
-    line between the eyes, on the side of the pivot, the head's joint, that they are on. None
+    """Which way the character faces, from where the eyes sit in the rest pose: level, square
+    to the line between the eyes, on the side of the pivot, the head's joint, that they are on. None
     when the bones don't say."""
     if not eyes:
         return None
@@ -90,7 +90,7 @@ class Setup:
         self.eyes = eyes
 
     def reach(self):
-        """How far aside she can look at all, with everything at its limit."""
+        """How far aside the character can look at all, with everything at its limit."""
         return self.turn_limit + (self.eyes.reach if self.eyes else Vector((0.0, 0.0)))
 
     def head(self, target, clip):

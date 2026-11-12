@@ -20,8 +20,8 @@ def suite_of(context):
     return context.scene.charpaper
 
 
-# Gaze needs her front as she stands in her rest pose, which a clip may turn her away from, so
-# while the arrow shows, so does her rest pose.
+# Gaze needs the front as the character stands in the rest pose, which a clip may turn it away
+# from, so while the arrow shows, so does the rest pose.
 def _show_front_changed(gaze, context):
     if gaze.show_front and gaze.preview:
         gaze.preview = False
@@ -38,7 +38,7 @@ def _gaze_changed(self, context):
     redraw_views()
 
 
-# The arrow shows her rest pose, where a preview would not be seen.
+# The arrow shows the rest pose, where a preview would not be seen.
 def _preview_changed(gaze, context):
     if gaze.preview and gaze.show_front:
         gaze.show_front = False
@@ -139,7 +139,7 @@ class CHARPAPER_PG_clip(PropertyGroup):
     gaze: BoolProperty(
         name="Gaze",
         default=True,
-        description="Let her follow the cursor during this clip. Turn off for dances or lying poses",
+        description="Let the character follow the cursor during this clip. Turn off for dances or lying poses",
     )
     # Named for what it first held; kept so older .blend files keep their choice.
     corrective: PointerProperty(
@@ -188,7 +188,7 @@ class CHARPAPER_PG_gaze(PropertyGroup):
         items=(
             ("KEEP", "Leave as is", "Don't touch the [gaze] section"),
             ("WRITE", "Write", "Write [gaze] from these fields"),
-            ("REMOVE", "Remove", "Remove [gaze]: she never follows the cursor"),
+            ("REMOVE", "Remove", "Remove [gaze]: the character never follows the cursor"),
         ),
         default="KEEP",
     )
@@ -202,7 +202,7 @@ class CHARPAPER_PG_gaze(PropertyGroup):
                 "DRAWN",
                 "Drawn",
                 "Anything else, like irises that slide over a flat eye. Aimed, they would shoot "
-                "past, so they move in proportion to how far aside she looks",
+                "past, so they move in proportion to how far aside the character looks",
             ),
         ),
         default="BALL",
@@ -259,11 +259,11 @@ class CHARPAPER_PG_gaze(PropertyGroup):
     front: EnumProperty(
         name="Front",
         description=(
-            "Which way her face points in her rest pose. Automatic works it out from where her "
+            "Which way the face points in the rest pose. Automatic works it out from where the "
             "eye bones sit; pick one of the armature's axes only if the arrow points wrong"
         ),
         items=(
-            ("NONE", "Automatic", "Worked out from her eye and head bones, as the app does"),
+            ("NONE", "Automatic", "Worked out from the eye and head bones, as the app does"),
             ("NEG_Y", "-Y", ""),
             ("POS_Y", "+Y", ""),
             ("NEG_X", "-X", ""),
@@ -276,7 +276,7 @@ class CHARPAPER_PG_gaze(PropertyGroup):
     )
     show_front: BoolProperty(
         name="Show front",
-        description="Show her rest pose, with an arrow from her head the way gaze takes her to face",
+        description="Show the rest pose, with an arrow from the head the way gaze takes the character to face",
         default=False,
         update=_show_front_changed,
     )
@@ -287,20 +287,20 @@ class CHARPAPER_PG_gaze(PropertyGroup):
     preview: BoolProperty(
         name="Preview",
         description=(
-            "Pose her as the app would for the look below, to set the limits by eye. Her own "
-            "pose is put back when this is turned off, on a frame change and before saving"
+            "Pose the character as the app would for the look below, to set the limits by eye. "
+            "Its own pose is put back when this is turned off, on a frame change and before saving"
         ),
         default=False,
         update=_preview_changed,
     )
     look_side: FloatProperty(
         name="Sideways",
-        description="-1 is as far to her right as she can look, 1 as far to her left",
+        description="-1 is as far to the character's right as it can look, 1 as far to its left",
         default=0.0, min=-1.0, max=1.0, update=_gaze_changed,
     )
     look_up: FloatProperty(
         name="Up",
-        description="-1 is as far down as she can look, 1 as far up",
+        description="-1 is as far down as the character can look, 1 as far up",
         default=0.0, min=-1.0, max=1.0, update=_gaze_changed,
     )
 

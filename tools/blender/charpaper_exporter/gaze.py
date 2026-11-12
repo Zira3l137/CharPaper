@@ -10,9 +10,9 @@ from mathutils import Vector
 
 from . import aim
 
-# Gaze on the Blender side: finding her gaze bones, telling eyeballs from other eyes, working
-# out her front as the app does, and a preview that poses her as the app would for a look, so
-# limits are set by eye rather than by exporting and looking.
+# Gaze on the Blender side: finding the gaze bones, telling eyeballs from other eyes, working
+# out the character's front as the app does, and a preview that poses the character as the app
+# would for a look, so limits are set by eye rather than by exporting and looking.
 
 AXES = {
     "POS_X": Vector((1, 0, 0)),
@@ -22,7 +22,7 @@ AXES = {
     "POS_Z": Vector((0, 0, 1)),
     "NEG_Z": Vector((0, 0, -1)),
 }
-# What the app takes her to face when nothing says: Blender's front view looks along +Y.
+# What the app takes the character to face when nothing says: Blender's front view looks along +Y.
 DEFAULT_FRONT = Vector((0, -1, 0))
 
 # Bone names are read word by word: "mixamorig:LeftEye" is mixamorig, left, eye. A bone is
@@ -67,7 +67,7 @@ def _up(armature):
 
 
 def worked_out_front(gaze, armature):
-    """Her front in the armature's axes, as the app works it out from the eye bones. None
+    """The front in the armature's axes, as the app works it out from the eye bones. None
     when the bones don't say."""
     eyes, head, neck = bones_of(gaze, armature)
     pivot = head or neck
@@ -79,8 +79,8 @@ def worked_out_front(gaze, armature):
 
 
 def front(gaze, armature):
-    """Her front in the armature's axes, and where it comes from: "stated" in the panel,
-    worked out from her "bones", or the "default" when neither says."""
+    """The front in the armature's axes, and where it comes from: "stated" in the panel,
+    worked out from the "bones", or the "default" when neither says."""
     stated = AXES.get(gaze.front)
     if stated is not None:
         return stated.copy(), "stated"
@@ -214,7 +214,7 @@ def _weighted(suite, armature, names):
 
 
 def detect(suite, armature):
-    """Her eye, head and neck bones, going by their names and what hangs from what:
+    """The eye, head and neck bones, going by their names and what hangs from what:
     (eyes, head, neck), with "" for what isn't found."""
     bones = armature.data.bones
     candidates = [b.name for b in bones if _named(b.name, EYE_WORDS, NOT_EYES)]
@@ -248,8 +248,8 @@ class CHARPAPER_OT_gaze_detect(Operator):
     bl_idname = "charpaper.gaze_detect"
     bl_label = "Detect bones"
     bl_description = (
-        "Find her eye, head and neck bones by their names and by what moves the mesh, and tell "
-        "whether her eyes are eyeballs. Check what it found, and fix it by hand where it's wrong"
+        "Find the eye, head and neck bones by their names and by what moves the mesh, and tell "
+        "whether the eyes are eyeballs. Check what it found, and fix it by hand where it's wrong"
     )
     bl_options = {"REGISTER", "UNDO"}
 
@@ -312,7 +312,7 @@ def _turned(pose_bone, matrix):
 
 
 def _pose(suite, armature):
-    """Poses her for the panel's look, as the app would on top of the pose she is in. Each
+    """Poses the character for the panel's look, as the app would on top of its current pose. Each
     bone's new pose is worked out from the poses read at the start, with what the bones above
     it did carried along, so nothing has to be evaluated in between."""
     gaze = suite.gaze
@@ -398,7 +398,7 @@ def _pose(suite, armature):
 
 def refresh(context):
     """Brings the preview up to date with the panel: puts back what it changed, and while it
-    is on, poses her again from there."""
+    is on, poses the character again from there."""
     _restore()
     suite = context.scene.charpaper
     armature = suite.armature
@@ -421,7 +421,7 @@ def _scenes_previewing():
     return [s for s in bpy.data.scenes if getattr(s, "charpaper", None) and s.charpaper.gaze.preview]
 
 
-# A previewed pose must not be saved as hers, and a new frame brings a new pose to start from.
+# A previewed pose must not be saved as the character's own, and a new frame brings a new pose to start from.
 @persistent
 def _stop_previews(*_):
     for scene in _scenes_previewing():

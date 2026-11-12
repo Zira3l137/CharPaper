@@ -30,13 +30,14 @@ use crate::suite::ActiveSuite;
 // playing: after the animation has posed the bones this frame, before their final positions
 // are worked out from the pose.
 //
-// Where she looks comes from the picture: how far the cursor is from her eyes on screen, and
-// which way. charpaper-gaze turns that into a direction and shares the turn out between neck,
-// head and eyes. This file reads the pose for it and writes the bones and shape keys.
+// Where the character looks comes from the picture: how far the cursor is from its eyes on
+// screen, and which way. charpaper-gaze turns that into a direction and shares the turn out
+// between neck, head and eyes. This file reads the pose for it and writes the bones and shape
+// keys.
 //
 // Everything is measured in the armature's own space, which is Blender's world as exported,
 // with +Y up, and against bones rather than the world: the head from the bone above the neck,
-// the eyes from the head. So it holds while she leans, lies down or turns away.
+// the eyes from the head. So it holds while the character leans, lies down or turns away.
 
 pub(crate) struct GazePlugin;
 
@@ -65,7 +66,7 @@ pub struct CursorAt {
 }
 
 const FADE_SECS: f32 = 0.4;
-// With the cursor still this long, she goes back to what the animation has her do.
+// With the cursor still this long, the character goes back to what the animation has it do.
 const IDLE_SECS: f32 = 5.0;
 // About how long the head and neck take to get where they should point. The eyes answer at
 // once and wait there for the head, as eyes do.
@@ -106,9 +107,9 @@ pub(crate) struct GazeRig {
     // Left, right, up, down: every (mesh, weight index) of that shape key in the worn skin.
     keys: [Vec<(Entity, usize)>; 4],
     weight: f32,
-    // Whether the cursor is where she can turn to. Out of reach she lets go of it.
+    // Whether the cursor is where the character can turn to. Out of reach, it is let go of.
     in_reach: bool,
-    // The way she looks, kept while no screen of hers sees the cursor.
+    // The way the character looks, kept while none of its stage's screens sees the cursor.
     direction: Option<Vec3>,
     // How far head and neck should turn from where the clip points the head, and how far
     // they have.
@@ -204,7 +205,7 @@ fn build_rig(
         _ if eyes.is_empty() && !eye_keys => None,
         _ if eyes.is_empty() => Some(Eyes { limit: Vec2::ZERO, reach: drawn_reach }),
         EyeKind::Ball => Some(Eyes { limit: eye_limit, reach: eye_limit }),
-        // Never less than the limit: the bone would turn further than she looks.
+        // Never less than the limit: the bone would turn further than the character looks.
         EyeKind::Drawn => Some(Eyes { limit: eye_limit, reach: drawn_reach.max(eye_limit) }),
     };
 
@@ -216,16 +217,16 @@ fn build_rig(
     let front = stated.or(worked_out).unwrap_or(Vec3::Z);
     let how = match (stated, worked_out) {
         (Some(_), _) => "as suite.toml says",
-        (None, Some(_)) => "worked out from her eye bones",
-        (None, None) => "taken as Blender's front view, since her bones don't say",
+        (None, Some(_)) => "worked out from the eye bones",
+        (None, None) => "taken as Blender's front view, since the bones don't say",
     };
-    info!("gaze: she faces {front:.2} in her rest pose, {how}");
+    info!("gaze: the character faces {front:.2} in the rest pose, {how}");
     if let (Some(stated), Some(worked_out)) = (stated, worked_out)
         && stated.dot(worked_out) < 0.0
     {
         warn!(
-            "gaze: suite.toml's `front` points to the back of her head, going by her eye bones; \
-             she will turn away from the cursor. Remove it to have it worked out"
+            "gaze: suite.toml's `front` points to the back of the head, going by the eye bones; \
+             the character will turn away from the cursor. Remove it to have it worked out"
         );
     }
 
@@ -337,7 +338,7 @@ fn aim(
 
 // Where the cursor is for one of the stage's own screens, and that screen's camera: the screen
 // the cursor is on, or, with the cursor on a monitor that shows something else, the stage's
-// nearest one, so that she looks across to it.
+// nearest one, so that the character looks across to it.
 fn seen_from(
     stage: Entity,
     at: CursorAt,
@@ -444,8 +445,8 @@ fn aim_stage(
     if let Some(head) = &mut rig.head {
         let head_turn = turn_of(head.anchor(), armature, bones);
         let clip = frame.angles(chest.inverse() * head_turn * frame.front);
-        // Out of reach the goal stays as it was, so she eases back from where she looked
-        // rather than swinging after a target that passes behind her.
+        // Out of reach the goal stays as it was, so the character eases back from where it
+        // looked rather than swinging after a target that passes behind it.
         if rig.in_reach {
             rig.turn_goal = setup.head(target, clip) - clip;
         }
@@ -508,7 +509,7 @@ impl GazeRig {
         self.neck.iter_mut().chain(self.head.iter_mut()).chain(self.eyes.iter_mut())
     }
 
-    // Nothing is carried over to the next time she looks up.
+    // Nothing is carried over to the next time the character looks up.
     fn start_over(&mut self) {
         self.turn_goal = Vec2::ZERO;
         self.turned = Spring::default();
@@ -517,8 +518,8 @@ impl GazeRig {
     }
 }
 
-// The direction she looks in, in world space, for a cursor at `at` in the camera's picture,
-// with her eyes at `eyes`. None while her eyes are behind the camera.
+// The direction the character looks in, in world space, for a cursor at `at` in the camera's
+// picture, with its eyes at `eyes`. None while the eyes are behind the camera.
 fn look_from(
     camera: &Camera,
     camera_global: &GlobalTransform,
@@ -528,7 +529,7 @@ fn look_from(
 ) -> Option<Vec3> {
     let eyes_at = camera.world_to_viewport(camera_global, eyes).ok()?;
     let half_height = camera.logical_viewport_size()?.y / 2.0;
-    // The line of sight to her eyes, whatever the lens: through an orthographic one it isn't
+    // The line of sight to the eyes, whatever the lens: through an orthographic one it isn't
     // the line to the camera.
     let sight = camera.viewport_to_world(camera_global, eyes_at).ok()?;
     let view =
@@ -538,8 +539,8 @@ fn look_from(
     Some(charpaper_gaze::look_direction(&view, offset, strength))
 }
 
-// Where her eyes are in the armature's space: between the eye bones, or without any, at the
-// joint of the head or of whatever stands in for it.
+// Where the character's eyes are in the armature's space: between the eye bones, or without
+// any, at the joint of the head or of whatever stands in for it.
 fn eyes_at(rig: &GazeRig, armature: Entity, bones: &Bones) -> Vec3 {
     let at = |bone: Entity| {
         pose(bone, armature, &bones.parents, &bones.transforms.as_readonly()).translation

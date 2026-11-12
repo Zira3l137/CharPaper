@@ -35,7 +35,7 @@
       }
     },
     "gaze": {
-      "description": "Makes the character look towards the mouse cursor. Without this\nsection she never does.",
+      "description": "Makes the character look towards the mouse cursor. Without this\nsection it never does.",
       "anyOf": [
         {
           "$ref": "#/$defs/Gaze"
@@ -216,7 +216,7 @@
           "type": "string"
         },
         "gaze": {
-          "description": "Whether the character may look towards the cursor while this plays.\nDefaults to true. Turn it off where she has to look somewhere on\npurpose, like a dance or a sleeping pose.",
+          "description": "Whether the character may look towards the cursor while this plays.\nDefaults to true. Turn it off where the character has to look somewhere on\npurpose, like a dance or a sleeping pose.",
           "type": [
             "boolean",
             "null"
@@ -328,7 +328,7 @@
           "const": "ball"
         },
         {
-          "description": "Anything else, like an iris that slides over a flat eye. Aimed, such\na bone would shoot past, so it turns in proportion to how far aside\nshe looks instead, reaching its limits for a look about 35° aside.",
+          "description": "Anything else, like an iris that slides over a flat eye. Aimed, such\na bone would shoot past, so it turns in proportion to how far aside\nthe character looks instead, reaching its limits for a look about\n35° aside.",
           "type": "string",
           "const": "drawn"
         }
@@ -384,7 +384,7 @@
       "additionalProperties": false
     },
     "Gaze": {
-      "description": "Looking towards the mouse cursor. Where she looks comes from where the\ncursor is on screen: on her eyes she looks at the viewer, and the further\nfrom them it is, the further aside she looks. Her head and neck go part\nof the way and her eyes cover the rest. The head's angles are measured\nfrom the bone above the neck, with the animation's own turn counted in,\nand the eyes' from the head. A cursor she can't turn to she lets go of.",
+      "description": "Looking towards the mouse cursor. Where the character looks comes from\nwhere the cursor is on screen: with the cursor on its eyes it looks at\nthe viewer, and the further from them the cursor is, the further aside\nit looks. The head and neck go part of the way and the eyes cover the\nrest. The head's angles are measured from the bone above the neck, with\nthe animation's own turn counted in, and the eyes' from the head. A\ncursor the character can't turn to, it lets go of.",
       "type": "object",
       "properties": {
         "eye_kind": {
@@ -415,7 +415,7 @@
           }
         },
         "front": {
-          "description": "Which way her face points while she stands in her rest pose, in\nBlender's world axes as exported: `[0, -1, 0]` faces Blender's front\nview. Rarely needed: it is worked out from where the eye bones sit\nfrom the head bone. Without those and without this, she's taken to\nface Blender's front view. Only its horizontal part counts.",
+          "description": "Which way the character's face points in the rest pose, in Blender's\nworld axes as exported: `[0, -1, 0]` faces Blender's front view.\nRarely needed: it is worked out from where the eye bones sit from\nthe head bone. Without those and without this, the character is\ntaken to face Blender's front view. Only its horizontal part counts.",
           "type": [
             "array",
             "null"
@@ -451,7 +451,7 @@
           "format": "float"
         },
         "head_turn": {
-          "description": "How much of the way to where she looks the head and neck go, from 0\nto 1, leaving the rest to the eyes. At 0 the head only moves for what\nthe eyes can't reach; at 1 it points straight there and the eyes stay\ncentered. Defaults to 0.6. Without eyes the head goes all the way.",
+          "description": "How much of the way to where the character looks the head and neck\ngo, from 0 to 1, leaving the rest to the eyes. At 0 the head only moves for what\nthe eyes can't reach; at 1 it points straight there and the eyes stay\ncentered. Defaults to 0.6. Without eyes the head goes all the way.",
           "type": [
             "number",
             "null"
@@ -490,7 +490,7 @@
           "format": "float"
         },
         "shape_keys": {
-          "description": "Shape keys that follow the eyes: eyelids, or on a character without\neye bones, the eyes themselves. Each is set in proportion to how far\nshe looks that way, reaching 1 at a full look. Any may be left out,\nand a skin without one ignores it.",
+          "description": "Shape keys that follow the eyes: eyelids, or on a character without\neye bones, the eyes themselves. Each is set in proportion to how far\nthe character looks that way, reaching 1 at a full look. Any may be\nleft out, and a skin without one ignores it.",
           "$ref": "#/$defs/GazeShapeKeys"
         }
       },

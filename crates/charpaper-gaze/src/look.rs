@@ -3,8 +3,8 @@ use std::f32::consts::PI;
 use glam::Vec2;
 use glam::Vec3;
 
-/// How the picture shows her: `toward` runs from her eyes to the viewer, and `right` and `up`
-/// are the picture's own.
+/// How the picture shows the character: `toward` runs from its eyes to the viewer, and `right`
+/// and `up` are the picture's own.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct View {
     pub toward: Vec3,
@@ -12,16 +12,17 @@ pub struct View {
     pub up: Vec3,
 }
 
-// How far aside she looks for a cursor half a screen height from her eyes, while it is near.
+// How far aside the character looks for a cursor half a screen height from its eyes, while
+// the cursor is near.
 const GAIN: f32 = 45.0 * PI / 180.0;
 // A look never asks for more than this, however far away the cursor is.
 const MOST: f32 = 80.0 * PI / 180.0;
 
-/// The direction she looks in for a cursor `offset` from her eyes in the picture: right and
-/// up, in half screen heights. On her eyes she looks at the viewer. Further away she looks
-/// further aside, the way the cursor lies, more slowly the further it goes and never past a
-/// limit. So the look depends on the picture alone, not on the lens or how far the camera is.
-/// `strength` scales how readily she turns: 1 is normal.
+/// The direction the character looks in for a cursor `offset` from its eyes in the picture:
+/// right and up, in half screen heights. With the cursor on its eyes it looks at the viewer.
+/// Further away it looks further aside, the way the cursor lies, more slowly the further the
+/// cursor goes and never past a limit. So the look depends on the picture alone, not on the
+/// lens or how far the camera is. `strength` scales how readily it turns: 1 is normal.
 pub fn look_direction(view: &View, offset: Vec2, strength: f32) -> Vec3 {
     let toward = view.toward.normalize_or(Vec3::Z);
     let across = view.right * offset.x + view.up * offset.y;
@@ -36,7 +37,8 @@ pub fn look_direction(view: &View, offset: Vec2, strength: f32) -> Vec3 {
 mod tests {
     use super::*;
 
-    // The viewer stands in front of her, as Blender's front view does: her left is on the right.
+    // The viewer stands in front of the character, as Blender's front view does: its left is
+    // on the right.
     const VIEW: View = View { toward: Vec3::Z, right: Vec3::X, up: Vec3::Y };
 
     fn aside(offset: Vec2) -> f32 {
@@ -44,12 +46,12 @@ mod tests {
     }
 
     #[test]
-    fn the_cursor_on_her_eyes_has_her_look_at_the_viewer() {
+    fn the_cursor_on_the_eyes_is_a_look_at_the_viewer() {
         assert_eq!(look_direction(&VIEW, Vec2::ZERO, 1.0), Vec3::Z);
     }
 
     #[test]
-    fn she_looks_the_way_the_cursor_lies() {
+    fn the_look_goes_the_way_the_cursor_lies() {
         let look = look_direction(&VIEW, Vec2::new(0.5, 0.5), 1.0);
         assert!(look.x > 0.1 && (look.x - look.y).abs() < 1e-5);
         let look = look_direction(&VIEW, Vec2::new(-1.0, 0.0), 1.0);

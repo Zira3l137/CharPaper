@@ -284,7 +284,7 @@ class CHARPAPER_PT_gaze(_Sidebar, Panel):
         row.prop(gaze, "head_share")
 
         col = layout.column(align=True)
-        col.label(text="Front, in her rest pose", icon="ORIENTATION_VIEW")
+        col.label(text="Front, in the rest pose", icon="ORIENTATION_VIEW")
         row = col.row(align=True)
         row.prop(gaze, "front", text="")
         row.prop(gaze, "show_front", text="", icon="EMPTY_SINGLE_ARROW")

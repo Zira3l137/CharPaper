@@ -115,7 +115,7 @@ fn gaze() -> impl Bundle {
                 },
             }
             .segments(),
-            // Does nothing while she doesn't follow.
+            // Does nothing while the character doesn't follow.
             Setting {
                 label: |l| fl!(l, "label-gaze-strength"),
                 help: |l| fl!(l, "help-gaze-strength"),

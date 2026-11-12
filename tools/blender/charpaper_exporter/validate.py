@@ -94,7 +94,7 @@ def _check_rig(armature, add):
     rotation = armature.matrix_world.to_quaternion()
     if rotation.angle > 1e-4:
         add(Finding(
-            f"{armature.name} is rotated; that's fine only if she still stands on +Z facing -Y",
+            f"{armature.name} is rotated; that's fine only if the character still stands on +Z facing -Y",
             armature,
             severity="INFO",
         ))
@@ -107,7 +107,7 @@ def _check_gaze(suite, armature, add):
     keys = gaze_bones.eye_keys(gaze)
     if not (eyes or keys or gaze.head or gaze.neck):
         add(Finding(
-            "gaze names no bones and no shape keys, so she never follows the cursor; "
+            "gaze names no bones and no shape keys, so the character never follows the cursor; "
             "try Detect bones",
             armature,
         ))
@@ -147,20 +147,21 @@ def _check_gaze_front(gaze, armature, add):
     if facing is None:
         if worked_out is None:
             add(Finding(
-                "gaze: her bones don't say which way she faces, so she's taken to face -Y. If she "
-                "faces another way, turn on the arrow, look her in the face and click She faces me",
+                "gaze: the bones don't say which way the character faces, so it's taken to face "
+                "-Y. If it faces another way, turn on the arrow, look it in the face and click "
+                "Front from view",
                 armature,
                 severity="INFO",
             ))
     elif abs(facing.z) > 0.7:
         add(Finding(
-            "gaze: her front points up or down; she has to stand upright for gaze to turn her",
+            "gaze: the front points up or down; the character has to stand upright for gaze to turn it",
             armature,
         ))
     elif worked_out is not None and worked_out.dot(gaze_bones.AXES[gaze.front]) < 0.0:
         add(Finding(
-            "gaze: Front points to the back of her head, going by her eye bones, so she'll turn "
-            "away from the cursor. Set Front back to Automatic",
+            "gaze: Front points to the back of the head, going by the eye bones, so the character "
+            "will turn away from the cursor. Set Front back to Automatic",
             armature,
         ))
 
@@ -182,7 +183,7 @@ def _check_gaze_clips(suite, eyes, add):
             if moved:
                 add(Finding(
                     f"gaze: clip {clip.name or clip.action.name!r} keys {_examples(moved)}, which "
-                    "gaze sets itself while she follows the cursor; untick the clip's Gaze for "
+                    "gaze sets itself while the character follows the cursor; untick the clip's Gaze for "
                     "its own eye movement to show",
                     suite.armature,
                     severity="INFO",
@@ -266,9 +267,9 @@ def _listed_animations(suite):
 
 def _check_contents(suite, add):
     if not any(e.enabled for e in suite.skins) and not _on_disk(suite, SKINS_DIR):
-        add(Finding("no skins, so there is nothing of her to show"))
+        add(Finding("no skins, so there is no character to show"))
     if not any(e.enabled for e in suite.environments) and not _on_disk(suite, ENVIRONMENT_DIR):
-        add(Finding("no environments, so nothing lights her and she renders black"))
+        add(Finding("no environments, so nothing lights the character and it renders black"))
 
 
 # The app refuses to load a suite whose default skin, environment or camera doesn't exist.
@@ -322,7 +323,7 @@ def _check_skin(suite, entry, armature, add):
     if loose:
         add(Finding(
             f"skin {entry.name!r}: {len(loose)} mesh(es) are neither skinned nor parented to the "
-            f"armature, so they won't follow her: {_examples(loose)}",
+            f"armature, so they won't follow the character: {_examples(loose)}",
             bpy.data.objects.get(loose[0]),
         ))
     others = [o.name for o in entry.collection.all_objects if o.type not in {"MESH", "EMPTY", "ARMATURE"}]

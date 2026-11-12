@@ -248,7 +248,7 @@ class CHARPAPER_OT_export(Operator):
             return {"CANCELLED"}
         folder = os.path.normpath(bpy.path.abspath(suite.folder))
         os.makedirs(folder, exist_ok=True)
-        # A previewed look is not her pose, and must not be exported or validated as it.
+        # A previewed look is not the character's own pose, and must not be exported or validated as it.
         gaze.stop(context)
 
         findings = validate.check(context, suite)
