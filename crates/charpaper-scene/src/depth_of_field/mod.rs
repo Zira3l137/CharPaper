@@ -3,7 +3,8 @@
 // the object keeps a sharp outline around its blurred inside. This one also spreads what is in
 // front of the focus over what is behind it, as a real lens does.
 //
-// It runs where Bevy's would, after bloom and before tonemapping, at half resolution apart from
+// It runs after TAA and before bloom, so bloom glows from the blurred picture, as through a
+// real lens, and chromatic aberration and the vignette go on top. At half resolution apart from
 // the last step. pass.rs has the steps.
 
 mod pass;

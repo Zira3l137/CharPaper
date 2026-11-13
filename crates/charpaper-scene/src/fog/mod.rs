@@ -12,6 +12,7 @@ use bevy::light::FogVolume;
 use bevy::light::VolumetricLight;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
+use charpaper_settings::AntiAliasing;
 use charpaper_settings::Graphics;
 use charpaper_suite::Fog;
 
@@ -197,6 +198,7 @@ fn scene_fog(graphics: &Graphics) -> SceneFog {
         max_steps: graphics.fog_quality.max_steps(),
         step_length: graphics.fog_quality.step_length(),
         dithering: graphics.fog_dithering,
+        moving_dither: graphics.anti_aliasing == AntiAliasing::Taa,
         downscale: graphics.fog_resolution.downscale(),
     }
 }

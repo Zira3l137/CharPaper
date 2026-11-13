@@ -55,6 +55,7 @@ struct FogBox {
     dithering: f32,
     phase: u32,
     interleaved: u32,
+    moving_dither: u32,
 }
 
 @group(1) @binding(0) var<uniform> fog_box: FogBox;
@@ -195,7 +196,8 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let Rd_world = normalize(position_ndc_to_world(Rd_ndc) - view.world_position);
 
     // Dithering: each pixel starts up to a step further in, which turns banding into noise.
-    let jitter = interleaved_gradient_noise(position.xy, globals.frame_count) * fog_box.dithering;
+    let frame = select(0u, globals.frame_count, fog_box.moving_dither != 0u);
+    let jitter = interleaved_gradient_noise(position.xy, frame) * fog_box.dithering;
     Ro_world += Rd_world * jitter * step_size_world;
 
     // What one step adds per unit of a light's color, the same for every light and step: the

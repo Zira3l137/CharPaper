@@ -107,9 +107,12 @@ pub(crate) struct SceneFog {
     pub max_steps: u32,
     // In meters.
     pub step_length: f32,
-    // Each pixel's ray starts up to a step further in, different every frame, which turns
-    // the stripes between steps into noise that TAA smooths out.
+    // Each pixel's ray starts up to a step further in, which turns the stripes between steps
+    // into noise.
     pub dithering: bool,
+    // A new noise every frame, which TAA smooths out. Without TAA it would only flicker, so
+    // the noise stays put.
+    pub moving_dither: bool,
     // Screen pixels per fog pixel, across and down: 1, 2 or 4.
     pub downscale: u32,
 }
@@ -119,6 +122,7 @@ pub(crate) struct ExtractedFog {
     max_steps: u32,
     step_length: f32,
     dithering: bool,
+    moving_dither: bool,
     downscale: u32,
     layers: RenderLayers,
 }
@@ -137,6 +141,7 @@ impl ExtractComponent for SceneFog {
             max_steps: fog.max_steps,
             step_length: fog.step_length,
             dithering: fog.dithering,
+            moving_dither: fog.moving_dither,
             downscale: fog.downscale,
             layers: layers.cloned().unwrap_or_default(),
         })
@@ -199,6 +204,8 @@ struct FogUniform {
     phase: u32,
     // 1 while only that one is, 0 when all are.
     interleaved: u32,
+    // 1 for a new dither every frame.
+    moving_dither: u32,
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
@@ -525,6 +532,7 @@ fn prepare_fog(
                     dithering: if fog.dithering { 1.0 } else { 0.0 },
                     phase,
                     interleaved: u32::from(interleaved),
+                    moving_dither: u32::from(fog.moving_dither),
                 });
                 ViewFogBox { uniform_offset, outside: !inside }
             })

@@ -15,8 +15,7 @@ use bevy::asset::load_embedded_asset;
 use bevy::core_pipeline::FullscreenShader;
 use bevy::core_pipeline::core_3d::prepare_core_3d_depth_textures;
 use bevy::core_pipeline::schedule::Core3d;
-use bevy::core_pipeline::tonemapping::tonemapping;
-use bevy::post_process::bloom::bloom;
+use bevy::core_pipeline::schedule::Core3dSystems;
 use bevy::prelude::*;
 use bevy::render::GpuResourceAppExt;
 use bevy::render::Render;
@@ -69,7 +68,16 @@ impl Plugin for DepthOfFieldPassPlugin {
                         .before(prepare_core_3d_depth_textures),
                 ),
             )
-            .add_systems(Core3d, draw_depth_of_field.after(bloom).before(tonemapping));
+            // Between whole sets, so it is ordered against every pass that swaps the image.
+            // Next to Bevy's effect stack, which is only ordered after Bevy's own depth of
+            // field, the two could run in either order on the CPU but always the same on the
+            // GPU, and then one reads the image while the other writes it: a frame flickers.
+            .add_systems(
+                Core3d,
+                draw_depth_of_field
+                    .after(Core3dSystems::EarlyPostProcess)
+                    .before(Core3dSystems::PostProcess),
+            );
     }
 }
 

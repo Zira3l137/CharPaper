@@ -113,7 +113,7 @@ it and brings it back.
 | Tab | What's there |
 |-----|--------------|
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
-| **Graphics** | Sky brightness, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
+| **Graphics** | Sky brightness, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). A row hides while it can't do anything: fog without fog boxes, depth of field without a camera F-Stop, ambient occlusion with 4x anti-aliasing. |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start at sign-in, monitors, frame rate limit, performance monitor, when to pause, and the panel's language, colors, size and side. |
 
