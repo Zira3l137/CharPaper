@@ -65,3 +65,18 @@ jobs:
             --title "CharPaper ${GITHUB_REF_NAME#v}" \
             --notes-file notes.md \
             "${flags[@]}"
+
+  website:
+    name: Website
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      # A release made with this workflow's token can't start other workflows by itself, but
+      # it can ask for a run. That run is on main, the only branch the github-pages
+      # environment takes deployments from.
+      - name: Publish the website with the new version's links
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main

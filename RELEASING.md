@@ -43,7 +43,9 @@ becomes a pre-release.
    git tag -a v0.2.0 -m "CharPaper 0.2.0"
    git push --atomic origin main v0.2.0
    ```
-5. Watch Actions → Release. When it finishes, the release is on the Releases page.
+5. Watch Actions → Release. When it finishes, the release is on the Releases page, and
+   Actions → Website republishes the site with its stable download links pointing at the
+   new version. A pre-release leaves them on the previous version.
 
 To preview the notes before tagging, with [git-cliff](https://git-cliff.org) installed
 (`cargo install git-cliff`): `git cliff --unreleased --tag v0.2.0`.
