@@ -113,18 +113,22 @@ it and brings it back.
 | Tab | What's there |
 |-----|--------------|
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
-| **Graphics** | Sky brightness, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). A row hides while it can't do anything: fog without fog boxes, depth of field without a camera F-Stop, ambient occlusion with 4x anti-aliasing. |
+| **Graphics** | Sky brightness, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start at sign-in, monitors, frame rate limit, performance monitor, when to pause, and the panel's language, colors, size and side. |
 
 A row only shows when it has something to offer. No camera row means the character has no
-extra cameras; no Gaze section means its author didn't set gaze up.
+extra cameras; no Gaze section means its author didn't set gaze up. In **Graphics**, Fog
+shows only in an environment with fog, Depth of field only through a camera that asks for
+it, and Ambient occlusion only with a sky and anti-aliasing other than 4x, which it can't
+run with. A setting's finer rows hide while it's off.
 
 **Restore defaults**, under Post processing, takes the picture back to how the
 character's author set it.
 
 If your computer struggles, lower **Render scale**, set **Shadow quality** to Low, turn
-**Fog** off, and lower the **FPS limit**. The **Performance monitor** shows what each
+**Fog** off, lower depth of field **Quality** or **Largest blur**, and lower the **FPS
+limit**. The **Performance monitor** shows what each
 frame costs.
 
 ## The mouse on the desktop
@@ -549,7 +553,11 @@ loops it.
   on the armature with a bone picked to keep, say, the head sharp.
 - Animated F-Stop or Focus Distance doesn't come over. Animate a focus empty instead.
 - The viewer can scale how much everything blurs with **Strength** in the Graphics tab.
-  100% is your F-Stop exactly; 200% is as if you'd halved it.
+  100% is your F-Stop exactly; 200% is as if you'd halved it. They can also keep what's in
+  front of the focus sharp with **Blur in front**.
+- No blur grows wider than the viewer's **Largest blur**, 64 pixels across on screen by
+  default. A very shallow focus in Blender reaches that limit sooner, and things far out
+  of focus look less blurred than in your render.
 - Aperture blades, rotation and ratio have no match in the app.
 - The orbit camera is always there in addition to yours. Where it starts is set in
   [suite.toml](#suitetoml).
@@ -724,7 +732,8 @@ render.
 | Only the eyes follow, not the head | No head bone is named in Gaze, or *Head turn* is 0. |
 | The character turns away from the cursor | Its front is wrong. Set **Front** back to *Automatic*; if the arrow still points wrong, set it by hand. |
 | A clip's eye animation doesn't show | Gaze moves the eyes while the character follows. Untick the clip's **Gaze**. |
-| The fog doesn't show | No lamp lights it. The sky doesn't light fog, and a sun only does with *Shadow* on. |
+| The fog doesn't show | No lamp lights it. The sky doesn't light fog, and a sun only does with *Shadow* on. Or **Fog** is off in the Graphics tab. |
+| Nothing blurs, and Graphics has no Depth of field | The camera in use has no F-Stop: tick *Depth of Field* on the camera and export again. For the orbit camera, set `f_stop` under `[camera]`. |
 | A light does nothing | It's an area light. Use a spot or point light. |
 | The sky didn't change after replacing the `.hdr` | Delete `skybox.ktx2`, `specular.ktx2` and `diffuse.ktx2` next to it. |
 | A sound or the music doesn't play | It isn't Ogg Vorbis. |
