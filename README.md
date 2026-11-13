@@ -492,6 +492,19 @@ the folder name must match the environment's. Keep only one panorama in a folder
 **Moving props.** Each object's *active* action becomes a clip that loops on its own, as
 long as its own keys. A 25-frame fan and a 420-frame curtain both keep their length.
 
+**Props that move with the character**, like a chair it rocks or a door it opens, play in
+step with it on one condition: the prop's action is exactly as long as the character's
+clip. Then the app keeps the two at the same frame, the way Blender's timeline does, and
+starts the prop over whenever that clip starts over. Props of any other length loop on
+their own, so a fan never jumps when the animation changes.
+
+- **Length is counted from an action's own first key to its own last key**, not from the
+  scene's frame range. Give the prop's action and the character's action keys on the same
+  first and last frame, even if the prop holds still there. A prop keyed from frame 30 would
+  otherwise come out 29 frames short and start early.
+- Only the clip the character plays right now counts. While another clip plays, the prop
+  loops on its own until the matching one comes back.
+
 - NLA tracks of environment objects aren't exported; only the active action is.
 - Animation of light, material or camera *settings* (a flickering strength, a changing
   color) isn't exported. Only objects, bones and shape keys move.

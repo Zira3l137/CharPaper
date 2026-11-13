@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 
+use bevy::animation::graph::AnimationNodeType;
+use bevy::app::AnimationSystems;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::NotShadowCaster;
@@ -22,6 +24,7 @@ use crate::SceneSet;
 use crate::assets::GPU_ONLY;
 use crate::assets::asset_path;
 use crate::camera::SceneCamera;
+use crate::character::Armature;
 use crate::look::LightTree;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
@@ -42,9 +45,14 @@ impl Plugin for EnvironmentPlugin {
                 (switch_environment, finish_bakes, equip_new_cameras, spawn_environment_scenes)
                     .chain()
                     .in_set(SceneSet::Run),
-            );
+            )
+            .add_systems(PostUpdate, follow_character.before(AnimationSystems));
     }
 }
+
+// Clips counted as the same length when they differ by less than this, in seconds: well
+// under a frame, while two clips exported from one frame range come out exactly equal.
+const SAME_LENGTH: f32 = 0.001;
 
 #[derive(Component, Default)]
 pub(crate) struct ShownEnvironment {
@@ -60,6 +68,10 @@ pub(crate) struct EnvironmentRoot {
 
 #[derive(Component)]
 pub(crate) struct AwaitingScene;
+
+// The clips an environment player loops, by their place in its graph.
+#[derive(Component)]
+pub(crate) struct PropClips(Vec<(AnimationNodeIndex, Handle<AnimationClip>)>);
 
 #[derive(Component, Default)]
 pub(crate) struct Baking(pub HashMap<String, Task<Result<(), String>>>);
@@ -318,16 +330,66 @@ pub(crate) fn on_environment_ready(
 
     let (graph, nodes) = AnimationGraph::from_clips(root.clips.iter().cloned());
     let graph = graphs.add(graph);
+    let clips: Vec<_> = nodes.iter().copied().zip(root.clips.iter().cloned()).collect();
     for entity in children.iter_descendants(ready.entity) {
         let Ok(mut player) = players.get_mut(entity) else {
             continue;
         };
-        commands.entity(entity).insert(AnimationGraphHandle(graph.clone()));
+        commands
+            .entity(entity)
+            .insert((AnimationGraphHandle(graph.clone()), PropClips(clips.clone())));
         for &node in &nodes {
             player.play(node).repeat();
         }
     }
     info!("environment: looping {} clip(s)", nodes.len());
+}
+
+// Each animation player keeps its own clock, started when its file finished loading, while
+// Blender plays the character and the props on one timeline. So a prop clip exactly as long
+// as the character's playing clip is put at the same moment of its loop every frame, before
+// both advance by the same step. Other prop clips loop on their own.
+fn follow_character(
+    armatures: Query<
+        (Entity, &AnimationPlayer, &AnimationTransitions, &AnimationGraphHandle),
+        With<Armature>,
+    >,
+    mut props: Query<(Entity, &mut AnimationPlayer, &PropClips), Without<Armature>>,
+    graphs: Res<Assets<AnimationGraph>>,
+    clips: Res<Assets<AnimationClip>>,
+    stage_of: StageOf,
+) {
+    let mut leads = HashMap::new();
+    for (armature, player, transitions, graph) in &armatures {
+        let Some(node) = transitions.get_main_animation() else {
+            continue;
+        };
+        let (Some(active), Some(stage)) = (player.animation(node), stage_of.get(armature)) else {
+            continue;
+        };
+        let Some(AnimationNodeType::Clip(clip)) =
+            graphs.get(&graph.0).and_then(|graph| graph.get(node)).map(|node| &node.node_type)
+        else {
+            continue;
+        };
+        if let Some(clip) = clips.get(clip) {
+            leads.insert(stage, (clip.duration(), active.seek_time()));
+        }
+    }
+    if leads.is_empty() {
+        return;
+    }
+    for (prop, mut player, own) in &mut props {
+        let Some(&(length, time)) = stage_of.get(prop).and_then(|stage| leads.get(&stage)) else {
+            continue;
+        };
+        for (node, clip) in &own.0 {
+            let same = clips.get(clip).is_some_and(|c| (c.duration() - length).abs() < SAME_LENGTH);
+            if let (true, Some(active)) = (same, player.animation_mut(*node)) {
+                active.seek_to(time);
+            }
+        }
+    }
 }
 
 // Bevy's glTF loader gives a spot light its range as its radius, the size of the bulb. glTF
