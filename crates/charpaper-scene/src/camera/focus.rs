@@ -1,8 +1,6 @@
 // Depth of field on each stage's cameras. The lens comes from the camera in use. With a focus
 // object, the distance to it is measured again every frame, since either may move.
 
-use bevy::post_process::dof::DepthOfField;
-use bevy::post_process::dof::DepthOfFieldMode;
 use bevy::prelude::*;
 use charpaper_settings::DepthOfFieldQuality;
 use charpaper_settings::Graphics;
@@ -13,13 +11,16 @@ use crate::camera::orbit::OrbitCamera;
 use crate::camera::rig::CameraRig;
 use crate::camera::rig::Following;
 use crate::character::Armature;
+use crate::depth_of_field::SceneDepthOfField;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
-// Bevy's default cap on how far one pixel may spread, which keeps the cost bounded.
+// The widest blur, as a diameter in pixels, which keeps the cost bounded.
 const MAX_BLUR_PX: f32 = 64.0;
-// The sky has no depth, and Bevy blurs it without limit unless told how far away it is. At
-// this distance it blurs like Blender's background at infinity.
+// The orbit camera's sensor, Super 35's height in meters, which is also Bevy's default.
+const ORBIT_SENSOR_HEIGHT: f32 = 0.01866;
+// The sky has no depth, and would blur without limit unless told how far away it is. At this
+// distance it blurs like Blender's background at infinity.
 const SKY_DEPTH: f32 = 10_000.0;
 
 // The entity found for the rig's focus object. Looked up again whenever it is gone: bones
@@ -38,7 +39,7 @@ pub(crate) fn focus_lens(
     graphics: Query<&Graphics>,
     suites: Query<&ActiveSuite>,
     views: Query<(Entity, &GlobalTransform, &OrbitCamera, &Following, &ChildOf), With<SceneView>>,
-    mut cameras: Query<(Entity, Option<&mut DepthOfField>, &ChildOf), With<SceneCamera>>,
+    mut cameras: Query<(Entity, Option<&mut SceneDepthOfField>, &ChildOf), With<SceneCamera>>,
     mut rigs: Query<(Entity, &CameraRig, &mut FocusTarget, &ChildOf)>,
     armatures: Query<Entity, With<Armature>>,
     stage_of: StageOf,
@@ -51,15 +52,15 @@ pub(crate) fn focus_lens(
         let Ok(graphics) = graphics.get(stage) else {
             continue;
         };
-        let mode = match graphics.depth_of_field {
+        let bokeh = match graphics.depth_of_field {
             DepthOfFieldQuality::Off => None,
-            DepthOfFieldQuality::Blur => Some(DepthOfFieldMode::Gaussian),
-            DepthOfFieldQuality::Bokeh => Some(DepthOfFieldMode::Bokeh),
+            DepthOfFieldQuality::Blur => Some(false),
+            DepthOfFieldQuality::Bokeh => Some(true),
         };
         let lens = match following.name() {
             None => suites.get(stage).ok().and_then(|s| s.camera.f_stop).map(|f_stop| Lens {
                 f_stop,
-                sensor_height: DepthOfField::default().sensor_height,
+                sensor_height: ORBIT_SENSOR_HEIGHT,
                 focal_distance: orbit.radius,
             }),
             Some(name) => rigs
@@ -96,15 +97,15 @@ pub(crate) fn focus_lens(
                 }),
         };
 
-        let wanted = lens.zip(mode).map(|(lens, mode)| DepthOfField {
-            mode,
+        let wanted = lens.zip(bokeh).map(|(lens, bokeh)| SceneDepthOfField {
             focal_distance: lens.focal_distance,
+            f_stop: lens.f_stop,
             sensor_height: lens.sensor_height,
-            aperture_f_stops: lens.f_stop,
             // Counted in the scene image's pixels, so it follows the render scale to look the
             // same.
-            max_circle_of_confusion_diameter: MAX_BLUR_PX * graphics.scale_percent() as f32 / 100.0,
+            max_blur: MAX_BLUR_PX * graphics.scale_percent() as f32 / 100.0,
             max_depth: SKY_DEPTH,
+            bokeh,
         });
         for (camera, depth_of_field, parent) in &mut cameras {
             if parent.parent() != view {
@@ -116,7 +117,7 @@ pub(crate) fn focus_lens(
                     commands.entity(camera).insert(wanted);
                 }
                 (None, Some(_)) => {
-                    commands.entity(camera).remove::<DepthOfField>();
+                    commands.entity(camera).remove::<SceneDepthOfField>();
                 }
                 (None, None) => {}
             }

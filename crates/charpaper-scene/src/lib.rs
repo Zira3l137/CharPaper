@@ -5,6 +5,7 @@ mod bevy_fixes;
 mod camera;
 mod character;
 mod config;
+mod depth_of_field;
 mod environment;
 mod fog;
 mod gaze;
@@ -98,6 +99,7 @@ impl Plugin for ScenePlugin {
             ))
             .add_plugins((
                 fog::FogPlugin,
+                depth_of_field::DepthOfFieldPlugin,
                 look::LookPlugin,
                 lut::LutPlugin,
                 render::RenderPlugin,
