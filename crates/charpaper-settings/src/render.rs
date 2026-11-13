@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 
 // What every stage shares, saved between runs by the app, whose frame pacing reads the fps and
@@ -34,7 +35,8 @@ impl Default for RenderSettings {
 pub struct Graphics {
     pub render_scale: u32,
     pub anti_aliasing: AntiAliasing,
-    pub depth_of_field: DepthOfFieldQuality,
+    #[serde(deserialize_with = "DepthOfField::saved")]
+    pub depth_of_field: DepthOfField,
     pub fog: bool,
     pub fog_quality: FogQuality,
     pub fog_dithering: bool,
@@ -54,7 +56,7 @@ impl Default for Graphics {
         Self {
             render_scale: 100,
             anti_aliasing: AntiAliasing::default(),
-            depth_of_field: DepthOfFieldQuality::default(),
+            depth_of_field: DepthOfField::default(),
             fog: true,
             fog_quality: FogQuality::default(),
             fog_dithering: false,
@@ -123,20 +125,115 @@ impl AntiAliasing {
     pub const ALL: [AntiAliasing; 3] = [AntiAliasing::Off, AntiAliasing::Msaa4, AntiAliasing::Taa];
 }
 
-// Only for cameras whose suite asks for depth of field. Bokeh turns bright out-of-focus spots
-// into lens-shaped discs, as Blender does; Blur is a cheaper plain blur.
+// Only for cameras whose suite asks for depth of field, whose lens sets how much blurs.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DepthOfField {
+    pub enabled: bool,
+    pub shape: DepthOfFieldShape,
+    // Multiplies every blur, as opening the aperture by that much would.
+    pub strength: f32,
+    // The widest a blur may grow, as a diameter in pixels at full render scale.
+    pub max_blur: f32,
+    pub quality: DepthOfFieldQuality,
+    // Whether what is in front of the focus blurs too, or only what is behind it.
+    pub foreground: bool,
+    // How far bright spots outweigh the rest in a bokeh blur: 0 weighs all alike.
+    pub highlights: f32,
+}
+
+impl Default for DepthOfField {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            shape: DepthOfFieldShape::default(),
+            strength: 1.0,
+            max_blur: 64.0,
+            quality: DepthOfFieldQuality::default(),
+            foreground: true,
+            highlights: 1.0,
+        }
+    }
+}
+
+impl DepthOfField {
+    // Older saves hold a single value, one of off, blur and bokeh, rather than a table.
+    fn saved<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        enum Before {
+            Off,
+            Blur,
+            Bokeh,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Saved {
+            Before(Before),
+            Now(DepthOfField),
+        }
+
+        Ok(match Saved::deserialize(deserializer)? {
+            Saved::Now(now) => now,
+            Saved::Before(before) => DepthOfField {
+                enabled: !matches!(before, Before::Off),
+                shape: match before {
+                    Before::Blur => DepthOfFieldShape::Blur,
+                    Before::Off | Before::Bokeh => DepthOfFieldShape::Bokeh,
+                },
+                ..default()
+            },
+        })
+    }
+}
+
+// Bokeh turns bright out-of-focus spots into lens-shaped discs, as Blender does; Blur is a
+// softer plain blur.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DepthOfFieldQuality {
-    Off,
+pub enum DepthOfFieldShape {
     Blur,
     #[default]
     Bokeh,
 }
 
+impl DepthOfFieldShape {
+    pub const ALL: [DepthOfFieldShape; 2] = [DepthOfFieldShape::Blur, DepthOfFieldShape::Bokeh];
+}
+
+// How many samples each blurred pixel takes. Too few for a wide blur show as rings or grain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DepthOfFieldQuality {
+    Low,
+    #[default]
+    Medium,
+    High,
+    Ultra,
+}
+
 impl DepthOfFieldQuality {
-    pub const ALL: [DepthOfFieldQuality; 3] =
-        [DepthOfFieldQuality::Off, DepthOfFieldQuality::Blur, DepthOfFieldQuality::Bokeh];
+    pub const ALL: [DepthOfFieldQuality; 4] = [
+        DepthOfFieldQuality::Low,
+        DepthOfFieldQuality::Medium,
+        DepthOfFieldQuality::High,
+        DepthOfFieldQuality::Ultra,
+    ];
+
+    // A bokeh disk has a hard edge, which shows the sampling pattern sooner than a soft blur.
+    pub fn samples(self, shape: DepthOfFieldShape) -> u32 {
+        let samples = match self {
+            DepthOfFieldQuality::Low => 16,
+            DepthOfFieldQuality::Medium => 32,
+            DepthOfFieldQuality::High => 48,
+            DepthOfFieldQuality::Ultra => 64,
+        };
+        match shape {
+            DepthOfFieldShape::Blur => samples,
+            DepthOfFieldShape::Bokeh => samples * 3 / 2,
+        }
+    }
 }
 
 // What shadows cost the GPU. Every point light draws the scene six times a frame into its

@@ -318,10 +318,23 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
             rows.push(changed(saved, label, |s| s.graphics.anti_aliasing = anti_aliasing));
         }
     }
-    if saved.graphics.depth_of_field != DepthOfFieldQuality::Off {
+    let depth_of_field = saved.graphics.depth_of_field;
+    if depth_of_field.enabled {
         rows.push(changed(saved, "depth of field off", |s| {
-            s.graphics.depth_of_field = DepthOfFieldQuality::Off;
+            s.graphics.depth_of_field.enabled = false;
         }));
+        for quality in DepthOfFieldQuality::ALL {
+            if quality == depth_of_field.quality {
+                continue;
+            }
+            let label = match quality {
+                DepthOfFieldQuality::Low => "depth of field low",
+                DepthOfFieldQuality::Medium => "depth of field medium",
+                DepthOfFieldQuality::High => "depth of field high",
+                DepthOfFieldQuality::Ultra => "depth of field ultra",
+            };
+            rows.push(changed(saved, label, |s| s.graphics.depth_of_field.quality = quality));
+        }
     }
     for scale in RENDER_SCALES {
         if scale != saved.graphics.scale_percent() {

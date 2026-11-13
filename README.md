@@ -113,7 +113,7 @@ it and brings it back.
 | Tab | What's there |
 |-----|--------------|
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
-| **Graphics** | Sky brightness, quality settings (render scale, anti-aliasing, depth of field, shadows, ambient occlusion, fog), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
+| **Graphics** | Sky brightness, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start at sign-in, monitors, frame rate limit, performance monitor, when to pause, and the panel's language, colors, size and side. |
 
@@ -548,6 +548,8 @@ loops it.
   either Focus Distance or a Focus Object. A focus object is followed as it moves. Focus
   on the armature with a bone picked to keep, say, the head sharp.
 - Animated F-Stop or Focus Distance doesn't come over. Animate a focus empty instead.
+- The viewer can scale how much everything blurs with **Strength** in the Graphics tab.
+  100% is your F-Stop exactly; 200% is as if you'd halved it.
 - Aperture blades, rotation and ratio have no match in the app.
 - The orbit camera is always there in addition to yours. Where it starts is set in
   [suite.toml](#suitetoml).

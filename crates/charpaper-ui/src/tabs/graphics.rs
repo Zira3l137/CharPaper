@@ -9,6 +9,7 @@ use charpaper_settings::AmbientOcclusionQuality;
 use charpaper_settings::AmbientOcclusionSoftness;
 use charpaper_settings::AntiAliasing;
 use charpaper_settings::DepthOfFieldQuality;
+use charpaper_settings::DepthOfFieldShape;
 use charpaper_settings::FogQuality;
 use charpaper_settings::FogResolution;
 use charpaper_settings::Graphics;
@@ -48,6 +49,11 @@ const SHIFT: Scale = Scale { step: 0.05, min: -1.0, max: 1.0, per_unit: 100.0 };
 const SATURATION: Scale = Scale { step: 0.05, min: 0.0, max: 2.0, per_unit: 100.0 };
 const CONTRAST: Scale = Scale { step: 0.05, min: 0.5, max: 1.5, per_unit: 100.0 };
 const LUT_STRENGTH: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
+// Depth of field strength, a stop of aperture apart: each doubles or halves the blur's area.
+const BLUR_STRENGTH_STOPS: [f32; 9] = [0.25, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8, 4.0];
+// Diameters in pixels. Beyond 128 the near blur would need more tiles around each pixel.
+const MAX_BLUR_STOPS: [f32; 7] = [16.0, 24.0, 32.0, 48.0, 64.0, 96.0, 128.0];
+const HIGHLIGHTS: Scale = Scale { step: 0.25, min: 0.0, max: 3.0, per_unit: 100.0 };
 // cd/m², spaced so each step looks about as big as the last.
 const BRIGHTNESS_STOPS: [f32; 15] = [
     50.0, 100.0, 200.0, 300.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0, 3000.0, 5000.0, 8000.0,
@@ -73,7 +79,7 @@ struct RestoreButton;
 // and how the picture is finished, in its look. Shadow quality is the exception: every stage
 // shares it.
 pub(crate) fn page() -> impl Bundle {
-    children![quality(), lighting(), fog(), strokes(), post_processing()]
+    children![quality(), lighting(), fog(), depth_of_field(), strokes(), post_processing()]
 }
 
 fn lighting() -> impl Bundle {
@@ -255,24 +261,130 @@ fn quality() -> impl Bundle {
                 },
             }
             .segments(),
+        ],
+    )
+}
+
+fn depth_of_field() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-depth-of-field"),
+        Section::DepthOfField,
+        children![
             Setting {
                 label: |l| fl!(l, "label-depth-of-field"),
                 help: |l| fl!(l, "help-depth-of-field"),
+                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.depth_of_field.enabled)),
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| flip(&mut g.depth_of_field.enabled, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-blur-shape"),
+                help: |l| fl!(l, "help-blur-shape"),
                 show: |w, l| {
-                    let current = w.focused::<Graphics>()?.depth_of_field;
-                    Some(choice(&DepthOfFieldQuality::ALL, &current, |quality| match quality {
-                        DepthOfFieldQuality::Off => on_off(l, false),
-                        DepthOfFieldQuality::Blur => fl!(l, "value-blur"),
-                        DepthOfFieldQuality::Bokeh => fl!(l, "value-bokeh"),
-                    }))
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let label = |shape: &DepthOfFieldShape| match shape {
+                        DepthOfFieldShape::Blur => fl!(l, "value-blur"),
+                        DepthOfFieldShape::Bokeh => fl!(l, "value-bokeh"),
+                    };
+                    Some(choice(&DepthOfFieldShape::ALL, &dof.shape, label).when(dof.enabled))
                 },
                 change: |w, step| {
                     w.edit(|g: &mut Graphics| {
-                        pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field, step);
+                        pick(&DepthOfFieldShape::ALL, &mut g.depth_of_field.shape, step);
                     });
                 },
             }
             .segments(),
+            Setting {
+                label: |l| fl!(l, "label-blur-strength"),
+                help: |l| fl!(l, "help-blur-strength"),
+                show: |w, _| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let [min, .., max] = BLUR_STRENGTH_STOPS;
+                    let shown =
+                        number(percent(dof.strength), dof.strength.ln(), min.ln(), max.ln());
+                    Some(shown.when(dof.enabled))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let dof = &mut g.depth_of_field;
+                        dof.strength = step_stops(&BLUR_STRENGTH_STOPS, dof.strength, step.by());
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-max-blur"),
+                help: |l| fl!(l, "help-max-blur"),
+                show: |w, _| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let [min, .., max] = MAX_BLUR_STOPS;
+                    let text = format!("{:.0} px", dof.max_blur);
+                    Some(number(text, dof.max_blur.ln(), min.ln(), max.ln()).when(dof.enabled))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let dof = &mut g.depth_of_field;
+                        dof.max_blur = step_stops(&MAX_BLUR_STOPS, dof.max_blur, step.by());
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-blur-quality"),
+                help: |l| fl!(l, "help-blur-quality"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let label = |quality: &DepthOfFieldQuality| match quality {
+                        DepthOfFieldQuality::Low => fl!(l, "value-low"),
+                        DepthOfFieldQuality::Medium => fl!(l, "value-medium"),
+                        DepthOfFieldQuality::High => fl!(l, "value-high"),
+                        DepthOfFieldQuality::Ultra => fl!(l, "value-ultra"),
+                    };
+                    Some(choice(&DepthOfFieldQuality::ALL, &dof.quality, label).when(dof.enabled))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field.quality, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-blur-foreground"),
+                help: |l| fl!(l, "help-blur-foreground"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    Some(switch(l, dof.foreground).when(dof.enabled))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| flip(&mut g.depth_of_field.foreground, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-bokeh-highlights"),
+                help: |l| fl!(l, "help-bokeh-highlights"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let text = if dof.highlights <= 0.0 {
+                        on_off(l, false)
+                    } else {
+                        percent(dof.highlights)
+                    };
+                    let bokeh = dof.enabled && dof.shape == DepthOfFieldShape::Bokeh;
+                    Some(HIGHLIGHTS.number(text, dof.highlights).when(bokeh))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let dof = &mut g.depth_of_field;
+                        dof.highlights = HIGHLIGHTS.nudge(dof.highlights, step);
+                    });
+                },
+            }
+            .stepper(),
         ],
     )
 }

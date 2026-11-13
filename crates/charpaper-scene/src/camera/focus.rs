@@ -2,7 +2,7 @@
 // object, the distance to it is measured again every frame, since either may move.
 
 use bevy::prelude::*;
-use charpaper_settings::DepthOfFieldQuality;
+use charpaper_settings::DepthOfFieldShape;
 use charpaper_settings::Graphics;
 
 use crate::camera::SceneCamera;
@@ -15,8 +15,6 @@ use crate::depth_of_field::SceneDepthOfField;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
 
-// The widest blur, as a diameter in pixels, which keeps the cost bounded.
-const MAX_BLUR_PX: f32 = 64.0;
 // The orbit camera's sensor, Super 35's height in meters, which is also Bevy's default.
 const ORBIT_SENSOR_HEIGHT: f32 = 0.01866;
 // The sky has no depth, and would blur without limit unless told how far away it is. At this
@@ -52,11 +50,7 @@ pub(crate) fn focus_lens(
         let Ok(graphics) = graphics.get(stage) else {
             continue;
         };
-        let bokeh = match graphics.depth_of_field {
-            DepthOfFieldQuality::Off => None,
-            DepthOfFieldQuality::Blur => Some(false),
-            DepthOfFieldQuality::Bokeh => Some(true),
-        };
+        let settings = graphics.depth_of_field;
         let lens = match following.name() {
             None => suites.get(stage).ok().and_then(|s| s.camera.f_stop).map(|f_stop| Lens {
                 f_stop,
@@ -97,15 +91,19 @@ pub(crate) fn focus_lens(
                 }),
         };
 
-        let wanted = lens.zip(bokeh).map(|(lens, bokeh)| SceneDepthOfField {
+        let wanted = lens.filter(|_| settings.enabled).map(|lens| SceneDepthOfField {
             focal_distance: lens.focal_distance,
-            f_stop: lens.f_stop,
+            // A wider aperture, a lower f-stop, blurs more in proportion.
+            f_stop: lens.f_stop / settings.strength.max(0.01),
             sensor_height: lens.sensor_height,
             // Counted in the scene image's pixels, so it follows the render scale to look the
             // same.
-            max_blur: MAX_BLUR_PX * graphics.scale_percent() as f32 / 100.0,
+            max_blur: settings.max_blur * graphics.scale_percent() as f32 / 100.0,
             max_depth: SKY_DEPTH,
-            bokeh,
+            bokeh: settings.shape == DepthOfFieldShape::Bokeh,
+            samples: settings.quality.samples(settings.shape),
+            foreground: settings.foreground,
+            highlights: settings.highlights,
         });
         for (camera, depth_of_field, parent) in &mut cameras {
             if parent.parent() != view {

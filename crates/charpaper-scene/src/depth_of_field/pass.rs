@@ -45,9 +45,6 @@ use super::ExtractedDepthOfField;
 
 // Must match the shader's TILE.
 const TILE: u32 = 16;
-// Samples per layer for each pixel of the gather. Bokeh's harder disk shows gaps sooner.
-const BLUR_SAMPLES: u32 = 32;
-const BOKEH_SAMPLES: u32 = 48;
 const LAYER_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 const TILE_FORMAT: TextureFormat = TextureFormat::R16Float;
 
@@ -86,6 +83,8 @@ struct DepthOfFieldUniform {
     max_depth: f32,
     samples: u32,
     bokeh: u32,
+    foreground: u32,
+    highlights: f32,
 }
 
 #[derive(Resource, Default)]
@@ -281,8 +280,10 @@ fn prepare_depth_of_field(
             coc_scale: settings.coc_scale * view.viewport.w as f32,
             max_radius: settings.max_radius,
             max_depth: settings.max_depth,
-            samples: if settings.bokeh { BOKEH_SAMPLES } else { BLUR_SAMPLES },
+            samples: settings.samples,
             bokeh: u32::from(settings.bokeh),
+            foreground: u32::from(settings.foreground),
+            highlights: settings.highlights,
         });
 
         let multisampled = *msaa != Msaa::Off;

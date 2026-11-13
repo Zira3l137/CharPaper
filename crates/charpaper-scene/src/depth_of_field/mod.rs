@@ -40,6 +40,12 @@ pub(crate) struct SceneDepthOfField {
     pub max_depth: f32,
     // Round highlights from bright spots, rather than a plain blur.
     pub bokeh: bool,
+    // Taken by each blurred pixel.
+    pub samples: u32,
+    // Whether what is in front of the focus blurs too.
+    pub foreground: bool,
+    // How far bright spots outweigh the rest in a bokeh blur.
+    pub highlights: f32,
 }
 
 // What the passes need, worked out from the camera's lens.
@@ -52,6 +58,9 @@ pub(crate) struct ExtractedDepthOfField {
     max_radius: f32,
     max_depth: f32,
     bokeh: bool,
+    samples: u32,
+    foreground: bool,
+    highlights: f32,
 }
 
 impl SyncComponent for SceneDepthOfField {
@@ -79,6 +88,9 @@ impl ExtractComponent for SceneDepthOfField {
             max_radius: 0.5 * settings.max_blur,
             max_depth: settings.max_depth,
             bokeh: settings.bokeh,
+            samples: settings.samples.max(1),
+            foreground: settings.foreground,
+            highlights: settings.highlights.max(0.0),
         })
     }
 }

@@ -18,6 +18,8 @@ struct Params {
     max_depth: f32,
     samples: u32,
     bokeh: u32,
+    foreground: u32,
+    highlights: f32,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -37,9 +39,12 @@ fn view_depth(depth: f32) -> f32 {
     return min(-(u.x * depth + u.y) / w, params.max_depth);
 }
 
-// In screen pixels.
+// In screen pixels. Without the foreground blur, everything in front stays sharp.
 fn coc_radius(depth: f32) -> f32 {
     let focus = params.focal_distance;
+    if depth < focus && params.foreground == 0u {
+        return 0.0;
+    }
     let diameter = params.coc_scale * abs(depth - focus)
         / (depth * max(focus - params.focal_length, EPSILON));
     let radius = min(0.5 * diameter, params.max_radius);
@@ -65,7 +70,7 @@ fn coverage(radius: f32, distance: f32) -> f32 {
 // Bokeh lets bright spots outweigh the rest, so lights turn into round highlights.
 fn brightness_weight(color: vec3<f32>) -> f32 {
     if params.bokeh != 0u {
-        return 1.0 + dot(color, vec3(0.2126, 0.7152, 0.0722));
+        return 1.0 + params.highlights * dot(color, vec3(0.2126, 0.7152, 0.0722));
     }
     return 1.0;
 }
@@ -170,12 +175,14 @@ fn gather(in: FullscreenVertexOutput) -> Layers {
         layers.far = vec4(sum / total, 1.0);
     }
 
-    // The near layer's reach: the largest near radius in this tile and the ones around it.
+    // The near layer's reach: the largest near radius in this tile and in as many tiles around
+    // as the widest blur can span.
     let tile = pixel / TILE;
     let last_tile = vec2<i32>(textureDimensions(tile_texture)) - 1;
+    let span = i32(ceil(0.5 * params.max_radius / f32(TILE)));
     var reach = 0.0;
-    for (var y = -1; y <= 1; y += 1) {
-        for (var x = -1; x <= 1; x += 1) {
+    for (var y = -span; y <= span; y += 1) {
+        for (var x = -span; x <= span; x += 1) {
             let at = clamp(tile + vec2(x, y), vec2(0), last_tile);
             reach = max(reach, textureLoad(tile_texture, at, 0).r);
         }

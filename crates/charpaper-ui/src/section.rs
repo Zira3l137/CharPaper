@@ -43,6 +43,7 @@ pub(crate) enum Section {
     FrameRate,
     Quality,
     Fog,
+    DepthOfField,
     Strokes,
     Pause,
     App,
@@ -72,6 +73,7 @@ impl Section {
             Section::FrameRate => "frame_rate",
             Section::Quality => "quality",
             Section::Fog => "fog",
+            Section::DepthOfField => "depth_of_field",
             Section::Strokes => "strokes",
             Section::Pause => "pause",
             Section::App => "app",
@@ -96,6 +98,7 @@ impl Section {
                 | Section::Color
                 | Section::Film
                 | Section::Fog
+                | Section::DepthOfField
                 | Section::Pause
         )
     }
