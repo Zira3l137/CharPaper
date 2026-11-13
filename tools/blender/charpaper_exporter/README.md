@@ -53,7 +53,8 @@ saved in the `.blend`.
   whether its drivers match Blender in the rest pose.
 - **Depth of field** comes from the camera's own *Depth of Field* panel: F-Stop, and either
   Focus Distance or a Focus Object. A focus object goes into the camera's file with the
-  empties it hangs from, and its animation joins the camera's clip. Focusing on the
+  empties it hangs from, and its animation joins the camera's clip. It may hang from the
+  camera itself, animated or not. Focusing on the
   character's armature with a bone picked, or on an object of one of its skins, follows that
   bone or object instead. Animated Focus Distance or F-Stop doesn't carry over; animate a
   focus empty instead.

@@ -549,7 +549,8 @@ loops it.
   viewer's monitor. A wider monitor shows more at the sides. Set your render resolution to
   the monitor shape you care about most, and leave some room at the sides.
 - **Depth of field** comes from the camera's own *Depth of Field* panel: F-Stop, and
-  either Focus Distance or a Focus Object. A focus object is followed as it moves. Focus
+  either Focus Distance or a Focus Object. A focus object is followed as it moves, and
+  may be animated and parented to the camera. Focus
   on the armature with a bone picked to keep, say, the head sharp.
 - Animated F-Stop or Focus Distance doesn't come over. Animate a focus empty instead.
 - The viewer can scale how much everything blurs with **Strength** in the Graphics tab.

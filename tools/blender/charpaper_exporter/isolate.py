@@ -2,6 +2,7 @@ import uuid
 from contextlib import contextmanager
 
 import bpy
+from mathutils import Matrix
 
 # Every export runs on copies of the objects it needs, linked into a throwaway scene. The
 # copies can have their animation cleared and new NLA tracks added without touching the
@@ -29,6 +30,7 @@ class Isolation:
         # the file.
         self._data = {}
         self._renamed = []
+        self._bridges = {}
 
     def _step_aside(self, block):
         name = block.name
@@ -97,6 +99,27 @@ class Isolation:
                 for bone in copy.pose.bones:
                     for constraint in bone.constraints:
                         self._retarget(constraint)
+        for copy in list(self.copies.values()):
+            parent = copy.parent
+            if parent is not None and parent.type in {"CAMERA", "LIGHT"} and _animated(copy):
+                self._bridge(copy)
+
+    def _bridge(self, copy):
+        # glTF cameras and lights look down another axis than Blender's. The exporter turns
+        # their nodes and turns their children back, but not the children's animation, so a
+        # focus object moving away from its camera moves sideways in the file. A still empty
+        # in between takes the turn, and the child under it needs none.
+        parent = copy.parent
+        bridge = self._bridges.get(parent)
+        if bridge is None:
+            bridge = bpy.data.objects.new(parent.name + " children", None)
+            self.scene.collection.objects.link(bridge)
+            bridge.parent = parent
+            bridge.matrix_parent_inverse = Matrix.Identity(4)
+            self._bridges[parent] = bridge
+        inverse = copy.matrix_parent_inverse.copy()
+        copy.parent = bridge
+        copy.matrix_parent_inverse = inverse
 
     def _retarget(self, holder):
         for attr in ("object", "target"):
@@ -111,7 +134,7 @@ class Isolation:
                 target.target = self.copies[target.target]
 
     def close(self):
-        for copy in self.copies.values():
+        for copy in [*self.copies.values(), *self._bridges.values()]:
             bpy.data.objects.remove(copy, do_unlink=True)
         for data in self._data.values():
             if data.users == 0:
@@ -122,6 +145,12 @@ class Isolation:
             block.name = name
         self.copies.clear()
         self._data.clear()
+        self._bridges.clear()
+
+
+def _animated(obj):
+    data = obj.animation_data
+    return data is not None and (data.action is not None or len(data.nla_tracks) > 0)
 
 
 def _strip(block, keep_drivers):
