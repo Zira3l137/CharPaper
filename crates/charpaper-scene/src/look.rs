@@ -14,6 +14,7 @@ use bevy::prelude::*;
 use bevy::render::view::ColorGrading;
 use bevy::render::view::ColorGradingGlobal;
 use bevy::render::view::ColorGradingSection;
+use charpaper_suite::BackgroundBlur;
 use charpaper_suite::GradingSection;
 use charpaper_suite::Look;
 use charpaper_suite::LookEdits;
@@ -64,6 +65,8 @@ const BLOOM_SOFTNESS: f32 = 0.5;
 pub const DEFAULT_CHROMATIC_ABERRATION: f32 = 0.0;
 pub const DEFAULT_BRIGHTNESS: f32 = 1000.0;
 pub const DEFAULT_SHADOWS: bool = true;
+pub const DEFAULT_SKY_ROTATION_DEG: f32 = 0.0;
+pub const DEFAULT_BACKGROUND: f32 = 1.0;
 
 #[derive(Component, Deref, DerefMut, Clone, Debug, Default)]
 pub struct ActiveLook(pub Look);
@@ -141,6 +144,9 @@ pub struct Resolved {
     pub brightness: f32,
     pub shadows: bool,
     pub exposure: f32,
+    pub sky_rotation_deg: f32,
+    pub background: f32,
+    pub background_blur: BackgroundBlur,
 }
 
 impl Resolved {
@@ -166,6 +172,9 @@ impl Resolved {
             brightness: entry.brightness.unwrap_or(DEFAULT_BRIGHTNESS),
             shadows: entry.shadows.unwrap_or(DEFAULT_SHADOWS),
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
+            sky_rotation_deg: entry.sky_rotation_deg.unwrap_or(DEFAULT_SKY_ROTATION_DEG),
+            background: entry.background.unwrap_or(DEFAULT_BACKGROUND),
+            background_blur: entry.background_blur.unwrap_or_default(),
         }
     }
 }
@@ -270,11 +279,16 @@ fn apply_stage_look(
             commands.entity(entity).remove::<effect_stack::Vignette>();
         }
         commands.entity(entity).insert(color_grading(look));
+        // As a Point Mapping node turns Blender's Environment Texture: it samples the sky turned
+        // by the angle, which shows the sky turned the other way. Bevy turns it the way given.
+        let rotation = Quat::from_rotation_y(-resolved.sky_rotation_deg.to_radians());
         if let Some(mut skybox) = skybox {
-            skybox.brightness = resolved.brightness;
+            skybox.brightness = resolved.brightness * resolved.background;
+            skybox.rotation = rotation;
         }
         if let Some(mut environment_light) = environment_light {
             environment_light.intensity = resolved.brightness;
+            environment_light.rotation = rotation;
         }
     }
 

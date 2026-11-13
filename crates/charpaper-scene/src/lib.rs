@@ -15,6 +15,7 @@ mod render;
 mod screens;
 mod shadows;
 mod shape_keys;
+mod sky;
 mod soundscape;
 mod span;
 mod stage;
@@ -105,6 +106,7 @@ impl Plugin for ScenePlugin {
                 render::RenderPlugin,
                 shadows::ShadowsPlugin,
                 shape_keys::ShapeKeysPlugin,
+                sky::SkyPlugin,
                 gaze::GazePlugin,
                 soundscape::SoundscapePlugin,
                 span::SpanPlugin,

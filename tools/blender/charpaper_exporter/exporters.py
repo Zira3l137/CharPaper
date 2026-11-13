@@ -6,6 +6,7 @@ from . import drivers
 from . import gltf
 from . import lens
 from . import lights
+from . import sky
 from .isolate import isolated
 from .isolate import showing
 from .props import file_stem
@@ -37,6 +38,8 @@ class Result:
         self.notes = []
         # Files written besides the one at `path`.
         self.written = []
+        # suite.toml values the export decided, None for the app's default.
+        self.settings = {}
 
 
 def extension(suite):
@@ -164,6 +167,22 @@ def animation(context, suite, entry, folder):
 
 
 def environment(context, suite, entry, folder):
+    result = None
+    if entry.collection is not None:
+        result = _environment_scene(context, suite, entry, folder)
+    if entry.world is not None:
+        sky_folder = os.path.join(folder, ENVIRONMENT_DIR, file_stem(entry.name))
+        path, settings, notes = sky.export(context, entry.world, sky_folder)
+        if result is None:
+            result = Result(path)
+        else:
+            result.written.append(path)
+        result.settings.update(settings)
+        result.notes.extend(notes)
+    return result
+
+
+def _environment_scene(context, suite, entry, folder):
     path = target(folder, ENVIRONMENT_DIR, entry.name, suite)
     threshold = context.scene.eevee.light_threshold
     objects = [obj for obj in entry.collection.all_objects if obj.type != "CAMERA"]

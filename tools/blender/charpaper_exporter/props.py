@@ -167,6 +167,11 @@ class CHARPAPER_PG_animation(PropertyGroup):
 class CHARPAPER_PG_environment(PropertyGroup):
     enabled: BoolProperty(name="Export", default=True)
     collection: PointerProperty(type=bpy.types.Collection)
+    world: PointerProperty(
+        type=bpy.types.World,
+        description="Its sky and reflections. Without one, the panorama in the environment's "
+        "folder is left as it is",
+    )
 
 
 class CHARPAPER_PG_camera(PropertyGroup):

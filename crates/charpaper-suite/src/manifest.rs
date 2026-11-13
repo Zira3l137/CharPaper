@@ -266,6 +266,17 @@ pub struct EnvironmentEntry {
     /// Exposure compensation in EV stops while this environment is shown,
     /// replacing `post.exposure`. A sunlit scene needs far less than a room.
     pub exposure: Option<f32>,
+    /// Turns the sky, and the light it casts, around the vertical axis, in
+    /// degrees, as the Z Rotation of a Point-type Mapping node turns Blender's
+    /// Environment Texture. Defaults to 0.
+    pub sky_rotation_deg: Option<f32>,
+    /// How bright the sky looks behind the scene, as a share of how brightly
+    /// it lights it: 0 hides it, 1 shows it as it is. Like Blender's Light
+    /// Path trick, it leaves the lighting alone. Defaults to 1.
+    pub background: Option<f32>,
+    /// How blurred the sky looks behind the scene. The lighting stays as it
+    /// is. Defaults to off.
+    pub background_blur: Option<BackgroundBlur>,
     /// Boxes of fog, keyed by the name of their object in the environment's
     /// file: in Blender, usually a cube with a Principled Volume material. The
     /// fog fills the object's bounding box, or the 2 m cube Blender draws for
@@ -479,6 +490,22 @@ impl Grain {
     pub fn colored(&self) -> bool {
         self.colored.unwrap_or(false)
     }
+}
+
+/// How blurred the sky looks behind the scene.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BackgroundBlur {
+    #[default]
+    Off,
+    Low,
+    Medium,
+    High,
+}
+
+impl BackgroundBlur {
+    pub const ALL: [BackgroundBlur; 4] =
+        [BackgroundBlur::Off, BackgroundBlur::Low, BackgroundBlur::Medium, BackgroundBlur::High];
 }
 
 // Mirrors Bevy's Tonemapping so this crate doesn't need Bevy.

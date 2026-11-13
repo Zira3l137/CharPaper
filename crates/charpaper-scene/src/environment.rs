@@ -26,6 +26,7 @@ use crate::assets::asset_path;
 use crate::camera::SceneCamera;
 use crate::character::Armature;
 use crate::look::LightTree;
+use crate::sky::SharpSky;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
@@ -138,7 +139,7 @@ pub(crate) fn switch_environment(
             commands.entity(root).despawn();
         }
         for &camera in &cameras {
-            commands.entity(camera).remove::<(Skybox, EnvironmentMapLight)>();
+            commands.entity(camera).remove::<(Skybox, SharpSky, EnvironmentMapLight)>();
         }
         shown.name = state.environment.clone();
 
@@ -190,8 +191,11 @@ fn attach_maps(
     environment: &Environment,
 ) {
     if let Some(sky) = environment.sky() {
-        let image = assets.load(asset_path(suite, sky));
-        commands.entity(camera).insert(Skybox { image: Some(image), brightness: 0.0, ..default() });
+        let image: Handle<Image> = assets.load(asset_path(suite, sky));
+        commands.entity(camera).insert((
+            Skybox { image: Some(image.clone()), brightness: 0.0, ..default() },
+            SharpSky(image),
+        ));
     }
     if let Some((diffuse, specular)) = environment.reflections() {
         commands.entity(camera).insert(EnvironmentMapLight {

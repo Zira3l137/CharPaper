@@ -68,6 +68,16 @@
     "schema"
   ],
   "$defs": {
+    "BackgroundBlur": {
+      "description": "How blurred the sky looks behind the scene.",
+      "type": "string",
+      "enum": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ]
+    },
     "Camera": {
       "description": "Which camera the app starts with, and where the built-in orbit camera\nstarts. The user can switch cameras, and orbit and zoom the orbit camera.",
       "type": "object",
@@ -256,6 +266,25 @@
       "description": "One environment's settings. Its lights come from its own `.glb`; these\nonly adjust how the scene is shown while it is.",
       "type": "object",
       "properties": {
+        "background": {
+          "description": "How bright the sky looks behind the scene, as a share of how brightly\nit lights it: 0 hides it, 1 shows it as it is. Like Blender's Light\nPath trick, it leaves the lighting alone. Defaults to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "background_blur": {
+          "description": "How blurred the sky looks behind the scene. The lighting stays as it\nis. Defaults to off.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackgroundBlur"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "brightness": {
           "description": "How bright the skybox looks and how strongly the reflection maps light\nthe scene, in cd/m². Defaults to 1000.",
           "type": [
@@ -301,6 +330,14 @@
             "boolean",
             "null"
           ]
+        },
+        "sky_rotation_deg": {
+          "description": "Turns the sky, and the light it casts, around the vertical axis, in\ndegrees, as the Z Rotation of a Point-type Mapping node turns Blender's\nEnvironment Texture. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
         }
       },
       "additionalProperties": false

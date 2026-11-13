@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::layout::Look;
+use crate::manifest::BackgroundBlur;
 use crate::manifest::Tonemapping;
 
 // What a viewer changed in a suite's look, kept apart from the author's suite.toml. Laid over
@@ -86,6 +87,12 @@ pub struct EnvironmentEdits {
     pub shadows: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exposure: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sky_rotation_deg: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_blur: Option<BackgroundBlur>,
 }
 
 impl LookEdits {
@@ -112,6 +119,9 @@ impl LookEdits {
                 brightness: changed(base.brightness, entry.brightness),
                 shadows: changed(base.shadows, entry.shadows),
                 exposure: changed(base.exposure, entry.exposure),
+                sky_rotation_deg: changed(base.sky_rotation_deg, entry.sky_rotation_deg),
+                background: changed(base.background, entry.background),
+                background_blur: changed(base.background_blur, entry.background_blur),
             };
             if environment != EnvironmentEdits::default() {
                 edits.environments.insert(name.clone(), environment);
@@ -135,6 +145,9 @@ impl LookEdits {
             entry.brightness = edits.brightness.or(entry.brightness);
             entry.shadows = edits.shadows.or(entry.shadows);
             entry.exposure = edits.exposure.or(entry.exposure);
+            entry.sky_rotation_deg = edits.sky_rotation_deg.or(entry.sky_rotation_deg);
+            entry.background = edits.background.or(entry.background);
+            entry.background_blur = edits.background_blur.or(entry.background_blur);
         }
     }
 

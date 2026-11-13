@@ -28,6 +28,9 @@ default = "room"
 brightness = 1000.0
 shadows = true
 exposure = 1.5
+sky_rotation_deg = 90.0
+background = 0.5
+background_blur = "medium"
 no_volume_scatter = ["Desk lamp"]
 no_shadows = ["Desk lamp"]
 

@@ -10,6 +10,7 @@ from . import cues
 from . import drivers
 from . import env_settings
 from . import front
+from . import sky
 from . import gaze as gaze_bones
 from . import gltf
 from . import lens
@@ -424,12 +425,30 @@ def _check_cues(suite, clips, add):
                     add(Finding(f"sound {sound.name!r}: its file {source} is missing"))
 
 
+def _check_world(name, world, add):
+    found = sky.plain(world)
+    if found is None:
+        add(Finding(
+            f"environment {name!r}: World {world.name!r} isn't a single .hdr or .exr Environment "
+            "Texture, so the export renders it into a panorama with Cycles; a Light Path trick "
+            "comes over as the camera sees it",
+            severity="INFO",
+        ))
+        return
+    image = found.image
+    if image.packed_file is None and not os.path.isfile(bpy.path.abspath(image.filepath, library=image.library)):
+        add(Finding(f"environment {name!r}: the World's image {image.filepath} is missing"))
+
+
 def _check_environment(entry, add):
+    if entry.world is not None:
+        _check_world(entry.name, entry.world, add)
     if entry.collection is None:
-        add(Finding(f"environment {entry.name!r} has no collection"))
+        if entry.world is None:
+            add(Finding(f"environment {entry.name!r} has no collection or World"))
         return
     objects = list(entry.collection.all_objects)
-    if not any(o.type == "LIGHT" for o in objects):
+    if entry.world is None and not any(o.type == "LIGHT" for o in objects):
         add(Finding(
             f"environment {entry.name!r} has no lights; unless it ships reflection maps, "
             "the character renders black",

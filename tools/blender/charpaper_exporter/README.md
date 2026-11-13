@@ -23,7 +23,7 @@ saved in the `.blend`.
 | Model file  | the armature alone                                      | `<model>.glb` next to suite.toml |
 | Skin        | the armature + every mesh in its collection, plus ticked expressions | `skins/<name>.glb` |
 | Animation   | the armature + ticked clips, plus copies of the skins' meshes whose shape keys the clips key, without materials or textures | `animations/<name>.glb` |
-| Environment | everything in its collection except cameras, with active actions | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/` |
+| Environment | everything in its collection except cameras, with active actions; its World as a panorama | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/`, the panorama in `environment/<name>/` |
 | Camera      | the camera, the empties it hangs from, its focus object, and one action | `cameras/<name>.glb` |
 
 - **Clips** and **expressions** are named after their Blender actions. *Shown as* renames a
@@ -68,6 +68,16 @@ saved in the `.blend`.
   animation of light, material or camera settings. Motion that only comes from constraints
   or drivers, with no action at all, needs baking into one (*Object > Animation > Bake
   Action*).
+- **Sky:** an environment's *World* (the scene's when you add the environment) becomes the
+  panorama its sky and reflections are baked from. A World that is one `.hdr` or `.exr`
+  Environment Texture into a Background, optionally through a Mapping node turned only
+  about Z, has its file copied as it is; Strength and the Z rotation go to suite.toml. Any
+  other World (Sky Texture, a plain color, mixed textures) is rendered with Cycles into a
+  2048×1024 `sky.exr`, which takes a few seconds on every export; a Light Path trick comes
+  over as the camera sees it. The panorama replaces any other in the folder, and when it
+  changed the baked `.ktx2` maps are deleted so the app bakes them again. Leave World empty
+  to keep a panorama you put there by hand. An environment with a World and no collection
+  is just a sky.
 - **Shared data:** objects sharing a mesh (*Alt+D*, or *Link/Transfer Data*) share it in the
   file too, and the app keeps it in memory once. An object with modifiers gets a mesh of its
   own when *Apply Modifiers* is on, since its result is its own. Lights sharing light data
@@ -160,7 +170,9 @@ Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.
 - Each exported camera's `[cameras.<name>]` is rewritten from its Depth of Field panel, and
   removed when depth of field is off.
 - Each exported environment's fog, `no_volume_scatter` and `no_shadows` are rewritten from
-  the scene; its brightness, shadows and exposure are kept.
+  the scene. With a World, its `brightness` and `sky_rotation_deg` are too. Its shadows,
+  exposure and background settings are kept, and so are brightness and rotation without a
+  World.
 - Clips of files that weren't exported this time, `[post]`, environments that weren't
   exported, and the orbit camera settings are kept as they are.
 

@@ -210,7 +210,9 @@ class CHARPAPER_PT_environments(_Sidebar, Panel):
             self.layout, suite, "ENVIRONMENT", CHARPAPER_UL_environments, "environments", "environment_index"
         )
         if entry is not None:
-            self.layout.prop(entry, "collection", text="Collection")
+            col = self.layout.column()
+            col.prop(entry, "collection", text="Collection")
+            col.prop(entry, "world", text="World")
 
 
 class CHARPAPER_PT_cameras(_Sidebar, Panel):

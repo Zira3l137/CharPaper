@@ -20,6 +20,7 @@ use charpaper_settings::ShadowQuality;
 use charpaper_settings::ShadowUpdates;
 use charpaper_settings::StrokeStrength;
 use charpaper_settings::StrokeWidth;
+use charpaper_suite::BackgroundBlur;
 use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
 use i18n_embed::fluent::FluentLanguageLoader;
@@ -49,6 +50,10 @@ const SHIFT: Scale = Scale { step: 0.05, min: -1.0, max: 1.0, per_unit: 100.0 };
 // 100% leaves the picture as it is, which sits in the middle of both ranges.
 const SATURATION: Scale = Scale { step: 0.05, min: 0.0, max: 2.0, per_unit: 100.0 };
 const CONTRAST: Scale = Scale { step: 0.05, min: 0.5, max: 1.5, per_unit: 100.0 };
+// Degrees, wrapping around at half a turn.
+const SKY_TURN_STEP: f32 = 15.0;
+// A share of the sky's brightness.
+const BACKGROUND: Scale = Scale { step: 0.1, min: 0.0, max: 2.0, per_unit: 100.0 };
 const LUT_STRENGTH: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
 // Depth of field strength, a stop of aperture apart: each doubles or halves the blur's area.
 const BLUR_STRENGTH_STOPS: [f32; 9] = [0.25, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8, 4.0];
@@ -111,6 +116,77 @@ fn lighting() -> impl Bundle {
                 },
             }
             .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-sky-rotation"),
+                help: |l| fl!(l, "help-sky-rotation"),
+                show: |w, _| {
+                    let lit = shown_environment(w)
+                        .is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
+                    let turn = resolved(w)?.sky_rotation_deg;
+                    Some(balance(format!("{turn:.0}°"), turn, -180.0, 180.0).when(lit))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, environment| {
+                        if let Some(name) = environment {
+                            let turned =
+                                current.sky_rotation_deg + SKY_TURN_STEP * step.by() as f32;
+                            // Into (-180, 180], so 180 and -180 aren't two stops.
+                            let turn = 180.0 - (180.0 - turned).rem_euclid(360.0);
+                            look.environments.entry(name.into()).or_default().sky_rotation_deg =
+                                Some(turn);
+                        }
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-background"),
+                help: |l| fl!(l, "help-background"),
+                show: |w, l| {
+                    let sky = shown_environment(w).is_some_and(|e| e.sky().is_some());
+                    let background = resolved(w)?.background;
+                    let text =
+                        if background <= 0.0 { on_off(l, false) } else { percent(background) };
+                    Some(BACKGROUND.number(text, background).when(sky))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, environment| {
+                        if let Some(name) = environment {
+                            look.environments.entry(name.into()).or_default().background =
+                                Some(BACKGROUND.nudge(current.background, step));
+                        }
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-background-blur"),
+                help: |l| fl!(l, "help-background-blur"),
+                show: |w, l| {
+                    // Blurred from the reflection map.
+                    let blurrable = shown_environment(w).is_some_and(|e| e.reflections().is_some());
+                    let resolved = resolved(w)?;
+                    let label = |blur: &BackgroundBlur| match blur {
+                        BackgroundBlur::Off => on_off(l, false),
+                        BackgroundBlur::Low => fl!(l, "value-low"),
+                        BackgroundBlur::Medium => fl!(l, "value-medium"),
+                        BackgroundBlur::High => fl!(l, "value-high"),
+                    };
+                    let shown = blurrable && resolved.background > 0.0;
+                    Some(choice(&BackgroundBlur::ALL, &resolved.background_blur, label).when(shown))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, environment| {
+                        if let Some(name) = environment {
+                            let mut blur = current.background_blur;
+                            pick(&BackgroundBlur::ALL, &mut blur, step);
+                            look.environments.entry(name.into()).or_default().background_blur =
+                                Some(blur);
+                        }
+                    });
+                },
+            }
+            .segments(),
             Setting {
                 label: |l| fl!(l, "label-shadows"),
                 help: |l| fl!(l, "help-shadows"),

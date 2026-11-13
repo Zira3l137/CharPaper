@@ -61,6 +61,8 @@ class CHARPAPER_OT_list_add(Operator):
         collection = getattr(suite, items)
         item = collection.add()
         active_collection = context.collection
+        if self.kind == "ENVIRONMENT":
+            item.world = context.scene.world
         if self.kind in {"SKIN", "ENVIRONMENT"} and active_collection != context.scene.collection:
             item.collection = active_collection
             item.name = active_collection.name.lower()
@@ -280,7 +282,8 @@ class CHARPAPER_OT_export(Operator):
                 if kind == "CAMERA":
                     lenses[file_stem(entry.name)] = lens.table(entry.camera, context.scene.render)
                 if kind == "ENVIRONMENT":
-                    environments[file_stem(entry.name)] = env_settings.table(entry.collection)
+                    table = env_settings.table(entry.collection) if entry.collection else {}
+                    environments[file_stem(entry.name)] = {**table, **result.settings}
                 model_exported |= kind == "MODEL"
 
         cue_tables = {}
@@ -314,8 +317,10 @@ class CHARPAPER_OT_export(Operator):
     def _missing(suite, kind, entry):
         if kind in {"MODEL", "SKIN", "ANIMATION"} and suite.armature is None:
             return "no armature picked"
-        if kind in {"SKIN", "ENVIRONMENT"} and entry.collection is None:
+        if kind == "SKIN" and entry.collection is None:
             return "no collection picked"
+        if kind == "ENVIRONMENT" and entry.collection is None and entry.world is None:
+            return "no collection or World picked"
         if kind == "CAMERA" and entry.camera is None:
             return "no camera picked"
         return None

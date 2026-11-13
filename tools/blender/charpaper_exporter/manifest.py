@@ -117,8 +117,10 @@ def update(
 
     tables = dict(data.get("environments", {}))
     for name, exported in environments.items():
-        table = {k: v for k, v in tables.get(name, {}).items() if k not in env_settings.KEYS}
-        table.update({k: v for k, v in exported.items() if v})
+        # The sky's keys belong to the export only when it wrote the sky; None takes the key out.
+        owned = set(env_settings.KEYS) | set(exported)
+        table = {k: v for k, v in tables.get(name, {}).items() if k not in owned}
+        table.update({k: v for k, v in exported.items() if v is not None and v != [] and v != {}})
         if table:
             tables[name] = table
         else:

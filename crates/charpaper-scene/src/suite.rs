@@ -23,6 +23,7 @@ use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
 use crate::look::ActiveLook;
 use crate::look::EditedLooks;
+use crate::sky::SharpSky;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::picks_of;
@@ -184,7 +185,7 @@ impl Teardown<'_, '_> {
         }
         for camera in &self.cameras {
             if self.stage_of.get(camera) == Some(stage) {
-                commands.entity(camera).remove::<(Skybox, EnvironmentMapLight)>();
+                commands.entity(camera).remove::<(Skybox, SharpSky, EnvironmentMapLight)>();
             }
         }
         let Ok((mut skin, mut rig, mut environment, mut baking, mut objects, mut expressions)) =
