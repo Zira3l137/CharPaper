@@ -39,7 +39,7 @@ label-lock-orbit = Lock orbit
 ## Graphics tab
 
 section-lighting = LIGHTING
-label-brightness = Sky Brightness
+label-sky-strength = Sky strength
 label-sky-rotation = Sky rotation
 label-background = Background
 label-background-blur = Background blur
@@ -251,7 +251,7 @@ help-follow-cursor = The character's head and eyes follow the mouse pointer.
 help-gaze-strength = How far the character turns for the pointer. Lower keeps it calmer, higher makes it turn sooner.
 help-camera = Where the scene is seen from. Orbit moves with the mouse over the scene.
 help-environment = The surroundings, with their own light and sky.
-help-brightness = How bright the environment's sky is, and the light it gives.
+help-sky-strength = How bright the environment's sky is, and the light it gives. The same as Strength on Blender's World: 1 is the panorama as it is.
 help-sky-rotation = Turns the sky around you, and the light it gives with it.
 help-background = How bright the sky looks behind the scene, apart from the light it gives. Off hides it.
 help-background-blur = Softens the sky behind the scene, like a lens focused on the character. The light it gives stays as it is.

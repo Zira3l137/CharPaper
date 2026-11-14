@@ -286,7 +286,7 @@
           ]
         },
         "brightness": {
-          "description": "How bright the skybox looks and how strongly the reflection maps light\nthe scene, in cd/m². Defaults to 1000.",
+          "description": "Older suites' sky brightness in cd/m², 1000 for a strength of 1. Read\nonly without `sky_strength`.",
           "type": [
             "number",
             "null"
@@ -333,6 +333,14 @@
         },
         "sky_rotation_deg": {
           "description": "Turns the sky, and the light it casts, around the vertical axis, in\ndegrees, as the Z Rotation of a Point-type Mapping node turns Blender's\nEnvironment Texture. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "sky_strength": {
+          "description": "How bright the sky is and how strongly it lights the scene, as the\nStrength of the Background node in Blender's World: 1 shows the\npanorama as it is. Defaults to 1.",
           "type": [
             "number",
             "null"

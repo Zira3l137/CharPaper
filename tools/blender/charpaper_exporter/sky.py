@@ -11,16 +11,16 @@ from .isolate import showing
 # that is just an .hdr or .exr Environment Texture into a Background has the file copied as
 # it is, with its Strength and Mapping rotation going to suite.toml. Any other World is
 # rendered to a panorama by a Cycles panoramic camera, so whatever Blender shows comes over.
+# Either way the panorama is sky.hdr or sky.exr: the image's own name can be anything, even
+# nothing a file can be called.
 
-KEYS = ("brightness", "sky_rotation_deg")
+# brightness is what older add-ons wrote in place of sky_strength; owning it takes it out.
+KEYS = ("sky_strength", "sky_rotation_deg", "brightness")
+NAME = "sky"
 PANORAMA_EXTENSIONS = (".hdr", ".exr")
 MAPS = ("skybox.ktx2", "specular.ktx2", "diffuse.ktx2")
-RENDERED_NAME = "sky.exr"
 RENDER_SIZE = (2048, 1024)
 RENDER_SAMPLES = 32
-# The app's brightness for a Strength of 1: Bevy's exposure matching Blender's takes
-# 1.2 × 2^9.7 cd/m² to white, rounded.
-BRIGHTNESS_PER_STRENGTH = 1000.0
 EPSILON = 1e-4
 
 
@@ -191,30 +191,29 @@ def export(context, world, folder):
     os.makedirs(folder, exist_ok=True)
     sky = plain(world)
     if sky is not None:
-        stem = os.path.splitext(os.path.basename(sky.image.filepath or sky.image.name))[0]
-        name = bpy.path.clean_name(stem) + _image_extension(sky.image)
-        path = _place(folder, name, _image_bytes(sky.image))
-        brightness = round(sky.strength * BRIGHTNESS_PER_STRENGTH, 2)
+        path = _place(folder, NAME + _image_extension(sky.image), _image_bytes(sky.image))
+        strength = round(sky.strength, 3)
         rotation = round(sky.rotation_deg, 2)
         values = {
-            "brightness": None if brightness == BRIGHTNESS_PER_STRENGTH else brightness,
+            "sky_strength": None if strength == 1 else strength,
             "sky_rotation_deg": None if rotation == 0 else rotation,
+            "brightness": None,
         }
         return path, values, []
 
     scratch = tempfile.mkdtemp(prefix="charpaper-sky-")
     try:
-        rendered = os.path.join(scratch, RENDERED_NAME)
+        rendered = os.path.join(scratch, NAME + ".exr")
         _render(context, world, rendered)
         # A render's file carries the time it was made, so only its pixels tell.
         def same(old):
             return _same_pixels(old, rendered)
 
-        path = _place(folder, RENDERED_NAME, _read(rendered), same)
+        path = _place(folder, NAME + ".exr", _read(rendered), same)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     note = (
         f"World {world.name!r} isn't a single .hdr or .exr Environment Texture, so it was "
-        f"rendered into {RENDERED_NAME} with Cycles"
+        f"rendered into {NAME}.exr with Cycles"
     )
     return path, {key: None for key in KEYS}, [note]

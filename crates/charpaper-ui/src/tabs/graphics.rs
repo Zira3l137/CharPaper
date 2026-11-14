@@ -60,11 +60,9 @@ const BLUR_STRENGTH_STOPS: [f32; 9] = [0.25, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8,
 // Diameters in pixels. Beyond 128 the near blur would need more tiles around each pixel.
 const MAX_BLUR_STOPS: [f32; 7] = [16.0, 24.0, 32.0, 48.0, 64.0, 96.0, 128.0];
 const HIGHLIGHTS: Scale = Scale { step: 0.25, min: 0.0, max: 3.0, per_unit: 100.0 };
-// cd/m², spaced so each step looks about as big as the last.
-const BRIGHTNESS_STOPS: [f32; 15] = [
-    50.0, 100.0, 200.0, 300.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0, 3000.0, 5000.0, 8000.0,
-    12000.0, 20000.0, 30000.0,
-];
+// As Blender's Background Strength, spaced so each step looks about as big as the last.
+const SKY_STRENGTH_STOPS: [f32; 15] =
+    [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0];
 
 // The button under the post-processing rows that drops the viewer's look edits.
 pub(crate) struct GraphicsPlugin;
@@ -94,23 +92,23 @@ fn lighting() -> impl Bundle {
         Section::Lighting,
         children![
             Setting {
-                label: |l| fl!(l, "label-brightness"),
-                help: |l| fl!(l, "help-brightness"),
+                label: |l| fl!(l, "label-sky-strength"),
+                help: |l| fl!(l, "help-sky-strength"),
                 show: |w, _| {
                     let lit = shown_environment(w)
                         .is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
-                    let brightness = resolved(w)?.brightness;
-                    let [min, .., max] = BRIGHTNESS_STOPS;
-                    let text = format!("{brightness:.0}");
-                    Some(number(text, brightness.ln(), min.ln(), max.ln()).when(lit))
+                    let strength = resolved(w)?.sky_strength;
+                    let [min, .., max] = SKY_STRENGTH_STOPS;
+                    let text = format!("{strength:.2}");
+                    Some(number(text, strength.max(min).ln(), min.ln(), max.ln()).when(lit))
                 },
                 change: |w, step| {
                     edit_look(w, |look, current, environment| {
                         if let Some(name) = environment {
-                            let brightness =
-                                step_stops(&BRIGHTNESS_STOPS, current.brightness, step.by());
-                            look.environments.entry(name.into()).or_default().brightness =
-                                Some(brightness);
+                            let strength =
+                                step_stops(&SKY_STRENGTH_STOPS, current.sky_strength, step.by());
+                            look.environments.entry(name.into()).or_default().sky_strength =
+                                Some(strength);
                         }
                     });
                 },

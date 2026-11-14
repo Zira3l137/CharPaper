@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::layout::Look;
 use crate::manifest::BackgroundBlur;
 use crate::manifest::Tonemapping;
+use crate::manifest::legacy_strength;
 
 // What a viewer changed in a suite's look, kept apart from the author's suite.toml. Laid over
 // the author's look, it gives the look shown. Only what the panel edits is here, and a setting
@@ -82,6 +83,9 @@ impl PostSetting {
 #[serde(default)]
 pub struct EnvironmentEdits {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub sky_strength: Option<f32>,
+    // Older saves' sky brightness in cd/m². Read, never written.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub brightness: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shadows: Option<bool>,
@@ -116,7 +120,8 @@ impl LookEdits {
         for (name, entry) in &look.environments {
             let base = author.environment(name);
             let environment = EnvironmentEdits {
-                brightness: changed(base.brightness, entry.brightness),
+                sky_strength: changed(base.strength(), entry.strength()),
+                brightness: None,
                 shadows: changed(base.shadows, entry.shadows),
                 exposure: changed(base.exposure, entry.exposure),
                 sky_rotation_deg: changed(base.sky_rotation_deg, entry.sky_rotation_deg),
@@ -142,7 +147,8 @@ impl LookEdits {
         }
         for (name, edits) in &self.environments {
             let entry = look.environments.entry(name.clone()).or_default();
-            entry.brightness = edits.brightness.or(entry.brightness);
+            let strength = edits.sky_strength.or(edits.brightness.map(legacy_strength));
+            entry.sky_strength = strength.or(entry.sky_strength);
             entry.shadows = edits.shadows.or(entry.shadows);
             entry.exposure = edits.exposure.or(entry.exposure);
             entry.sky_rotation_deg = edits.sky_rotation_deg.or(entry.sky_rotation_deg);

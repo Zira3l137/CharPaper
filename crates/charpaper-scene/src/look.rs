@@ -63,7 +63,7 @@ pub const DEFAULT_BLOOM_THRESHOLD: f32 = 1.0;
 // Light a little under the threshold glows a little, so the glow has no hard edge.
 const BLOOM_SOFTNESS: f32 = 0.5;
 pub const DEFAULT_CHROMATIC_ABERRATION: f32 = 0.0;
-pub const DEFAULT_BRIGHTNESS: f32 = 1000.0;
+pub const DEFAULT_SKY_STRENGTH: f32 = 1.0;
 pub const DEFAULT_SHADOWS: bool = true;
 pub const DEFAULT_SKY_ROTATION_DEG: f32 = 0.0;
 pub const DEFAULT_BACKGROUND: f32 = 1.0;
@@ -141,7 +141,7 @@ pub struct Resolved {
     pub saturation: f32,
     pub contrast: f32,
     pub lut_strength: f32,
-    pub brightness: f32,
+    pub sky_strength: f32,
     pub shadows: bool,
     pub exposure: f32,
     pub sky_rotation_deg: f32,
@@ -169,7 +169,7 @@ impl Resolved {
             saturation: look.post.grading.saturation(),
             contrast: look.post.grading.contrast(),
             lut_strength: look.post.lut.strength(),
-            brightness: entry.brightness.unwrap_or(DEFAULT_BRIGHTNESS),
+            sky_strength: entry.strength().unwrap_or(DEFAULT_SKY_STRENGTH),
             shadows: entry.shadows.unwrap_or(DEFAULT_SHADOWS),
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
             sky_rotation_deg: entry.sky_rotation_deg.unwrap_or(DEFAULT_SKY_ROTATION_DEG),
@@ -282,12 +282,14 @@ fn apply_stage_look(
         // As a Point Mapping node turns Blender's Environment Texture: it samples the sky turned
         // by the angle, which shows the sky turned the other way. Bevy turns it the way given.
         let rotation = Quat::from_rotation_y(-resolved.sky_rotation_deg.to_radians());
+        // At Blender's exposure, a panorama texel of 1 shows as 1, as Blender shows it.
+        let luminance = resolved.sky_strength / Exposure::BLENDER.exposure();
         if let Some(mut skybox) = skybox {
-            skybox.brightness = resolved.brightness * resolved.background;
+            skybox.brightness = luminance * resolved.background;
             skybox.rotation = rotation;
         }
         if let Some(mut environment_light) = environment_light {
-            environment_light.intensity = resolved.brightness;
+            environment_light.intensity = luminance;
             environment_light.rotation = rotation;
         }
     }

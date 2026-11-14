@@ -257,8 +257,12 @@ pub struct EnvironmentSection {
 #[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct EnvironmentEntry {
-    /// How bright the skybox looks and how strongly the reflection maps light
-    /// the scene, in cd/m². Defaults to 1000.
+    /// How bright the sky is and how strongly it lights the scene, as the
+    /// Strength of the Background node in Blender's World: 1 shows the
+    /// panorama as it is. Defaults to 1.
+    pub sky_strength: Option<f32>,
+    /// Older suites' sky brightness in cd/m², 1000 for a strength of 1. Read
+    /// only without `sky_strength`.
     pub brightness: Option<f32>,
     /// Whether the environment's lights cast shadows. glTF cannot say, so it
     /// is set here. Defaults to true.
@@ -490,6 +494,20 @@ impl Grain {
     pub fn colored(&self) -> bool {
         self.colored.unwrap_or(false)
     }
+}
+
+// What older suites' `brightness` was per unit of strength.
+const LEGACY_BRIGHTNESS_PER_STRENGTH: f32 = 1000.0;
+
+impl EnvironmentEntry {
+    /// `sky_strength`, or what an older suite's `brightness` stands for.
+    pub fn strength(&self) -> Option<f32> {
+        self.sky_strength.or(self.brightness.map(legacy_strength))
+    }
+}
+
+pub(crate) fn legacy_strength(brightness: f32) -> f32 {
+    brightness / LEGACY_BRIGHTNESS_PER_STRENGTH
 }
 
 /// How blurred the sky looks behind the scene.

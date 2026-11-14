@@ -71,7 +71,8 @@ saved in the `.blend`.
 - **Sky:** an environment's *World* (the scene's when you add the environment) becomes the
   panorama its sky and reflections are baked from. A World that is one `.hdr` or `.exr`
   Environment Texture into a Background, optionally through a Mapping node turned only
-  about Z, has its file copied as it is; Strength and the Z rotation go to suite.toml. Any
+  about Z, has its file copied as it is, as `sky.hdr` or `sky.exr`; Strength and the Z
+  rotation go to suite.toml as `sky_strength` and `sky_rotation_deg`. Any
   other World (Sky Texture, a plain color, mixed textures) is rendered with Cycles into a
   2048×1024 `sky.exr`, which takes a few seconds on every export; a Light Path trick comes
   over as the camera sees it. The panorama replaces any other in the folder, and when it
@@ -170,9 +171,9 @@ Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.
 - Each exported camera's `[cameras.<name>]` is rewritten from its Depth of Field panel, and
   removed when depth of field is off.
 - Each exported environment's fog, `no_volume_scatter` and `no_shadows` are rewritten from
-  the scene. With a World, its `brightness` and `sky_rotation_deg` are too. Its shadows,
-  exposure and background settings are kept, and so are brightness and rotation without a
-  World.
+  the scene. With a World, its `sky_strength` and `sky_rotation_deg` are too, and an older
+  `brightness` is dropped. Its shadows, exposure and background settings are kept, and so
+  are strength and rotation without a World.
 - Clips of files that weren't exported this time, `[post]`, environments that weren't
   exported, and the orbit camera settings are kept as they are.
 

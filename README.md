@@ -113,7 +113,7 @@ it and brings it back.
 | Tab | What's there |
 |-----|--------------|
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
-| **Graphics** | Sky brightness, rotation, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
+| **Graphics** | Sky strength, rotation, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start at sign-in, monitors, frame rate limit, performance monitor, when to pause, and the panel's language, colors, size and side. |
 
@@ -232,7 +232,7 @@ characters/
     ├── environment/
     │   ├── room.glb          a place: its objects and its lights
     │   └── room/             extras for the environment of the same name
-    │       ├── studio.hdr    its sky and reflections, from its World
+    │       ├── sky.hdr       its sky and reflections, from its World
     │       ├── music/        .ogg tracks (you put these here)
     │       ├── ambience.ogg  background sound (you put this here)
     │       └── animated/     GIFs that play on its materials
@@ -477,18 +477,18 @@ spots or points.
 
 **Sky and reflections.** Pick the environment's **World** in the add-on (it starts as the
 scene's). The export puts it into the environment's own folder as the panorama the app
-lights the scene with: `environment/room/studio.hdr` for `environment/room.glb`.
+lights the scene with: `environment/room/sky.hdr` for `environment/room.glb`.
 
 - A World that is just an `.hdr` or `.exr` *Environment Texture* into a *Background* is
-  copied as it is. Its *Strength* becomes `brightness`, and a *Mapping* node's Z rotation
-  becomes `sky_rotation_deg`.
+  copied as it is, as `sky.hdr` or `sky.exr`. Its *Strength* becomes `sky_strength`, and
+  a *Mapping* node's Z rotation becomes `sky_rotation_deg`.
 - Any other World, such as a *Sky Texture*, a plain color, or mixed textures, is rendered
   with Cycles into `sky.exr`. That adds a few seconds to every export. A *Light Path* trick
   (a sky that looks different from how it lights) comes over as the camera sees it; use the
   app's **Background** setting for that instead.
 - Without a World, the add-on leaves the folder alone, and you can put a panorama there by
-  hand. The file name doesn't matter; the folder name must match the environment's. Keep
-  only one panorama in a folder.
+  hand. Its name doesn't matter as long as it has one; the folder name must match the
+  environment's. Keep only one panorama in a folder.
 
 - The first time the environment shows, the app makes three files from the panorama
   (`skybox.ktx2`, `specular.ktx2`, `diffuse.ktx2`). That takes a few seconds, and the sky
@@ -499,10 +499,13 @@ lights the scene with: `environment/room/studio.hdr` for `environment/room.glb`.
 - Only a rotation about Z (up) comes over from a Mapping node.
 - A folder with a panorama and no `.glb` is an environment too: just a sky, lighting the
   character on its own. In the add-on, that's an environment with a World and no collection.
-- In the app's **Graphics** tab, while the environment shows: **Sky Brightness**, **Sky
+- **Sky strength** means the same as *Strength* on the World's Background node: 1 shows
+  the panorama as it is, as Blender does at an exposure of 0.
+- In the app's **Graphics** tab, while the environment shows: **Sky strength**, **Sky
   rotation**, **Background** (how bright the sky looks behind the scene, apart from the
   light it gives; Off hides it) and **Background blur**. Write the values you like into
-  suite.toml as `brightness`, `sky_rotation_deg`, `background` and `background_blur`.
+  suite.toml as `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`.
+  An older suite's `brightness` still works: 1000 is a strength of 1.
 
 **Moving props.** Each object's *active* action becomes a clip that loops on its own, as
 long as its own keys. A 25-frame fan and a 420-frame curtain both keep their length.
@@ -666,7 +669,7 @@ which line.
 | `[character]` | `default_skin`, `default_animation`, and `model` when more than one `.glb` sits next to suite.toml. |
 | `[animations.<name>]` | Names a clip and says how it plays: `file`, `clip` (the action's name), `mode` (`loop`, `once`, `pose`), `gaze`, and `cues` for sounds. |
 | `[environment]` | `default`: the environment shown first. |
-| `[environments.<name>]` | Per environment: `brightness` of the sky, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `exposure`, fog boxes, and the lights and objects left out of fog and shadows. |
+| `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `exposure`, fog boxes, and the lights and objects left out of fog and shadows. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
@@ -686,7 +689,7 @@ Things worth knowing:
   does nothing.
 - **What the add-on rewrites on every export:** the name, the *Starts with* defaults,
   every exported clip, each exported camera's depth of field, and each exported
-  environment's fog and shadow lists, and with a World its `brightness` and
+  environment's fog and shadow lists, and with a World its `sky_strength` and
   `sky_rotation_deg`. **What it leaves alone:** `[post]`, each environment's `shadows`,
   `exposure`, `background` and `background_blur`, the orbit camera, and anything
   about files you didn't export this time. An empty field in the add-on means "don't
