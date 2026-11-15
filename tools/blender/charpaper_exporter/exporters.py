@@ -170,15 +170,25 @@ def environment(context, suite, entry, folder):
     result = None
     if entry.collection is not None:
         result = _environment_scene(context, suite, entry, folder)
-    if entry.world is not None:
-        sky_folder = os.path.join(folder, ENVIRONMENT_DIR, file_stem(entry.name))
-        path, settings, notes = sky.export(context, entry.world, sky_folder)
-        if result is None:
-            result = Result(path)
-        else:
-            result.written.append(path)
-        result.settings.update(settings)
-        result.notes.extend(notes)
+    world = sky.world_of(context.scene, entry)
+    if world is None:
+        if entry.export_sky:
+            note = f"{entry.name}: no World in the scene, so no sky was exported"
+            result.notes.append(note)
+        return result
+    sky_folder = os.path.join(folder, ENVIRONMENT_DIR, file_stem(entry.name))
+    kept = sky.hand_placed(sky_folder) if entry.world is None else None
+    if kept is not None:
+        path, settings = os.path.join(sky_folder, kept), {}
+        notes = [f"{entry.name}: kept {kept}, which you put there; pick a World to replace it"]
+    else:
+        path, settings, notes = sky.export(context, world, sky_folder)
+    if result is None:
+        result = Result(path)
+    else:
+        result.written.append(path)
+    result.settings.update(settings)
+    result.notes.extend(notes)
     return result
 
 

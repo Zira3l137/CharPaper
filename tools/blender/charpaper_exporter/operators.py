@@ -15,6 +15,7 @@ from . import gaze
 from . import gltf
 from . import lens
 from . import manifest
+from . import sky
 from . import toml_io
 from . import validate
 from .isolate import object_mode
@@ -61,8 +62,6 @@ class CHARPAPER_OT_list_add(Operator):
         collection = getattr(suite, items)
         item = collection.add()
         active_collection = context.collection
-        if self.kind == "ENVIRONMENT":
-            item.world = context.scene.world
         if self.kind in {"SKIN", "ENVIRONMENT"} and active_collection != context.scene.collection:
             item.collection = active_collection
             item.name = active_collection.name.lower()
@@ -261,7 +260,7 @@ class CHARPAPER_OT_export(Operator):
         with object_mode(context):
             for kind, entry in self._jobs(suite):
                 label = entry.name if entry else "model"
-                missing = self._missing(suite, kind, entry)
+                missing = self._missing(context.scene, suite, kind, entry)
                 if missing:
                     failed.append(f"{label}: {missing}")
                     continue
@@ -314,13 +313,13 @@ class CHARPAPER_OT_export(Operator):
         return {"FINISHED"} if done else {"CANCELLED"}
 
     @staticmethod
-    def _missing(suite, kind, entry):
+    def _missing(scene, suite, kind, entry):
         if kind in {"MODEL", "SKIN", "ANIMATION"} and suite.armature is None:
             return "no armature picked"
         if kind == "SKIN" and entry.collection is None:
             return "no collection picked"
-        if kind == "ENVIRONMENT" and entry.collection is None and entry.world is None:
-            return "no collection or World picked"
+        if kind == "ENVIRONMENT" and entry.collection is None and sky.world_of(scene, entry) is None:
+            return "no collection, and Sky is off" if not entry.export_sky else "no collection, and no World for its sky"
         if kind == "CAMERA" and entry.camera is None:
             return "no camera picked"
         return None

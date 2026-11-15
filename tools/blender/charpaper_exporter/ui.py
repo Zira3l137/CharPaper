@@ -212,7 +212,15 @@ class CHARPAPER_PT_environments(_Sidebar, Panel):
         if entry is not None:
             col = self.layout.column()
             col.prop(entry, "collection", text="Collection")
-            col.prop(entry, "world", text="World")
+            row = col.row(align=True)
+            row.prop(entry, "export_sky", text="")
+            world = row.row(align=True)
+            world.active = entry.export_sky
+            world.prop(entry, "world", text="Sky")
+            if entry.export_sky and entry.world is None:
+                scene_world = context.scene.world
+                hint = f"From the scene: {scene_world.name}" if scene_world else "No World in the scene"
+                col.label(text=hint, icon="WORLD")
 
 
 class CHARPAPER_PT_cameras(_Sidebar, Panel):

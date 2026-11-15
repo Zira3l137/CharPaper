@@ -475,20 +475,35 @@ spots or points.
 - An object casts shadows unless its *Object → Visibility → Ray Visibility → Shadow* is
   unticked. Untick it on small clutter.
 
-**Sky and reflections.** Pick the environment's **World** in the add-on (it starts as the
-scene's). The export puts it into the environment's own folder as the panorama the app
-lights the scene with: `environment/room/sky.hdr` for `environment/room.glb`.
+**Sky and reflections.** Each environment in the add-on has a **Sky** row: a tick box and
+a World. Ticked, the export puts that World into the environment's own folder as the
+panorama the app lights the scene with: `environment/room/sky.hdr` for
+`environment/room.glb`. Leave the World empty to use the scene's.
 
-- A World that is just an `.hdr` or `.exr` *Environment Texture* into a *Background* is
-  copied as it is, as `sky.hdr` or `sky.exr`. Its *Strength* becomes `sky_strength`, and
-  a *Mapping* node's Z rotation becomes `sky_rotation_deg`.
+- A World that is just an *Environment Texture* into a *Background* goes over at full
+  size. Its *Strength* becomes `sky_strength`, and a *Mapping* node's Z rotation becomes
+  `sky_rotation_deg`. An `.hdr` or `.exr` in Linear Rec.709 is copied as it is; anything
+  else Blender reads (another format, color space or EXR layout, a packed image) is
+  written out as Blender sees it, into `sky.exr`.
 - Any other World, such as a *Sky Texture*, a plain color, or mixed textures, is rendered
-  with Cycles into `sky.exr`. That adds a few seconds to every export. A *Light Path* trick
-  (a sky that looks different from how it lights) comes over as the camera sees it; use the
-  app's **Background** setting for that instead.
-- Without a World, the add-on leaves the folder alone, and you can put a panorama there by
-  hand. Its name doesn't matter as long as it has one; the folder name must match the
-  environment's. Keep only one panorama in a folder.
+  with Cycles into a 2048×1024 `sky.exr`. That adds a few seconds to every export. A *Light
+  Path* trick (a sky that looks different from how it lights) comes over as the camera
+  sees it; use the app's **Background** setting for that instead.
+- You can also put a panorama in the folder by hand. Its name doesn't matter as long as it
+  has one; the folder name must match the environment's. Keep only one panorama in a
+  folder.
+
+**When the sky isn't exported.** Only in these cases. The export reports the last four,
+and **Validate** warns about a missing image or World beforehand:
+
+| Case | What happens |
+|---|---|
+| *Sky* is unticked | The folder is left as it is. |
+| The World field is empty and the folder holds a panorama you put there (any name but `sky.hdr` or `sky.exr`) | It's kept, in case it isn't the scene's World. Pick the World to replace it. |
+| The environment isn't exported | Its *Export* box is unticked, or the export was for something else. |
+| The World's image file is missing and not packed (Blender shows it pink) | The export stops with an error. Find it (*File > External Data > Find Missing Files*) or pack it. |
+| The World field is empty and the scene has no World | No sky. The environment is lit by its own lights. |
+| CharPaper is baking that sky at the moment (Windows) | The old files are in use, so the export stops with an error. Export again when the sky shows. |
 
 - The first time the environment shows, the app makes three files from the panorama
   (`skybox.ktx2`, `specular.ktx2`, `diffuse.ktx2`). That takes a few seconds, and the sky

@@ -68,17 +68,18 @@ saved in the `.blend`.
   animation of light, material or camera settings. Motion that only comes from constraints
   or drivers, with no action at all, needs baking into one (*Object > Animation > Bake
   Action*).
-- **Sky:** an environment's *World* (the scene's when you add the environment) becomes the
-  panorama its sky and reflections are baked from. A World that is one `.hdr` or `.exr`
+- **Sky:** with *Sky* ticked, an environment's World, or the scene's while the field is
+  empty, becomes the panorama its sky and reflections are baked from. A World that is one
   Environment Texture into a Background, optionally through a Mapping node turned only
-  about Z, has its file copied as it is, as `sky.hdr` or `sky.exr`; Strength and the Z
-  rotation go to suite.toml as `sky_strength` and `sky_rotation_deg`. Any
-  other World (Sky Texture, a plain color, mixed textures) is rendered with Cycles into a
-  2048×1024 `sky.exr`, which takes a few seconds on every export; a Light Path trick comes
-  over as the camera sees it. The panorama replaces any other in the folder, and when it
-  changed the baked `.ktx2` maps are deleted so the app bakes them again. Leave World empty
-  to keep a panorama you put there by hand. An environment with a World and no collection
-  is just a sky.
+  about Z, goes over at full size: Strength and the Z rotation go to suite.toml as
+  `sky_strength` and `sky_rotation_deg`. Its file is copied as `sky.hdr` or `sky.exr` when
+  it's an `.hdr` or plain `.exr` in Linear Rec.709, and otherwise written out as Blender
+  sees it into `sky.exr`. Any other World (Sky Texture, a plain color, mixed textures) is
+  rendered with Cycles into a 2048×1024 `sky.exr`, which takes a few seconds on every
+  export; Cycles is switched on for it if it's off. The panorama replaces any other in the
+  folder, and when it changed the baked `.ktx2` maps are deleted so the app bakes them
+  again. The cases where no sky is exported are listed in the main README, under *When the
+  sky isn't exported*. An environment with a World and no collection is just a sky.
 - **Shared data:** objects sharing a mesh (*Alt+D*, or *Link/Transfer Data*) share it in the
   file too, and the app keeps it in memory once. An object with modifiers gets a mesh of its
   own when *Apply Modifiers* is on, since its result is its own. Lights sharing light data
