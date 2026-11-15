@@ -277,9 +277,9 @@ fn lighting() -> impl Bundle {
                     let current = graphics.ambient_occlusion_softness;
                     let shown = graphics.ambient_occlusion && occludable(w, graphics);
                     let label = |softness: &AmbientOcclusionSoftness| match softness {
-                        AmbientOcclusionSoftness::Sharp => fl!(l, "value-sharp"),
-                        AmbientOcclusionSoftness::Medium => fl!(l, "value-medium"),
-                        AmbientOcclusionSoftness::Soft => fl!(l, "value-soft"),
+                        AmbientOcclusionSoftness::Sharp => fl!(l, "value-distance-short"),
+                        AmbientOcclusionSoftness::Medium => fl!(l, "value-distance-medium"),
+                        AmbientOcclusionSoftness::Soft => fl!(l, "value-distance-long"),
                     };
                     Some(choice(&AmbientOcclusionSoftness::ALL, &current, label).when(shown))
                 },
@@ -512,9 +512,9 @@ fn strokes() -> impl Bundle {
                 show: |w, l| {
                     let graphics = w.focused::<Graphics>()?;
                     let label = |width: &StrokeWidth| match width {
-                        StrokeWidth::Thin => fl!(l, "value-thin"),
-                        StrokeWidth::Medium => fl!(l, "value-medium"),
-                        StrokeWidth::Thick => fl!(l, "value-thick"),
+                        StrokeWidth::Thin => fl!(l, "value-width-thin"),
+                        StrokeWidth::Medium => fl!(l, "value-width-medium"),
+                        StrokeWidth::Thick => fl!(l, "value-width-thick"),
                     };
                     let current = graphics.stroke_width;
                     Some(choice(&StrokeWidth::ALL, &current, label).when(graphics.strokes))
@@ -530,9 +530,9 @@ fn strokes() -> impl Bundle {
                 show: |w, l| {
                     let graphics = w.focused::<Graphics>()?;
                     let label = |strength: &StrokeStrength| match strength {
-                        StrokeStrength::Light => fl!(l, "value-light"),
-                        StrokeStrength::Medium => fl!(l, "value-medium"),
-                        StrokeStrength::Strong => fl!(l, "value-strong"),
+                        StrokeStrength::Light => fl!(l, "value-strength-light"),
+                        StrokeStrength::Medium => fl!(l, "value-strength-medium"),
+                        StrokeStrength::Strong => fl!(l, "value-strength-strong"),
                     };
                     let current = graphics.stroke_strength;
                     Some(choice(&StrokeStrength::ALL, &current, label).when(graphics.strokes))

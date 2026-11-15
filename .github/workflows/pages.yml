@@ -40,25 +40,28 @@ jobs:
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)
           echo "latest release: ${tag:-none}"
           if [[ -z $tag ]]; then exit 0; fi
-          TAG=$tag python3 - site/index.html <<'EOF'
+          TAG=$tag python3 - site/index.html:Version site/ru/index.html:Версия <<'EOF'
           import os, re, sys
-          tag, path = os.environ["TAG"], sys.argv[1]
+          tag = os.environ["TAG"]
           base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
-          page = open(path, encoding="utf-8").read()
-          page, links = re.subn(
-              r'href="[^"]*" data-asset="([^"]+)"',
-              lambda m: f'href="{base}/{m[1].replace("{tag}", tag)}" data-asset="{m[1]}"',
-              page,
-          )
-          page, labels = re.subn(
-              r"<span data-version>[^<]*</span>",
-              f"<span data-version>Version {tag.removeprefix('v')}</span>",
-              page,
-          )
-          if not links or labels != links:
-              sys.exit(f"expected matching download links and labels, found {links} and {labels}")
-          open(path, "w", encoding="utf-8").write(page)
-          print(f"{links} links point at {tag}")
+          # Each page with the word its language puts before a version number.
+          for argument in sys.argv[1:]:
+              path, word = argument.split(":")
+              page = open(path, encoding="utf-8").read()
+              page, links = re.subn(
+                  r'href="[^"]*" data-asset="([^"]+)"',
+                  lambda m: f'href="{base}/{m[1].replace("{tag}", tag)}" data-asset="{m[1]}"',
+                  page,
+              )
+              page, labels = re.subn(
+                  r"<span data-version>[^<]*</span>",
+                  f"<span data-version>{word} {tag.removeprefix('v')}</span>",
+                  page,
+              )
+              if not links or labels != links:
+                  sys.exit(f"{path}: expected matching download links and labels, found {links} and {labels}")
+              open(path, "w", encoding="utf-8").write(page)
+              print(f"{path}: {links} links point at {tag}")
           EOF
 
       - uses: actions/configure-pages@v6

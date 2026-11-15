@@ -2,6 +2,17 @@
 # `locales/<language>/charpaper_ui.ftl` next to the executable, where <language> is a tag
 # such as `de-DE` or `ru-RU`, and translate the text after each `=`. Keep the names before
 # it as they are. A string left out shows in English.
+#
+# How the text is written, so the panel reads the same everywhere:
+# - Section titles (section-*) and the performance overlay's title are in capitals.
+# - Tab names, setting names (label-*) and choices (value-* and the like) start with a
+#   capital and go on in lower case, as in "Sky strength" or "Every other frame". Names
+#   keep their own spelling: CharPaper, LUT, TAA, AgX, Blender.
+# - Notes that follow something on the same line start in lower case, as in "not connected"
+#   or "with shadows: 2".
+# - Help lines (help-*) are whole sentences that end in a full stop. Where Blender has the
+#   same setting, they name it, since most people who make characters know it from there.
+# - A choice translates on its own, so it can agree with the setting it belongs to.
 
 # How the language is named in the panel's language list: in the language itself.
 language-name = English
@@ -19,7 +30,7 @@ quit = Quit
 section-suite = CHARACTER
 label-suite = Character
 section-outfit = OUTFIT
-section-parts = Parts
+section-parts = PARTS
 section-animation = ANIMATION
 label-animation = Animation
 section-expression = EXPRESSION
@@ -51,34 +62,34 @@ label-shadow-quality = Shadow quality
 label-shadow-updates = Animated shadows
 label-ambient-occlusion = Ambient occlusion
 label-ambient-occlusion-quality = Occlusion quality
-label-ambient-occlusion-softness = Occlusion softness
+label-ambient-occlusion-softness = Occlusion distance
 section-fog = FOG
 label-fog = Fog
 label-fog-quality = Quality
-label-fog-dithering = Dithering
+label-fog-dithering = Jitter
 label-fog-resolution = Resolution
 section-depth-of-field = DEPTH OF FIELD
 label-blur-shape = Shape
 label-blur-strength = Strength
-label-max-blur = Largest blur
+label-max-blur = Max size
 label-blur-quality = Quality
-label-blur-foreground = Blur in front
+label-blur-foreground = Foreground blur
 label-bokeh-highlights = Highlights
 section-strokes = STROKES
 label-strokes = Strokes
-label-stroke-width = Width
+label-stroke-width = Thickness
 label-stroke-strength = Strength
 label-stroke-creases = Creases
 label-stroke-hand-drawn = Hand-drawn
 section-post-processing = POST PROCESSING
 section-image = IMAGE
-label-tonemapping = Tonemapping
+label-tonemapping = View transform
 label-exposure = Exposure
 label-bloom = Bloom
 label-bloom-threshold = Bloom threshold
 label-chromatic-aberration = Aberration
 section-color = COLOR
-label-warmth = Warmth
+label-warmth = Temperature
 label-tint = Tint
 label-saturation = Saturation
 label-contrast = Contrast
@@ -102,17 +113,23 @@ value-half = Half
 value-quarter = Quarter
 value-every-frame = Every frame
 value-every-other-frame = Every other frame
-value-sharp = Sharp
-value-soft = Soft
-value-thin = Thin
-value-thick = Thick
-value-light = Light
-value-strong = Strong
+# Occlusion distance.
+value-distance-short = Short
+value-distance-medium = Medium
+value-distance-long = Long
+# Stroke thickness.
+value-width-thin = Thin
+value-width-medium = Medium
+value-width-thick = Thick
+# Stroke strength.
+value-strength-light = Light
+value-strength-medium = Medium
+value-strength-strong = Strong
 
 ## Sound tab
 
 section-sound = SOUND
-label-master-volume = Volume
+label-master-volume = All sound
 label-music-volume = Music
 label-ambience-volume = Ambience
 label-character-volume = Character
@@ -132,7 +149,7 @@ section-app = APP
 label-mode = Show as
 mode-wallpaper = Wallpaper
 mode-window = Window
-label-start-at-login = Start at sign-in
+label-start-at-login = Start with Windows
 section-display = DISPLAY
 # Above the panel, with several stages: which one the panel shows.
 stage-name = Stage { $letter }
@@ -143,10 +160,10 @@ layout-mirror = Mirror
 layout-span = Span
 section-frame-rate = FRAME RATE
 label-fps-limit = FPS limit
-label-monitor = Performance monitor
+label-monitor = Performance overlay
 value-max = Max
 section-pause = PAUSE WHEN
-label-pause-fullscreen = App fullscreen
+label-pause-fullscreen = Fullscreen app
 label-pause-covered = Desktop covered
 label-pause-battery = On battery
 section-interface = INTERFACE
@@ -168,7 +185,7 @@ label-side = Side
 side-left = Left
 side-right = Right
 
-## Performance monitor, shown at the top of the screen. Units after numbers.
+## Performance overlay, shown at the top of the screen. Units after numbers.
 
 monitor-title = PERFORMANCE
 monitor-ms = { $value } ms
@@ -182,13 +199,13 @@ monitor-cores = { $busy } of { $total } cores busy
 monitor-main-thread = Main thread
 monitor-render-thread = Render thread
 monitor-recording = { $time } writing GPU commands
-monitor-stage-assets = Assets
-monitor-stage-specialize = Shader variants
-monitor-stage-views = Views, screen
+monitor-stage-assets = Loading
+monitor-stage-specialize = Preparing shaders
+monitor-stage-views = Cameras, screen
 monitor-stage-views-note = waits here while the GPU or vsync is slower
 monitor-stage-queue = Sorting draws
-monitor-stage-prepare = GPU buffers
-monitor-stage-render = Commands
+monitor-stage-prepare = Uploading to GPU
+monitor-stage-render = Recording draws
 monitor-stage-cleanup = Cleanup
 # The memory section. "Memory" is all the RAM the process touches, as Task Manager counts it.
 monitor-memory = Memory
@@ -197,16 +214,16 @@ monitor-growth = { $mb } MB a minute
 # Memory the process asked Windows for, touched or not.
 monitor-committed = Committed
 # What the app's own code holds, and in how many separate pieces.
-monitor-heap = Heap
+monitor-heap = App memory
 monitor-heap-blocks = { $count } blocks
 monitor-gpu-memory = GPU memory
 monitor-gpu-reserved = { $mb } MB reserved
 monitor-gpu-objects = GPU objects
 monitor-gpu-object-details = buffers { $buffers }, textures { $textures }, views { $views }, bind groups { $groups }, samplers { $samplers }, pipelines { $pipelines }, shaders { $shaders }
-monitor-entities = Entities
-monitor-render-entities = render world: { $count }
+monitor-entities = Objects
+monitor-render-entities = copied for drawing: { $count }
 monitor-assets = Assets
-monitor-asset-details = images { $images }, meshes { $meshes }, materials { $materials }, clips { $clips }, glTF { $gltfs }
+monitor-asset-details = images { $images }, meshes { $meshes }, materials { $materials }, animations { $clips }, glTF { $gltfs }
 monitor-graphics = Graphics
 monitor-discrete = discrete
 monitor-integrated = integrated
@@ -216,14 +233,14 @@ monitor-gpu = GPU
 monitor-busy = { $percent } of the time
 monitor-waiting = measuring…
 monitor-unsupported = this GPU can't time its work
-monitor-light-shadows = Light shadows
+monitor-light-shadows = Lamp shadows
 # Of the shadow maps there are, how many were drawn again this frame; the rest show what
 # they showed before, since nothing in them changed.
 monitor-shadow-maps = shadow maps: { $drawn } of { $count } drawn
-monitor-prepass = Prepass, sun shadows
+monitor-prepass = Depth prepass, sun shadows
 monitor-main-pass = Main pass
 monitor-fog = Fog
-monitor-effects = Effects
+monitor-effects = Post processing
 monitor-display = Screen, panel
 monitor-scene = Scene
 monitor-lights = { $count } lights
@@ -244,74 +261,74 @@ help-playback = Pauses the music, and plays it on from where it stopped.
 help-order = Which track comes next: the following one, any other, or the same again.
 help-lock-orbit = Keeps the orbit camera where it is: dragging and scrolling over the scene no longer move it.
 help-panel = Point at a setting to see what it does. The mouse wheel over a value changes it.
-help-suite = Which character to show, from the folders in characters.
+help-suite = Which character to show: one for each folder in the characters folder next to CharPaper.
 help-animation = What the character is doing.
 help-expression = The look on the character's face.
 help-follow-cursor = The character's head and eyes follow the mouse pointer.
-help-gaze-strength = How far the character turns for the pointer. Lower keeps it calmer, higher makes it turn sooner.
-help-camera = Where the scene is seen from. Orbit moves with the mouse over the scene.
-help-environment = The surroundings, with their own light and sky.
+help-gaze-strength = How far the character turns toward the pointer. Lower keeps it calmer, higher makes it turn sooner.
+help-camera = Where the scene is seen from. Orbit turns with the mouse over the scene; the others are the cameras the character came with.
+help-environment = The place the character is in, with its own lights, sky, props and music.
 help-sky-strength = How bright the environment's sky is, and the light it gives. The same as Strength on Blender's World: 1 is the panorama as it is.
-help-sky-rotation = Turns the sky around you, and the light it gives with it.
-help-background = How bright the sky looks behind the scene, apart from the light it gives. Off hides it.
-help-background-blur = Softens the sky behind the scene, like a lens focused on the character. The light it gives stays as it is.
+help-sky-rotation = Turns the sky around the scene, and the light it gives with it, like the Z rotation of a Mapping node on the World.
+help-background = How bright the sky looks behind the scene, without changing the light it gives. Off hides it.
+help-background-blur = Blurs the sky behind the scene, as if a lens were focused on the character. The light it gives stays the same.
 help-shadows = Whether the environment's lights cast shadows. Off is faster.
-help-tonemapping = How bright colors are fitted to the screen. Each one sets a different mood.
+help-tonemapping = How the scene's light is fitted to the screen, like View Transform in Blender's Color Management. AgX and Filmic match Blender's.
 help-exposure = Brightens or darkens the whole picture, as a camera would.
 help-bloom = A glow around the brightest parts of the picture.
 help-bloom-threshold = How bright a part must be to glow: 1.0 is white, lower lets dimmer lights glow too.
-help-chromatic-aberration = Colored fringes toward the edges, like a cheap lens.
+help-chromatic-aberration = Chromatic aberration: colored fringes toward the edges of the picture, like a cheap lens.
 help-vignette = Darkens the corners of the picture.
 help-vignette-size = How far the darkened corners reach in.
 help-grain = Fine noise over the picture, like film.
 help-grain-size = How coarse the grain is.
-help-warmth = Shifts colors toward orange or blue.
-help-tint = Shifts colors toward magenta or green.
+help-warmth = White balance: shifts colors toward orange or blue, like Temperature in Blender's Color Management.
+help-tint = White balance: shifts colors toward magenta or green, like Tint in Blender's Color Management.
 help-saturation = How vivid colors are. At 0% the picture is black and white.
 help-contrast = How far darks and lights are pushed apart.
-help-lut = A ready-made color grade from the character's luts folder.
+help-lut = A ready-made color grade from the character's luts folder, much like a Look in Blender.
 help-lut-strength = How much of the color grade to apply.
 help-fps-limit = How many frames a second to draw. Fewer save power.
-help-monitor = Shows at the top of the screen what drawing each frame costs the CPU and GPU, stage by stage.
-help-render-scale = Draws the scene at a lower resolution to save power. The panel stays sharp.
-help-anti-aliasing = Smooths jagged edges. TAA is smoothest but can trail behind movement. Ambient occlusion can't run with 4x and is hidden while it's on.
-help-shadow-quality = How sharp shadows are, on every stage. Low is fastest, with hard edges. High takes much more video memory.
-help-shadow-updates = How often lamps redraw shadows that only animation moves. Every other frame halves their cost, and they trail the motion by a frame.
-help-ambient-occlusion = Darkens creases and corners the sky's light can't reach, like where the character meets the floor. Needs anti-aliasing off or TAA, and looks smoothest with TAA.
+help-monitor = Shows at the top of the screen what drawing each frame costs the CPU and GPU, step by step, and what the scene holds.
+help-render-scale = Draws the scene at a lower resolution to save power, like Resolution % in Blender. The panel stays sharp.
+help-anti-aliasing = Smooths jagged edges. TAA is the smoothest but can smear what moves. Ambient occlusion can't run with 4x, so it hides while 4x is on.
+help-shadow-quality = How detailed shadows are, on every stage. Low is the fastest, with blocky edges. High takes much more video memory.
+help-shadow-updates = How often lamps redraw shadows that only animation moves. Every other frame halves their cost, but they lag a frame behind the motion.
+help-ambient-occlusion = Darkens creases and corners the sky's light can't reach, like where the character meets the floor, as Ambient Occlusion does in Blender.
 help-ambient-occlusion-quality = How many samples shade each pixel. Lower is faster and grainier; TAA hides most of the grain.
-help-ambient-occlusion-softness = How far the darkening spreads from creases and contacts. Sharp keeps it tight in the corners, Soft fades it over a wide area.
-help-fog = Fog and light shafts, where the environment has them.
-help-fog-quality = How finely the fog is drawn. Higher costs more.
-help-fog-dithering = Hides banding in the fog with fine noise. With TAA the noise changes every frame and smooths away; without it, it stays still.
-help-fog-resolution = Half draws the fog four times faster, and it is soft, so this rarely shows. Quarter is faster again but softens light shafts.
-help-depth-of-field = Blurs what's out of focus, like a camera lens, where the scene's camera asks for it.
+help-ambient-occlusion-softness = How far the darkening reaches from creases, like Distance in Blender's ambient occlusion. Short keeps it in corners, Long spreads it wide.
+help-fog = Fog and light shafts, in environments that have fog.
+help-fog-quality = How many steps the fog is drawn in, like Steps in Blender's volumes. Higher is smoother and costs more.
+help-fog-dithering = Turns banding in the fog into fine noise, like Jitter in Blender's volumes. With TAA the noise changes every frame and smooths away; without it, it stays still.
+help-fog-resolution = Like Resolution in Blender's volumes. Half draws the fog four times faster and rarely shows, since fog is soft. Quarter is faster again but blurs light shafts.
+help-depth-of-field = Blurs what's out of focus, from the camera's F-Stop and focus in Blender. Only for cameras that have depth of field.
 help-blur-shape = Bokeh turns bright spots into round discs, like a real lens. Blur is a softer, plain blur.
-help-blur-strength = How much everything out of focus blurs, as if the lens opened wider. 100% is what the scene's camera asks for.
-help-max-blur = The widest a blur may grow, in pixels. Larger lets close or far things melt away further, but needs more quality to stay smooth.
+help-blur-strength = How much everything out of focus blurs. 100% is the camera's own F-Stop; 200% blurs as if it were halved.
+help-max-blur = The widest a blur may grow, in pixels, like Max Size in Blender. Larger lets near and far things melt away more, but needs higher quality.
 help-blur-quality = How many samples each blurred pixel takes. Lower is faster, but wide blurs show rings or grain.
 help-blur-foreground = Whether things in front of the focus blur too, or only what's behind it.
 help-bokeh-highlights = How much brighter spots outweigh the rest, so lights stand out as discs. Off blurs everything alike.
-help-strokes = Inks the edges of what's on screen for a drawn look: outlines around shapes, and lines where surfaces fold.
-help-stroke-width = How wide the lines are. A lower render scale makes them wider on screen.
+help-strokes = Draws ink lines over the scene for a hand-drawn look, a little like Freestyle: outlines around shapes, and lines where surfaces fold.
+help-stroke-width = How thick the lines are. A lower render scale makes them thicker on screen.
 help-stroke-strength = How much the lines darken what's under them. They keep its color, like ink.
-help-stroke-creases = Also draws lines where a surface bends sharply, like folds and corners, not just around outlines.
+help-stroke-creases = Also draws lines where a surface bends sharply, like folds and corners, as Crease does in Freestyle.
 help-stroke-hand-drawn = Lets the lines wander and swell a little and redraws them a few times a second, like hand-drawn animation.
 help-pause-fullscreen = Stops the picture and sound while an app, such as a game, runs fullscreen.
 help-pause-covered = Stops the picture and sound while windows cover the whole desktop.
 help-pause-battery = Stops the picture and sound while the computer runs on battery.
 help-mode = Wallpaper puts the scene behind the desktop icons, Window in an ordinary window. CharPaper restarts to switch.
-help-start-at-login = Starts CharPaper whenever you sign in to this computer.
+help-start-at-login = Starts CharPaper whenever you sign in to Windows on this computer.
 help-layout = For this monitor's stage. Mirror shows the whole scene on each of its monitors. Span spreads one wide view across them, as if they were a single screen.
 help-master-volume = How loud all of CharPaper's sound is.
-help-music-volume = The environment's music.
-help-ambience-volume = The environment's background sounds, such as rain or wind.
-help-character-volume = Sounds the character's animations make, such as footsteps.
-help-language = The panel's language. System follows the system's language.
+help-music-volume = How loud the environment's music is.
+help-ambience-volume = How loud the environment's background sounds are, such as rain or wind.
+help-character-volume = How loud the sounds of the character's animations are, such as footsteps.
+help-language = The panel's language. System follows the language Windows is set to.
 help-theme = The panel's colors. Light is easier to read over a bright scene.
 help-accent = The color of what is picked or open. Click to set its hue, saturation and brightness.
 help-accent-hue = Which color the accent is, around the color wheel: red, then yellow, green, cyan, blue, magenta.
 help-accent-saturation = How vivid the accent is. At 0% it is gray.
 help-accent-brightness = How light the accent is. At 0% it is black.
-help-opacity = How much of the scene shows through the panel and the performance monitor.
-help-size = How big the panel and the performance monitor are drawn.
+help-opacity = How much of the scene shows through the panel and the performance overlay.
+help-size = How big the panel and the performance overlay are drawn.
 help-side = The edge of the screen the panel keeps to.

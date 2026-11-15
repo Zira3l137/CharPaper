@@ -113,9 +113,9 @@ it and brings it back.
 | Tab | What's there |
 |-----|--------------|
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
-| **Graphics** | Sky strength, rotation, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, largest blur, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
+| **Graphics** | Sky strength, rotation, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
-| **System** | Wallpaper or window, start at sign-in, monitors, frame rate limit, performance monitor, when to pause, and the panel's language, colors, size and side. |
+| **System** | Wallpaper or window, start with Windows, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size and side. |
 
 A row only shows when it has something to offer. No camera row means the character has no
 extra cameras; no Gaze section means its author didn't set gaze up. In **Graphics**, Fog
@@ -127,8 +127,8 @@ run with. A setting's finer rows hide while it's off.
 character's author set it.
 
 If your computer struggles, lower **Render scale**, set **Shadow quality** to Low, turn
-**Fog** off, lower depth of field **Quality** or **Largest blur**, and lower the **FPS
-limit**. The **Performance monitor** shows what each
+**Fog** off, lower depth of field **Quality** or **Max size**, and lower the **FPS
+limit**. The **Performance overlay** shows what each
 frame costs.
 
 ## The mouse on the desktop
@@ -167,14 +167,14 @@ monitor has a button. Click it to step through **Stage A**, **Stage B**, …, an
 CharPaper stops drawing and playing sound, to leave the computer alone, when:
 
 - the screen is locked or the screen saver runs (always);
-- an app runs fullscreen, such as a game (**App fullscreen**, on by default);
+- an app runs fullscreen, such as a game (**Fullscreen app**, on by default);
 - windows cover the whole desktop (**Desktop covered**, on by default);
 - the computer runs on battery (**On battery**, off by default).
 
 ## Where your settings live
 
 Everything is in the folder you extracted. Nothing is installed, so deleting the folder
-removes CharPaper. The one thing kept outside it is **Start at sign-in**, which is an
+removes CharPaper. The one thing kept outside it is **Start with Windows**, which is an
 entry in Windows' own list of startup apps: turn it off before deleting the folder, and
 turn it on again after moving the folder.
 
@@ -584,8 +584,8 @@ loops it.
 - Animated F-Stop or Focus Distance doesn't come over. Animate a focus empty instead.
 - The viewer can scale how much everything blurs with **Strength** in the Graphics tab.
   100% is your F-Stop exactly; 200% is as if you'd halved it. They can also keep what's in
-  front of the focus sharp with **Blur in front**.
-- No blur grows wider than the viewer's **Largest blur**, 64 pixels across on screen by
+  front of the focus sharp with **Foreground blur**.
+- No blur grows wider than the viewer's **Max size**, 64 pixels across on screen by
   default. A very shallow focus in Blender reaches that limit sooner, and things far out
   of focus look less blurred than in your render.
 - Aperture blades, rotation and ratio have no match in the app.
@@ -628,13 +628,14 @@ The grade is applied to the finished picture, after everything except film grain
 
 ### The picture the viewer sees first
 
-Tonemapping, exposure, bloom, vignette, grain and color settings are yours to set as the
+View transform, exposure, bloom, vignette, grain and color settings are yours to set as the
 author. The easy way: tune them in the app's **Graphics** tab until the scene looks
 right, then write the same numbers into the `[post]` section of suite.toml. The app never
 writes to suite.toml itself; what a viewer changes is kept in their own `state.toml`, and
 **Restore defaults** brings yours back.
 
-To get close to your Blender viewport, set `tonemapping` to match your *View Transform*:
+To get close to your Blender viewport, set `tonemapping` (**View transform** in the app) to
+match your *View Transform*:
 `agx` for AgX, `blender_filmic` for Filmic. Without one the app uses `tony_mc_mapface`.
 
 A sunlit scene and a lamp-lit room need very different exposure. Give each environment
@@ -826,14 +827,14 @@ added beside it:
 |-------|--------------|
 | `charpaper` | The executable: start-up, command line, saving, frame pacing. |
 | `charpaper-scene` | Everything drawn: character, environment, cameras, effects. |
-| `charpaper-ui` | The panel and the performance monitor. |
+| `charpaper-ui` | The panel and the performance overlay. |
 | `charpaper-suite` | Reads a suite folder and suite.toml. No engine inside, so it's quick to test. |
 | `charpaper-bake` | Makes the sky files from a panorama. |
 | `charpaper-drivers` | Runs Blender's shape key drivers. |
 | `charpaper-gaze` | Works out where the character looks, and how neck, head and eyes share the turn. |
 | `charpaper-audio` | Sound. |
 | `charpaper-settings` | What `state.toml` holds. |
-| `charpaper-monitor` | Measurements for the performance monitor. |
+| `charpaper-monitor` | Measurements for the performance overlay. |
 | `charpaper-wallpaper` | What any system must provide to be a wallpaper. |
 | `charpaper-windows` | How Windows provides it. |
 

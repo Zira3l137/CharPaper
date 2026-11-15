@@ -1,9 +1,9 @@
-# Русский перевод. Для проверки положите эту папку рядом с charpaper.exe:
-# `locales/ru-RU/charpaper_ui.ftl`.
+# Русский перевод. Для проверки положите этот файл рядом с charpaper.exe:
+# `locales/ru-RU/charpaper_ui.ftl`. Как писать текст, сказано в начале английского файла.
 
 language-name = Русский
 
-## Panel
+## Панель
 
 tab-scene = Сцена
 tab-graphics = Графика
@@ -11,29 +11,29 @@ tab-sound = Звук
 tab-system = Система
 quit = Выход
 
-## Scene tab
+## Вкладка «Сцена»
 
 section-suite = ПЕРСОНАЖ
 label-suite = Персонаж
 section-outfit = ОДЕЖДА
-section-parts = Части
+section-parts = ЧАСТИ
 section-animation = АНИМАЦИЯ
 label-animation = Анимация
 section-expression = МИМИКА
 label-expression = Мимика
 section-gaze = ВЗГЛЯД
-label-follow-cursor = За курсором
+label-follow-cursor = Следить за курсором
 label-gaze-strength = Сила
-expression-neutral = Нейтрально
+expression-neutral = Нейтральная
 section-camera = КАМЕРА
 label-camera = Камера
 camera-orbit = Орбита
 section-environment = ОКРУЖЕНИЕ
 label-environment = Окружение
 label-shadows = Тени
-label-lock-orbit = Зафиксировать
+label-lock-orbit = Закрепить орбиту
 
-## Graphics tab
+## Вкладка «Графика»
 
 section-lighting = ОСВЕЩЕНИЕ
 label-sky-strength = Сила неба
@@ -41,23 +41,23 @@ label-sky-rotation = Поворот неба
 label-background = Фон
 label-background-blur = Размытие фона
 section-quality = КАЧЕСТВО
-label-render-scale = Масштаб
+label-render-scale = Масштаб рендера
 label-anti-aliasing = Сглаживание
 label-depth-of-field = Глубина резкости
 label-shadow-quality = Качество теней
 label-shadow-updates = Анимированные тени
 label-ambient-occlusion = Затенение окружения
 label-ambient-occlusion-quality = Качество затенения
-label-ambient-occlusion-softness = Мягкость затенения
+label-ambient-occlusion-softness = Дистанция затенения
 section-fog = ТУМАН
 label-fog = Туман
 label-fog-quality = Качество
-label-fog-dithering = Дизеринг
+label-fog-dithering = Дрожание
 label-fog-resolution = Разрешение
 section-depth-of-field = ГЛУБИНА РЕЗКОСТИ
 label-blur-shape = Вид
 label-blur-strength = Сила
-label-max-blur = Наибольшее размытие
+label-max-blur = Макс. размер
 label-blur-quality = Качество
 label-blur-foreground = Размытие спереди
 label-bokeh-highlights = Блики
@@ -66,16 +66,16 @@ label-strokes = Штрихи
 label-stroke-width = Толщина
 label-stroke-strength = Сила
 label-stroke-creases = Сгибы
-label-stroke-hand-drawn = От руки
+label-stroke-hand-drawn = Как от руки
 section-post-processing = ПОСТОБРАБОТКА
 section-image = ИЗОБРАЖЕНИЕ
-label-tonemapping = Тонмаппинг
+label-tonemapping = Преобразование вида
 label-exposure = Экспозиция
 label-bloom = Свечение
 label-bloom-threshold = Порог свечения
 label-chromatic-aberration = Аберрация
 section-color = ЦВЕТ
-label-warmth = Теплота
+label-warmth = Температура
 label-tint = Оттенок
 label-saturation = Насыщенность
 label-contrast = Контраст
@@ -99,37 +99,40 @@ value-half = Половина
 value-quarter = Четверть
 value-every-frame = Каждый кадр
 value-every-other-frame = Через кадр
-value-sharp = Резкое
-value-soft = Мягкое
-value-thin = Тонкие
-value-thick = Толстые
-value-light = Слабая
-value-strong = Сильная
+value-distance-short = Короткая
+value-distance-medium = Средняя
+value-distance-long = Длинная
+value-width-thin = Тонкие
+value-width-medium = Средние
+value-width-thick = Толстые
+value-strength-light = Слабая
+value-strength-medium = Средняя
+value-strength-strong = Сильная
 
-## Sound tab
+## Вкладка «Звук»
 
 section-sound = ЗВУК
-label-master-volume = Громкость
+label-master-volume = Весь звук
 label-music-volume = Музыка
 label-ambience-volume = Атмосфера
 label-character-volume = Персонаж
 section-music = МУЗЫКА
-label-track = Трэк
+label-track = Трек
 label-playback = Воспроизведение
 label-order = Порядок
 value-play = Играть
 value-pause = Пауза
 value-in-order = По порядку
-value-shuffle = Случайно
-value-repeat-one = Повтор текущего
+value-shuffle = Вперемешку
+value-repeat-one = Повторять один
 
-## System tab
+## Вкладка «Система»
 
 section-app = ПРИЛОЖЕНИЕ
 label-mode = Показывать как
 mode-wallpaper = Обои
 mode-window = Окно
-label-start-at-login = Запуск при входе
+label-start-at-login = Запуск с Windows
 section-display = ЭКРАН
 stage-name = Сцена { $letter }
 monitor-missing = не подключён
@@ -138,21 +141,21 @@ layout-mirror = Зеркало
 layout-span = Панорама
 section-frame-rate = ЧАСТОТА КАДРОВ
 label-fps-limit = Лимит FPS
-label-monitor = Монитор производительности
+label-monitor = Оверлей производительности
 value-max = Макс.
 section-pause = ПАУЗА, КОГДА
-label-pause-fullscreen = Полный экран
-label-pause-covered = Стол закрыт
-label-pause-battery = От батареи
+label-pause-fullscreen = Полноэкранное приложение
+label-pause-covered = Стол закрыт окнами
+label-pause-battery = Работа от батареи
 section-interface = ИНТЕРФЕЙС
 label-language = Язык
-language-system = Системный
+language-system = Как в системе
 label-theme = Тема
 theme-slate = Графит
 theme-midnight = Полночь
 theme-light = Светлая
 label-accent = Акцент
-label-accent-hue = Оттенок
+label-accent-hue = Тон
 label-accent-saturation = Насыщенность
 label-accent-brightness = Яркость
 label-opacity = Непрозрачность
@@ -161,7 +164,7 @@ label-side = Сторона
 side-left = Слева
 side-right = Справа
 
-## Performance monitor, shown at the top of the screen. Units after numbers.
+## Оверлей производительности вверху экрана. Единицы после чисел.
 
 monitor-title = ПРОИЗВОДИТЕЛЬНОСТЬ
 monitor-ms = { $value } мс
@@ -170,36 +173,31 @@ monitor-frame-rate = Частота кадров
 monitor-fps = { $value } к/с
 monitor-frame-time = { $time } на кадр
 monitor-cpu = Процессор
-# How many of the computer's cores CharPaper keeps busy, on average.
 monitor-cores = занято ядер: { $busy } из { $total }
 monitor-main-thread = Основной поток
 monitor-render-thread = Поток отрисовки
-monitor-recording = { $time } на запись команд GPU
-monitor-stage-assets = Ресурсы
-monitor-stage-specialize = Варианты шейдеров
-monitor-stage-views = Виды, экран
+monitor-recording = { $time } на запись команд для GPU
+monitor-stage-assets = Загрузка
+monitor-stage-specialize = Подготовка шейдеров
+monitor-stage-views = Камеры, экран
 monitor-stage-views-note = здесь ждёт, если GPU или вертикальная синхронизация медленнее
 monitor-stage-queue = Сортировка отрисовки
-monitor-stage-prepare = Буферы GPU
-monitor-stage-render = Команды
+monitor-stage-prepare = Загрузка в GPU
+monitor-stage-render = Запись отрисовки
 monitor-stage-cleanup = Очистка
-# The memory section. "Memory" is all the RAM the process touches, as Task Manager counts it.
 monitor-memory = Память
-# How much a kind of memory grew over the last minute, with its sign.
 monitor-growth = { $mb } МБ в минуту
-# Memory the process asked Windows for, touched or not.
 monitor-committed = Выделено
-# What the app's own code holds, and in how many separate pieces.
-monitor-heap = Куча
+monitor-heap = Память приложения
 monitor-heap-blocks = блоков: { $count }
 monitor-gpu-memory = Память GPU
 monitor-gpu-reserved = { $mb } МБ зарезервировано
 monitor-gpu-objects = Объекты GPU
 monitor-gpu-object-details = буферы { $buffers }, текстуры { $textures }, виды { $views }, группы привязок { $groups }, сэмплеры { $samplers }, конвейеры { $pipelines }, шейдеры { $shaders }
-monitor-entities = Сущности
-monitor-render-entities = в мире отрисовки: { $count }
+monitor-entities = Объекты
+monitor-render-entities = скопировано для отрисовки: { $count }
 monitor-assets = Ресурсы
-monitor-asset-details = изображения { $images }, меши { $meshes }, материалы { $materials }, клипы { $clips }, glTF { $gltfs }
+monitor-asset-details = изображения { $images }, меши { $meshes }, материалы { $materials }, анимации { $clips }, glTF { $gltfs }
 monitor-graphics = Видеокарта
 monitor-discrete = дискретная
 monitor-integrated = встроенная
@@ -208,103 +206,99 @@ monitor-other-gpu = другая
 monitor-gpu = GPU
 monitor-busy = { $percent } времени
 monitor-waiting = идёт замер…
-monitor-unsupported = эта видеокарта не умеет замерять время
+monitor-unsupported = эта видеокарта не умеет замерять время своей работы
 monitor-light-shadows = Тени ламп
-# Of the shadow maps there are, how many were drawn again this frame; the rest show what
-# they showed before, since nothing in them changed.
 monitor-shadow-maps = карт теней перерисовано: { $drawn } из { $count }
-monitor-prepass = Предпроход, тени солнца
+monitor-prepass = Предпроход глубины, тени солнца
 monitor-main-pass = Основной проход
 monitor-fog = Туман
-monitor-effects = Эффекты
+monitor-effects = Постобработка
 monitor-display = Экран, панель
 monitor-scene = Сцена
 monitor-lights = источников света: { $count }
 monitor-light-details = с тенями: { $shadowed }, в тумане: { $fog }, объёмов тумана: { $boxes }
 monitor-meshes = Меши
-# How many times a frame meshes are drawn: by the cameras, and into the lights' shadow maps.
 monitor-mesh-details = отрисовок камерами: { $drawn }, в карты теней: { $shadows }
 
-## Values shown in controls
+## Значения в элементах управления
 
 value-on = Вкл
 value-off = Выкл
 
-## Подсказка внизу панели
-
-help-track = Музыкальный трэк окружения который проигрывается на данный момент.
-help-playback = Ставит трэк на паузу либо возобновляет проигрывание.
-help-order = По какому порядку воспроизводить следующий трэк: последовательно, случайно или один и тот же.
-help-lock-orbit = Фиксирует позицию интерактивной камеры, игнорируя взаимодействия с мышью.
+## Подсказка внизу панели: одно-два коротких предложения о настройке под указателем.
+help-track = Музыка окружения, которая играет сейчас. Выберите трек, чтобы включить его.
+help-playback = Ставит музыку на паузу и продолжает с того же места.
+help-order = Какой трек играет следующим: по порядку, любой другой или тот же снова.
+help-lock-orbit = Закрепляет орбитальную камеру: перетаскивание и прокрутка над сценой её больше не двигают.
 help-panel = Наведите на настройку, чтобы узнать, что она делает. Колесо мыши над значением меняет его.
-help-suite = Какого персонажа показывать, из папок в characters.
+help-suite = Какого персонажа показывать: по одному на каждую папку в папке characters рядом с CharPaper.
 help-animation = Что делает персонаж.
 help-expression = Выражение лица персонажа.
-help-follow-cursor = Персонаж поворачивает голову и смотрит вслед за указателем мыши.
+help-follow-cursor = Персонаж поворачивает голову и глаза вслед за указателем мыши.
 help-gaze-strength = Насколько сильно персонаж поворачивается к указателю. Меньше — спокойнее, больше — поворачивается раньше.
-help-camera = Откуда видна сцена. Орбиту двигают мышью над сценой.
-help-environment = Окружение со своим светом и небом.
-help-sky-strength = Насколько ярко небо окружения и свет от него. То же, что Strength у World в Blender: 1 — панорама как есть.
-help-sky-rotation = Поворачивает небо вокруг, а с ним и свет от него.
-help-background = Насколько ярко небо выглядит за сценой, отдельно от света, который оно даёт. Выкл скрывает его.
-help-background-blur = Смягчает небо за сценой, как объектив, сфокусированный на персонаже. Свет от неба остаётся прежним.
-help-shadows = Отбрасывает ли свет окружения тени. Без теней быстрее.
-help-tonemapping = Как яркие цвета укладываются в возможности экрана. Каждый способ задаёт своё настроение.
-help-exposure = Делает всю картинку светлее или темнее, как экспозиция в фотоаппарате.
+help-camera = Откуда видна сцена. Орбита вращается мышью над сценой, остальные — камеры, с которыми пришёл персонаж.
+help-environment = Место, где находится персонаж, со своим светом, небом, предметами и музыкой.
+help-sky-strength = Насколько ярко небо и свет от него. То же, что Strength у World в Blender: 1 — панорама как есть.
+help-sky-rotation = Поворачивает небо вокруг сцены, а с ним и свет, как поворот по Z у узла Mapping в World.
+help-background = Насколько ярко небо выглядит за сценой, не меняя света от него. Выкл скрывает его.
+help-background-blur = Размывает небо за сценой, будто объектив сфокусирован на персонаже. Свет от неба не меняется.
+help-shadows = Отбрасывают ли тени лампы окружения. Без теней быстрее.
+help-tonemapping = Как свет сцены укладывается в экран, как View Transform в Color Management Blender. AgX и Filmic совпадают с Blender.
+help-exposure = Делает всю картинку светлее или темнее, как экспозиция камеры.
 help-bloom = Свечение вокруг самых ярких мест картинки.
 help-bloom-threshold = Насколько ярким должно быть место, чтобы светиться: 1.0 — белый, ниже — светятся и более тусклые огни.
-help-chromatic-aberration = Цветная кайма к краям кадра, как у простого объектива.
+help-chromatic-aberration = Хроматическая аберрация: цветная кайма к краям картинки, как у простого объектива.
 help-vignette = Затемняет углы картинки.
 help-vignette-size = Как далеко к центру заходит затемнение.
 help-grain = Мелкий шум поверх картинки, как у плёнки.
 help-grain-size = Насколько крупное зерно.
-help-warmth = Сдвигает цвета к оранжевому или к синему.
-help-tint = Сдвигает цвета к пурпурному или к зелёному.
+help-warmth = Баланс белого: сдвигает цвета к оранжевому или синему, как Temperature в Color Management Blender.
+help-tint = Баланс белого: сдвигает цвета к пурпурному или зелёному, как Tint в Color Management Blender.
 help-saturation = Насколько сочные цвета. При 0% картинка чёрно-белая.
 help-contrast = Насколько сильно разведены тёмное и светлое.
-help-lut = Готовая цветокоррекция из папки luts персонажа.
+help-lut = Готовая цветокоррекция из папки luts персонажа, почти как Look в Blender.
 help-lut-strength = Насколько сильно применять цветокоррекцию.
 help-fps-limit = Сколько кадров в секунду рисовать. Меньше кадров — меньше расход энергии.
-help-monitor = Показывает вверху экрана, сколько каждый этап отрисовки кадра стоит процессору и видеокарте.
-help-render-scale = Рисует сцену в меньшем разрешении ради экономии энергии. Панель остаётся чёткой.
-help-anti-aliasing = Сглаживает зубчатые края. TAA сглаживает лучше всех, но может оставлять след за движением. Затенение окружения не работает с 4x и скрыто, пока оно включено.
-help-shadow-quality = Насколько чёткие тени, на всех сценах. Низкое быстрее всего, но края жёсткие. Высокое занимает намного больше видеопамяти.
-help-shadow-updates = Как часто лампы перерисовывают тени, которые двигает только анимация. Через кадр вдвое дешевле, но тени отстают от движения на кадр.
-help-ambient-occlusion = Затемняет складки и углы, куда не достаёт свет неба, например там, где персонаж касается пола. Работает со сглаживанием Выкл или TAA, с TAA выглядит глаже.
-help-ambient-occlusion-quality = Сколько выборок затеняют каждый пиксель. Ниже быстрее, но зернистее; TAA скрывает почти всё зерно.
-help-ambient-occlusion-softness = Насколько далеко затенение расходится от складок и касаний. Резкое держит его в углах, мягкое растягивает на большую площадь.
-help-fog = Туман и лучи света, если они есть в окружении.
-help-fog-quality = Насколько подробно рисуется туман. Чем выше, тем дороже.
-help-fog-dithering = Убирает полосы в тумане мелким шумом. С TAA шум меняется каждый кадр и сглаживается, без него остаётся неподвижным.
-help-fog-resolution = В половинном разрешении туман рисуется в четыре раза быстрее. Он мягкий, поэтому разница почти не видна. Четверть ещё быстрее, но размывает лучи света.
-help-depth-of-field = Размывает то, что не в фокусе, как объектив, если камера сцены этого просит.
-help-blur-shape = Боке превращает яркие точки в круглые пятна, как настоящий объектив. Размытие мягче и проще.
-help-blur-strength = Насколько сильно размывается всё не в фокусе, как если бы диафрагма открылась шире. 100% — как задано камерой сцены.
-help-max-blur = Наибольшая ширина размытия в пикселях. Больше даёт близким и дальним предметам расплыться сильнее, но для гладкости нужно качество повыше.
-help-blur-quality = Сколько выборок берёт каждый размытый пиксель. Ниже быстрее, но широкое размытие покажет кольца или зерно.
+help-monitor = Показывает вверху экрана, сколько каждый шаг отрисовки кадра стоит процессору и видеокарте и что есть в сцене.
+help-render-scale = Рисует сцену в меньшем разрешении ради экономии энергии, как Resolution % в Blender. Панель остаётся чёткой.
+help-anti-aliasing = Сглаживает зубчатые края. TAA сглаживает лучше всех, но может смазывать движение. Затенение окружения не работает с 4x и скрыто, пока оно включено.
+help-shadow-quality = Насколько подробны тени, на всех сценах. Низкое быстрее всего, но края ступенчатые. Высокое занимает намного больше видеопамяти.
+help-shadow-updates = Как часто лампы перерисовывают тени, которые двигает только анимация. Через кадр вдвое дешевле, но тени отстают на кадр.
+help-ambient-occlusion = Затемняет складки и углы, куда не достаёт свет неба, например где персонаж касается пола, как Ambient Occlusion в Blender.
+help-ambient-occlusion-quality = Сколько выборок затеняют каждый пиксель. Меньше — быстрее, но зернистее; TAA скрывает почти всё зерно.
+help-ambient-occlusion-softness = Как далеко затенение расходится от складок, как Distance у Ambient Occlusion в Blender. Короткая держит его в углах, длинная растягивает.
+help-fog = Туман и лучи света в окружениях, где есть туман.
+help-fog-quality = Сколькими шагами рисуется туман, как Steps у объёмов в Blender. Выше — глаже, но дороже.
+help-fog-dithering = Превращает полосы в тумане в мелкий шум, как Jitter у объёмов в Blender. С TAA шум меняется каждый кадр и сглаживается, без него стоит на месте.
+help-fog-resolution = Как Resolution у объёмов в Blender. Половина рисует туман вчетверо быстрее, и разница почти не видна. Четверть ещё быстрее, но размывает лучи.
+help-depth-of-field = Размывает то, что не в фокусе, по F-Stop и фокусу камеры в Blender. Только для камер с глубиной резкости.
+help-blur-shape = Боке превращает яркие точки в круглые пятна, как настоящий объектив. Размытие — более мягкое и простое.
+help-blur-strength = Насколько сильно размывается всё не в фокусе. 100% — F-Stop самой камеры, 200% — как если бы его уменьшили вдвое.
+help-max-blur = Наибольшая ширина размытия в пикселях, как Max Size в Blender. Больше — ближнее и дальнее расплывается сильнее, но нужно качество выше.
+help-blur-quality = Сколько выборок берёт каждый размытый пиксель. Меньше — быстрее, но широкое размытие покажет кольца или зерно.
 help-blur-foreground = Размываются ли и предметы перед фокусом или только то, что за ним.
 help-bokeh-highlights = Насколько яркие точки перевешивают остальное, чтобы огни выделялись пятнами. Выкл размывает всё одинаково.
-help-strokes = Обводит края того, что на экране, как на рисунке: контуры вокруг форм и линии там, где поверхность сгибается.
-help-stroke-width = Толщина линий. При меньшем масштабе рендера они на экране толще.
+help-strokes = Рисует поверх сцены линии тушью, как от руки, немного похоже на Freestyle: контуры вокруг форм и линии на сгибах поверхностей.
+help-stroke-width = Насколько толстые линии. При меньшем масштабе рендера они на экране толще.
 help-stroke-strength = Насколько линии затемняют то, что под ними. Цвет сохраняется, как у туши.
-help-stroke-creases = Рисует линии и там, где поверхность резко изгибается, — складки и углы, а не только контуры.
+help-stroke-creases = Рисует линии и там, где поверхность резко изгибается, — складки и углы, как Crease во Freestyle.
 help-stroke-hand-drawn = Линии немного гуляют и меняют толщину и перерисовываются несколько раз в секунду, как в рисованной анимации.
 help-pause-fullscreen = Останавливает картинку и звук, пока приложение, например игра, открыто на весь экран.
 help-pause-covered = Останавливает картинку и звук, пока окна закрывают весь рабочий стол.
 help-pause-battery = Останавливает картинку и звук, пока компьютер работает от батареи.
 help-mode = «Обои» ставят сцену за значки рабочего стола, «Окно» показывает её в обычном окне. Для переключения CharPaper перезапустится.
-help-start-at-login = Запускает CharPaper при каждом входе в систему.
+help-start-at-login = Запускает CharPaper при каждом входе в Windows на этом компьютере.
 help-layout = Для сцены этого монитора. «Зеркало» показывает всю сцену на каждом её мониторе. «Панорама» растягивает один широкий вид на них, будто это один экран.
 help-master-volume = Общая громкость всех звуков CharPaper.
-help-music-volume = Музыка окружения.
-help-ambience-volume = Фоновые звуки окружения, например дождь или ветер.
-help-character-volume = Звуки анимаций персонажа, например шаги.
-help-language = Язык панели. «Системный» следует языку системы.
+help-music-volume = Громкость музыки окружения.
+help-ambience-volume = Громкость фоновых звуков окружения, например дождя или ветра.
+help-character-volume = Громкость звуков анимаций персонажа, например шагов.
+help-language = Язык панели. «Как в системе» следует языку Windows.
 help-theme = Цвета панели. «Светлую» легче читать поверх яркой сцены.
-help-accent = Цвет выбранного и открытого. Нажмите, чтобы задать его оттенок, насыщенность и яркость.
+help-accent = Цвет выбранного и открытого. Нажмите, чтобы задать его тон, насыщенность и яркость.
 help-accent-hue = Какой это цвет на цветовом круге: красный, затем жёлтый, зелёный, голубой, синий, пурпурный.
 help-accent-saturation = Насколько акцент сочный. При 0% он серый.
 help-accent-brightness = Насколько акцент светлый. При 0% он чёрный.
-help-opacity = Насколько сквозь панель и монитор производительности видна сцена.
-help-size = Насколько крупно нарисованы панель и монитор производительности.
+help-opacity = Насколько сквозь панель и оверлей производительности видна сцена.
+help-size = Насколько крупно нарисованы панель и оверлей производительности.
 help-side = Край экрана, у которого стоит панель.

@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CharPaper: живой 3D-персонаж на рабочем столе Windows</title>
+<meta name="description" content="CharPaper рисует живого 3D-персонажа на месте обоев, за значками рабочего стола. Бесплатно, для Windows 10 и 11.">
+<meta name="theme-color" content="#0E1015">
+<meta property="og:type" content="website">
+<meta property="og:title" content="CharPaper">
+<meta property="og:description" content="Живой 3D-персонаж на рабочем столе Windows, за вашими значками.">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:image" content="https://zira3l137.github.io/CharPaper/banner.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" hreflang="en" href="https://zira3l137.github.io/CharPaper/">
+<link rel="alternate" hreflang="ru" href="https://zira3l137.github.io/CharPaper/ru/">
+<link rel="alternate" hreflang="x-default" href="https://zira3l137.github.io/CharPaper/">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="preload" href="../fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* Fonts ship with the site, so nothing loads from anywhere but here. Variable weight;
+   licenses next to them. The Cyrillic parts load only on a page that uses them, and Space
+   Grotesk, which has none, gives way to Onest for those letters. */
+@font-face { font-family: "Inter"; src: url(../fonts/inter.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Inter"; src: url(../fonts/inter-cyrillic.woff2) format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Space Grotesk"; src: url(../fonts/space-grotesk.woff2) format("woff2"); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: "Onest"; src: url(../fonts/onest-cyrillic.woff2) format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "JetBrains Mono"; src: url(../fonts/jetbrains-mono.woff2) format("woff2"); font-weight: 100 800; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url(../fonts/jetbrains-mono-cyrillic.woff2) format("woff2"); font-weight: 100 800; font-display: swap; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+
+:root {
+  --accent: #5AA6F2;
+  --accent-text: #8CC3F7;
+  --ground: #0E1015;
+  --raised: #12141A;
+  --card: #181B23;
+  --line: #262B36;
+  --rule: #1F232D;
+  --strong: #F4F6FA;
+  --text: #E8EBF2;
+  --soft: #B4BBC8;
+  --faint: #8A92A3;
+  --display: "Space Grotesk", "Onest", "Inter", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 84px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body { margin: 0; background: var(--ground); color: var(--text); font: 17px/1.55 "Inter", system-ui, sans-serif; }
+a { color: var(--accent-text); }
+a:hover { color: #B9DAFA; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+code, pre { font-family: var(--mono); }
+code { color: var(--text); }
+h1, h2, h3 { font-family: var(--display); color: var(--strong); margin: 0; }
+h2 { font-size: clamp(30px, 3.6vw, 44px); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+h3 { font-size: 21px; font-weight: 600; }
+p { margin: 0; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 96px 24px; display: flex; flex-direction: column; gap: 48px; }
+.band { background: var(--raised); border-block: 1px solid var(--rule); }
+.intro { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
+.soft { color: var(--soft); }
+.eyebrow { font-size: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.icon { flex: none; }
+
+.button { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; border-radius: 12px; font-weight: 600; }
+.button.primary { background: var(--accent); color: #0B0D12; }
+.button.primary:hover { background: #7DB9F5; color: #0B0D12; }
+.button.quiet { color: var(--text); border: 1px solid #343A48; font-weight: 500; }
+.button.quiet:hover { border-color: #4A5266; color: var(--strong); }
+
+header { position: sticky; top: 0; z-index: 10; background: var(--ground); border-bottom: 1px solid var(--rule); }
+header nav { max-width: 1180px; margin: 0 auto; padding: 14px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--strong); font: 700 21px var(--display); letter-spacing: -0.01em; }
+.brand:hover { color: var(--strong); }
+.links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 22px; font-size: 15px; }
+.links a:not(.button) { color: #C4CAD6; text-decoration: none; padding: 10px 0; display: inline-flex; align-items: center; gap: 8px; }
+.links a:not(.button):hover { color: var(--strong); }
+.links .button { padding: 10px 18px; border-radius: 10px; }
+.lang { display: inline-flex; border: 1px solid #343A48; border-radius: 9px; overflow: hidden; font: 600 13px/1 var(--display); letter-spacing: 0.04em; }
+.lang > * { padding: 8px 10px; }
+.lang [aria-current] { background: #20242E; color: var(--strong); }
+.links .lang a { padding: 8px 10px; color: var(--faint); text-decoration: none; }
+.links .lang a:hover { color: var(--strong); background: #1A1E27; }
+
+.hero { position: relative; overflow: hidden; }
+.beam { position: absolute; left: 50%; top: 0; width: 1100px; height: 100%; transform: translateX(-50%); pointer-events: none; }
+.hero .wrap { position: relative; padding-top: 88px; padding-bottom: 40px; align-items: center; text-align: center; gap: 22px; }
+.hero h1 { max-width: 900px; font-size: clamp(40px, 6.2vw, 76px); font-weight: 700; line-height: 1.04; letter-spacing: -0.025em; }
+.hero .lead { max-width: 660px; font-size: clamp(17px, 1.6vw, 20px); color: var(--soft); }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px; }
+.actions .button { font-size: 17px; padding: 15px 26px; }
+.actions .quiet { padding: 14px 24px; }
+.note { font-size: 14px; color: var(--faint); }
+.shot { position: relative; max-width: 1180px; margin: 0 auto; padding: 16px 24px 96px; }
+.shot img { display: block; width: 100%; height: auto; border-radius: 18px; border: 1px solid var(--line); }
+
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.feature { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 10px; }
+.feature p { color: var(--soft); font-size: 16px; }
+
+.split { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+.split > * { flex: 1 1 420px; min-width: 0; }
+.pauses { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.pauses li { display: flex; gap: 14px; align-items: center; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+.dot { width: 10px; height: 10px; border-radius: 5px; background: var(--accent); flex: none; }
+.dot.off { background: #5C6475; }
+
+.artist { display: flex; flex-wrap: wrap; gap: 32px; align-items: stretch; }
+.steps { flex: 1 1 440px; min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; counter-reset: step; }
+.steps li { display: flex; gap: 18px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; counter-increment: step; }
+.steps li::before { content: counter(step); flex: none; width: 34px; height: 34px; border-radius: 17px; display: flex; align-items: center; justify-content: center; background: #1E2A3A; color: var(--accent-text); font-weight: 600; font-size: 15px; }
+.steps div { display: flex; flex-direction: column; gap: 4px; }
+.steps strong { color: var(--strong); font-weight: 600; }
+.steps span { color: var(--soft); font-size: 16px; }
+.tree { flex: 1 1 380px; min-width: 0; background: #0B0D12; border: 1px solid var(--line); border-radius: 14px; padding: 24px 26px; display: flex; flex-direction: column; gap: 14px; }
+.tree .path { font: 13px var(--mono); color: var(--faint); }
+.tree pre { margin: 0; font-size: 14px; line-height: 1.75; color: #C4CAD6; overflow-x: auto; }
+.tree pre span { color: #6E7789; }
+.tree p { font-size: 15px; color: var(--soft); }
+.more { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; text-decoration: none; padding: 10px 0; }
+
+.start { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin: 0; padding: 0; list-style: none; counter-reset: start; }
+.start li { border-top: 2px solid #343A48; padding-top: 18px; display: flex; flex-direction: column; gap: 8px; counter-increment: start; }
+.start li:first-child { border-top-color: var(--accent); }
+.start li::before { content: "0" counter(start); font: 600 15px var(--display); color: var(--accent-text); }
+.start strong { color: var(--strong); font-weight: 600; font-size: 18px; }
+.start span { color: var(--soft); font-size: 16px; }
+.guide { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; background: var(--raised); border: 1px solid var(--line); border-radius: 16px; padding: 28px 32px; }
+.guide div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.guide strong { font: 600 22px var(--display); color: var(--strong); }
+.guide span { color: var(--soft); font-size: 16px; }
+.guide .button { padding: 13px 22px; }
+
+footer { border-top: 1px solid var(--rule); }
+footer .wrap { padding-top: 32px; padding-bottom: 48px; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; font-size: 15px; color: var(--faint); }
+footer nav { display: flex; flex-wrap: wrap; gap: 6px 24px; }
+footer nav a { color: var(--soft); text-decoration: none; padding: 8px 0; }
+footer nav a:hover { color: var(--strong); }
+
+.download { position: relative; }
+.download > summary { list-style: none; cursor: pointer; user-select: none; }
+.download > summary::-webkit-details-marker { display: none; }
+.download > summary .chevron { transition: transform 0.15s; }
+.download[open] > summary .chevron { transform: rotate(180deg); }
+.menu { position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; z-index: 10; width: 340px; max-width: calc(100vw - 32px); background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45); text-align: left; display: flex; flex-direction: column; }
+.menu a { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 10px; text-decoration: none; color: var(--text); }
+.menu a:hover, .menu a:focus-visible { background: #20242E; }
+.menu .label { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.menu strong { color: var(--strong); font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.menu small { color: var(--faint); font-size: 13.5px; line-height: 1.4; }
+.menu .tag { font: 600 11px/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 7px; border-radius: 6px; }
+.menu .tag.stable { background: #1E2A3A; color: var(--accent-text); }
+.menu .tag.experimental { background: #2E2618; color: #E2B86B; }
+.menu .icon { color: var(--faint); flex: none; }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 8px; }
+.menu a.all { padding: 10px 14px; font-size: 14px; color: var(--soft); }
+</style>
+</head>
+<body>
+
+<header>
+<nav aria-label="Основное меню">
+<a class="brand" href="#top"><img src="../icon.svg" width="36" height="36" alt="">CharPaper</a>
+<div class="links">
+<a href="#features">Возможности</a>
+<a href="#artists">3D-художникам</a>
+<a href="#start">Как начать</a>
+<a href="https://github.com/Zira3l137/CharPaper"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>GitHub</a>
+<span class="lang" aria-label="Язык"><a href="../" hreflang="en" lang="en">EN</a><span aria-current="page">RU</span></span>
+<a class="button primary" href="#download">Скачать</a>
+</div>
+</nav>
+</header>
+
+<main>
+<section class="hero" id="top">
+<svg class="beam" viewBox="0 0 1000 700" preserveAspectRatio="none" aria-hidden="true"><path d="M420 0 L580 0 L860 700 L140 700 Z" fill="#5AA6F2" fill-opacity="0.07"/></svg>
+<div class="wrap">
+<p class="eyebrow">Живые обои для Windows 10 и 11</p>
+<h1>3D-персонаж на рабочем столе, за вашими значками.</h1>
+<p class="lead">CharPaper рисует живую 3D-сцену на месте обоев. Меняйте одежду, анимацию и мимику, осматривайтесь мышью и настраивайте картинку в небольшой панели прямо на рабочем столе.</p>
+<div class="actions" id="download">
+<details class="download"><summary class="button primary"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Скачать CharPaper<svg class="icon chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+<div class="menu">
+<a href="https://github.com/Zira3l137/CharPaper/releases/latest" data-asset="charpaper-{tag}-windows-x64.zip"><span class="label"><strong><span data-version>Последняя версия</span> <span class="tag stable">Стабильная</span></strong><small>Windows 10 и 11, 64 бит. Распакуйте zip и запустите.</small></span><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></a>
+<a href="https://github.com/Zira3l137/CharPaper/releases/download/nightly/charpaper-nightly-windows-x64.zip"><span class="label"><strong>Экспериментальная <span class="tag experimental">Ночная</span></strong><small>Собрана из последних изменений. Самое новое, но возможны ошибки.</small></span><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></a>
+<hr><a class="all" href="https://github.com/Zira3l137/CharPaper/releases">Все выпуски и что в них нового</a>
+</div></details>
+<details class="download"><summary class="button quiet"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Скачать аддон для Blender<svg class="icon chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+<div class="menu">
+<a href="https://github.com/Zira3l137/CharPaper/releases/latest" data-asset="charpaper_exporter-{tag}.zip"><span class="label"><strong><span data-version>Последняя версия</span> <span class="tag stable">Стабильная</span></strong><small>Blender 4.2 или новее. Установите zip через Install from Disk.</small></span><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></a>
+<a href="https://github.com/Zira3l137/CharPaper/releases/download/nightly/charpaper_exporter-nightly.zip"><span class="label"><strong>Экспериментальная <span class="tag experimental">Ночная</span></strong><small>Пара к экспериментальному приложению. Используйте их вместе.</small></span><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></a>
+<hr><a class="all" href="https://github.com/Zira3l137/CharPaper/releases">Все выпуски и что в них нового</a>
+</div></details>
+</div>
+<p class="note">Бесплатно. 64-битная Windows. Ничего устанавливать не нужно. Аддон нужен только тем, кто делает персонажей в Blender.</p>
+</div>
+<div class="shot">
+<img src="../banner.webp" width="1915" height="821" alt="Персонаж CharPaper выглядывает из монитора рядом с панелью настроек CharPaper">
+</div>
+</section>
+
+<section class="band" id="features">
+<div class="wrap">
+<div class="intro">
+<h2>Что он умеет</h2>
+<p class="soft">Всё работает в реальном времени, за значками рабочего стола. Значки и клики работают как раньше.</p>
+</div>
+<div class="features">
+<div class="feature">
+<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8CC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 6l2 4 2-1v12h8V9l2 1 2-4-4-3c-.5 1.5-2 2.5-4 2.5S8.5 4.5 8 3z"/></svg>
+<h3>Одежда, анимации, мимика</h3>
+<p>Меняйте, во что персонаж одет, что он делает и какое у него выражение лица. Снимайте и надевайте отдельные части одежды.</p>
+</div>
+<div class="feature">
+<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8CC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l6.5 16 2.3-6.7L19.5 11z"/><path d="m13 13 6 6"/></svg>
+<h3>Следит за курсором</h3>
+<p>Глаза, голова и шея поворачиваются к указателю мыши поверх любой анимации и возвращаются, когда указатель замирает.</p>
+</div>
+<div class="feature">
+<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8CC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+<h3>Осматривайтесь</h3>
+<p>Тяните правой кнопкой мыши, чтобы вращать камеру, крутите колесо, чтобы приблизить, или переключайтесь на камеры, которые настроил автор персонажа.</p>
+</div>
+<div class="feature">
+<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8CC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M12 1.5v1.5M4.5 9H3M21 9h-1.5M6.7 3.7l1 1M17.3 3.7l-1 1"/><path d="M3 17h18M5 21h14"/></svg>
+<h3>Места, небо и туман</h3>
+<p>У каждого персонажа может быть несколько окружений, у каждого свой свет, небо, движущиеся предметы и лучи света сквозь туман.</p>
+</div>
+<div class="feature">
+<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8CC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+<h3>Музыка и звук</h3>
+<p>Фоновая музыка и атмосферные звуки для каждого места и звуки, которые играют вместе с анимациями: шаги, смех.</p>
+</div>
+<div class="feature">
+<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8CC3F7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="4" width="10" height="8" rx="1"/><rect x="12.5" y="4" width="10" height="8" rx="1"/><path d="M6.5 12v3M17.5 12v3M4 18h5M15 18h5"/></svg>
+<h3>Несколько мониторов</h3>
+<p>Свой персонаж на каждом экране, один и тот же в зеркале или одна широкая картинка на все сразу.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section>
+<div class="wrap split">
+<div class="intro">
+<h2>Бережёт ваш компьютер</h2>
+<p class="soft">Обои работают весь день, поэтому CharPaper перестаёт рисовать и затихает, когда его никто не видит. Если компьютеру тяжело, уменьшите масштаб рендера, качество теней или лимит кадров на вкладках «Графика» и «Система».</p>
+</div>
+<ul class="pauses">
+<li><span class="dot"></span>Экран заблокирован или работает заставка</li>
+<li><span class="dot"></span>Игра или другое приложение открыто на весь экран</li>
+<li><span class="dot"></span>Окна закрывают весь рабочий стол</li>
+<li><span class="dot off"></span><span>Ноутбук работает от батареи <span style="color: var(--faint)">(по желанию, по умолчанию выключено)</span></span></li>
+</ul>
+</div>
+</section>
+
+<section class="band" id="artists">
+<div class="wrap">
+<div class="intro">
+<p class="eyebrow">3D-художникам</p>
+<h2>Приводите своего персонажа из Blender</h2>
+<p class="soft">Аддон для Blender экспортирует всё одним нажатием: риг, всю одежду, анимации, мимику, окружения со светом и туманом, камеры и звуки. Знать игровые движки не нужно.</p>
+</div>
+<div class="artist">
+<ol class="steps">
+<li><div><strong>Установите аддон</strong><span>Blender 4.2 или новее. Возьмите его в «Скачать аддон для Blender» вверху, той же версии, что и приложение.</span></div></li>
+<li><div><strong>Укажите коллекции</strong><span>По коллекции на каждый наряд и каждое место, затем отметьте экшены для экспорта.</span></div></li>
+<li><div><strong>Настройте взгляд в два клика</strong><span>Detect bones находит глаза, голову и шею. Preview показывает взгляд прямо во вьюпорте.</span></div></li>
+<li><div><strong>Validate, затем Export All</strong><span>Предупреждения укажут, что будет выглядеть не так. Ваш .blend никогда не меняется.</span></div></li>
+</ol>
+<div class="tree">
+<p class="path">characters/aki/</p>
+<pre>suite.toml        <span>имя, настройки по умолчанию, вид</span>
+model.glb         <span>арматура</span>
+skins/            <span>по файлу на наряд</span>
+animations/       <span>анимации</span>
+environment/      <span>окружения, небо, музыка</span>
+cameras/          <span>дополнительные камеры</span>
+sounds/           <span>звуки анимаций</span>
+luts/             <span>цветокоррекция</span></pre>
+<p>Персонаж — это просто папка. Положите её в <code>characters</code> рядом с приложением.</p>
+</div>
+</div>
+<a class="more" href="https://github.com/Zira3l137/CharPaper#making-a-character">Руководство для художников: рецепты, тонкости и решение проблем (на английском)<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+</div>
+</section>
+
+<section id="start">
+<div class="wrap">
+<h2>Как начать</h2>
+<ol class="start">
+<li><strong>Скачайте</strong><span>Выберите версию в «Скачать CharPaper» вверху.</span></li>
+<li><strong>Распакуйте</strong><span>В свою папку, например в «Документы». Не в Program Files: настройки сохраняются рядом с приложением.</span></li>
+<li><strong>Добавьте персонажа</strong><span>CharPaper поставляется без персонажей. Положите папку персонажа в <code>characters</code>.</span></li>
+<li><strong>Запустите charpaper.exe</strong><span>Если Windows предупредит, нажмите «Подробнее», затем «Выполнить в любом случае». Приложение пока не подписано.</span></li>
+</ol>
+<div class="guide">
+<div>
+<strong>Всё остальное — в README</strong>
+<span>Панель, управление мышью, мониторы, где хранятся настройки и что делать, если что-то пошло не так. На английском.</span>
+</div>
+<a class="button quiet" href="https://github.com/Zira3l137/CharPaper#using-charpaper">Открыть руководство</a>
+</div>
+</div>
+</section>
+</main>
+
+<footer>
+<div class="wrap">
+<span>CharPaper от Zira3l137 · <a href="https://github.com/Zira3l137/CharPaper#license" style="color: inherit">MIT или Apache-2.0</a></span>
+<nav aria-label="Проект">
+<a href="https://github.com/Zira3l137/CharPaper">Исходный код</a>
+<a href="https://github.com/Zira3l137/CharPaper/releases">Все выпуски</a>
+<a href="https://github.com/Zira3l137/CharPaper/issues">Сообщить о проблеме</a>
+</nav>
+</div>
+</footer>
+
+
+<script>
+// The download menus work without this; it closes them on a click elsewhere or on Escape, and
+// keeps only one open.
+const menus = document.querySelectorAll("details.download");
+const close = (except) => menus.forEach((m) => { if (m !== except) m.open = false; });
+document.addEventListener("click", (e) => close(e.target.closest("details.download")));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+</script>
+</body>
+</html>
