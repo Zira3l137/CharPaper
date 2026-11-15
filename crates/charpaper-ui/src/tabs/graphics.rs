@@ -54,6 +54,7 @@ const CONTRAST: Scale = Scale { step: 0.05, min: 0.5, max: 1.5, per_unit: 100.0 
 const SKY_TURN_STEP: f32 = 15.0;
 // A share of the sky's brightness.
 const BACKGROUND: Scale = Scale { step: 0.1, min: 0.0, max: 2.0, per_unit: 100.0 };
+const BACKGROUND_BLUR: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
 const LUT_STRENGTH: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
 // Depth of field strength, a stop of aperture apart: each doubles or halves the blur's area.
 const BLUR_STRENGTH_STOPS: [f32; 9] = [0.25, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8, 4.0];
@@ -164,27 +165,22 @@ fn lighting() -> impl Bundle {
                     // Blurred from the reflection map.
                     let blurrable = shown_environment(w).is_some_and(|e| e.reflections().is_some());
                     let resolved = resolved(w)?;
-                    let label = |blur: &BackgroundBlur| match blur {
-                        BackgroundBlur::Off => on_off(l, false),
-                        BackgroundBlur::Low => fl!(l, "value-low"),
-                        BackgroundBlur::Medium => fl!(l, "value-medium"),
-                        BackgroundBlur::High => fl!(l, "value-high"),
-                    };
+                    let blur = resolved.background_blur;
+                    let text = if blur <= 0.0 { on_off(l, false) } else { percent(blur) };
                     let shown = blurrable && resolved.background > 0.0;
-                    Some(choice(&BackgroundBlur::ALL, &resolved.background_blur, label).when(shown))
+                    Some(BACKGROUND_BLUR.number(text, blur).when(shown))
                 },
                 change: |w, step| {
                     edit_look(w, |look, current, environment| {
                         if let Some(name) = environment {
-                            let mut blur = current.background_blur;
-                            pick(&BackgroundBlur::ALL, &mut blur, step);
+                            let blur = BACKGROUND_BLUR.nudge(current.background_blur, step);
                             look.environments.entry(name.into()).or_default().background_blur =
-                                Some(blur);
+                                Some(BackgroundBlur(blur));
                         }
                     });
                 },
             }
-            .segments(),
+            .stepper(),
             Setting {
                 label: |l| fl!(l, "label-shadows"),
                 help: |l| fl!(l, "help-shadows"),

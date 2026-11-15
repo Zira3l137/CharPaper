@@ -518,9 +518,12 @@ and **Validate** warns about a missing image or World beforehand:
   the panorama as it is, as Blender does at an exposure of 0.
 - In the app's **Graphics** tab, while the environment shows: **Sky strength**, **Sky
   rotation**, **Background** (how bright the sky looks behind the scene, apart from the
-  light it gives; Off hides it) and **Background blur**. Write the values you like into
-  suite.toml as `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`.
-  An older suite's `brightness` still works: 1000 is a strength of 1.
+  light it gives; Off hides it) and **Background blur** (0% sharp to 100%, about what a
+  Principled BSDF of Roughness 0.5 reflects; it needs the environment's reflection map).
+  Write the values you like into suite.toml as `sky_strength`, `sky_rotation_deg`,
+  `background` and `background_blur` (from 0 to 1). An older suite's `brightness` still
+  works: 1000 is a strength of 1, and an older `background_blur` of "low", "medium" or
+  "high" reads as 0.71, 0.87 or 1.
 
 **Moving props.** Each object's *active* action becomes a clip that loops on its own, as
 long as its own keys. A 25-frame fan and a 420-frame curtain both keep their length.

@@ -9,7 +9,6 @@ use bevy::app::AnimationSystems;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::NotShadowCaster;
-use bevy::light::Skybox;
 use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::tasks::Task;
@@ -26,7 +25,7 @@ use crate::assets::asset_path;
 use crate::camera::SceneCamera;
 use crate::character::Armature;
 use crate::look::LightTree;
-use crate::sky::SharpSky;
+use crate::sky::SceneSky;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
@@ -139,7 +138,7 @@ pub(crate) fn switch_environment(
             commands.entity(root).despawn();
         }
         for &camera in &cameras {
-            commands.entity(camera).remove::<(Skybox, SharpSky, EnvironmentMapLight)>();
+            commands.entity(camera).remove::<(SceneSky, EnvironmentMapLight)>();
         }
         shown.name = state.environment.clone();
 
@@ -190,19 +189,24 @@ fn attach_maps(
     suite: &Suite,
     environment: &Environment,
 ) {
-    if let Some(sky) = environment.sky() {
-        let image: Handle<Image> = assets.load(asset_path(suite, sky));
-        commands.entity(camera).insert((
-            Skybox { image: Some(image.clone()), brightness: 0.0, ..default() },
-            SharpSky(image),
-        ));
-    }
+    let mut reflections = None;
     if let Some((diffuse, specular)) = environment.reflections() {
+        let specular_map: Handle<Image> = assets.load(asset_path(suite, specular));
+        reflections = Some(specular_map.clone());
         commands.entity(camera).insert(EnvironmentMapLight {
             diffuse_map: assets.load(asset_path(suite, diffuse)),
-            specular_map: assets.load(asset_path(suite, specular)),
+            specular_map,
             intensity: 0.0,
             ..default()
+        });
+    }
+    if let Some(sky) = environment.sky() {
+        commands.entity(camera).insert(SceneSky {
+            image: assets.load(asset_path(suite, sky)),
+            reflections,
+            brightness: 0.0,
+            rotation: Quat::IDENTITY,
+            blur: 0.0,
         });
     }
 }

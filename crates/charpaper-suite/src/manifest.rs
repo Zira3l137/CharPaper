@@ -278,8 +278,9 @@ pub struct EnvironmentEntry {
     /// it lights it: 0 hides it, 1 shows it as it is. Like Blender's Light
     /// Path trick, it leaves the lighting alone. Defaults to 1.
     pub background: Option<f32>,
-    /// How blurred the sky looks behind the scene. The lighting stays as it
-    /// is. Defaults to off.
+    /// How blurred the sky looks behind the scene, from 0, sharp, to 1, as
+    /// if a lens were focused close: about what a Principled BSDF of
+    /// Roughness 0.5 reflects. The lighting stays as it is. Defaults to 0.
     pub background_blur: Option<BackgroundBlur>,
     /// Boxes of fog, keyed by the name of their object in the environment's
     /// file: in Blender, usually a cube with a Principled Volume material. The
@@ -432,8 +433,11 @@ pub struct Grading {
     /// 0 is black and white, 1 unchanged, above more vivid. Applied after
     /// tonemapping. Defaults to 1.
     pub saturation: Option<f32>,
-    /// Spreads colors away from middle gray (above 1) or pulls them towards
-    /// it (below 1), on top of each section's own contrast. Defaults to 1.
+    /// Spreads tones away from middle gray (above 1) or pulls them towards
+    /// it (below 1), as a power of their distance in stops: 1.1 puts
+    /// something 3 stops darker than middle gray 3.3 stops darker. Black and
+    /// middle gray stay where they are. Each section's own contrast applies
+    /// on top. Defaults to 1.
     pub contrast: Option<f32>,
     /// Where the midtones begin and end, as brightness from 0 to 1; the
     /// sections blend into each other smoothly. Defaults to [0.2, 0.7].
@@ -510,20 +514,38 @@ pub(crate) fn legacy_strength(brightness: f32) -> f32 {
     brightness / LEGACY_BRIGHTNESS_PER_STRENGTH
 }
 
-/// How blurred the sky looks behind the scene.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum BackgroundBlur {
-    #[default]
-    Off,
-    Low,
-    Medium,
-    High,
-}
+/// How blurred the sky looks behind the scene, from 0 to 1.
+#[derive(Serialize, JsonSchema, Debug, Clone, Copy, PartialEq, Default)]
+#[serde(transparent)]
+pub struct BackgroundBlur(pub f32);
 
-impl BackgroundBlur {
-    pub const ALL: [BackgroundBlur; 4] =
-        [BackgroundBlur::Off, BackgroundBlur::Low, BackgroundBlur::Medium, BackgroundBlur::High];
+// Older suites name one of four steps. Each reads as the amount that blurs as much.
+impl<'de> Deserialize<'de> for BackgroundBlur {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Saved {
+            Amount(f32),
+            Step(Step),
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        enum Step {
+            Off,
+            Low,
+            Medium,
+            High,
+        }
+
+        Ok(BackgroundBlur(match Saved::deserialize(deserializer)? {
+            Saved::Amount(amount) => amount.clamp(0.0, 1.0),
+            Saved::Step(Step::Off) => 0.0,
+            Saved::Step(Step::Low) => 0.71,
+            Saved::Step(Step::Medium) => 0.87,
+            Saved::Step(Step::High) => 1.0,
+        }))
+    }
 }
 
 // Mirrors Bevy's Tonemapping so this crate doesn't need Bevy.

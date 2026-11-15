@@ -4,7 +4,6 @@ use bevy::camera::Exposure;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::ecs::system::SystemParam;
 use bevy::light::EnvironmentMapLight;
-use bevy::light::Skybox;
 use bevy::post_process::bloom::Bloom;
 use bevy::post_process::bloom::BloomCompositeMode;
 use bevy::post_process::bloom::BloomPrefilter;
@@ -14,7 +13,6 @@ use bevy::prelude::*;
 use bevy::render::view::ColorGrading;
 use bevy::render::view::ColorGradingGlobal;
 use bevy::render::view::ColorGradingSection;
-use charpaper_suite::BackgroundBlur;
 use charpaper_suite::GradingSection;
 use charpaper_suite::Look;
 use charpaper_suite::LookEdits;
@@ -30,6 +28,7 @@ use crate::environment::shown_environment;
 use crate::environment::spawn_environment_scenes;
 use crate::render::SceneImage;
 use crate::render::ScreenParts;
+use crate::sky::SceneSky;
 use crate::stage::FocusedStage;
 use crate::stage::StageOf;
 use crate::suite::ActiveSuite;
@@ -62,6 +61,9 @@ pub const DEFAULT_BLOOM: f32 = 0.0;
 pub const DEFAULT_BLOOM_THRESHOLD: f32 = 1.0;
 // Light a little under the threshold glows a little, so the glow has no hard edge.
 const BLOOM_SOFTNESS: f32 = 0.5;
+// The tone contrast turns around, in linear light: what Blender's and most grading tools call
+// middle gray.
+const MIDDLE_GRAY: f32 = 0.18;
 pub const DEFAULT_CHROMATIC_ABERRATION: f32 = 0.0;
 pub const DEFAULT_SKY_STRENGTH: f32 = 1.0;
 pub const DEFAULT_SHADOWS: bool = true;
@@ -146,7 +148,7 @@ pub struct Resolved {
     pub exposure: f32,
     pub sky_rotation_deg: f32,
     pub background: f32,
-    pub background_blur: BackgroundBlur,
+    pub background_blur: f32,
 }
 
 impl Resolved {
@@ -174,7 +176,7 @@ impl Resolved {
             exposure: entry.exposure.or(look.post.exposure).unwrap_or(DEFAULT_EXPOSURE),
             sky_rotation_deg: entry.sky_rotation_deg.unwrap_or(DEFAULT_SKY_ROTATION_DEG),
             background: entry.background.unwrap_or(DEFAULT_BACKGROUND),
-            background_blur: entry.background_blur.unwrap_or_default(),
+            background_blur: entry.background_blur.unwrap_or_default().0,
         }
     }
 }
@@ -197,7 +199,7 @@ fn bloom(resolved: &Resolved) -> Bloom {
 type LookedCameras<'w, 's> = Query<
     'w,
     's,
-    (Entity, Option<&'static mut Skybox>, Option<&'static mut EnvironmentMapLight>),
+    (Entity, Option<&'static mut SceneSky>, Option<&'static mut EnvironmentMapLight>),
     With<SceneCamera>,
 >;
 type LookedLights<'w, 's> = Query<
@@ -247,7 +249,7 @@ fn apply_stage_look(
     let resolved = Resolved::new(look, shown.name.as_deref());
 
     for &camera in mine {
-        let Ok((entity, skybox, environment_light)) = cameras.get_mut(camera) else {
+        let Ok((entity, sky, environment_light)) = cameras.get_mut(camera) else {
             continue;
         };
         // A higher EV100 is darker; a higher look exposure is brighter.
@@ -284,9 +286,10 @@ fn apply_stage_look(
         let rotation = Quat::from_rotation_y(-resolved.sky_rotation_deg.to_radians());
         // At Blender's exposure, a panorama texel of 1 shows as 1, as Blender shows it.
         let luminance = resolved.sky_strength / Exposure::BLENDER.exposure();
-        if let Some(mut skybox) = skybox {
-            skybox.brightness = luminance * resolved.background;
-            skybox.rotation = rotation;
+        if let Some(mut sky) = sky {
+            sky.brightness = luminance * resolved.background;
+            sky.rotation = rotation;
+            sky.blur = resolved.background_blur;
         }
         if let Some(mut environment_light) = environment_light {
             environment_light.intensity = luminance;
@@ -320,16 +323,28 @@ fn apply_stage_look(
 }
 
 // Always present, and neutral when the look has no grading.
+//
+// The look's contrast isn't Bevy's. Bevy's turns colors around 0.5 in linear light, before the
+// view transform, where almost everything lies far below 0.5: a few percent more crushes the
+// shadows to black, a few less lifts them into a gray haze. The look's scales each tone's
+// distance from middle gray in stops instead, out = g · (in / g)^c, which leaves black and
+// middle gray in place. Bevy's grading ends in (in · gain + lift)^(1 / gamma), and that curve
+// on top of it folds into the same three numbers: gain and lift times g^((1 − c) · gamma / c),
+// and gamma over c.
 fn color_grading(look: &Look) -> ColorGrading {
     let grading = &look.post.grading;
     let [temperature, tint] = grading.white_balance();
     let [start, end] = grading.midtones_range();
-    let section = |section: &GradingSection| ColorGradingSection {
-        saturation: section.saturation(),
-        contrast: section.contrast() * grading.contrast(),
-        gamma: section.gamma(),
-        gain: section.gain(),
-        lift: section.lift(),
+    let contrast = grading.contrast().max(0.01);
+    let section = |section: &GradingSection| {
+        let scale = MIDDLE_GRAY.powf((1.0 - contrast) * section.gamma() / contrast);
+        ColorGradingSection {
+            saturation: section.saturation(),
+            contrast: section.contrast(),
+            gamma: section.gamma() / contrast,
+            gain: section.gain() * scale,
+            lift: section.lift() * scale,
+        }
     };
     ColorGrading {
         global: ColorGradingGlobal {

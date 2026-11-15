@@ -3,7 +3,6 @@ use std::error::Error;
 
 use bevy::ecs::system::SystemParam;
 use bevy::light::EnvironmentMapLight;
-use bevy::light::Skybox;
 use bevy::prelude::*;
 use charpaper_settings::Picks;
 use charpaper_suite::Suite;
@@ -23,7 +22,7 @@ use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
 use crate::look::ActiveLook;
 use crate::look::EditedLooks;
-use crate::sky::SharpSky;
+use crate::sky::SceneSky;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::picks_of;
@@ -185,7 +184,7 @@ impl Teardown<'_, '_> {
         }
         for camera in &self.cameras {
             if self.stage_of.get(camera) == Some(stage) {
-                commands.entity(camera).remove::<(Skybox, SharpSky, EnvironmentMapLight)>();
+                commands.entity(camera).remove::<(SceneSky, EnvironmentMapLight)>();
             }
         }
         let Ok((mut skin, mut rig, mut environment, mut baking, mut objects, mut expressions)) =

@@ -69,14 +69,9 @@
   ],
   "$defs": {
     "BackgroundBlur": {
-      "description": "How blurred the sky looks behind the scene.",
-      "type": "string",
-      "enum": [
-        "off",
-        "low",
-        "medium",
-        "high"
-      ]
+      "description": "How blurred the sky looks behind the scene, from 0 to 1.",
+      "type": "number",
+      "format": "float"
     },
     "Camera": {
       "description": "Which camera the app starts with, and where the built-in orbit camera\nstarts. The user can switch cameras, and orbit and zoom the orbit camera.",
@@ -275,7 +270,7 @@
           "format": "float"
         },
         "background_blur": {
-          "description": "How blurred the sky looks behind the scene. The lighting stays as it\nis. Defaults to off.",
+          "description": "How blurred the sky looks behind the scene, from 0, sharp, to 1, as\nif a lens were focused close: about what a Principled BSDF of\nRoughness 0.5 reflects. The lighting stays as it is. Defaults to 0.",
           "anyOf": [
             {
               "$ref": "#/$defs/BackgroundBlur"
@@ -577,7 +572,7 @@
       "type": "object",
       "properties": {
         "contrast": {
-          "description": "Spreads colors away from middle gray (above 1) or pulls them towards\nit (below 1), on top of each section's own contrast. Defaults to 1.",
+          "description": "Spreads tones away from middle gray (above 1) or pulls them towards\nit (below 1), as a power of their distance in stops: 1.1 puts\nsomething 3 stops darker than middle gray 3.3 stops darker. Black and\nmiddle gray stay where they are. Each section's own contrast applies\non top. Defaults to 1.",
           "type": [
             "number",
             "null"
