@@ -1,7 +1,7 @@
 # What an environment's [environments.<name>] table takes from Blender that glTF can't
-# carry: fog boxes, read from their Principled Volume, the lights that skip the fog, and the
-# lights and objects that cast no shadows. Export owns these keys; the look's keys are left
-# alone.
+# carry: fog boxes, read from their Principled Volume, the lights that skip the fog, the
+# lights and objects that cast no shadows, and lights' Radius and keyed Strength and Color.
+# Export owns these keys; the look's keys are left alone.
 #
 # A fog's Density may come from a Noise Texture, through nodes that turn its value into
 # another: Color Ramp, Map Range, Math with one input from the chain, Float Curve. The app
@@ -14,8 +14,9 @@ import bpy
 import mathutils
 
 from . import anim
+from . import lights as light_settings
 
-KEYS = ("fog", "no_volume_scatter", "no_shadows")
+KEYS = ("fog", "no_volume_scatter", "no_shadows", "lights")
 
 NOISE_POINTS = 32
 MAX_NOISE_DETAIL = 3.0
@@ -378,4 +379,18 @@ def table(collection):
         "fog": {obj.name: fog_table(obj, node) for obj, node in sorted(fog.items(), key=lambda i: i[0].name)},
         "no_volume_scatter": sorted(o.name for o in lights if o.data.volume_factor <= 0.0),
         "no_shadows": sorted(o.name for o in unshadowed),
+        "lights": {o.name: light for o in sorted(lights, key=lambda o: o.name) if (light := light_table(o))},
     }
+
+
+def light_table(obj):
+    """What glTF can't carry of a light: a point or spot light's Radius, and its keyed
+    Strength and Color."""
+    table = {}
+    light = obj.data
+    if light.type in {"POINT", "SPOT"} and light.shadow_soft_size > 0.0:
+        table["radius"] = float(light.shadow_soft_size)
+    keys = light_settings.keyed(light, bpy.context.scene)
+    if keys is not None:
+        table["animation"] = light_settings.animation_table(keys)
+    return table

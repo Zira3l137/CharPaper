@@ -464,8 +464,12 @@ collection are left out; they go under Cameras.
 **Lights.** Point, spot and sun lights come over. **Area lights don't**; replace them with
 spots or points.
 
-- Lights are points in the app. A light's *Radius*, which softens shadows in Blender,
-  doesn't come over.
+- A point or spot light's *Radius* comes over as the size of its bulb: its reflections
+  on shiny surfaces widen and soften as in Blender. Its shadows stay sharp.
+- A light's keyed *Strength* and *Color* come over and loop: a flickering candle, a TV's
+  glow. The loop runs from the action's first key to its last, or over the scene's frame
+  range when the keys don't span a frame. Like a prop's clip, a loop exactly as long as
+  the character's playing clip stays in step with it.
 - A point or spot light reaches as far as it does in EEVEE: its *Custom Distance* when
   ticked, otherwise where it fades below *Render Properties → Sampling → Advanced → Light
   Threshold*.
@@ -542,8 +546,9 @@ their own, so a fan never jumps when the animation changes.
   loops on its own until the matching one comes back.
 
 - NLA tracks of environment objects aren't exported; only the active action is.
-- Animation of light, material or camera *settings* (a flickering strength, a changing
-  color) isn't exported. Only objects, bones and shape keys move.
+- Animation of material or camera *settings*, and of a light's settings other than its
+  *Strength* and *Color*, isn't exported. Only objects, bones, shape keys and those two
+  light settings move.
 - Motion that comes only from constraints or drivers needs baking into an action
   (*Object → Animation → Bake Action*).
 - A rigged prop works: put its armature and meshes in the collection.
@@ -658,8 +663,8 @@ its own with `exposure` under `[environments.<name>]`.
 | Principled BSDF with image textures; PNG and JPEG | Procedural shader nodes (bake them); WebP images |
 | Shape keys, up to 256 a mesh | Draco or meshopt compressed files |
 | Shape key drivers that read bones | Drivers using Python, other objects, custom properties or the frame |
-| Actions on the armature | Animation of light, material or camera settings |
-| Point, spot and sun lights, with color and strength | Area lights; a light's Radius |
+| Actions on the armature | Animation of material or camera settings |
+| Point, spot and sun lights, with color, strength, Radius and keyed Strength and Color | Area lights; soft shadows from a light's Radius |
 | Per-light *Shadow* and per-object shadow visibility | Light probes and reflection planes |
 | Principled Volume fog boxes, with Noise Texture density | Volume emission, blackbody, other textures on density |
 | Camera position, lens, animation, depth of field | Animated F-Stop or Focus Distance; aperture shape |
@@ -694,7 +699,7 @@ which line.
 | `[character]` | `default_skin`, `default_animation`, and `model` when more than one `.glb` sits next to suite.toml. |
 | `[animations.<name>]` | Names a clip and says how it plays: `file`, `clip` (the action's name), `mode` (`loop`, `once`, `pose`), `gaze`, and `cues` for sounds. |
 | `[environment]` | `default`: the environment shown first. |
-| `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `exposure`, fog boxes, and the lights and objects left out of fog and shadows. |
+| `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `exposure`, fog boxes, the lights and objects left out of fog and shadows, and `lights`: each light's `radius` and keyed `animation`. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
@@ -714,7 +719,7 @@ Things worth knowing:
   does nothing.
 - **What the add-on rewrites on every export:** the name, the *Starts with* defaults,
   every exported clip, each exported camera's depth of field, and each exported
-  environment's fog and shadow lists, and with a World its `sky_strength` and
+  environment's fog and shadow lists and `lights`, and with a World its `sky_strength` and
   `sky_rotation_deg`. **What it leaves alone:** `[post]`, each environment's `shadows`,
   `exposure`, `background` and `background_blur`, the orbit camera, and anything
   about files you didn't export this time. An empty field in the add-on means "don't

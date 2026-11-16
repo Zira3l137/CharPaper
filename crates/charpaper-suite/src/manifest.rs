@@ -303,6 +303,36 @@ pub struct EnvironmentEntry {
     /// animated one no longer makes lamps draw their shadows again.
     #[serde(default)]
     pub no_shadows: Vec<String>,
+    /// What glTF can't carry of the environment's lights, keyed by object
+    /// name.
+    #[serde(default)]
+    pub lights: BTreeMap<String, Light>,
+}
+
+/// A light's settings beyond glTF's.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Light {
+    /// The size of a point or spot light's bulb, in meters, as Blender's
+    /// Radius: it widens and softens the light's reflections. Its shadows stay
+    /// sharp. Defaults to 0, a point.
+    pub radius: Option<f32>,
+    /// The light's keyed Strength and Color, looped.
+    pub animation: Option<LightAnimation>,
+}
+
+/// A light's Strength and Color sampled evenly over a loop, read in between
+/// samples and from the last back to the first.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LightAnimation {
+    /// How long the loop lasts, in seconds.
+    pub duration: f32,
+    /// The light's strength at each sample, times its strength in the file.
+    pub strength: Option<Vec<f32>>,
+    /// The light's linear color at each sample, times its color in the file,
+    /// which export leaves white.
+    pub color: Option<Vec<[f32; 3]>>,
 }
 
 /// A box of fog, set up like Blender's Principled Volume. Colors are linear,

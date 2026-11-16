@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use bevy::animation::graph::AnimationNodeType;
 use bevy::app::AnimationSystems;
+use bevy::ecs::system::SystemParam;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::NotShadowCaster;
@@ -37,7 +38,6 @@ pub(crate) struct EnvironmentPlugin;
 impl Plugin for EnvironmentPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_environment_ready)
-            .add_observer(point_sized_spots)
             .add_observer(uncast_shadows)
             .add_systems(Update, choose_environment.in_set(SceneSet::Fill))
             .add_systems(
@@ -52,7 +52,7 @@ impl Plugin for EnvironmentPlugin {
 
 // Clips counted as the same length when they differ by less than this, in seconds: well
 // under a frame, while two clips exported from one frame range come out exactly equal.
-const SAME_LENGTH: f32 = 0.001;
+pub(crate) const SAME_LENGTH: f32 = 0.001;
 
 #[derive(Component, Default)]
 pub(crate) struct ShownEnvironment {
@@ -358,32 +358,12 @@ pub(crate) fn on_environment_ready(
 // as the character's playing clip is put at the same moment of its loop every frame, before
 // both advance by the same step. Other prop clips loop on their own.
 fn follow_character(
-    armatures: Query<
-        (Entity, &AnimationPlayer, &AnimationTransitions, &AnimationGraphHandle),
-        With<Armature>,
-    >,
+    clock: CharacterClock,
     mut props: Query<(Entity, &mut AnimationPlayer, &PropClips), Without<Armature>>,
-    graphs: Res<Assets<AnimationGraph>>,
     clips: Res<Assets<AnimationClip>>,
     stage_of: StageOf,
 ) {
-    let mut leads = HashMap::new();
-    for (armature, player, transitions, graph) in &armatures {
-        let Some(node) = transitions.get_main_animation() else {
-            continue;
-        };
-        let (Some(active), Some(stage)) = (player.animation(node), stage_of.get(armature)) else {
-            continue;
-        };
-        let Some(AnimationNodeType::Clip(clip)) =
-            graphs.get(&graph.0).and_then(|graph| graph.get(node)).map(|node| &node.node_type)
-        else {
-            continue;
-        };
-        if let Some(clip) = clips.get(clip) {
-            leads.insert(stage, (clip.duration(), active.seek_time()));
-        }
-    }
+    let leads = clock.leads();
     if leads.is_empty() {
         return;
     }
@@ -396,25 +376,6 @@ fn follow_character(
             if let (true, Some(active)) = (same, player.animation_mut(*node)) {
                 active.seek_to(time);
             }
-        }
-    }
-}
-
-// Bevy's glTF loader gives a spot light its range as its radius, the size of the bulb. glTF
-// lights are points, and a spot with a range of a few meters would shine like a soft panel
-// that wide, so it gets its point back.
-fn point_sized_spots(
-    ready: On<WorldInstanceReady>,
-    roots: Query<(), With<EnvironmentRoot>>,
-    children: Query<&Children>,
-    mut spots: Query<&mut SpotLight>,
-) {
-    if !roots.contains(ready.entity) {
-        return;
-    }
-    for entity in children.iter_descendants(ready.entity) {
-        if let Ok(mut spot) = spots.get_mut(entity) {
-            spot.radius = 0.0;
         }
     }
 }
@@ -446,5 +407,52 @@ fn uncast_shadows(
         if meshes.contains(entity) && listed(unshadowed, entity, &tree.names, &tree.parents) {
             commands.entity(entity).insert(NotShadowCaster);
         }
+    }
+}
+
+// Each stage's character and the clip it plays, which other loops of the same length follow.
+#[derive(SystemParam)]
+pub(crate) struct CharacterClock<'w, 's> {
+    armatures: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static AnimationPlayer,
+            &'static AnimationTransitions,
+            &'static AnimationGraphHandle,
+        ),
+        With<Armature>,
+    >,
+    graphs: Res<'w, Assets<AnimationGraph>>,
+    clips: Res<'w, Assets<AnimationClip>>,
+    stage_of: StageOf<'w, 's>,
+}
+
+impl CharacterClock<'_, '_> {
+    // By stage: how long the character's playing clip is, and how far into it it is.
+    pub(crate) fn leads(&self) -> HashMap<Entity, (f32, f32)> {
+        let mut leads = HashMap::new();
+        for (armature, player, transitions, graph) in &self.armatures {
+            let Some(node) = transitions.get_main_animation() else {
+                continue;
+            };
+            let (Some(active), Some(stage)) = (player.animation(node), self.stage_of.get(armature))
+            else {
+                continue;
+            };
+            let Some(AnimationNodeType::Clip(clip)) = self
+                .graphs
+                .get(&graph.0)
+                .and_then(|graph| graph.get(node))
+                .map(|node| &node.node_type)
+            else {
+                continue;
+            };
+            if let Some(clip) = self.clips.get(clip) {
+                leads.insert(stage, (clip.duration(), active.seek_time()));
+            }
+        }
+        leads
     }
 }

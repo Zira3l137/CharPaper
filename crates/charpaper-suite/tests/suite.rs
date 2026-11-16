@@ -381,12 +381,18 @@ fn environment_gifs_are_found_by_material_name() {
 }
 
 #[test]
-fn environment_settings_hold_fog_and_light_lists() {
+fn environment_settings_hold_fog_lights_and_light_lists() {
     let manifest = r#"schema = 1
 [environments.foggy]
 no_volume_scatter = ["Lamp"]
 [environments.foggy.fog.Mist]
 density = 0.2
+[environments.foggy.lights.Lamp]
+radius = 0.1
+[environments.foggy.lights.Candle.animation]
+duration = 2.0
+strength = [1.0, 0.5]
+color = [[1.0, 0.8, 0.6], [1.0, 0.7, 0.4]]
 "#;
     let fixture = Fixture::new("fog", manifest);
     fixture.write("environment/foggy.gltf", &foggy_scene());
@@ -394,6 +400,9 @@ density = 0.2
     let foggy = &suite.environments[0];
     assert_eq!(foggy.settings.fog["Mist"].density, Some(0.2));
     assert_eq!(foggy.settings.no_volume_scatter, ["Lamp"]);
+    assert_eq!(foggy.settings.lights["Lamp"].radius, Some(0.1));
+    let candle = foggy.settings.lights["Candle"].animation.as_ref().unwrap();
+    assert_eq!((candle.duration, candle.strength.as_deref()), (2.0, Some(&[1.0, 0.5][..])));
 }
 
 #[test]

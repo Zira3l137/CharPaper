@@ -202,7 +202,9 @@ def _environment_scene(context, suite, entry, folder):
         for obj in objects:
             copy = iso.add(obj, own_mesh=_shape_keyed(obj), own_light=True, keep_drivers=True)
             if copy.type == "LIGHT":
-                lights.give_range(copy.data, threshold)
+                keys = lights.keyed(obj.data, context.scene)
+                lights.bake(copy.data, keys)
+                lights.give_range(copy.data, threshold, keys)
             # Each action becomes a clip of its own, as long as its own keys, and the app loops
             # each on its own. Merged into one clip, a short loop would wait for the longest.
             # Objects playing the same action share its clip and stay in step.

@@ -303,6 +303,13 @@
             "$ref": "#/$defs/Fog"
           }
         },
+        "lights": {
+          "description": "What glTF can't carry of the environment's lights, keyed by object\nname.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Light"
+          }
+        },
         "no_shadows": {
           "description": "Lights and objects that cast no shadows, by object name, like a Blender\nlight whose Shadow is off or an object whose Visibility > Ray\nVisibility > Shadow is. Every other light does while `shadows` is on.\nA light without shadows costs far less: a point light draws the scene\nsix times a frame for its shadows. A sun without shadows doesn't light\nfog. An object left out of shadows is drawn into none of them, and an\nanimated one no longer makes lamps draw their shadows again.",
           "type": "array",
@@ -801,6 +808,74 @@
         }
       },
       "additionalProperties": false
+    },
+    "Light": {
+      "description": "A light's settings beyond glTF's.",
+      "type": "object",
+      "properties": {
+        "animation": {
+          "description": "The light's keyed Strength and Color, looped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LightAnimation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "radius": {
+          "description": "The size of a point or spot light's bulb, in meters, as Blender's\nRadius: it widens and softens the light's reflections. Its shadows stay\nsharp. Defaults to 0, a point.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false
+    },
+    "LightAnimation": {
+      "description": "A light's Strength and Color sampled evenly over a loop, read in between\nsamples and from the last back to the first.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "The light's linear color at each sample, times its color in the file,\nwhich export leaves white.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "maxItems": 3,
+            "minItems": 3
+          }
+        },
+        "duration": {
+          "description": "How long the loop lasts, in seconds.",
+          "type": "number",
+          "format": "float"
+        },
+        "strength": {
+          "description": "The light's strength at each sample, times its strength in the file.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "duration"
+      ]
     },
     "Lut": {
       "description": "A color lookup table from `luts/`: the .cube files grading apps like\nResolve and Photoshop export. It grades the finished image, after\neverything else but the grain.",

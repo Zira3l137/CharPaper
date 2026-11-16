@@ -9,6 +9,7 @@ mod depth_of_field;
 mod environment;
 mod fog;
 mod gaze;
+mod lights;
 mod look;
 mod lut;
 mod render;
@@ -95,6 +96,7 @@ impl Plugin for ScenePlugin {
                 character::CharacterPlugin,
                 camera::CameraPlugin,
                 environment::EnvironmentPlugin,
+                lights::LightsPlugin,
                 animated::AnimatedPlugin,
                 bevy_fixes::BevyFixesPlugin,
             ))
