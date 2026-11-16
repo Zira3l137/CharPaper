@@ -681,14 +681,13 @@ fn prepare_fog(
     mut uniforms: ResMut<FogUniforms>,
     mut average_uniforms: ResMut<FogAverageUniforms>,
     mut noise_texture: ResMut<NoiseTexture>,
-    boxes: Res<FogBoxes>,
-    clock: Res<FogClock>,
+    // Paired up, as a system takes 16 parameters at most.
+    (boxes, clock): (Res<FogBoxes>, Res<FogClock>),
     views: Query<(Entity, &ExtractedView, &ExtractedFog)>,
     mut histories: Query<&mut FogHistory>,
     stale: Query<Entity, (Or<(With<ViewFog>, With<FogHistory>)>, Without<ExtractedFog>)>,
     view_keys: Res<ViewKeyCache>,
-    device: Res<RenderDevice>,
-    queue: Res<RenderQueue>,
+    (device, queue): (Res<RenderDevice>, Res<RenderQueue>),
 ) {
     for view in &stale {
         commands.entity(view).remove::<(ViewFog, FogHistory)>();
