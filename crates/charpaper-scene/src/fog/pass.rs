@@ -187,12 +187,12 @@ fn extract_fog_boxes(
 #[derive(ShaderType)]
 struct FogUniform {
     clip_from_local: Mat4,
+    local_from_world: Mat4,
     far_planes: [Vec4; 6],
     fog_color: Vec3,
     light_tint: Vec3,
     max_steps: u32,
     step_length: f32,
-    bounding_radius: f32,
     absorption: f32,
     scattering: f32,
     density: f32,
@@ -517,13 +517,12 @@ fn prepare_fog(
                         &view.clip_from_view,
                         &view_from_local,
                     ),
+                    local_from_world: Mat4::from(fog_box.local_from_world),
                     far_planes: far_planes(&view_from_local),
                     fog_color: fog_box.color,
                     light_tint: fog_box.light_tint,
                     max_steps: fog.max_steps,
                     step_length: fog.step_length,
-                    // Of the sphere around the box.
-                    bounding_radius: view_from_local.transform_vector3a(Vec3A::splat(0.5)).length(),
                     absorption: fog_box.absorption,
                     scattering: fog_box.scattering,
                     density: fog_box.density,

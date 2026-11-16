@@ -40,13 +40,14 @@
 
 struct FogBox {
     clip_from_local: mat4x4<f32>,
+    // Into the box's own space, where it is the cube from -0.5 to 0.5.
+    local_from_world: mat4x4<f32>,
     // View space planes of the box's far sides, (normal, -normal · point).
     far_planes: array<vec4<f32>, 6>,
     fog_color: vec3<f32>,
     light_tint: vec3<f32>,
     max_steps: u32,
     step_length: f32,
-    bounding_radius: f32,
     absorption: f32,
     scattering: f32,
     density: f32,
@@ -127,6 +128,15 @@ fn clear_fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f
     return vec4(0.0);
 }
 
+// How far light coming from a direction travels inside the box to reach a point in it, both in
+// the box's own space. Lengths along a direction carried over from world space stay in meters.
+fn distance_in_box(point: vec3<f32>, direction: vec3<f32>) -> f32 {
+    // Never dividing by zero: along an axis the light doesn't move on, its sides are far away.
+    let safe = select(direction, vec3(1e-8), abs(direction) < vec3(1e-8));
+    let to_sides = max((vec3(0.5) - point) / safe, (vec3(-0.5) - point) / safe);
+    return max(min(min(to_sides.x, to_sides.y), to_sides.z), 0.0);
+}
+
 // Henyey-Greenstein: how much light goes on toward the viewer rather than away, which makes
 // light shafts fade in and out as the view turns toward the light.
 fn henyey_greenstein(neg_LdotV: f32) -> f32 {
@@ -200,9 +210,10 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let jitter = interleaved_gradient_noise(position.xy, frame) * fog_box.dithering;
     Ro_world += Rd_world * jitter * step_size_world;
 
-    // What one step adds per unit of a light's color, the same for every light and step: the
-    // light scattered toward the camera, dimmed on its way through the box.
-    let light_through_box = exp(-extinction * fog_box.bounding_radius);
+    let local_from_world = fog_box.local_from_world;
+    let Ro_local = (local_from_world * vec4(Ro_world, 1.0)).xyz;
+    let Rd_local = (local_from_world * vec4(Rd_world, 0.0)).xyz;
+
     let step_transmittance = exp(-step_size_world * extinction);
     // Light scattered anywhere within a step is also dimmed by the rest of that step on its way
     // to the camera, so a step weighs the integral of e^(-extinction x) over its length rather
@@ -214,7 +225,9 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         (1.0 - step_transmittance) / extinction,
         extinction > 0.0
     );
-    let per_step = fog_box.fog_color * fog_box.light_tint * light_through_box *
+    // What one step adds per unit of a light's color, the same for every light and step: the
+    // light scattered toward the camera.
+    let per_step = fog_box.fog_color * fog_box.light_tint *
         fog_box.scattering * density * step_weight * fog_box.light_intensity * view.exposure;
 
     // Suns that light the fog come first in the list, so the first one that doesn't ends it.
@@ -238,6 +251,7 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
 
         let P_world = Ro_world + Rd_world * f32(step) * step_size_world;
         let P_view = view_start_pos + Rd_view * f32(step) * step_size_world;
+        let P_local = Ro_local + Rd_local * f32(step) * step_size_world;
 
         var sample_color = vec3(0.0);
 
@@ -260,7 +274,9 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
                 continue;
             }
             let phase = henyey_greenstein(dot(normalize(L), Rd_world));
-            sample_color += (*light).color.rgb * phase * shadow;
+            let L_local = (local_from_world * vec4(normalize(L), 0.0)).xyz;
+            let through_box = exp(-extinction * distance_in_box(P_local, L_local));
+            sample_color += (*light).color.rgb * phase * shadow * through_box;
         }
 
         // Point and spot lights, found through the cluster this step falls in. The clusters are
@@ -312,8 +328,12 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
             // Bevy's own pass leaves the phase out for lamps, which ignores Anisotropy and lets
             // them light fog 4π times brighter than suns. Blender applies it to every light.
             let phase = henyey_greenstein(dot(L, Rd_world));
-            sample_color +=
-                (*light).color_inverse_square_range.rgb * local_light_attenuation * phase;
+            // A lamp inside the box shines through only the fog between it and here.
+            let L_local = (local_from_world * vec4(L, 0.0)).xyz;
+            let in_box = min(distance_in_box(P_local, L_local), sqrt(distance_square));
+            let through_box = exp(-extinction * in_box);
+            sample_color += (*light).color_inverse_square_range.rgb * local_light_attenuation *
+                phase * through_box;
         }
 
         // Dimmed by the fog in front of this step; the step's own share is in per_step.
