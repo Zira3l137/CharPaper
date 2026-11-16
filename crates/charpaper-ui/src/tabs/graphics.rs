@@ -139,6 +139,26 @@ fn lighting() -> impl Bundle {
             }
             .stepper(),
             Setting {
+                label: |l| fl!(l, "label-sun-follows-sky"),
+                help: |l| fl!(l, "help-sun-follows-sky"),
+                show: |w, l| {
+                    let both = shown_environment(w)
+                        .is_some_and(|e| e.scene.is_some() && e.sky().is_some());
+                    Some(switch(l, resolved(w)?.sun_follows_sky).when(both))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, environment| {
+                        if let Some(name) = environment {
+                            let mut follows = current.sun_follows_sky;
+                            flip(&mut follows, step);
+                            look.environments.entry(name.into()).or_default().sun_follows_sky =
+                                Some(follows);
+                        }
+                    });
+                },
+            }
+            .segments(),
+            Setting {
                 label: |l| fl!(l, "label-background"),
                 help: |l| fl!(l, "help-background"),
                 show: |w, l| {

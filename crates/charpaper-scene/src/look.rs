@@ -67,6 +67,7 @@ const MIDDLE_GRAY: f32 = 0.18;
 pub const DEFAULT_CHROMATIC_ABERRATION: f32 = 0.0;
 pub const DEFAULT_SKY_STRENGTH: f32 = 1.0;
 pub const DEFAULT_SHADOWS: bool = true;
+pub const DEFAULT_SUN_FOLLOWS_SKY: bool = true;
 pub const DEFAULT_SKY_ROTATION_DEG: f32 = 0.0;
 pub const DEFAULT_BACKGROUND: f32 = 1.0;
 
@@ -149,6 +150,7 @@ pub struct Resolved {
     pub sky_rotation_deg: f32,
     pub background: f32,
     pub background_blur: f32,
+    pub sun_follows_sky: bool,
 }
 
 impl Resolved {
@@ -177,6 +179,7 @@ impl Resolved {
             sky_rotation_deg: entry.sky_rotation_deg.unwrap_or(DEFAULT_SKY_ROTATION_DEG),
             background: entry.background.unwrap_or(DEFAULT_BACKGROUND),
             background_blur: entry.background_blur.unwrap_or_default().0,
+            sun_follows_sky: entry.sun_follows_sky.unwrap_or(DEFAULT_SUN_FOLLOWS_SKY),
         }
     }
 }

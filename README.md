@@ -113,7 +113,7 @@ it and brings it back.
 | Tab | What's there |
 |-----|--------------|
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
-| **Graphics** | Sky strength, rotation, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
+| **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start with Windows, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size and side. |
 
@@ -478,8 +478,8 @@ spots or points.
   turns with the sky when **Sky rotation** turns it. Its light and shadows match the sun in
   the background whatever its own rotation in Blender. An overcast sky, or one whose
   brightest spot is below the horizon, leaves the sun as Blender has it, and so does
-  `sun_follows_sky = false` under the environment in `suite.toml`. With several suns, the
-  brightest follows.
+  turning off **Sun follows sky** in Graphics → Lighting, or `sun_follows_sky = false`
+  under the environment in `suite.toml`. With several suns, the brightest follows.
 - **Shadows** follow each light's *Shadow* checkbox. Untick it on lamps whose shadows
   nobody would miss. This is the biggest thing you can do for speed: every point light
   with shadows draws the scene six more times a frame.
@@ -528,11 +528,11 @@ and **Validate** warns about a missing image or World beforehand:
 - **Sky strength** means the same as *Strength* on the World's Background node: 1 shows
   the panorama as it is, as Blender does at an exposure of 0.
 - In the app's **Graphics** tab, while the environment shows: **Sky strength**, **Sky
-  rotation**, **Background** (how bright the sky looks behind the scene, apart from the
+  rotation**, **Sun follows sky**, **Background** (how bright the sky looks behind the scene, apart from the
   light it gives; Off hides it) and **Background blur** (0% sharp to 100%, about what a
   Principled BSDF of Roughness 0.5 reflects; it needs the environment's reflection map).
   Write the values you like into suite.toml as `sky_strength`, `sky_rotation_deg`,
-  `background` and `background_blur` (from 0 to 1). An older suite's `brightness` still
+  `sun_follows_sky`, `background` and `background_blur` (from 0 to 1). An older suite's `brightness` still
   works: 1000 is a strength of 1, and an older `background_blur` of "low", "medium" or
   "high" reads as 0.71, 0.87 or 1.
 

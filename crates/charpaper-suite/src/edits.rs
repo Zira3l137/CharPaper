@@ -97,6 +97,8 @@ pub struct EnvironmentEdits {
     pub background: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub background_blur: Option<BackgroundBlur>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sun_follows_sky: Option<bool>,
 }
 
 impl LookEdits {
@@ -127,6 +129,7 @@ impl LookEdits {
                 sky_rotation_deg: changed(base.sky_rotation_deg, entry.sky_rotation_deg),
                 background: changed(base.background, entry.background),
                 background_blur: changed(base.background_blur, entry.background_blur),
+                sun_follows_sky: changed(base.sun_follows_sky, entry.sun_follows_sky),
             };
             if environment != EnvironmentEdits::default() {
                 edits.environments.insert(name.clone(), environment);
@@ -154,6 +157,7 @@ impl LookEdits {
             entry.sky_rotation_deg = edits.sky_rotation_deg.or(entry.sky_rotation_deg);
             entry.background = edits.background.or(entry.background);
             entry.background_blur = edits.background_blur.or(entry.background_blur);
+            entry.sun_follows_sky = edits.sun_follows_sky.or(entry.sun_follows_sky);
         }
     }
 

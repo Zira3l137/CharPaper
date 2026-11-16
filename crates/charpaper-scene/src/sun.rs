@@ -1,7 +1,8 @@
 // An environment's sun shines from its sky's sun, the sky's brightest spot, turned with the
 // sky, so that its light and shadows match the sun in the background whatever Blender had it
 // at and however the sky is turned in the app. Each sky's sun is found once, on the CPU, in
-// the skybox Bevy keeps after loading it; see charpaper_bake::sun_direction.
+// the skybox Bevy keeps after loading it; see charpaper_bake::sun_direction. A sun stops
+// following when the look says so, or the sky has no sun, and goes back to how it came.
 
 use std::collections::HashMap;
 
@@ -11,11 +12,12 @@ use bevy::render::render_resource::TextureFormat;
 use bevy::transform::TransformSystems;
 
 use crate::environment::ShownEnvironment;
-use crate::environment::shown_environment;
+use crate::look::ActiveLook;
+use crate::look::DEFAULT_SUN_FOLLOWS_SKY;
 use crate::look::LightTree;
+use crate::look::Resolved;
 use crate::sky::SceneSky;
 use crate::stage::StageOf;
-use crate::suite::ActiveSuite;
 
 pub(crate) struct SunPlugin;
 
@@ -31,6 +33,10 @@ impl Plugin for SunPlugin {
 // Where each sky's sun is, Y up and before the sky is turned; none for a sky without one.
 #[derive(Resource, Default)]
 struct SkySuns(HashMap<AssetId<Image>, Option<Vec3>>);
+
+// On a sun following its sky: how it was turned before.
+#[derive(Component)]
+struct HomeRotation(Quat);
 
 fn find_sky_suns(mut suns: ResMut<SkySuns>, skies: Query<&SceneSky>, images: Res<Assets<Image>>) {
     for sky in &skies {
@@ -67,51 +73,58 @@ fn sky_sun(image: &Image) -> Option<Vec3> {
 // A directional light looks down its local -Z, so it is turned to look away from the sun.
 // Its parents are whatever the glTF put above it, last frame's place standing in for theirs.
 fn follow_sky_sun(
+    mut commands: Commands,
     suns: Res<SkySuns>,
-    stages: Query<(Entity, Option<&ActiveSuite>, &ShownEnvironment)>,
+    stages: Query<(Entity, Option<&ActiveLook>, &ShownEnvironment)>,
     skies: Query<(Entity, &SceneSky)>,
     stage_of: StageOf,
     tree: LightTree,
     places: Query<&GlobalTransform>,
-    mut lights: Query<(&DirectionalLight, &mut Transform)>,
+    mut lights: Query<(&DirectionalLight, &mut Transform, Option<&HomeRotation>)>,
 ) {
-    for (stage, suite, shown) in &stages {
-        let follows = shown_environment(suite, shown)
-            .is_some_and(|environment| environment.settings.sun_follows_sky != Some(false));
-        let Some(root) = shown.root.filter(|_| follows) else {
+    for (stage, look, shown) in &stages {
+        let Some(root) = shown.root else {
             continue;
         };
+        let name = shown.name.as_deref();
+        let follows = look
+            .map_or(DEFAULT_SUN_FOLLOWS_SKY, |look| Resolved::new(&look.0, name).sun_follows_sky);
         let sky = skies.iter().find(|&(camera, _)| stage_of.get(camera) == Some(stage));
-        let Some((_, sky)) = sky else {
-            continue;
-        };
-        let Some(&Some(sun)) = suns.0.get(&sky.image.id()) else {
-            continue;
-        };
-        let towards_sun = sky.rotation * sun;
+        let sun = sky.and_then(|(_, sky)| Some(sky.rotation * (*suns.0.get(&sky.image.id())?)?));
+        let towards_sun = sun.filter(|_| follows);
 
-        let brightest = tree
+        let environment_suns: Vec<(Entity, f32)> = tree
             .children
             .iter_descendants(root)
-            .filter_map(|entity| {
-                lights.get(entity).ok().map(|(light, _)| (entity, light.illuminance))
-            })
-            .max_by(|a, b| a.1.total_cmp(&b.1));
-        let Some((entity, _)) = brightest else {
-            continue;
-        };
-        let above = tree
-            .parents
-            .get(entity)
-            .ok()
-            .and_then(|parent| places.get(parent.parent()).ok())
-            .map_or(Quat::IDENTITY, |place| place.compute_transform().rotation);
-        let facing = Transform::default().looking_to(-towards_sun, Vec3::Y).rotation;
-        let rotation = above.inverse() * facing;
-        if let Ok((_, mut transform)) = lights.get_mut(entity)
-            && transform.rotation.angle_between(rotation) > 1e-5
-        {
-            transform.rotation = rotation;
+            .filter_map(|entity| lights.get(entity).ok().map(|(sun, ..)| (entity, sun.illuminance)))
+            .collect();
+        let brightest = environment_suns.iter().max_by(|a, b| a.1.total_cmp(&b.1)).map(|s| s.0);
+
+        for &(entity, _) in &environment_suns {
+            let Ok((_, mut transform, home)) = lights.get_mut(entity) else {
+                continue;
+            };
+            let Some(towards_sun) = towards_sun.filter(|_| Some(entity) == brightest) else {
+                if let Some(home) = home {
+                    transform.rotation = home.0;
+                    commands.entity(entity).remove::<HomeRotation>();
+                }
+                continue;
+            };
+            if home.is_none() {
+                commands.entity(entity).insert(HomeRotation(transform.rotation));
+            }
+            let above = tree
+                .parents
+                .get(entity)
+                .ok()
+                .and_then(|parent| places.get(parent.parent()).ok())
+                .map_or(Quat::IDENTITY, |place| place.compute_transform().rotation);
+            let facing = Transform::default().looking_to(-towards_sun, Vec3::Y).rotation;
+            let rotation = above.inverse() * facing;
+            if transform.rotation.angle_between(rotation) > 1e-5 {
+                transform.rotation = rotation;
+            }
         }
     }
 }
