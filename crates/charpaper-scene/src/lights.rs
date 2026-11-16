@@ -47,6 +47,9 @@ type Lights<'w, 's> = Query<
 // Bevy's glTF loader gives a point light no radius and a spot light its range as one, though
 // glTF lights are points: a spot with a range of a few meters would shine like a soft panel
 // that wide. Both get the Radius they have in Blender instead, or none.
+//
+// It also reads a light's color as sRGB, while glTF keeps it linear, as Blender shows it. Read
+// that way, a tinted light came out darker and more saturated than in Blender.
 fn set_up_lights(
     ready: On<WorldInstanceReady>,
     roots: Query<&ChildOf, With<EnvironmentRoot>>,
@@ -73,13 +76,18 @@ fn set_up_lights(
         let loaded = match (point, spot, sun) {
             (Some(mut point), _, _) => {
                 point.radius = radius;
+                point.color = linear(point.color);
                 (point.intensity, point.color)
             }
             (_, Some(mut spot), _) => {
                 spot.radius = radius;
+                spot.color = linear(spot.color);
                 (spot.intensity, spot.color)
             }
-            (_, _, Some(sun)) => (sun.illuminance, sun.color),
+            (_, _, Some(mut sun)) => {
+                sun.color = linear(sun.color);
+                (sun.illuminance, sun.color)
+            }
             (None, None, None) => continue,
         };
         if let Some(animation) = light.and_then(|light| light.animation.clone()) {
@@ -88,6 +96,12 @@ fn set_up_lights(
             commands.entity(entity).insert(KeyedLight { animation, strength, color, played: 0.0 });
         }
     }
+}
+
+// The loader's sRGB channels hold the file's linear ones.
+fn linear(color: Color) -> Color {
+    let Srgba { red, green, blue, alpha } = color.to_srgba();
+    Color::linear_rgba(red, green, blue, alpha)
 }
 
 // suite.toml names a light by its object, and glTF puts the light on a child of its object,
