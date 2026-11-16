@@ -279,6 +279,7 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
             }
 
             let light_to_frag = (*light).position_radius.xyz - P_world;
+            let L = normalize(light_to_frag);
             let distance_square = dot(light_to_frag, light_to_frag);
             var local_light_attenuation =
                 getDistanceAttenuation(distance_square, (*light).color_inverse_square_range.w);
@@ -290,7 +291,7 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
                 }
 
                 // Filament's spot cone, with scale and offset worked out ahead.
-                let cd = dot(-spot_dir, normalize(light_to_frag));
+                let cd = dot(-spot_dir, L);
                 let attenuation = saturate(cd * (*light).light_custom_data.z + (*light).light_custom_data.w);
                 local_light_attenuation *= attenuation * attenuation;
             }
@@ -308,7 +309,11 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
                 }
             }
 
-            sample_color += (*light).color_inverse_square_range.rgb * local_light_attenuation;
+            // Bevy's own pass leaves the phase out for lamps, which ignores Anisotropy and lets
+            // them light fog 4π times brighter than suns. Blender applies it to every light.
+            let phase = henyey_greenstein(dot(L, Rd_world));
+            sample_color +=
+                (*light).color_inverse_square_range.rgb * local_light_attenuation * phase;
         }
 
         // Dimmed by the fog in front of this step; the step's own share is in per_step.
