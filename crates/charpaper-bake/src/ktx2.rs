@@ -95,7 +95,6 @@ pub(crate) fn pack_rgb9e5(color: Rgb) -> u32 {
     mantissa(r) | (mantissa(g) << 9) | (mantissa(b) << 18) | ((exponent as u32) << 27)
 }
 
-#[cfg(test)]
 pub(crate) fn unpack_rgb9e5(packed: u32) -> Rgb {
     let exponent = (packed >> 27) as i32;
     let scale = 2f32.powi(exponent - 15 - 9);

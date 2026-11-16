@@ -267,6 +267,13 @@ pub struct EnvironmentEntry {
     /// Whether the environment's lights cast shadows. glTF cannot say, so it
     /// is set here. Defaults to true.
     pub shadows: Option<bool>,
+    /// Whether the environment's sun shines from its sky's sun, the sky's
+    /// brightest spot, turning as the sky is turned, so that its light and
+    /// shadows match the sun in the background. A sky only has a sun when
+    /// that spot stands far out from the rest: not an overcast one, nor one
+    /// whose brightest spot is below the horizon. With several suns, the
+    /// brightest follows. Defaults to true.
+    pub sun_follows_sky: Option<bool>,
     /// Exposure compensation in EV stops while this environment is shown,
     /// replacing `post.exposure`. A sunlit scene needs far less than a room.
     pub exposure: Option<f32>,

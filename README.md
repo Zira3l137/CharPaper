@@ -473,6 +473,13 @@ spots or points.
 - A point or spot light reaches as far as it does in EEVEE: its *Custom Distance* when
   ticked, otherwise where it fades below *Render Properties → Sampling → Advanced → Light
   Threshold*.
+- **A sun follows the sky's sun.** With a sky whose brightest spot stands far out from
+  the rest, a clear sky's sun, the environment's sun light shines from that spot, and
+  turns with the sky when **Sky rotation** turns it. Its light and shadows match the sun in
+  the background whatever its own rotation in Blender. An overcast sky, or one whose
+  brightest spot is below the horizon, leaves the sun as Blender has it, and so does
+  `sun_follows_sky = false` under the environment in `suite.toml`. With several suns, the
+  brightest follows.
 - **Shadows** follow each light's *Shadow* checkbox. Untick it on lamps whose shadows
   nobody would miss. This is the biggest thing you can do for speed: every point light
   with shadows draws the scene six more times a frame.
@@ -699,7 +706,7 @@ which line.
 | `[character]` | `default_skin`, `default_animation`, and `model` when more than one `.glb` sits next to suite.toml. |
 | `[animations.<name>]` | Names a clip and says how it plays: `file`, `clip` (the action's name), `mode` (`loop`, `once`, `pose`), `gaze`, and `cues` for sounds. |
 | `[environment]` | `default`: the environment shown first. |
-| `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `exposure`, fog boxes, the lights and objects left out of fog and shadows, and `lights`: each light's `radius` and keyed `animation`. |
+| `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `sun_follows_sky`, `exposure`, fog boxes, the lights and objects left out of fog and shadows, and `lights`: each light's `radius` and keyed `animation`. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
@@ -720,7 +727,7 @@ Things worth knowing:
 - **What the add-on rewrites on every export:** the name, the *Starts with* defaults,
   every exported clip, each exported camera's depth of field, and each exported
   environment's fog and shadow lists and `lights`, and with a World its `sky_strength` and
-  `sky_rotation_deg`. **What it leaves alone:** `[post]`, each environment's `shadows`,
+  `sky_rotation_deg`. **What it leaves alone:** `[post]`, each environment's `shadows`, `sun_follows_sky`,
   `exposure`, `background` and `background_blur`, the orbit camera, and anything
   about files you didn't export this time. An empty field in the add-on means "don't
   touch that key".

@@ -6,6 +6,7 @@ mod cube;
 mod filter;
 mod ktx2;
 mod panorama;
+mod sun;
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -18,6 +19,7 @@ use thiserror::Error;
 use tracing::info;
 
 use crate::panorama::Panorama;
+pub use crate::sun::sun_direction;
 
 // RGB9E5 takes 4 bytes a texel, so a skybox is 6 × size² × 4 bytes: 25 MB at 1024.
 #[derive(Debug, Clone, PartialEq)]

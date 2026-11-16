@@ -27,7 +27,7 @@ pub(crate) fn render(size: u32, shade: impl Fn([f32; 3]) -> Rgb + Sync) -> CubeL
 
 // The usual Vulkan and Direct3D face table. Bevy reads cubemaps left-handed, looking up
 // (x, y, z) at (x, y, -z), so z is flipped back here.
-fn world(face: usize, s: f32, t: f32) -> [f32; 3] {
+pub(crate) fn world(face: usize, s: f32, t: f32) -> [f32; 3] {
     let [x, y, z] = match face {
         0 => [1.0, -t, -s],
         1 => [-1.0, -t, s],

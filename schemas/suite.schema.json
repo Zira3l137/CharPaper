@@ -348,6 +348,13 @@
             "null"
           ],
           "format": "float"
+        },
+        "sun_follows_sky": {
+          "description": "Whether the environment's sun shines from its sky's sun, the sky's\nbrightest spot, turning as the sky is turned, so that its light and\nshadows match the sun in the background. A sky only has a sun when\nthat spot stands far out from the rest: not an overcast one, nor one\nwhose brightest spot is below the horizon. With several suns, the\nbrightest follows. Defaults to true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

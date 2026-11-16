@@ -23,6 +23,7 @@ mod stage;
 mod state;
 mod strokes;
 mod suite;
+mod sun;
 
 pub use assets::ARMATURE_SOURCE;
 pub use assets::CHARACTERS_SOURCE;
@@ -97,6 +98,7 @@ impl Plugin for ScenePlugin {
                 camera::CameraPlugin,
                 environment::EnvironmentPlugin,
                 lights::LightsPlugin,
+                sun::SunPlugin,
                 animated::AnimatedPlugin,
                 bevy_fixes::BevyFixesPlugin,
             ))
