@@ -21,9 +21,11 @@
 // A fog box with density noise reads it from a texture of Blender's Perlin noise, made the
 // first time any fog needs it; see noise.rs.
 //
-// With dithering, each march brings new noise, and fog_average.wgsl folds the marches into a
-// running average for as long as the fog would be interleaved. A still scene's fog then looks
-// as if marched with many more steps, at the cost of one cheap pass at the fog's resolution.
+// What's shown is then made by fog_average.wgsl, one cheap pass at the fog's resolution. It
+// keeps the fog pixels not marched this frame in line with those that were, so that what moves
+// through the fog leaves no trail. With dithering, each march brings new noise, and the pass
+// also folds the marches into a running average for as long as the fog stays interleaved. A
+// still scene's fog then looks as if marched with many more steps.
 
 use bevy::asset::embedded_asset;
 use bevy::asset::load_embedded_asset;
@@ -338,6 +340,7 @@ impl NoiseTexture {
 struct FogAverageUniform {
     phase: u32,
     blend: f32,
+    interleaved: u32,
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
@@ -348,9 +351,10 @@ struct FogAverageUniforms(DynamicUniformBuffer<FogAverageUniform>);
 const AVERAGED_MARCHES: u32 = 16;
 
 // This frame's share of the average, the frames since the fog last started over. Starting over
-// marches every fog pixel; after that, each is marched every fourth frame.
-fn average_blend(still_frames: u32) -> f32 {
-    if still_frames == 0 {
+// marches every fog pixel; after that, each is marched every fourth frame. Without dithering,
+// every march comes out the same, so there is nothing to average.
+fn average_blend(still_frames: u32, dithering: bool) -> f32 {
+    if still_frames == 0 || !dithering {
         return 1.0;
     }
     let marches = 1 + still_frames.div_ceil(4);
@@ -599,7 +603,7 @@ struct ViewFog {
     averaging: Option<ViewFogAverage>,
 }
 
-// This frame's step of the fog's average: from the one before into the next.
+// This frame's step from the fog shown last frame to the fog shown now.
 struct ViewFogAverage {
     previous: TextureView,
     next: TextureView,
@@ -616,13 +620,13 @@ struct FogHistory {
     phase: u32,
     // Frames the fog has been marched for the same as now; 0 when it starts over.
     still_frames: u32,
-    // With dithering, the fog's average, in two textures that take turns: each frame reads the
-    // first and writes the second, then they swap.
-    averages: Option<[(Texture, TextureView); 2]>,
+    // The fog shown, in two textures that take turns: each frame reads the first and writes
+    // the second, then they swap.
+    shown: [(Texture, TextureView); 2],
 }
 
 impl FogHistory {
-    fn new(device: &RenderDevice, size: UVec2, marched_for: MarchedFor, dithering: bool) -> Self {
+    fn new(device: &RenderDevice, size: UVec2, marched_for: MarchedFor) -> Self {
         let (texture, view) = fog_texture(device, size);
         Self {
             _texture: texture,
@@ -631,22 +635,16 @@ impl FogHistory {
             marched_for,
             phase: 0,
             still_frames: 0,
-            averages: dithering.then(|| [fog_texture(device, size), fog_texture(device, size)]),
+            shown: [fog_texture(device, size), fog_texture(device, size)],
         }
     }
 
-    fn advance(&mut self, device: &RenderDevice, marched_for: MarchedFor, dithering: bool) {
+    fn advance(&mut self, marched_for: MarchedFor) {
         let still = self.marched_for == marched_for;
         self.marched_for = marched_for;
         self.phase = (self.phase + 1) % 4;
         self.still_frames = if still { self.still_frames.saturating_add(1) } else { 0 };
-        if dithering != self.averages.is_some() {
-            let size = self.size;
-            self.averages =
-                dithering.then(|| [fog_texture(device, size), fog_texture(device, size)]);
-        } else if let Some(averages) = &mut self.averages {
-            averages.swap(0, 1);
-        }
+        self.shown.swap(0, 1);
     }
 }
 
@@ -735,26 +733,25 @@ fn prepare_fog(
         let history = match histories.get_mut(entity) {
             Ok(history) if history.size == size => {
                 let history = history.into_inner();
-                history.advance(&device, marched_for, fog.dithering);
+                history.advance(marched_for);
                 history
             }
             // New, or the screen changed size: every fog pixel is marched afresh.
-            _ => new_history.insert(FogHistory::new(&device, size, marched_for, fog.dithering)),
+            _ => new_history.insert(FogHistory::new(&device, size, marched_for)),
         };
         let texture = history.view.clone();
         let interleaved = history.still_frames > 0;
         let phase = history.phase;
-        let averaging = match (&history.averages, &mut average_writer) {
-            (Some([(_, previous), (_, next)]), Some(writer)) => Some(ViewFogAverage {
-                previous: previous.clone(),
-                next: next.clone(),
-                uniform_offset: writer.write(&FogAverageUniform {
-                    phase,
-                    blend: average_blend(history.still_frames),
-                }),
+        let [(_, previous), (_, next)] = &history.shown;
+        let averaging = average_writer.as_mut().map(|writer| ViewFogAverage {
+            previous: previous.clone(),
+            next: next.clone(),
+            uniform_offset: writer.write(&FogAverageUniform {
+                phase,
+                blend: average_blend(history.still_frames, fog.dithering),
+                interleaved: u32::from(interleaved),
             }),
-            _ => None,
-        };
+        });
         if let Some(history) = new_history {
             commands.entity(entity).insert(history);
         }
