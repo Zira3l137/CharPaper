@@ -467,9 +467,13 @@ spots or points.
 - A point or spot light's *Radius* comes over as the size of its bulb: its reflections
   on shiny surfaces widen and soften as in Blender. Its shadows stay sharp.
 - A light's keyed *Strength* and *Color* come over and loop: a flickering candle, a TV's
-  glow. The loop runs from the action's first key to its last, or over the scene's frame
-  range when the keys don't span a frame. Like a prop's clip, a loop exactly as long as
-  the character's playing clip stays in step with it.
+  glow. Key them on the light itself (*Object Data Properties*), not through its nodes.
+  F-Curve modifiers count, so a *Noise* modifier on *Strength* makes a flicker. The loop
+  runs from the action's first key to its last, or over the scene's frame range when the
+  keys don't span a frame, as with one key and a Noise modifier: there, set the scene's
+  range, or the action's *Manual Frame Range*, to the loop you want. Like a prop's clip, a
+  loop exactly as long as the character's playing clip stays in step with it. The light
+  reaches as far as its brightest moment.
 - A point or spot light reaches as far as it does in EEVEE: its *Custom Distance* when
   ticked, otherwise where it fades below *Render Properties → Sampling → Advanced → Light
   Threshold*.
@@ -581,8 +585,13 @@ a **Principled Volume** plugged into *Volume*, and nothing in *Surface*.
 - Patchy fog: feed *Density* from a **Noise Texture** (fBM, 3D) through any of Color
   Ramp, Map Range, Math and Float Curve nodes. Its *Vector* may be Generated or Object
   coordinates, through a Mapping node. The app draws Blender's own noise, up to *Detail* 3,
-  without *Distortion*. Animate the Mapping node's *Location* and the fog drifts, at that
-  animation's average speed, for as long as the app runs.
+  without *Distortion* or *W*. Animate the Mapping node's *Location* and the fog drifts, at
+  that animation's average speed, for as long as the app runs.
+- The app's noise repeats every 16 units of the noise's own space: past a Scale of about
+  16 across the box, the pattern repeats. Within that, it follows Blender's own pattern
+  where the noise's coordinates are positive; with Object coordinates, the side of the box
+  below the object's origin shows a different, alike pattern. For the closest match to a
+  Cycles render, use Generated coordinates.
 - The sky lights fog evenly, as it lights surfaces, even indoors where walls would keep it
   out in Cycles. Lamps add light shafts. Fog with neither a sky nor a lamp is invisible.
 - A sun lights fog only while its *Shadow* is ticked.
@@ -791,6 +800,11 @@ render.
 | The fog doesn't show | Nothing lights it: the environment has no sky, and no lamp lights the fog. A sun only does with *Shadow* on. Or **Fog** is off in the Graphics tab. |
 | Nothing blurs, and Graphics has no Depth of field | The camera in use has no F-Stop: tick *Depth of Field* on the camera and export again. For the orbit camera, set `f_stop` under `[camera]`. |
 | A light does nothing | It's an area light. Use a spot or point light. |
+| A light's flicker or color change doesn't play | It's keyed on the object or in the light's nodes, not on the light's *Strength* or *Color*. Or its keys hold one value: a Noise modifier with no range to loop over needs the scene's or the action's frame range set. Export again. |
+| The sun's shadows ignore how I turned the sun in Blender | **Sun follows sky** is on and the sky has a clear sun, so the sun shines from there. Turn it off in Graphics → Lighting, or set `sun_follows_sky = false`. |
+| The sun doesn't turn with the sky | The sky has no sun to follow (`charpaper.log` says so): it's overcast, or its brightest spot is below the horizon. Or **Sun follows sky** is off. |
+| Patchy fog shows as even fog | Its Density setup isn't one the app follows. **Validate** says why. Only a Noise Texture's *Fac*, fBM, through Color Ramp, Map Range, Math and Float Curve nodes, works. |
+| The fog's noise repeats | The noise's Scale is beyond about 16 across the box. Lower it, or scale the Mapping node down. |
 | The sky didn't change after replacing the `.hdr` by hand | Delete `skybox.ktx2`, `specular.ktx2` and `diffuse.ktx2` next to it. The export does this itself when the World's panorama changed. |
 | A sound or the music doesn't play | It isn't Ogg Vorbis. |
 | A GIF shows as a still picture | It isn't a GIF, or its file isn't named after the material. |
