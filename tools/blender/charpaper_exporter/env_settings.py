@@ -71,7 +71,7 @@ def fog_table(obj, node):
 def density_noise(obj, node):
     """The noise table for a fog whose Density comes from a Noise Texture, and notes on what
     of it the app leaves out. Without one, None and why, if Density is linked at all."""
-    chain = _chain(node.inputs["Density"])
+    chain = _chain(_input(node, "Density"))
     if chain is None:
         return None, [
             "Density comes from nodes other than a Noise Texture through Color Ramp, Map Range, "
@@ -82,10 +82,13 @@ def density_noise(obj, node):
         return None, ["its Noise Texture isn't fBM"]
     if noise.noise_dimensions not in {"3D", "4D"}:
         return None, [f"its Noise Texture is {noise.noise_dimensions}, not 3D"]
-    settings = ("Scale", "Detail", "Roughness", "Lacunarity")
-    if any(noise.inputs[name].is_linked for name in settings):
+    sockets = _inputs(noise, "Vector", "Scale", "Detail", "Roughness", "Lacunarity", "Distortion")
+    if sockets is None:
+        return None, ["its Noise Texture lacks inputs the exporter knows"]
+    vector, scale, detail, roughness, lacunarity, distortion = sockets
+    if any(s.is_linked for s in (scale, detail, roughness, lacunarity)):
         return None, ["its Noise Texture's Scale, Detail, Roughness or Lacunarity come from nodes"]
-    coordinates = _coordinates(obj, noise.inputs["Vector"])
+    coordinates = _coordinates(obj, vector)
     if coordinates is None:
         return None, [
             "its Noise Texture's Vector isn't Generated or Object coordinates, through a Mapping "
@@ -93,13 +96,13 @@ def density_noise(obj, node):
         ]
     noise_from_object, mapping = coordinates
 
-    scale = mathutils.Matrix.Scale(noise.inputs["Scale"].default_value, 4)
+    scale = mathutils.Matrix.Scale(scale.default_value, 4)
     noise_from_box = scale @ noise_from_object @ _object_from_box(obj)
-    detail = noise.inputs["Detail"].default_value
+    detail = detail.default_value
     notes = []
     if detail > MAX_NOISE_DETAIL:
         notes.append(f"the app draws Detail up to {MAX_NOISE_DETAIL:g}, not {detail:g}")
-    if noise.inputs["Distortion"].default_value != 0.0:
+    if distortion.default_value != 0.0:
         notes.append("Distortion doesn't carry over")
     if noise.noise_dimensions == "4D":
         notes.append("the app draws the noise in 3D, without W")
@@ -107,8 +110,8 @@ def density_noise(obj, node):
     table = {
         "transform": [[float(v) for v in noise_from_box[row]] for row in range(3)],
         "detail": float(min(detail, MAX_NOISE_DETAIL)),
-        "roughness": float(noise.inputs["Roughness"].default_value),
-        "lacunarity": float(noise.inputs["Lacunarity"].default_value),
+        "roughness": float(roughness.default_value),
+        "lacunarity": float(lacunarity.default_value),
         "normalize": bool(noise.normalize),
         "density": [max(float(curve(i / (NOISE_POINTS - 1))), 0.0) for i in range(NOISE_POINTS)],
     }
@@ -116,6 +119,17 @@ def density_noise(obj, node):
     if drift is not None:
         table["drift"] = [float(v) for v in (scale.to_3x3() @ drift)]
     return table, notes
+
+
+def _input(node, identifier):
+    """A node's input by identifier, which stays as it was when Blender renames a socket, as
+    newer versions show Fac as Factor."""
+    return next((s for s in node.inputs if s.identifier == identifier and s.enabled), None)
+
+
+def _inputs(node, *identifiers):
+    found = [_input(node, identifier) for identifier in identifiers]
+    return None if None in found else found
 
 
 def _linked(socket):
@@ -132,33 +146,35 @@ def _linked(socket):
 
 def _chain(socket):
     """The Noise Texture feeding a socket, and what the nodes in between make of its value."""
+    if socket is None:
+        return None
     fed = _linked(socket)
     if fed is None:
         return None
     node, output = fed
     kind = node.bl_idname
     if kind == "ShaderNodeTexNoise":
-        return (node, lambda x: x) if output.name == "Fac" else None
+        return (node, lambda x: x) if output.identifier == "Fac" else None
 
     if kind == "ShaderNodeValToRGB":
-        chain = _chain(node.inputs["Fac"])
+        chain = _chain(_input(node, "Fac"))
         if chain is None:
             return None
         noise, inner = chain
         ramp = node.color_ramp
-        if output.name == "Alpha":
+        if output.identifier == "Alpha":
             return noise, lambda x: ramp.evaluate(_unit(inner(x)))[3]
         return noise, lambda x: _gray(ramp.evaluate(_unit(inner(x))))
 
     if kind == "ShaderNodeMapRange" and node.data_type == "FLOAT":
-        names = ("From Min", "From Max", "To Min", "To Max", "Steps")
-        if any(node.inputs[name].is_linked for name in names):
+        ends = _inputs(node, "From Min", "From Max", "To Min", "To Max", "Steps")
+        if ends is None or any(s.is_linked for s in ends):
             return None
-        chain = _chain(node.inputs["Value"])
+        chain = _chain(_input(node, "Value"))
         if chain is None:
             return None
         noise, inner = chain
-        ends = [node.inputs[name].default_value for name in names]
+        ends = [s.default_value for s in ends]
         return noise, lambda x: _map_range(node, inner(x), *ends)
 
     if kind == "ShaderNodeMath":
@@ -179,14 +195,15 @@ def _chain(socket):
 
         return noise, math_node
 
-    if kind == "ShaderNodeFloatCurve" and not node.inputs["Factor"].is_linked:
-        chain = _chain(node.inputs["Value"])
+    sockets = _inputs(node, "Factor", "Value") if kind == "ShaderNodeFloatCurve" else None
+    if sockets is not None and not sockets[0].is_linked:
+        chain = _chain(sockets[1])
         if chain is None:
             return None
         noise, inner = chain
         mapping = node.mapping
         mapping.initialize()
-        factor = node.inputs["Factor"].default_value
+        factor = sockets[0].default_value
 
         def curve_node(x):
             value = inner(x)
@@ -263,18 +280,19 @@ def _coordinates(obj, socket):
     if node.bl_idname == "ShaderNodeMapping":
         if node.vector_type not in {"POINT", "TEXTURE"}:
             return None
-        if any(node.inputs[name].is_linked for name in ("Location", "Rotation", "Scale")):
+        sockets = _inputs(node, "Vector", "Location", "Rotation", "Scale")
+        if sockets is None or any(s.is_linked for s in sockets[1:]):
             return None
         mapping = node
-        fed = _linked(node.inputs["Vector"])
+        fed = _linked(sockets[0])
         if fed is None:
             return None
         node, output = fed
     if node.bl_idname != "ShaderNodeTexCoord" or node.object not in (None, obj):
         return None
-    if output.name == "Generated":
+    if output.identifier == "Generated":
         coordinates = _generated(obj)
-    elif output.name == "Object":
+    elif output.identifier == "Object":
         coordinates = mathutils.Matrix.Identity(4)
     else:
         return None
@@ -291,15 +309,16 @@ def _generated(obj):
 
 def _mapped(mapping, location=None):
     """A Mapping node as a matrix: Point scales, turns and then moves; Texture undoes that."""
+    _, at, turn, size = _inputs(mapping, "Vector", "Location", "Rotation", "Scale")
     if location is None:
-        location = mapping.inputs["Location"].default_value
-    rotation = mathutils.Euler(mapping.inputs["Rotation"].default_value, "XYZ").to_matrix().to_4x4()
-    scale = mathutils.Matrix.Diagonal(list(mapping.inputs["Scale"].default_value) + [1.0])
+        location = at.default_value
+    rotation = mathutils.Euler(turn.default_value, "XYZ").to_matrix().to_4x4()
+    scale = mathutils.Matrix.Diagonal(list(size.default_value) + [1.0])
     point = mathutils.Matrix.Translation(location) @ rotation @ scale
     if mapping.vector_type == "POINT":
         return point
     # Blender divides by zero scale safely, to 0; so does a pseudo-inverse here.
-    safe = mathutils.Matrix.Diagonal([_divide(1.0, s) for s in mapping.inputs["Scale"].default_value] + [1.0])
+    safe = mathutils.Matrix.Diagonal([_divide(1.0, s) for s in size.default_value] + [1.0])
     return safe @ rotation.transposed() @ mathutils.Matrix.Translation(-mathutils.Vector(location))
 
 
@@ -327,7 +346,8 @@ def _drift(mapping):
     data = tree.animation_data
     if data is None or data.action is None:
         return None
-    path = mapping.inputs["Location"].path_from_id("default_value")
+    location_socket = _input(mapping, "Location")
+    path = location_socket.path_from_id("default_value")
     render = bpy.context.scene.render
     fps = render.fps / render.fps_base
     speed = [0.0, 0.0, 0.0]
@@ -339,7 +359,7 @@ def _drift(mapping):
             speed[curve.array_index] = (curve.evaluate(last) - curve.evaluate(first)) * fps / (last - first)
     if not any(speed):
         return None
-    location = mathutils.Vector(mapping.inputs["Location"].default_value)
+    location = mathutils.Vector(location_socket.default_value)
     moved = _mapped(mapping, location + mathutils.Vector(speed)).translation
     return moved - _mapped(mapping, location).translation
 
