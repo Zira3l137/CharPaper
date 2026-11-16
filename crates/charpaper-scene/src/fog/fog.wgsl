@@ -203,9 +203,19 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     // What one step adds per unit of a light's color, the same for every light and step: the
     // light scattered toward the camera, dimmed on its way through the box.
     let light_through_box = exp(-extinction * fog_box.bounding_radius);
-    let per_step = fog_box.fog_color * fog_box.light_tint * light_through_box *
-        fog_box.scattering * density * step_size_world * fog_box.light_intensity * view.exposure;
     let step_transmittance = exp(-step_size_world * extinction);
+    // Light scattered anywhere within a step is also dimmed by the rest of that step on its way
+    // to the camera, so a step weighs the integral of e^(-extinction x) over its length rather
+    // than the length itself (Hillaire, "Physically Based and Unified Volumetric Rendering in
+    // Frostbite", 2015). Without it, long steps through thick fog come out too dark, so the
+    // fog's brightness would change with Quality.
+    let step_weight = select(
+        step_size_world,
+        (1.0 - step_transmittance) / extinction,
+        extinction > 0.0
+    );
+    let per_step = fog_box.fog_color * fog_box.light_tint * light_through_box *
+        fog_box.scattering * density * step_weight * fog_box.light_intensity * view.exposure;
 
     // Suns that light the fog come first in the list, so the first one that doesn't ends it.
     var volumetric_suns = 0u;
@@ -301,8 +311,9 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
             sample_color += (*light).color_inverse_square_range.rgb * local_light_attenuation;
         }
 
-        background_alpha *= step_transmittance;
+        // Dimmed by the fog in front of this step; the step's own share is in per_step.
         accumulated_color += sample_color * per_step * background_alpha;
+        background_alpha *= step_transmittance;
     }
 
     return vec4(accumulated_color, 1.0 - background_alpha);
