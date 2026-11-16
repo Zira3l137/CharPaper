@@ -285,8 +285,8 @@ pub struct EnvironmentEntry {
     /// Boxes of fog, keyed by the name of their object in the environment's
     /// file: in Blender, usually a cube with a Principled Volume material. The
     /// fog fills the object's bounding box, or the 2 m cube Blender draws for
-    /// an empty, and moves, turns and scales with it. Only lights light fog,
-    /// not the sky.
+    /// an empty, and moves, turns and scales with it. The sky lights fog
+    /// evenly; lights also cast light shafts through it.
     #[serde(default)]
     pub fog: BTreeMap<String, Fog>,
     /// Lights that do not light the fog, by object name, like a Blender light

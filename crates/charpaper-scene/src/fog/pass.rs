@@ -2,7 +2,8 @@
 // (Bevy 0.19.1, bevy_pbr/src/volumetric_fog), so that CharPaper decides how the fog is drawn:
 // only the fog boxes on a camera's own stage, and timed by the performance monitor like the
 // other stages. Bevy still sends the lights' fog flags and shadow maps to the GPU; this pass
-// reads them the way Bevy's does.
+// reads them the way Bevy's does, and the view's diffuse environment map for the sky's light,
+// which Bevy's leaves out.
 //
 // Bevy's pass stays idle: it only runs for cameras with Bevy's VolumetricFog component, and
 // the scene cameras get SceneFog instead.
@@ -30,6 +31,7 @@ use bevy::light::FogVolume;
 use bevy::math::Affine3A;
 use bevy::math::Vec3A;
 use bevy::math::vec4;
+use bevy::pbr::MeshPipeline;
 use bevy::pbr::MeshPipelineSystems;
 use bevy::pbr::MeshPipelineViewLayoutKey;
 use bevy::pbr::MeshPipelineViewLayouts;
@@ -214,6 +216,8 @@ struct FogUniforms(DynamicUniformBuffer<FogUniform>);
 #[derive(Resource)]
 struct FogPipeline {
     view_layouts: MeshPipelineViewLayouts,
+    // Whether the view's environment maps are bound as an array, as Bevy decides for the GPU.
+    binding_arrays_are_usable: bool,
     // Without and with MSAA, whose depth texture is read differently.
     box_layouts: [BindGroupLayoutDescriptor; 2],
     shader: Handle<Shader>,
@@ -250,6 +254,7 @@ struct UpsamplePipelineKey {
 fn init_fog_pipeline(
     mut commands: Commands,
     view_layouts: Res<MeshPipelineViewLayouts>,
+    mesh_pipeline: Res<MeshPipeline>,
     fullscreen: Res<FullscreenShader>,
     asset_server: Res<AssetServer>,
 ) {
@@ -264,6 +269,7 @@ fn init_fog_pipeline(
     };
     commands.insert_resource(FogPipeline {
         view_layouts: view_layouts.clone(),
+        binding_arrays_are_usable: mesh_pipeline.binding_arrays_are_usable,
         box_layouts: [
             layout("charpaper_fog_box", texture_depth_2d()),
             layout("charpaper_fog_box_multisampled", texture_depth_2d_multisampled()),
@@ -304,6 +310,13 @@ impl SpecializedRenderPipeline for FogPipeline {
         if multisampled {
             shader_defs.push("MULTISAMPLED".into());
         }
+        // The sky lights the fog through the view's diffuse environment map, if it has one.
+        if key.view.contains(MeshPipelineViewLayoutKey::ENVIRONMENT_MAP) {
+            shader_defs.push("ENVIRONMENT_MAP".into());
+            if self.binding_arrays_are_usable {
+                shader_defs.push("MULTIPLE_LIGHT_PROBES_IN_ARRAY".into());
+            }
+        }
         let view_layout = self.view_layouts.get_view_layout(key.view);
         // The clear overwrites; the boxes add up over what's there.
         let (vertex, fragment, blend) = match key.clear {
@@ -315,6 +328,7 @@ impl SpecializedRenderPipeline for FogPipeline {
             label: Some("charpaper_fog".into()),
             layout: vec![
                 view_layout.main_layout,
+                view_layout.binding_array_layout,
                 self.box_layouts[usize::from(multisampled)].clone(),
             ],
             vertex: VertexState {
@@ -609,14 +623,15 @@ fn draw_fog(
         let attachment = attachment(&fog.texture, !fog.interleaved);
         let mut pass = ctx.command_encoder().begin_render_pass(&color_pass(&attachment));
         pass.set_bind_group(0, &view_bind_group.main, &view_bind_group.main_offsets);
+        pass.set_bind_group(1, &view_bind_group.binding_array, &[]);
         if fog.interleaved {
             pass.set_pipeline(clear);
-            pass.set_bind_group(1, &box_bind_group, &[first.uniform_offset]);
+            pass.set_bind_group(2, &box_bind_group, &[first.uniform_offset]);
             pass.draw(0..3, 0..1);
         }
         pass.set_pipeline(pipeline);
         for fog_box in &fog.boxes {
-            pass.set_bind_group(1, &box_bind_group, &[fog_box.uniform_offset]);
+            pass.set_bind_group(2, &box_bind_group, &[fog_box.uniform_offset]);
             pass.draw(fog_box.vertices(), 0..1);
         }
     }

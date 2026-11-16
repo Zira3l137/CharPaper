@@ -461,7 +461,7 @@ def _check_environment(scene, entry, add):
     cameras = [o.name for o in objects if o.type == "CAMERA"]
     if cameras:
         add(Finding(f"environment {entry.name!r}: cameras are left out, use Cameras: {_examples(cameras)}", severity="INFO"))
-    _check_fog(entry.name, objects, add)
+    _check_fog(entry.name, objects, world is not None, add)
     _check_shadows(entry.name, objects, add)
     _check_animated(objects, add)
     _check_nla(entry.name, objects, add)
@@ -509,7 +509,7 @@ def _check_animated(objects, add):
             add(Finding(f"GIF {gifs[0].name!r}: its file {source} is missing"))
 
 
-def _check_fog(name, objects, add):
+def _check_fog(name, objects, has_sky, add):
     fog = env_settings.fog_objects(objects)
     for obj, node in fog.items():
         if not env_settings.is_principled(node):
@@ -540,10 +540,10 @@ def _check_fog(name, objects, add):
             f"above 0 counts as on: {_examples(partial)}",
             severity="INFO",
         ))
-    if fog and not any(o.data.volume_factor > 0.0 for o in lights):
+    if fog and not has_sky and not any(o.data.volume_factor > 0.0 for o in lights):
         add(Finding(
-            f"environment {name!r} has fog but no light that lights it, so the fog never shows; "
-            "the sky does not light fog",
+            f"environment {name!r} has fog but no World and no light that lights it, so unless "
+            "it ships a sky the fog never shows",
         ))
     dark_suns = [o.name for o in lights if o.data.type == "SUN" and not o.data.use_shadow and o.data.volume_factor > 0.0]
     if fog and dark_suns:

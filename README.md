@@ -566,7 +566,8 @@ a **Principled Volume** plugged into *Volume*, and nothing in *Surface*.
 - The fog fills the object's bounding box, whatever its shape.
 - Color, Density, Anisotropy and Absorption Color come over, as typed into the node.
   Values fed from other nodes don't, and neither do Emission and Blackbody.
-- **Only lamps light fog. The sky doesn't.** Fog with no light in it is invisible.
+- The sky lights fog evenly, as it lights surfaces, even indoors where walls would keep it
+  out in Cycles. Lamps add light shafts. Fog with neither a sky nor a lamp is invisible.
 - A sun lights fog only while its *Shadow* is ticked.
 - To keep a light out of the fog, set its *Light → Influence → Volume Scatter* to 0. Any
   value above 0 counts as fully on.
@@ -767,7 +768,7 @@ render.
 | Only the eyes follow, not the head | No head bone is named in Gaze, or *Head turn* is 0. |
 | The character turns away from the cursor | Its front is wrong. Set **Front** back to *Automatic*; if the arrow still points wrong, set it by hand. |
 | A clip's eye animation doesn't show | Gaze moves the eyes while the character follows. Untick the clip's **Gaze**. |
-| The fog doesn't show | No lamp lights it. The sky doesn't light fog, and a sun only does with *Shadow* on. Or **Fog** is off in the Graphics tab. |
+| The fog doesn't show | Nothing lights it: the environment has no sky, and no lamp lights the fog. A sun only does with *Shadow* on. Or **Fog** is off in the Graphics tab. |
 | Nothing blurs, and Graphics has no Depth of field | The camera in use has no F-Stop: tick *Depth of Field* on the camera and export again. For the orbit camera, set `f_stop` under `[camera]`. |
 | A light does nothing | It's an area light. Use a spot or point light. |
 | The sky didn't change after replacing the `.hdr` by hand | Delete `skybox.ktx2`, `specular.ktx2` and `diffuse.ktx2` next to it. The export does this itself when the World's panorama changed. |

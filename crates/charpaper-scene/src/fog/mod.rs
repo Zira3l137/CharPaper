@@ -1,7 +1,7 @@
 // Volumetric fog. Each fog object named in suite.toml gets a box of fog shaped by its mesh's
-// bounds, and its own mesh is hidden. Fog shows only where lights light it, and every light
-// that does adds to the work of every pixel the fog covers, so the camera only does fog while
-// there is fog to draw. pass.rs draws it.
+// bounds, and its own mesh is hidden. The sky and the lights light it, and every light that
+// does adds to the work of every pixel the fog covers, so the camera only does fog while there
+// is fog to draw. pass.rs draws it.
 
 mod pass;
 

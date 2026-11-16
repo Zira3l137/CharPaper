@@ -4,7 +4,8 @@
 //
 // Each fog box is drawn as a cube, or as a plane over the whole screen while the camera is
 // inside it. Every pixel it covers marches a ray from the box's near side to its far side or
-// the first surface, adding up the light each lamp scatters toward the camera at every step.
+// the first surface, adding up the light each lamp and the sky scatter toward the camera at
+// every step.
 // A ray takes one step per step length, up to the most allowed, so a short one is cheap.
 // Unlike Bevy's, suns and lamps share one march.
 //
@@ -12,7 +13,8 @@
 // block it covers, which fog_upsample.wgsl relies on. Interleaved, a box only marches the fog
 // pixels whose turn it is, after clear_fragment has emptied them; see pass.rs.
 
-#import bevy_pbr::mesh_view_bindings::{globals, lights, view, clustered_lights}
+#import bevy_pbr::mesh_view_bindings as bindings
+#import bevy_pbr::mesh_view_bindings::{globals, lights, view, clustered_lights, light_probes}
 #import bevy_pbr::mesh_view_types::{
     DIRECTIONAL_LIGHT_FLAGS_VOLUMETRIC_BIT,
     POINT_LIGHT_FLAGS_SHADOWS_ENABLED_BIT,
@@ -59,12 +61,13 @@ struct FogBox {
     moving_dither: u32,
 }
 
-@group(1) @binding(0) var<uniform> fog_box: FogBox;
+// Group 1 is the view's environment maps.
+@group(2) @binding(0) var<uniform> fog_box: FogBox;
 
 #ifdef MULTISAMPLED
-@group(1) @binding(1) var depth_texture: texture_depth_multisampled_2d;
+@group(2) @binding(1) var depth_texture: texture_depth_multisampled_2d;
 #else
-@group(1) @binding(1) var depth_texture: texture_depth_2d;
+@group(2) @binding(1) var depth_texture: texture_depth_2d;
 #endif
 
 // 1 / (4π)
@@ -136,6 +139,54 @@ fn distance_in_box(point: vec3<f32>, direction: vec3<f32>) -> f32 {
     let to_sides = max((vec3(0.5) - point) / safe, (vec3(-0.5) - point) / safe);
     return max(min(min(to_sides.x, to_sides.y), to_sides.z), 0.0);
 }
+
+// The sky's light on the fog along a pixel's ray, from the same diffuse environment map that
+// lights surfaces. For each way a surface may face, that map holds the light it gets from the
+// half of the sky in front of it. Fog gets light from all around, so this takes the half ahead
+// of the camera and the half behind it, leaning toward the half ahead as Anisotropy does. An
+// approximation, but the sky's light is soft.
+fn sky_light(direction: vec3<f32>) -> vec3<f32> {
+#ifdef ENVIRONMENT_MAP
+    if (light_probes.view_cubemap_index < 0) {
+        return vec3(0.0);
+    }
+    let ahead = sample_sky(direction);
+    let behind = sample_sky(-direction);
+    let forward = 0.5 * (1.0 + fog_box.scattering_asymmetry);
+    return mix(behind, ahead, forward) * light_probes.intensity_for_view;
+#else
+    return vec3(0.0);
+#endif
+}
+
+#ifdef ENVIRONMENT_MAP
+fn sample_sky(direction: vec3<f32>) -> vec3<f32> {
+    // Turned with the sky's rotation, and z flipped since cube maps are left-handed, as Bevy
+    // does for surfaces.
+    var sample_dir = quat_rotate(light_probes.view_rotation, direction);
+    sample_dir.z = -sample_dir.z;
+#ifdef MULTIPLE_LIGHT_PROBES_IN_ARRAY
+    return textureSampleLevel(
+        bindings::diffuse_environment_maps[light_probes.view_cubemap_index],
+        bindings::environment_map_sampler,
+        sample_dir,
+        0.0
+    ).rgb;
+#else
+    return textureSampleLevel(
+        bindings::diffuse_environment_map,
+        bindings::environment_map_sampler,
+        sample_dir,
+        0.0
+    ).rgb;
+#endif
+}
+
+fn quat_rotate(q: vec4<f32>, dir: vec3<f32>) -> vec3<f32> {
+    let t = 2.0 * cross(q.xyz, dir);
+    return dir + q.w * t + cross(q.xyz, t);
+}
+#endif
 
 // Henyey-Greenstein: how much light goes on toward the viewer rather than away, which makes
 // light shafts fade in and out as the view turns toward the light.
@@ -225,10 +276,15 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         (1.0 - step_transmittance) / extinction,
         extinction > 0.0
     );
-    // What one step adds per unit of a light's color, the same for every light and step: the
-    // light scattered toward the camera.
-    let per_step = fog_box.fog_color * fog_box.light_tint *
-        fog_box.scattering * density * step_weight * fog_box.light_intensity * view.exposure;
+    // What one step adds per unit of light, the same for every light and step: the light
+    // scattered toward the camera.
+    let per_step = fog_box.fog_color * fog_box.scattering * density * step_weight * view.exposure;
+    let light_scale = fog_box.light_tint * fog_box.light_intensity;
+
+    // The sky lights the fog from above mostly, through the fog over each step.
+    let sky = sky_light(Rd_world);
+    let lit_by_sky = any(sky > vec3(0.0));
+    let up_local = (local_from_world * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
 
     // Suns that light the fog come first in the list, so the first one that doesn't ends it.
     var volumetric_suns = 0u;
@@ -336,8 +392,13 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
                 phase * through_box;
         }
 
+        var in_scattered = sample_color * light_scale;
+        if (lit_by_sky) {
+            in_scattered += sky * exp(-extinction * distance_in_box(P_local, up_local));
+        }
+
         // Dimmed by the fog in front of this step; the step's own share is in per_step.
-        accumulated_color += sample_color * per_step * background_alpha;
+        accumulated_color += in_scattered * per_step * background_alpha;
         background_alpha *= step_transmittance;
     }
 
