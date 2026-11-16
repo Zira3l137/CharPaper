@@ -109,8 +109,8 @@ impl FpsLimit {
 }
 
 // MSAA only at a sample count every GPU supports: an unsupported one crashes on the first
-// frame. TAA blends each frame with the ones before, which also smooths fog dithering, but
-// can leave faint trails behind motion, more so at low frame rates.
+// frame. TAA blends each frame with the ones before, but can leave faint trails behind
+// motion, more so at low frame rates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AntiAliasing {
@@ -377,8 +377,8 @@ impl StrokeStrength {
 // How closely each pixel samples the fog along its ray: one sample per step length, up to a
 // most a ray may take. Too few show as stripes wherever shadows cross the fog; each step up
 // halves the step and doubles the most, so long rays cost twice as much. Short rays, such as
-// fog just in front of a wall, stay cheap at any quality. Very low is meant for dithering
-// with TAA, which blends the noise of a few frames into a smooth result.
+// fog just in front of a wall, stay cheap at any quality. Very low is meant for dithering,
+// whose noise the fog averages over frames into a smooth result while the view is still.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FogQuality {

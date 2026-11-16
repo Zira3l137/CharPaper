@@ -127,8 +127,8 @@ run with. A setting's finer rows hide while it's off.
 character's author set it.
 
 If your computer struggles, lower **Render scale**, set **Shadow quality** to Low, turn
-**Fog** off, lower depth of field **Quality** or **Max size**, and lower the **FPS
-limit**. The **Performance overlay** shows what each
+on fog **Jitter** and lower fog **Quality** (or turn **Fog** off), lower depth of field
+**Quality** or **Max size**, and lower the **FPS limit**. The **Performance overlay** shows what each
 frame costs.
 
 ## The mouse on the desktop

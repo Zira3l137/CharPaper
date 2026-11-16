@@ -58,7 +58,6 @@ struct FogBox {
     dithering: f32,
     phase: u32,
     interleaved: u32,
-    moving_dither: u32,
 }
 
 // Group 1 is the view's environment maps.
@@ -256,9 +255,9 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     var Ro_world = position_view_to_world(view_start_pos.xyz);
     let Rd_world = normalize(position_ndc_to_world(Rd_ndc) - view.world_position);
 
-    // Dithering: each pixel starts up to a step further in, which turns banding into noise.
-    let frame = select(0u, globals.frame_count, fog_box.moving_dither != 0u);
-    let jitter = interleaved_gradient_noise(position.xy, frame) * fog_box.dithering;
+    // Dithering: each pixel starts up to a step further in, which turns banding into noise. A
+    // new noise every frame, which fog_average.wgsl averages away.
+    let jitter = interleaved_gradient_noise(position.xy, globals.frame_count) * fog_box.dithering;
     Ro_world += Rd_world * jitter * step_size_world;
 
     let local_from_world = fog_box.local_from_world;

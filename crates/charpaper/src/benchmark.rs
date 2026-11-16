@@ -262,6 +262,11 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
                 s.graphics.fog_resolution = resolution;
             }));
         }
+        let label = if saved.graphics.fog_dithering { "fog jitter off" } else { "fog jitter on" };
+        rows.push(changed(saved, label, |s| {
+            s.graphics.fog = true;
+            s.graphics.fog_dithering = !s.graphics.fog_dithering;
+        }));
     }
     if let Some(on) = shadows {
         let label = if on { "shadows off" } else { "shadows on" };

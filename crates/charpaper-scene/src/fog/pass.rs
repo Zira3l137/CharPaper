@@ -17,6 +17,10 @@
 // wallpaper's camera is still nearly all the time, so this saves about three quarters of the
 // march nearly all the time. What does change meanwhile, the character moving through the fog
 // or the shadows it casts into it, shows up within four frames, which TAA blends over.
+//
+// With dithering, each march brings new noise, and fog_average.wgsl folds the marches into a
+// running average for as long as the fog would be interleaved. A still scene's fog then looks
+// as if marched with many more steps, at the cost of one cheap pass at the fog's resolution.
 
 use bevy::asset::embedded_asset;
 use bevy::asset::load_embedded_asset;
@@ -69,6 +73,7 @@ impl Plugin for FogPassPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "fog.wgsl");
         embedded_asset!(app, "fog_upsample.wgsl");
+        embedded_asset!(app, "fog_average.wgsl");
         app.add_plugins(ExtractComponentPlugin::<SceneFog>::default());
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
@@ -78,6 +83,7 @@ impl Plugin for FogPassPlugin {
             .init_gpu_resource::<SpecializedRenderPipelines<FogPipeline>>()
             .init_gpu_resource::<SpecializedRenderPipelines<UpsamplePipeline>>()
             .init_gpu_resource::<FogUniforms>()
+            .init_gpu_resource::<FogAverageUniforms>()
             .add_systems(RenderStartup, init_fog_pipeline.after(MeshPipelineSystems))
             .add_systems(ExtractSchedule, extract_fog_boxes)
             .add_systems(
@@ -110,11 +116,8 @@ pub(crate) struct SceneFog {
     // In meters.
     pub step_length: f32,
     // Each pixel's ray starts up to a step further in, which turns the stripes between steps
-    // into noise.
+    // into noise: new noise every frame, which the fog averages away while it stays still.
     pub dithering: bool,
-    // A new noise every frame, which TAA smooths out. Without TAA it would only flicker, so
-    // the noise stays put.
-    pub moving_dither: bool,
     // Screen pixels per fog pixel, across and down: 1, 2 or 4.
     pub downscale: u32,
 }
@@ -124,7 +127,6 @@ pub(crate) struct ExtractedFog {
     max_steps: u32,
     step_length: f32,
     dithering: bool,
-    moving_dither: bool,
     downscale: u32,
     layers: RenderLayers,
 }
@@ -143,7 +145,6 @@ impl ExtractComponent for SceneFog {
             max_steps: fog.max_steps,
             step_length: fog.step_length,
             dithering: fog.dithering,
-            moving_dither: fog.moving_dither,
             downscale: fog.downscale,
             layers: layers.cloned().unwrap_or_default(),
         })
@@ -206,12 +207,34 @@ struct FogUniform {
     phase: u32,
     // 1 while only that one is, 0 when all are.
     interleaved: u32,
-    // 1 for a new dither every frame.
-    moving_dither: u32,
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
 struct FogUniforms(DynamicUniformBuffer<FogUniform>);
+
+// The same layout as FogAverage in fog_average.wgsl.
+#[derive(ShaderType)]
+struct FogAverageUniform {
+    phase: u32,
+    blend: f32,
+}
+
+#[derive(Resource, Default, Deref, DerefMut)]
+struct FogAverageUniforms(DynamicUniformBuffer<FogAverageUniform>);
+
+// Each fog pixel's average weighs its marches equally until it holds this many, then keeps
+// giving each new one this share, so that it still follows what changes slowly.
+const AVERAGED_MARCHES: u32 = 16;
+
+// This frame's share of the average, the frames since the fog last started over. Starting over
+// marches every fog pixel; after that, each is marched every fourth frame.
+fn average_blend(still_frames: u32) -> f32 {
+    if still_frames == 0 {
+        return 1.0;
+    }
+    let marches = 1 + still_frames.div_ceil(4);
+    1.0 / marches.min(AVERAGED_MARCHES) as f32
+}
 
 #[derive(Resource)]
 struct FogPipeline {
@@ -235,6 +258,13 @@ struct FogPipelineKey {
 // and blendable on every GPU.
 const FOG_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
+// Folds this frame's march into the fog's average. One pipeline serves every camera.
+#[derive(Resource)]
+struct AveragePipeline {
+    layout: BindGroupLayoutDescriptor,
+    id: CachedRenderPipelineId,
+}
+
 // Lays the fog's own texture over the scene.
 #[derive(Resource)]
 struct UpsamplePipeline {
@@ -257,6 +287,7 @@ fn init_fog_pipeline(
     mesh_pipeline: Res<MeshPipeline>,
     fullscreen: Res<FullscreenShader>,
     asset_server: Res<AssetServer>,
+    pipeline_cache: Res<PipelineCache>,
 ) {
     let layout = |label: &'static str, depth| {
         BindGroupLayoutDescriptor::new(
@@ -294,6 +325,31 @@ fn init_fog_pipeline(
         vertex: fullscreen.to_vertex_state(),
         shader: load_embedded_asset!(asset_server.as_ref(), "fog_upsample.wgsl"),
     });
+
+    let texture = || texture_2d(TextureSampleType::Float { filterable: false });
+    let layout = BindGroupLayoutDescriptor::new(
+        "charpaper_fog_average",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::FRAGMENT,
+            (uniform_buffer::<FogAverageUniform>(true), texture(), texture()),
+        ),
+    );
+    let id = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+        label: Some("charpaper_fog_average".into()),
+        layout: vec![layout.clone()],
+        vertex: fullscreen.to_vertex_state(),
+        fragment: Some(FragmentState {
+            shader: load_embedded_asset!(asset_server.as_ref(), "fog_average.wgsl"),
+            targets: vec![Some(ColorTargetState {
+                format: FOG_FORMAT,
+                blend: None,
+                write_mask: ColorWrites::ALL,
+            })],
+            ..default()
+        }),
+        ..default()
+    });
+    commands.insert_resource(AveragePipeline { layout, id });
 }
 
 impl SpecializedRenderPipeline for FogPipeline {
@@ -411,6 +467,14 @@ struct ViewFog {
     texture: TextureView,
     // Only some fog pixels are marched again, the rest kept.
     interleaved: bool,
+    averaging: Option<ViewFogAverage>,
+}
+
+// This frame's step of the fog's average: from the one before into the next.
+struct ViewFogAverage {
+    previous: TextureView,
+    next: TextureView,
+    uniform_offset: u32,
 }
 
 // A camera's fog texture, kept from frame to frame, and what its fog was last marched for.
@@ -421,6 +485,40 @@ struct FogHistory {
     size: UVec2,
     marched_for: MarchedFor,
     phase: u32,
+    // Frames the fog has been marched for the same as now; 0 when it starts over.
+    still_frames: u32,
+    // With dithering, the fog's average, in two textures that take turns: each frame reads the
+    // first and writes the second, then they swap.
+    averages: Option<[(Texture, TextureView); 2]>,
+}
+
+impl FogHistory {
+    fn new(device: &RenderDevice, size: UVec2, marched_for: MarchedFor, dithering: bool) -> Self {
+        let (texture, view) = fog_texture(device, size);
+        Self {
+            _texture: texture,
+            view,
+            size,
+            marched_for,
+            phase: 0,
+            still_frames: 0,
+            averages: dithering.then(|| [fog_texture(device, size), fog_texture(device, size)]),
+        }
+    }
+
+    fn advance(&mut self, device: &RenderDevice, marched_for: MarchedFor, dithering: bool) {
+        let still = self.marched_for == marched_for;
+        self.marched_for = marched_for;
+        self.phase = (self.phase + 1) % 4;
+        self.still_frames = if still { self.still_frames.saturating_add(1) } else { 0 };
+        if dithering != self.averages.is_some() {
+            let size = self.size;
+            self.averages =
+                dithering.then(|| [fog_texture(device, size), fog_texture(device, size)]);
+        } else if let Some(averages) = &mut self.averages {
+            averages.swap(0, 1);
+        }
+    }
 }
 
 // Everything but the lights and the scene's depth that decides how the fog comes out.
@@ -452,6 +550,7 @@ fn prepare_fog(
     mut upsample_pipelines: ResMut<SpecializedRenderPipelines<UpsamplePipeline>>,
     upsample_pipeline: Res<UpsamplePipeline>,
     mut uniforms: ResMut<FogUniforms>,
+    mut average_uniforms: ResMut<FogAverageUniforms>,
     boxes: Res<FogBoxes>,
     views: Query<(Entity, &ExtractedView, &ExtractedFog)>,
     mut histories: Query<&mut FogHistory>,
@@ -470,6 +569,7 @@ fn prepare_fog(
         }
         return;
     };
+    let mut average_writer = average_uniforms.get_writer(views.iter().count(), &device, &queue);
 
     for (entity, view, fog) in &views {
         let Some(view_key) = view_keys.get(&view.retained_view_entity) else {
@@ -498,26 +598,33 @@ fn prepare_fog(
             fog: fog.clone(),
             boxes: on_stage(&boxes, fog).cloned().collect(),
         };
-        let (texture, interleaved, phase) = match histories.get_mut(entity) {
-            Ok(mut history) if history.size == size => {
-                let interleaved = history.marched_for == marched_for;
-                history.marched_for = marched_for;
-                history.phase = (history.phase + 1) % 4;
-                (history.view.clone(), interleaved, history.phase)
+        let mut new_history = None;
+        let history = match histories.get_mut(entity) {
+            Ok(history) if history.size == size => {
+                let history = history.into_inner();
+                history.advance(&device, marched_for, fog.dithering);
+                history
             }
             // New, or the screen changed size: every fog pixel is marched afresh.
-            _ => {
-                let (texture, view) = fog_texture(&device, size);
-                commands.entity(entity).insert(FogHistory {
-                    _texture: texture,
-                    view: view.clone(),
-                    size,
-                    marched_for,
-                    phase: 0,
-                });
-                (view, false, 0)
-            }
+            _ => new_history.insert(FogHistory::new(&device, size, marched_for, fog.dithering)),
         };
+        let texture = history.view.clone();
+        let interleaved = history.still_frames > 0;
+        let phase = history.phase;
+        let averaging = match (&history.averages, &mut average_writer) {
+            (Some([(_, previous), (_, next)]), Some(writer)) => Some(ViewFogAverage {
+                previous: previous.clone(),
+                next: next.clone(),
+                uniform_offset: writer.write(&FogAverageUniform {
+                    phase,
+                    blend: average_blend(history.still_frames),
+                }),
+            }),
+            _ => None,
+        };
+        if let Some(history) = new_history {
+            commands.entity(entity).insert(history);
+        }
 
         let world_from_view = view.world_from_view.affine();
         let boxes = on_stage(&boxes, fog)
@@ -545,7 +652,6 @@ fn prepare_fog(
                     dithering: if fog.dithering { 1.0 } else { 0.0 },
                     phase,
                     interleaved: u32::from(interleaved),
-                    moving_dither: u32::from(fog.moving_dither),
                 });
                 ViewFogBox { uniform_offset, outside: !inside }
             })
@@ -557,6 +663,7 @@ fn prepare_fog(
             boxes,
             texture,
             interleaved,
+            averaging,
         });
     }
 }
@@ -591,8 +698,10 @@ fn draw_fog(
     view: ViewQuery<(&ViewTarget, &ViewDepthTexture, &ViewFog, &MeshViewBindGroup, &Msaa)>,
     pipeline_cache: Res<PipelineCache>,
     fog_pipeline: Res<FogPipeline>,
+    average_pipeline: Res<AveragePipeline>,
     upsample_pipeline: Res<UpsamplePipeline>,
     uniforms: Res<FogUniforms>,
+    average_uniforms: Res<FogAverageUniforms>,
     mut ctx: RenderContext,
 ) {
     let (target, depth, fog, view_bind_group, msaa) = view.into_inner();
@@ -636,10 +745,29 @@ fn draw_fog(
         }
     }
 
+    // Until the average's pipeline is ready, the march is shown as it is.
+    let average = pipeline_cache.get_render_pipeline(average_pipeline.id);
+    let shown = match (&fog.averaging, average, average_uniforms.binding()) {
+        (Some(averaging), Some(average), Some(uniform)) => {
+            let bind_group = ctx.render_device().create_bind_group(
+                "charpaper_fog_average",
+                &pipeline_cache.get_bind_group_layout(&average_pipeline.layout),
+                &BindGroupEntries::sequential((uniform, &fog.texture, &averaging.previous)),
+            );
+            let attachment = attachment(&averaging.next, true);
+            let mut pass = ctx.command_encoder().begin_render_pass(&color_pass(&attachment));
+            pass.set_pipeline(average);
+            pass.set_bind_group(0, &bind_group, &[averaging.uniform_offset]);
+            pass.draw(0..3, 0..1);
+            &averaging.next
+        }
+        _ => &fog.texture,
+    };
+
     let upsample_bind_group = ctx.render_device().create_bind_group(
         "charpaper_fog_upsample",
         &pipeline_cache.get_bind_group_layout(&upsample_pipeline.layouts[multisampled]),
-        &BindGroupEntries::sequential((&fog.texture, BindingResource::TextureView(depth.view()))),
+        &BindGroupEntries::sequential((shown, BindingResource::TextureView(depth.view()))),
     );
     let attachment = attachment(target.main_texture_view(), false);
     let mut pass = ctx.command_encoder().begin_render_pass(&color_pass(&attachment));
