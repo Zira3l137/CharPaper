@@ -516,6 +516,13 @@ def _check_fog(name, objects, has_sky, add):
             add(Finding(f"fog {obj.name}: only a Principled Volume is read; this one shows as its defaults", obj))
             continue
         linked = [socket for socket in env_settings.FOG_INPUTS if node.inputs[socket].is_linked]
+        if "Density" in linked:
+            linked.remove("Density")
+            noise, notes = env_settings.density_noise(obj, node)
+            if noise is None:
+                add(Finding(f"fog {obj.name}: {notes[0]}, so the app uses the Density typed into the node", obj))
+            for note in notes if noise is not None else ():
+                add(Finding(f"fog {obj.name}: {note}", obj, severity="INFO"))
         if linked:
             add(Finding(
                 f"fog {obj.name}: {', '.join(linked)} come from other nodes, which don't carry over; "

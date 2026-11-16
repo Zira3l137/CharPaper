@@ -3,6 +3,7 @@
 // does adds to the work of every pixel the fog covers, so the camera only does fog while there
 // is fog to draw. pass.rs draws it.
 
+mod noise;
 mod pass;
 
 pub(crate) use pass::FogPass;
@@ -13,7 +14,7 @@ use bevy::light::VolumetricLight;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 use charpaper_settings::Graphics;
-use charpaper_suite::Fog;
+use charpaper_suite::Medium;
 
 use crate::SceneSet;
 use crate::camera::SceneCamera;
@@ -21,6 +22,7 @@ use crate::environment::ShownEnvironment;
 use crate::environment::listed;
 use crate::environment::shown_environment;
 use crate::environment::spawn_environment_scenes;
+use crate::fog::pass::DensityNoise;
 use crate::fog::pass::SceneFog;
 use crate::look::ActiveLook;
 use crate::look::Resolved;
@@ -89,17 +91,20 @@ fn spawn_fog(
         // Bevy's fog fills a 1 m cube, so the box's size is its scale. Never quite flat: the
         // fog shader needs the inverse of this scale.
         let size = (max - min).max(Vec3::splat(0.001));
-        commands.spawn((
+        let medium = fog.medium();
+        let mut fog_box = commands.spawn((
             Name::new(format!("Fog {name}")),
-            volume(fog),
+            volume(&medium),
             Transform::from_translation((min + max) / 2.0).with_scale(size),
             ChildOf(object),
         ));
+        if let Some(noise) = medium.noise {
+            fog_box.insert(DensityNoise(noise));
+        }
     }
 }
 
-fn volume(fog: &Fog) -> FogVolume {
-    let medium = fog.medium();
+fn volume(medium: &Medium) -> FogVolume {
     let [r, g, b] = medium.color;
     FogVolume {
         fog_color: Color::linear_rgb(r, g, b),

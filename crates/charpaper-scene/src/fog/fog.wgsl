@@ -40,12 +40,27 @@
 #import bevy_pbr::clustered_forward as clustering
 #import bevy_pbr::lighting::getDistanceAttenuation;
 
+// Blender's Noise Texture in fBM mode, varying the fog's density, and the curve that turns
+// its value into a thickness: how many times the fog's average density it is there.
+struct FogNoise {
+    noise_from_local: mat4x4<f32>,
+    // Each octave's drift so far.
+    offsets: array<vec4<f32>, 4>,
+    thickness: array<vec4<f32>, 8>,
+    // Below 0 for no noise.
+    detail: f32,
+    roughness: f32,
+    lacunarity: f32,
+    normalize: u32,
+}
+
 struct FogBox {
     clip_from_local: mat4x4<f32>,
     // Into the box's own space, where it is the cube from -0.5 to 0.5.
     local_from_world: mat4x4<f32>,
     // View space planes of the box's far sides, (normal, -normal · point).
     far_planes: array<vec4<f32>, 6>,
+    noise: FogNoise,
     fog_color: vec3<f32>,
     light_tint: vec3<f32>,
     max_steps: u32,
@@ -68,6 +83,12 @@ struct FogBox {
 #else
 @group(2) @binding(1) var depth_texture: texture_depth_2d;
 #endif
+@group(2) @binding(2) var noise_texture: texture_3d<f32>;
+@group(2) @binding(3) var noise_sampler: sampler;
+
+// The noise texture repeats every this many units of noise space; see noise.rs.
+const NOISE_PERIOD: f32 = 16.0;
+const THICKNESS_POINTS: u32 = 32u;
 
 // 1 / (4π)
 const FRAC_4_PI: f32 = 0.07957747154594767;
@@ -187,6 +208,49 @@ fn quat_rotate(q: vec4<f32>, dir: vec3<f32>) -> vec3<f32> {
 }
 #endif
 
+// Blender's Perlin noise, from -1 to 1.
+fn perlin(at: vec3<f32>) -> f32 {
+    return textureSampleLevel(noise_texture, noise_sampler, at / NOISE_PERIOD, 0.0).r;
+}
+
+fn noise_value(sum: f32, total: f32) -> f32 {
+    return select(sum, 0.5 * sum / total + 0.5, fog_box.noise.normalize != 0u);
+}
+
+// How many times the fog's average density it has at a point in the box, from Blender's fBM:
+// octaves of Perlin noise, each lacunarity times finer and counting roughness times as much as
+// the one before, with Detail's fraction blending in one more.
+fn thickness(local: vec3<f32>) -> f32 {
+    let noise = &fog_box.noise;
+    if ((*noise).detail < 0.0) {
+        return 1.0;
+    }
+    let at = ((*noise).noise_from_local * vec4(local, 1.0)).xyz;
+    let whole = u32((*noise).detail);
+    var sum = 0.0;
+    var total = 0.0;
+    var amplitude = 1.0;
+    var frequency = 1.0;
+    for (var octave = 0u; octave <= whole; octave += 1u) {
+        sum += perlin(at * frequency + (*noise).offsets[octave].xyz) * amplitude;
+        total += amplitude;
+        amplitude *= (*noise).roughness;
+        frequency *= (*noise).lacunarity;
+    }
+    var value = noise_value(sum, total);
+    let rest = (*noise).detail - f32(whole);
+    if (rest > 0.0) {
+        let more = sum + perlin(at * frequency + (*noise).offsets[whole + 1u].xyz) * amplitude;
+        value = mix(value, noise_value(more, total + amplitude), rest);
+    }
+
+    let t = clamp(value, 0.0, 1.0) * f32(THICKNESS_POINTS - 1u);
+    let i = min(u32(t), THICKNESS_POINTS - 2u);
+    let below = (*noise).thickness[i / 4u][i % 4u];
+    let above = (*noise).thickness[(i + 1u) / 4u][(i + 1u) % 4u];
+    return mix(below, above, t - f32(i));
+}
+
 // Henyey-Greenstein: how much light goes on toward the viewer rather than away, which makes
 // light shafts fade in and out as the view turns toward the light.
 fn henyey_greenstein(neg_LdotV: f32) -> f32 {
@@ -264,20 +328,8 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let Ro_local = (local_from_world * vec4(Ro_world, 1.0)).xyz;
     let Rd_local = (local_from_world * vec4(Rd_world, 0.0)).xyz;
 
-    let step_transmittance = exp(-step_size_world * extinction);
-    // Light scattered anywhere within a step is also dimmed by the rest of that step on its way
-    // to the camera, so a step weighs the integral of e^(-extinction x) over its length rather
-    // than the length itself (Hillaire, "Physically Based and Unified Volumetric Rendering in
-    // Frostbite", 2015). Without it, long steps through thick fog come out too dark, so the
-    // fog's brightness would change with Quality.
-    let step_weight = select(
-        step_size_world,
-        (1.0 - step_transmittance) / extinction,
-        extinction > 0.0
-    );
-    // What one step adds per unit of light, the same for every light and step: the light
-    // scattered toward the camera.
-    let per_step = fog_box.fog_color * fog_box.scattering * density * step_weight * view.exposure;
+    // What a meter of fog of the average density scatters toward the camera per unit of light.
+    let per_meter = fog_box.fog_color * fog_box.scattering * density * view.exposure;
     let light_scale = fog_box.light_tint * fog_box.light_intensity;
 
     // The sky lights the fog from above mostly, through the fog over each step.
@@ -307,6 +359,25 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         let P_world = Ro_world + Rd_world * f32(step) * step_size_world;
         let P_view = view_start_pos + Rd_view * f32(step) * step_size_world;
         let P_local = Ro_local + Rd_local * f32(step) * step_size_world;
+
+        // Where noise thins the fog to nothing, a step neither scatters nor dims, so its lights
+        // aren't worth looking up.
+        let here = thickness(P_local);
+        if (here <= 0.0) {
+            continue;
+        }
+        let step_extinction = extinction * here;
+        let step_transmittance = exp(-step_size_world * step_extinction);
+        // Light scattered anywhere within a step is also dimmed by the rest of that step on its
+        // way to the camera, so a step weighs the integral of e^(-extinction x) over its length
+        // rather than the length itself (Hillaire, "Physically Based and Unified Volumetric
+        // Rendering in Frostbite", 2015). Without it, long steps through thick fog come out too
+        // dark, so the fog's brightness would change with Quality.
+        let step_weight = select(
+            step_size_world,
+            (1.0 - step_transmittance) / step_extinction,
+            step_extinction > 0.0
+        );
 
         var sample_color = vec3(0.0);
 
@@ -396,8 +467,8 @@ fn fragment(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
             in_scattered += sky * exp(-extinction * distance_in_box(P_local, up_local));
         }
 
-        // Dimmed by the fog in front of this step; the step's own share is in per_step.
-        accumulated_color += in_scattered * per_step * background_alpha;
+        // Dimmed by the fog in front of this step; the step's own share is in step_weight.
+        accumulated_color += in_scattered * per_meter * (here * step_weight) * background_alpha;
         background_alpha *= step_transmittance;
     }
 

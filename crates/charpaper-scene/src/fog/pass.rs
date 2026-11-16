@@ -18,6 +18,9 @@
 // march nearly all the time. What does change meanwhile, the character moving through the fog
 // or the shadows it casts into it, shows up within four frames, which TAA blends over.
 //
+// A fog box with density noise reads it from a texture of Blender's Perlin noise, made the
+// first time any fog needs it; see noise.rs.
+//
 // With dithering, each march brings new noise, and fog_average.wgsl folds the marches into a
 // running average for as long as the fog would be interleaved. A still scene's fog then looks
 // as if marched with many more steps, at the cost of one cheap pass at the fog's resolution.
@@ -51,7 +54,9 @@ use bevy::render::RenderStartup;
 use bevy::render::RenderSystems;
 use bevy::render::extract_component::ExtractComponent;
 use bevy::render::extract_component::ExtractComponentPlugin;
+use bevy::render::render_resource::binding_types::sampler;
 use bevy::render::render_resource::binding_types::texture_2d;
+use bevy::render::render_resource::binding_types::texture_3d;
 use bevy::render::render_resource::binding_types::texture_depth_2d;
 use bevy::render::render_resource::binding_types::texture_depth_2d_multisampled;
 use bevy::render::render_resource::binding_types::uniform_buffer;
@@ -66,6 +71,10 @@ use bevy::render::view::ViewDepthTexture;
 use bevy::render::view::ViewTarget;
 use bevy::shader::Shader;
 use bevy::shader::ShaderDefVal;
+use charpaper_suite::NOISE_CURVE_POINTS;
+use charpaper_suite::NoiseMedium;
+
+use super::noise;
 
 pub(crate) struct FogPassPlugin;
 
@@ -80,6 +89,7 @@ impl Plugin for FogPassPlugin {
         };
         render_app
             .init_resource::<FogBoxes>()
+            .init_resource::<FogClock>()
             .init_gpu_resource::<SpecializedRenderPipelines<FogPipeline>>()
             .init_gpu_resource::<SpecializedRenderPipelines<UpsamplePipeline>>()
             .init_gpu_resource::<FogUniforms>()
@@ -151,9 +161,18 @@ impl ExtractComponent for SceneFog {
     }
 }
 
+// On a fog box whose density varies with noise.
+#[derive(Component, Clone, Copy, Debug)]
+pub(crate) struct DensityNoise(pub NoiseMedium);
+
 // Every fog box in every stage, made anew each frame.
 #[derive(Resource, Default)]
 struct FogBoxes(Vec<FogBox>);
+
+// Seconds since the app started, which the noise drifts by. Kept apart from the boxes so that
+// drifting noise doesn't stop the fog from being interleaved.
+#[derive(Resource, Default)]
+struct FogClock(f64);
 
 #[derive(Clone, PartialEq)]
 struct FogBox {
@@ -165,15 +184,30 @@ struct FogBox {
     density: f32,
     asymmetry: f32,
     light_intensity: f32,
+    noise: Option<NoiseMedium>,
     layers: RenderLayers,
 }
 
+type FogVolumes<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static FogVolume,
+        &'static GlobalTransform,
+        Option<&'static DensityNoise>,
+        Option<&'static RenderLayers>,
+    ),
+>;
+
 fn extract_fog_boxes(
     mut boxes: ResMut<FogBoxes>,
-    volumes: Extract<Query<(&FogVolume, &GlobalTransform, Option<&RenderLayers>)>>,
+    mut clock: ResMut<FogClock>,
+    volumes: Extract<FogVolumes>,
+    time: Extract<Res<Time>>,
 ) {
+    clock.0 = time.elapsed_secs_f64();
     boxes.0.clear();
-    boxes.0.extend(volumes.iter().map(|(volume, transform, layers)| FogBox {
+    boxes.0.extend(volumes.iter().map(|(volume, transform, noise, layers)| FogBox {
         local_from_world: transform.affine().inverse(),
         color: volume.fog_color.to_linear().to_vec3(),
         light_tint: volume.light_tint.to_linear().to_vec3(),
@@ -182,6 +216,7 @@ fn extract_fog_boxes(
         density: volume.density_factor,
         asymmetry: volume.scattering_asymmetry,
         light_intensity: volume.light_intensity,
+        noise: noise.map(|noise| noise.0),
         layers: layers.cloned().unwrap_or_default(),
     }));
 }
@@ -192,6 +227,7 @@ struct FogUniform {
     clip_from_local: Mat4,
     local_from_world: Mat4,
     far_planes: [Vec4; 6],
+    noise: FogNoiseUniform,
     fog_color: Vec3,
     light_tint: Vec3,
     max_steps: u32,
@@ -209,8 +245,93 @@ struct FogUniform {
     interleaved: u32,
 }
 
+// The same layout as FogNoise in fog.wgsl.
+#[derive(ShaderType, Default)]
+struct FogNoiseUniform {
+    noise_from_local: Mat4,
+    // How far each octave has drifted, less whole periods of the noise texture, which repeats
+    // over them. Kept per octave, and worked out here in double precision, so that the drift
+    // never jumps nor loses precision however long the app runs.
+    offsets: [Vec4; 4],
+    // NOISE_CURVE_POINTS values, four to a vector.
+    thickness: [Vec4; NOISE_CURVE_POINTS / 4],
+    // Below 0 for no noise.
+    detail: f32,
+    roughness: f32,
+    lacunarity: f32,
+    normalize: u32,
+}
+
+impl FogNoiseUniform {
+    fn new(noise: Option<&NoiseMedium>, seconds: f64) -> Self {
+        let Some(noise) = noise else {
+            return Self { detail: -1.0, ..default() };
+        };
+        let [a, b, c] = noise.transform;
+        let period = f64::from(noise::PERIOD);
+        let offsets = std::array::from_fn(|octave| {
+            let frequency = f64::from(noise.lacunarity).powi(octave as i32);
+            let moved =
+                noise.drift.map(|d| (f64::from(d) * seconds * frequency).rem_euclid(period));
+            vec4(moved[0] as f32, moved[1] as f32, moved[2] as f32, 0.0)
+        });
+        Self {
+            noise_from_local: Mat4::from_cols_array_2d(&[a, b, c, [0.0, 0.0, 0.0, 1.0]])
+                .transpose(),
+            offsets,
+            thickness: std::array::from_fn(|i| Vec4::from_slice(&noise.thickness[i * 4..])),
+            detail: noise.detail,
+            roughness: noise.roughness,
+            lacunarity: noise.lacunarity,
+            normalize: u32::from(noise.normalize),
+        }
+    }
+}
+
 #[derive(Resource, Default, Deref, DerefMut)]
 struct FogUniforms(DynamicUniformBuffer<FogUniform>);
+
+// The noise that varies fog density, or a single empty texel until some fog needs it.
+#[derive(Resource)]
+struct NoiseTexture {
+    _texture: Texture,
+    view: TextureView,
+    sampler: Sampler,
+    made: bool,
+}
+
+impl NoiseTexture {
+    fn new(device: &RenderDevice, queue: &RenderQueue, made: bool) -> Self {
+        let size = if made { noise::SIZE } else { 1 };
+        let texels = if made { noise::perlin_texels() } else { vec![0] };
+        let texture = device.create_texture_with_data(
+            queue,
+            &TextureDescriptor {
+                label: Some("charpaper_fog_noise"),
+                size: Extent3d { width: size, height: size, depth_or_array_layers: size },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D3,
+                format: TextureFormat::R8Snorm,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            TextureDataOrder::LayerMajor,
+            &texels,
+        );
+        let view = texture.create_view(&TextureViewDescriptor::default());
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            label: Some("charpaper_fog_noise"),
+            address_mode_u: AddressMode::Repeat,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            ..default()
+        });
+        Self { _texture: texture, view, sampler, made }
+    }
+}
 
 // The same layout as FogAverage in fog_average.wgsl.
 #[derive(ShaderType)]
@@ -288,13 +409,21 @@ fn init_fog_pipeline(
     fullscreen: Res<FullscreenShader>,
     asset_server: Res<AssetServer>,
     pipeline_cache: Res<PipelineCache>,
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
 ) {
+    commands.insert_resource(NoiseTexture::new(&device, &queue, false));
     let layout = |label: &'static str, depth| {
         BindGroupLayoutDescriptor::new(
             label,
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::VERTEX_FRAGMENT,
-                (uniform_buffer::<FogUniform>(true), depth),
+                (
+                    uniform_buffer::<FogUniform>(true),
+                    depth,
+                    texture_3d(TextureSampleType::Float { filterable: true }),
+                    sampler(SamplerBindingType::Filtering),
+                ),
             ),
         )
     };
@@ -551,7 +680,9 @@ fn prepare_fog(
     upsample_pipeline: Res<UpsamplePipeline>,
     mut uniforms: ResMut<FogUniforms>,
     mut average_uniforms: ResMut<FogAverageUniforms>,
+    mut noise_texture: ResMut<NoiseTexture>,
     boxes: Res<FogBoxes>,
+    clock: Res<FogClock>,
     views: Query<(Entity, &ExtractedView, &ExtractedFog)>,
     mut histories: Query<&mut FogHistory>,
     stale: Query<Entity, (Or<(With<ViewFog>, With<FogHistory>)>, Without<ExtractedFog>)>,
@@ -561,6 +692,9 @@ fn prepare_fog(
 ) {
     for view in &stale {
         commands.entity(view).remove::<(ViewFog, FogHistory)>();
+    }
+    if !noise_texture.made && boxes.0.iter().any(|fog_box| fog_box.noise.is_some()) {
+        *noise_texture = NoiseTexture::new(&device, &queue, true);
     }
     let count = views.iter().map(|(_, _, fog)| on_stage(&boxes, fog).count()).sum();
     let Some(mut writer) = uniforms.get_writer(count, &device, &queue) else {
@@ -640,6 +774,7 @@ fn prepare_fog(
                     ),
                     local_from_world: Mat4::from(fog_box.local_from_world),
                     far_planes: far_planes(&view_from_local),
+                    noise: FogNoiseUniform::new(fog_box.noise.as_ref(), clock.0),
                     fog_color: fog_box.color,
                     light_tint: fog_box.light_tint,
                     max_steps: fog.max_steps,
@@ -700,6 +835,7 @@ fn draw_fog(
     fog_pipeline: Res<FogPipeline>,
     average_pipeline: Res<AveragePipeline>,
     upsample_pipeline: Res<UpsamplePipeline>,
+    noise_texture: Res<NoiseTexture>,
     uniforms: Res<FogUniforms>,
     average_uniforms: Res<FogAverageUniforms>,
     mut ctx: RenderContext,
@@ -722,7 +858,12 @@ fn draw_fog(
     let box_bind_group = ctx.render_device().create_bind_group(
         "charpaper_fog_box",
         &pipeline_cache.get_bind_group_layout(&fog_pipeline.box_layouts[multisampled]),
-        &BindGroupEntries::sequential((uniform, BindingResource::TextureView(depth.view()))),
+        &BindGroupEntries::sequential((
+            uniform,
+            BindingResource::TextureView(depth.view()),
+            &noise_texture.view,
+            &noise_texture.sampler,
+        )),
     );
 
     {

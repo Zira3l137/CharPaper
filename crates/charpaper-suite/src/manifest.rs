@@ -320,6 +320,34 @@ pub struct Fog {
     pub anisotropy: Option<f32>,
     /// The fog absorbs the light this color lacks. Defaults to black.
     pub absorption_color: Option<[f32; 3]>,
+    /// Varies how thick the fog is from place to place, as a Noise Texture
+    /// feeding Density does. density then scales what it gives.
+    pub noise: Option<FogNoise>,
+}
+
+/// Blender's Noise Texture in fBM mode, and what the nodes between it and
+/// Density make of it.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FogNoise {
+    /// Three rows of the affine matrix from the fog box's own space, the cube
+    /// from -0.5 to 0.5 with Y up, to the noise's coordinates, its Scale
+    /// included.
+    pub transform: [[f32; 4]; 3],
+    /// How far the noise's coordinates move each second, as an animated
+    /// Mapping node's Location moves them. Defaults to none.
+    pub drift: Option<[f32; 3]>,
+    /// Octaves past the first; the app stops at 3. Defaults to 2.
+    pub detail: Option<f32>,
+    /// How much each octave counts next to the one before. Defaults to 0.5.
+    pub roughness: Option<f32>,
+    /// How much finer each octave is than the one before. Defaults to 2.
+    pub lacunarity: Option<f32>,
+    /// Keeps the noise between 0 and 1. Defaults to true.
+    pub normalize: Option<bool>,
+    /// The fog's density at evenly spaced noise values from 0 to 1, in place
+    /// of density; at least two.
+    pub density: Vec<f32>,
 }
 
 /// Effects applied to the finished image.

@@ -419,9 +419,98 @@
             "null"
           ],
           "format": "float"
+        },
+        "noise": {
+          "description": "Varies how thick the fog is from place to place, as a Noise Texture\nfeeding Density does. density then scales what it gives.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FogNoise"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
+    },
+    "FogNoise": {
+      "description": "Blender's Noise Texture in fBM mode, and what the nodes between it and\nDensity make of it.",
+      "type": "object",
+      "properties": {
+        "density": {
+          "description": "The fog's density at evenly spaced noise values from 0 to 1, in place\nof density; at least two.",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "float"
+          }
+        },
+        "detail": {
+          "description": "Octaves past the first; the app stops at 3. Defaults to 2.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "drift": {
+          "description": "How far the noise's coordinates move each second, as an animated\nMapping node's Location moves them. Defaults to none.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "lacunarity": {
+          "description": "How much finer each octave is than the one before. Defaults to 2.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "normalize": {
+          "description": "Keeps the noise between 0 and 1. Defaults to true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "roughness": {
+          "description": "How much each octave counts next to the one before. Defaults to 0.5.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "transform": {
+          "description": "Three rows of the affine matrix from the fog box's own space, the cube\nfrom -0.5 to 0.5 with Y up, to the noise's coordinates, its Scale\nincluded.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "maxItems": 4,
+            "minItems": 4
+          },
+          "maxItems": 3,
+          "minItems": 3
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "transform",
+        "density"
+      ]
     },
     "Gaze": {
       "description": "Looking towards the mouse cursor. Where the character looks comes from\nwhere the cursor is on screen: with the cursor on its eyes it looks at\nthe viewer, and the further from them the cursor is, the further aside\nit looks. The head and neck go part of the way and the eyes cover the\nrest. The head's angles are measured from the bone above the neck, with\nthe animation's own turn counted in, and the eyes' from the head. A\ncursor the character can't turn to, it lets go of.",

@@ -566,6 +566,11 @@ a **Principled Volume** plugged into *Volume*, and nothing in *Surface*.
 - The fog fills the object's bounding box, whatever its shape.
 - Color, Density, Anisotropy and Absorption Color come over, as typed into the node.
   Values fed from other nodes don't, and neither do Emission and Blackbody.
+- Patchy fog: feed *Density* from a **Noise Texture** (fBM, 3D) through any of Color
+  Ramp, Map Range, Math and Float Curve nodes. Its *Vector* may be Generated or Object
+  coordinates, through a Mapping node. The app draws Blender's own noise, up to *Detail* 3,
+  without *Distortion*. Animate the Mapping node's *Location* and the fog drifts, at that
+  animation's average speed, for as long as the app runs.
 - The sky lights fog evenly, as it lights surfaces, even indoors where walls would keep it
   out in Cycles. Lamps add light shafts. Fog with neither a sky nor a lamp is invisible.
 - A sun lights fog only while its *Shadow* is ticked.
@@ -656,7 +661,7 @@ its own with `exposure` under `[environments.<name>]`.
 | Actions on the armature | Animation of light, material or camera settings |
 | Point, spot and sun lights, with color and strength | Area lights; a light's Radius |
 | Per-light *Shadow* and per-object shadow visibility | Light probes and reflection planes |
-| Principled Volume fog boxes | Volume emission, blackbody, textured density |
+| Principled Volume fog boxes, with Noise Texture density | Volume emission, blackbody, other textures on density |
 | Camera position, lens, animation, depth of field | Animated F-Stop or Focus Distance; aperture shape |
 | GIFs on materials | Videos and image sequences |
 | Sounds on pose markers | A World's Light Path tricks (use **Background**) |
@@ -742,6 +747,9 @@ render.
   shadow visibility on the ones that don't need it.
 - **Every light that lights fog adds to the fog's cost.** Set *Volume Scatter* to 0 on
   lights that don't need to show in it.
+- **Noise on fog costs a texture read per *Detail* octave at every step**, though gaps
+  the noise thins to nothing cost almost nothing. Keep *Detail* low; soft fog rarely needs
+  more than 2.
 - **Big GIFs take memory.** A GIF's frames are kept unpacked, up to 200 MB of them; a
   bigger one is read again on every loop instead. Keep screens small and loops short.
 - **Textures:** 2K is plenty for a character seen on a desktop.
