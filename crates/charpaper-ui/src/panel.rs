@@ -49,8 +49,9 @@ pub(crate) struct Panel {
 #[derive(Component)]
 struct MainMenu;
 
-// Holds the reveal button and stays behind, empty, when the button hides itself, so the
-// pointer still has something to find: picking skips hidden nodes, not empty shown ones.
+// Holds the reveal button, with room around it, and stays behind, empty, when the button
+// hides itself, so the pointer still has something to find: picking skips hidden nodes, not
+// empty shown ones.
 #[derive(Component, Default)]
 struct RevealZone {
     // Seconds without the pointer on it.
@@ -59,6 +60,11 @@ struct RevealZone {
 
 // Seconds the reveal button stays after the pointer leaves it, when it hides itself.
 const REVEAL_LINGERS: f32 = 3.0;
+
+const REVEAL_BUTTON: Vec2 = Vec2::new(40.0, 80.0);
+// How far past the reveal button its zone reaches, into the screen and up and down, so a
+// quick, rough move to the edge finds the button.
+const REVEAL_REACH: f32 = 32.0;
 
 // A tab's page. Each scrolls on its own, so a tab is where it was left when you come back to it.
 #[derive(Component)]
@@ -140,16 +146,20 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
 
 // Which edge it sits on, and which way the button's arrow points, is up to `dock_panels`.
 fn reveal_zone(closed: bool) -> impl Bundle {
+    let height = REVEAL_BUTTON.y + 2.0 * REVEAL_REACH;
     (
         Node {
             position_type: PositionType::Absolute,
             top: Val::Percent(50.0),
-            margin: UiRect::top(Val::Px(-40.0)),
-            width: Val::Px(40.0),
-            height: Val::Px(80.0),
+            margin: UiRect::top(Val::Px(-height / 2.0)),
+            width: Val::Px(REVEAL_BUTTON.x + REVEAL_REACH),
+            height: Val::Px(height),
+            align_items: AlignItems::Center,
             display: display(closed),
             ..default()
         },
+        // Felt, but not in the way: the scene under the empty part still gets the pointer.
+        Pickable { should_block_lower: false, is_hoverable: true },
         RevealZone::default(),
         Hovered::default(),
     )
@@ -162,8 +172,8 @@ fn reveal_button() -> impl Bundle {
         .fill(PANEL_BG)
         .border_color(BORDER)
         .node(|n| {
-            n.width = percent(100);
-            n.height = percent(100);
+            n.width = Val::Px(REVEAL_BUTTON.x);
+            n.height = Val::Px(REVEAL_BUTTON.y);
             n.justify_content = JustifyContent::Center;
             n.align_items = AlignItems::Center;
         })
@@ -353,9 +363,13 @@ fn dock_panels(
     let (hide, reveal) = if left { ("<", ">") } else { (">", "<") };
     for (mut node, button, menu, zone, children) in parts {
         if zone {
-            let edge = if left { (Val::ZERO, Val::Auto) } else { (Val::Auto, Val::ZERO) };
-            if (node.left, node.right) != edge {
-                (node.left, node.right) = edge;
+            let edge = if left {
+                (Val::ZERO, Val::Auto, JustifyContent::FlexStart)
+            } else {
+                (Val::Auto, Val::ZERO, JustifyContent::FlexEnd)
+            };
+            if (node.left, node.right, node.justify_content) != edge {
+                (node.left, node.right, node.justify_content) = edge;
             }
             continue;
         }
