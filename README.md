@@ -103,7 +103,9 @@ To update, download and extract the new version, then move the `characters` fold
 ## The panel
 
 The panel sits at the right edge of the screen. The small arrow button on that edge hides
-it and brings it back.
+it and brings it back. With **Auto-hide button** on in the System tab, that button
+disappears a few seconds after you move the pointer away, and comes back as soon as you
+point at its spot on the edge.
 
 - **Point at a setting** and the line at the bottom of the panel says what it does.
 - **Turn the mouse wheel over a value** to change it. Anywhere else on the panel, the
@@ -115,7 +117,7 @@ it and brings it back.
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
 | **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog, depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
-| **System** | Wallpaper or window, start with Windows, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size and side. |
+| **System** | Wallpaper or window, start with Windows, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size, side and auto-hiding button. |
 
 A row only shows when it has something to offer. No camera row means the character has no
 extra cameras; no Gaze section means its author didn't set gaze up. In **Graphics**, Fog

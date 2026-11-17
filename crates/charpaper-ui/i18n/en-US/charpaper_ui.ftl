@@ -185,6 +185,7 @@ label-size = Size
 label-side = Side
 side-left = Left
 side-right = Right
+label-auto-hide = Auto-hide button
 
 ## Performance overlay, shown at the top of the screen. Units after numbers.
 
@@ -334,3 +335,4 @@ help-accent-brightness = How light the accent is. At 0% it is black.
 help-opacity = How much of the scene shows through the panel and the performance overlay.
 help-size = How big the panel and the performance overlay are drawn.
 help-side = The edge of the screen the panel keeps to.
+help-auto-hide = Hides the button that brings the panel back a few seconds after the pointer leaves it. Move the pointer to that spot on the edge and it shows again.

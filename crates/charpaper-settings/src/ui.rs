@@ -30,6 +30,8 @@ pub struct UiState {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub folded: BTreeMap<String, bool>,
     pub performance_monitor: bool,
+    // The button that brings the panel back hides itself while the pointer is away from it.
+    pub hide_reveal_button: bool,
     pub theme: UiTheme,
 }
 

@@ -29,7 +29,7 @@ impl Plugin for PanelPlugin {
         app.init_resource::<PanelHovered>()
             .add_systems(PreUpdate, spawn_panels.after(ScreenSync))
             .add_observer(despawn_panel)
-            .add_systems(Update, (track_hover, show_status, show_help))
+            .add_systems(Update, (track_hover, show_status, show_help, hide_reveal_button))
             .add_systems(
                 Update,
                 (show_panel, style_tabs, dock_panels)
@@ -48,6 +48,17 @@ pub(crate) struct Panel {
 // The panel itself, which hides away to the button that brings it back.
 #[derive(Component)]
 struct MainMenu;
+
+// Holds the reveal button and stays behind, empty, when the button hides itself, so the
+// pointer still has something to find: picking skips hidden nodes, not empty shown ones.
+#[derive(Component, Default)]
+struct RevealZone {
+    // Seconds without the pointer on it.
+    idle: f32,
+}
+
+// Seconds the reveal button stays after the pointer leaves it, when it hides itself.
+const REVEAL_LINGERS: f32 = 3.0;
 
 // A tab's page. Each scrolls on its own, so a tab is where it was left when you come back to it.
 #[derive(Component)]
@@ -110,7 +121,9 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
         Panel { screen },
     );
     commands.spawn(root).with_children(|root| {
-        root.spawn((reveal_button(ui.is_menu_closed), Hovered::default())).with_hover_feedback();
+        root.spawn(reveal_zone(ui.is_menu_closed)).with_children(|zone| {
+            zone.spawn(reveal_button()).with_hover_feedback();
+        });
         root.spawn(main_menu(ui.is_menu_closed))
             .with_children(|panel| {
                 panel.spawn(header());
@@ -125,22 +138,34 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
     });
 }
 
-// Which edge it sits on, and which way its arrow points, is up to `dock_panels`.
-fn reveal_button(closed: bool) -> impl Bundle {
+// Which edge it sits on, and which way the button's arrow points, is up to `dock_panels`.
+fn reveal_zone(closed: bool) -> impl Bundle {
+    (
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Percent(50.0),
+            margin: UiRect::top(Val::Px(-40.0)),
+            width: Val::Px(40.0),
+            height: Val::Px(80.0),
+            display: display(closed),
+            ..default()
+        },
+        RevealZone::default(),
+        Hovered::default(),
+    )
+}
+
+fn reveal_button() -> impl Bundle {
     ButtonBuilder::new("<")
         .font_size(GLYPH_SIZE)
         .text_color(TEXT)
         .fill(PANEL_BG)
         .border_color(BORDER)
         .node(|n| {
-            n.position_type = PositionType::Absolute;
-            n.top = Val::Percent(50.0);
-            n.margin.top = Val::Px(-40.0);
-            n.width = Val::Px(40.0);
-            n.height = Val::Px(80.0);
+            n.width = percent(100);
+            n.height = percent(100);
             n.justify_content = JustifyContent::Center;
             n.align_items = AlignItems::Center;
-            n.display = display(closed);
         })
         .build(PanelButton::Reveal)
 }
@@ -276,14 +301,14 @@ fn footer() -> impl Bundle {
 
 fn show_panel(
     ui: Res<UiState>,
-    parts: Query<(&mut Node, Option<&Page>, Option<&PanelButton>, Has<MainMenu>)>,
+    parts: Query<(&mut Node, Option<&Page>, Has<RevealZone>, Has<MainMenu>)>,
 ) {
-    for (mut node, page, button, menu) in parts {
-        let shown = match (page, button) {
-            (Some(page), _) => page.0 == ui.tab,
-            (_, Some(PanelButton::Reveal)) => ui.is_menu_closed,
-            _ if menu => !ui.is_menu_closed,
-            _ => continue,
+    for (mut node, page, zone, menu) in parts {
+        let shown = match page {
+            Some(page) => page.0 == ui.tab,
+            None if zone => ui.is_menu_closed,
+            None if menu => !ui.is_menu_closed,
+            None => continue,
         };
         node.display = display(shown);
     }
@@ -315,18 +340,29 @@ fn style_tabs(
 // back on that edge, and points both arrows the way the panel moves.
 fn dock_panels(
     ui: Res<UiState>,
-    parts: Query<(&mut Node, Option<&PanelButton>, Has<MainMenu>, Option<&Children>)>,
+    parts: Query<(
+        &mut Node,
+        Option<&PanelButton>,
+        Has<MainMenu>,
+        Has<RevealZone>,
+        Option<&Children>,
+    )>,
     mut texts: Query<&mut Text>,
 ) {
     let left = ui.theme.side == PanelSide::Left;
     let (hide, reveal) = if left { ("<", ">") } else { (">", "<") };
-    for (mut node, button, menu, children) in parts {
+    for (mut node, button, menu, zone, children) in parts {
+        if zone {
+            let edge = if left { (Val::ZERO, Val::Auto) } else { (Val::Auto, Val::ZERO) };
+            if (node.left, node.right) != edge {
+                (node.left, node.right) = edge;
+            }
+            continue;
+        }
         let glyph = match button {
             Some(PanelButton::Hide) => hide,
             Some(PanelButton::Reveal) => {
                 // Flush with the edge, so the side touching it has no border or rounding.
-                let (near, far) =
-                    if left { (Val::ZERO, Val::Auto) } else { (Val::Auto, Val::ZERO) };
                 let mut border = UiRect::all(LINE);
                 let radius = if left {
                     border.left = Val::ZERO;
@@ -335,11 +371,7 @@ fn dock_panels(
                     border.right = Val::ZERO;
                     BorderRadius::left(PANEL_RADIUS)
                 };
-                if (node.left, node.right, node.border, node.border_radius)
-                    != (near, far, border, radius)
-                {
-                    node.left = near;
-                    node.right = far;
+                if (node.border, node.border_radius) != (border, radius) {
                     node.border = border;
                     node.border_radius = radius;
                 }
@@ -363,6 +395,34 @@ fn dock_panels(
                 && text.0 != glyph
             {
                 text.0 = glyph.to_string();
+            }
+        }
+    }
+}
+
+// With the setting on, the reveal button hides once the pointer has been off it for a while,
+// and comes back on the frame the pointer reaches its place. Hiding the panel counts as
+// touching it, so you see where the button went before it goes.
+fn hide_reveal_button(
+    time: Res<Time>,
+    ui: Res<UiState>,
+    mut was_closed: Local<bool>,
+    mut zones: Query<(&mut RevealZone, &Hovered, &Children)>,
+    mut buttons: Query<&mut Visibility, With<PanelButton>>,
+) {
+    let just_closed = ui.is_menu_closed && !*was_closed;
+    *was_closed = ui.is_menu_closed;
+    for (mut zone, hovered, children) in &mut zones {
+        if !ui.hide_reveal_button || just_closed || hovered.get() {
+            zone.idle = 0.0;
+        } else {
+            zone.idle += time.delta_secs();
+        }
+        let shown =
+            if zone.idle < REVEAL_LINGERS { Visibility::Inherited } else { Visibility::Hidden };
+        for &child in &**children {
+            if let Ok(mut visibility) = buttons.get_mut(child) {
+                visibility.set_if_neq(shown);
             }
         }
     }

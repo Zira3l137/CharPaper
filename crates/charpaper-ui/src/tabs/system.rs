@@ -296,6 +296,13 @@ fn interface() -> impl Bundle {
                 },
             }
             .segments(),
+            Setting {
+                label: |l| fl!(l, "label-auto-hide"),
+                help: |l| fl!(l, "help-auto-hide"),
+                show: |w, l| Some(switch(l, w.resource::<UiState>().hide_reveal_button)),
+                change: |w, step| flip(&mut w.resource_mut::<UiState>().hide_reveal_button, step),
+            }
+            .segments(),
         ],
     )
 }
