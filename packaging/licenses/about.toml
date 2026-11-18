@@ -15,6 +15,10 @@ accepted = [
     "Unlicense",
     "Zlib",
     "0BSD",
+    # Data rather than code: Mozilla's root certificates in webpki-roots, which the updater
+    # checks GitHub's certificate against. Asks only that its text comes along, as it does
+    # in THIRD-PARTY-LICENSES.html.
+    "CDLA-Permissive-2.0",
 ]
 # Only what a download contains: the build passes its own platform, and nothing that only
 # builds or tests the app counts.
