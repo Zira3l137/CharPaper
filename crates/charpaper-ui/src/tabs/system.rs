@@ -14,6 +14,8 @@ use charpaper_settings::StageId;
 use charpaper_settings::StartAtLogin;
 use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
+use charpaper_settings::UpdateAction;
+use charpaper_settings::UpdateStatus;
 use i18n_embed_fl::fl;
 
 use crate::locale::Languages;
@@ -65,6 +67,8 @@ fn app_section() -> impl Bundle {
         |l| fl!(l, "section-app"),
         Section::App,
         children![
+            update_version(),
+            update(),
             Setting {
                 label: |l| fl!(l, "label-mode"),
                 help: |l| fl!(l, "help-mode"),
@@ -97,8 +101,76 @@ fn app_section() -> impl Bundle {
                 },
             }
             .segments(),
+            Setting {
+                label: |l| fl!(l, "label-check-updates"),
+                help: |l| fl!(l, "help-check-updates"),
+                show: |w, l| Some(switch(l, w.resource::<SystemSettings>().check_for_updates)),
+                change: |w, step| {
+                    flip(&mut w.resource_mut::<SystemSettings>().check_for_updates, step);
+                },
+            }
+            .segments(),
         ],
     )
+}
+
+// The two rows below are buttons rather than settings: segments with none current, which act
+// on a click and ignore the wheel passing over them. Both are there only while a newer
+// version is on offer.
+
+// The version on offer, and how its download goes. A click opens its page.
+fn update_version() -> impl Bundle {
+    Setting {
+        label: |l| fl!(l, "label-update-version"),
+        help: |l| fl!(l, "help-update-version"),
+        show: |w, l| {
+            let text = match w.resource::<UpdateStatus>() {
+                UpdateStatus::Idle => return Some(Shown::Hidden),
+                UpdateStatus::Available { version } => version.clone(),
+                UpdateStatus::Downloading { version, done, total } => {
+                    let percent = (done * 100).checked_div(*total).unwrap_or(0);
+                    fl!(l, "update-downloading", version = version.as_str(), percent = percent)
+                }
+                UpdateStatus::Failed { version, .. } => {
+                    fl!(l, "update-failed", version = version.as_str())
+                }
+                UpdateStatus::Installing { version } => {
+                    fl!(l, "update-restarting", version = version.as_str())
+                }
+            };
+            Some(Shown::Choice { labels: vec![text], current: Some(0) })
+        },
+        change: |w, step| {
+            if let Change::To(_) = step.change {
+                w.write_message(UpdateAction::OpenPage);
+            }
+        },
+    }
+    .segments()
+}
+
+fn update() -> impl Bundle {
+    Setting {
+        label: |l| fl!(l, "label-update"),
+        help: |l| fl!(l, "help-update"),
+        show: |w, l| {
+            let install = match w.resource::<UpdateStatus>() {
+                UpdateStatus::Available { .. } => fl!(l, "update-install"),
+                UpdateStatus::Failed { .. } => fl!(l, "update-retry"),
+                _ => return Some(Shown::Hidden),
+            };
+            Some(Shown::Choice { labels: vec![install, fl!(l, "update-skip")], current: None })
+        },
+        change: |w, step| {
+            let action = match step.change {
+                Change::To(0) => UpdateAction::Install,
+                Change::To(1) => UpdateAction::Skip,
+                _ => return,
+            };
+            w.write_message(action);
+        },
+    }
+    .segments()
 }
 
 fn display_section() -> impl Bundle {

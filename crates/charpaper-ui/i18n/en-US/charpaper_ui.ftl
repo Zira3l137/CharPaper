@@ -152,6 +152,17 @@ label-mode = Show as
 mode-wallpaper = Wallpaper
 mode-window = Window
 label-start-at-login = Start with Windows
+label-check-updates = Check for updates
+label-update-version = New version
+label-update = Update
+# The version on offer while it downloads, after downloading it failed, and while CharPaper
+# restarts to install it.
+update-downloading = { $version } · { $percent }%
+update-failed = { $version } · failed
+update-restarting = { $version } · restarting
+update-install = Install
+update-retry = Try again
+update-skip = Skip
 section-display = DISPLAY
 # Above the panel, with several stages: which one the panel shows.
 stage-name = Stage { $letter }
@@ -323,6 +334,9 @@ help-pause-covered = Stops the picture and sound while windows cover the whole d
 help-pause-battery = Stops the picture and sound while the computer runs on battery.
 help-mode = Wallpaper puts the scene behind the desktop icons, Window in an ordinary window. CharPaper restarts to switch.
 help-start-at-login = Starts CharPaper whenever you sign in to Windows on this computer.
+help-check-updates = Asks GitHub for a newer version each time CharPaper starts. Nothing is downloaded until you click Install.
+help-update-version = A newer CharPaper is out. Click it to see what changed.
+help-update = Install downloads it and restarts CharPaper with it, keeping your characters and settings. Skip hides this version.
 help-layout = For this monitor's stage. Mirror shows the whole scene on each of its monitors. Span spreads one wide view across them, as if they were a single screen.
 help-master-volume = How loud all of CharPaper's sound is.
 help-music-volume = How loud the environment's music is.

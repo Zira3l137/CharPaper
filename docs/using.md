@@ -2,7 +2,7 @@
 
 # Using CharPaper
 
-**On this page:** [Getting started](#getting-started) · [The panel](#the-panel) · [The mouse on the desktop](#the-mouse-on-the-desktop) · [Several monitors](#several-monitors) · [When it pauses](#when-it-pauses) · [Where your settings live](#where-your-settings-live) · [When something goes wrong](#when-something-goes-wrong) · [Command line](#command-line)
+**On this page:** [Getting started](#getting-started) · [The panel](#the-panel) · [The mouse on the desktop](#the-mouse-on-the-desktop) · [Several monitors](#several-monitors) · [When it pauses](#when-it-pauses) · [Where your settings live](#where-your-settings-live) · [Updating](#updating) · [When something goes wrong](#when-something-goes-wrong) · [Command line](#command-line)
 
 ## Getting started
 
@@ -23,8 +23,7 @@ at all.
 
 To quit, click **Quit** at the bottom of the panel.
 
-To update, download and extract the new version, then move the `characters` folder and
-`state.toml`, where your settings are, from the old folder into the new one.
+To update, see [Updating](#updating).
 
 ## The panel
 
@@ -43,7 +42,7 @@ point at its spot on the edge.
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
 | **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog (density, quality, jitter, resolution), depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
-| **System** | Wallpaper or window, start with Windows, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size, side and auto-hiding button. |
+| **System** | Wallpaper or window, start with Windows, updates, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size, side and auto-hiding button. |
 
 A row only shows when it has something to offer. No camera row means the character has no
 extra cameras; no Gaze section means its author didn't set gaze up. In **Graphics**, Fog
@@ -116,6 +115,46 @@ turn it on again after moving the folder.
 | `run-windowed.bat` | Starts CharPaper in an ordinary window. |
 | `LICENSE-MIT`, `LICENSE-APACHE` | CharPaper's license: either one, your choice. |
 | `THIRD-PARTY-LICENSES.html` | Every library inside CharPaper, and its license. |
+
+## Updating
+
+Each time it starts, CharPaper asks GitHub whether a newer version is out. Only finished
+versions count, never the nightly build or a test version. When there is one, a dot shows
+on the button that brings the panel back and on the **System** tab, and **System → App**
+gets two more rows:
+
+- **New version** shows its number. Click it to read what changed.
+- **Update** has two buttons. **Install** downloads it, checks the download isn't
+  damaged, then restarts CharPaper with it. **Skip** stops offering that version;
+  the next one is offered as usual.
+
+While it downloads, **New version** shows how far along it is. You can carry on using
+CharPaper meanwhile.
+
+Installing replaces `charpaper.exe`, `locales`, `schemas`, `run-windowed.bat` and the
+license files. Your characters, `state.toml` and the logs stay as they are. If the new
+version comes with characters of its own, they are added next to yours, never over one
+with the same name.
+
+Some things to know:
+
+- **The Blender add-on doesn't update with the app.** Download the new
+  `charpaper_exporter` zip from the version's page, the one **New version** opens, and
+  install it in Blender as you did the first time.
+- **0.6.0 and older can't update themselves.** Update one of those by hand: extract
+  the new version, then move `characters` and `state.toml` from the old folder into the
+  new one.
+- **CharPaper can only update itself where it can write.** That's another reason not to
+  put it in Program Files. Where it can't, **New version** shows "failed": download the
+  new version from its page and update by hand.
+- **Updating leaves a `.update` folder behind for a moment.** CharPaper deletes it the
+  next time it starts.
+- **A failed update puts the old files back.** In the rare case that this fails too,
+  they're kept in a `charpaper-backup-…` folder next to `charpaper.exe`, and
+  `charpaper.log` says what happened.
+- **To stop checking**, turn off **System → App → Check for updates**. CharPaper then
+  never contacts GitHub. The check only asks which version is the latest, and sends
+  nothing but CharPaper's own version number.
 
 ## When something goes wrong
 

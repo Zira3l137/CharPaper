@@ -13,6 +13,8 @@ use bevy::prelude::*;
 use charpaper_settings::StartAtLogin;
 use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
+use charpaper_settings::UpdateAction;
+use charpaper_settings::UpdateStatus;
 
 pub use locale::Locale;
 pub use locale::UiConfig;
@@ -33,6 +35,8 @@ impl Plugin for SettingsPanelPlugin {
         app.init_resource::<UiState>()
             .init_resource::<SystemSettings>()
             .init_resource::<StartAtLogin>()
+            .init_resource::<UpdateStatus>()
+            .add_message::<UpdateAction>()
             .insert_resource(locale::Locale::load(&self.config))
             .insert_resource(locale::Languages::find(&self.config.locales_dir))
             .insert_resource(self.config.clone())

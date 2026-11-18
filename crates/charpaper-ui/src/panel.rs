@@ -9,6 +9,7 @@ use charpaper_scene::StageKey;
 use charpaper_settings::PanelSide;
 use charpaper_settings::Tab;
 use charpaper_settings::UiState;
+use charpaper_settings::UpdateStatus;
 use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
@@ -30,6 +31,7 @@ impl Plugin for PanelPlugin {
             .add_systems(PreUpdate, spawn_panels.after(ScreenSync))
             .add_observer(despawn_panel)
             .add_systems(Update, (track_hover, show_status, show_help, hide_reveal_button))
+            .add_systems(Update, (add_update_dots, show_update_dots).chain())
             .add_systems(
                 Update,
                 (show_panel, style_tabs, dock_panels)
@@ -77,6 +79,11 @@ enum PanelButton {
     Exit,
     Tab(Tab),
 }
+
+// On the reveal button and the System tab while a newer version waits for an answer, since
+// the panel is the only place CharPaper can tell anyone.
+#[derive(Component)]
+struct UpdateDot;
 
 // The line under the panel's title: the suite's name.
 #[derive(Component)]
@@ -421,13 +428,16 @@ fn hide_reveal_button(
     time: Res<Time>,
     ui: Res<UiState>,
     mut was_closed: Local<bool>,
+    update: Res<UpdateStatus>,
     mut zones: Query<(&mut RevealZone, &Hovered, &Children)>,
     mut buttons: Query<&mut Visibility, With<PanelButton>>,
 ) {
     let just_closed = ui.is_menu_closed && !*was_closed;
     *was_closed = ui.is_menu_closed;
+    // It stays while its dot is on, or nobody would see the dot.
+    let keep = !ui.hide_reveal_button || just_closed || waiting(&update);
     for (mut zone, hovered, children) in &mut zones {
-        if !ui.hide_reveal_button || just_closed || hovered.get() {
+        if keep || hovered.get() {
             zone.idle = 0.0;
         } else {
             zone.idle += time.delta_secs();
@@ -516,6 +526,44 @@ fn on_click(
         PanelButton::Hide => ui.is_menu_closed = true,
         PanelButton::Reveal => ui.is_menu_closed = false,
         PanelButton::Tab(tab) => ui.tab = *tab,
+    }
+}
+
+fn waiting(update: &UpdateStatus) -> bool {
+    matches!(update, UpdateStatus::Available { .. } | UpdateStatus::Failed { .. })
+}
+
+fn add_update_dots(
+    mut commands: Commands,
+    buttons: Query<(Entity, &PanelButton), Added<PanelButton>>,
+) {
+    for (button, kind) in &buttons {
+        if matches!(kind, PanelButton::Reveal | PanelButton::Tab(Tab::System)) {
+            commands.entity(button).with_child((
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(5.0),
+                    right: Val::Px(5.0),
+                    width: Val::Px(7.0),
+                    height: Val::Px(7.0),
+                    border_radius: BorderRadius::all(Val::Px(3.5)),
+                    display: Display::None,
+                    ..default()
+                },
+                Fill(ACCENT),
+                Pickable::IGNORE,
+                UpdateDot,
+            ));
+        }
+    }
+}
+
+fn show_update_dots(update: Res<UpdateStatus>, mut dots: Query<&mut Node, With<UpdateDot>>) {
+    let shown = display(waiting(&update));
+    for mut dot in &mut dots {
+        if dot.display != shown {
+            dot.display = shown;
+        }
     }
 }
 

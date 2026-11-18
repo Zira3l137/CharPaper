@@ -66,7 +66,7 @@ Windows says it protected your PC.
 
 | I want to… | Read |
 |---|---|
-| Install, update or remove CharPaper | [Getting started](docs/using.md#getting-started) · [Where your settings live](docs/using.md#where-your-settings-live) |
+| Install, update or remove CharPaper | [Getting started](docs/using.md#getting-started) · [Updating](docs/using.md#updating) · [Where your settings live](docs/using.md#where-your-settings-live) |
 | Change the outfit, animation, camera or picture | [The panel](docs/using.md#the-panel) |
 | Turn the view with the mouse | [The mouse on the desktop](docs/using.md#the-mouse-on-the-desktop) |
 | Use two or more monitors | [Several monitors](docs/using.md#several-monitors) |
