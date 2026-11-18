@@ -482,10 +482,16 @@ spots or points.
 - **A sun follows the sky's sun.** With a sky whose brightest spot stands far out from
   the rest, a clear sky's sun, the environment's sun light shines from that spot, and
   turns with the sky when **Sky rotation** turns it. Its light and shadows match the sun in
-  the background whatever its own rotation in Blender. An overcast sky, or one whose
-  brightest spot is below the horizon, leaves the sun as Blender has it, and so does
-  turning off **Sun follows sky** in Graphics → Lighting, or `sun_follows_sky = false`
-  under the environment in `suite.toml`. With several suns, the brightest follows.
+  the background whatever its own rotation in Blender. Turning off **Sun follows sky** in
+  Graphics → Lighting, or `sun_follows_sky = false` under the environment in `suite.toml`,
+  leaves the sun as Blender has it. With several suns, the brightest follows.
+- **A sky with no sun to find still takes the sun along.** That's an overcast sky, one whose
+  brightest spot is below the horizon, or a panorama whose sun is *clipped*: cut down to a
+  few times the brightness of the clouds, as in many free HDRIs. The sun then turns only
+  as far as **Sky rotation** is turned from what the suite set, from where Blender has it,
+  so line it up with the sky in Blender. `charpaper.log` says why no sun was found. To have
+  it found, use an unclipped HDRI, where the sun's pixels read hundreds to tens of
+  thousands in Blender's Image Editor, or a *Sky Texture* with *Sun Disc* on.
 - **Shadows** follow each light's *Shadow* checkbox. Untick it on lamps whose shadows
   nobody would miss. This is the biggest thing you can do for speed: every point light
   with shadows draws the scene six more times a frame.
@@ -804,7 +810,8 @@ render.
 | A light does nothing | It's an area light. Use a spot or point light. |
 | A light's flicker or color change doesn't play | It's keyed on the object or in the light's nodes, not on the light's *Strength* or *Color*. Or its keys hold one value: a Noise modifier with no range to loop over needs the scene's or the action's frame range set. Export again. |
 | The sun's shadows ignore how I turned the sun in Blender | **Sun follows sky** is on and the sky has a clear sun, so the sun shines from there. Turn it off in Graphics → Lighting, or set `sun_follows_sky = false`. |
-| The sun doesn't turn with the sky | The sky has no sun to follow (`charpaper.log` says so): it's overcast, or its brightest spot is below the horizon. Or **Sun follows sky** is off. |
+| The sun doesn't turn with the sky | **Sun follows sky** is off, or the sun isn't in the environment's collection. |
+| The sun turns with the sky but doesn't shine from the sun in it | The sky has no sun to find, so the sun keeps where Blender had it against the sky. `charpaper.log` says why: the sun is clipped in the panorama, behind clouds, or below the horizon. Line the sun up in Blender, or use an unclipped HDRI. |
 | Patchy fog shows as even fog | Its Density setup isn't one the app follows. **Validate** says why. Only a Noise Texture's *Fac*, fBM, through Color Ramp, Map Range, Math and Float Curve nodes, works. |
 | The fog's noise repeats | The noise's Scale is beyond about 16 across the box. Lower it, or scale the Mapping node down. |
 | The sky didn't change after replacing the `.hdr` by hand | Delete `skybox.ktx2`, `specular.ktx2` and `diffuse.ktx2` next to it. The export does this itself when the World's panorama changed. |

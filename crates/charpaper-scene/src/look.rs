@@ -184,6 +184,12 @@ impl Resolved {
     }
 }
 
+// As a Point Mapping node turns Blender's Environment Texture: it samples the sky turned by
+// the angle, which shows the sky turned the other way. Bevy turns it the way given.
+pub(crate) fn sky_turn(degrees: f32) -> Quat {
+    Quat::from_rotation_y(-degrees.to_radians())
+}
+
 // As Blender's Glare node does it: only light past the threshold glows, and the glow is added
 // on top of the image. Bevy's own default instead fades the whole image towards a blurred copy
 // of itself, which at full strength is nothing but the blur.
@@ -284,9 +290,7 @@ fn apply_stage_look(
             commands.entity(entity).remove::<effect_stack::Vignette>();
         }
         commands.entity(entity).insert(color_grading(look));
-        // As a Point Mapping node turns Blender's Environment Texture: it samples the sky turned
-        // by the angle, which shows the sky turned the other way. Bevy turns it the way given.
-        let rotation = Quat::from_rotation_y(-resolved.sky_rotation_deg.to_radians());
+        let rotation = sky_turn(resolved.sky_rotation_deg);
         // At Blender's exposure, a panorama texel of 1 shows as 1, as Blender shows it.
         let luminance = resolved.sky_strength / Exposure::BLENDER.exposure();
         if let Some(mut sky) = sky {
