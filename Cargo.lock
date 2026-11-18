@@ -1902,9 +1902,11 @@ dependencies = [
  "charpaper-settings",
  "charpaper-suite",
  "charpaper-ui",
+ "charpaper-update",
  "charpaper-wallpaper",
  "charpaper-windows",
  "clap",
+ "crossbeam-channel",
  "embed-resource",
  "mimalloc",
 ]

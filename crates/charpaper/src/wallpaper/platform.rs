@@ -55,3 +55,13 @@ pub fn starts_at_login(_exe: &Path) -> Option<io::Result<bool>> {
 pub fn set_starts_at_login(_exe: &Path, _on: bool) -> io::Result<()> {
     Err(io::ErrorKind::Unsupported.into())
 }
+
+#[cfg(windows)]
+pub fn open_in_browser(url: &str) {
+    charpaper_windows::open_in_browser(url);
+}
+
+#[cfg(not(windows))]
+pub fn open_in_browser(url: &str) {
+    bevy::log::warn!("cannot open {url}: no way to open a browser on {}", std::env::consts::OS);
+}

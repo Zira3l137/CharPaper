@@ -19,6 +19,8 @@ pub use crate::install::install;
 pub use crate::install::tidy;
 pub use crate::release::Release;
 pub use crate::release::check;
+// For comparing versions without a semver dependency of one's own.
+pub use semver::Version;
 
 pub const REPOSITORY: &str = "Zira3l137/CharPaper";
 

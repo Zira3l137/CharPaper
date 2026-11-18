@@ -1,6 +1,7 @@
 use charpaper_scene::SceneConfig;
 use charpaper_settings::DisplayMode;
 use charpaper_ui::UiConfig;
+use charpaper_update::Version;
 use charpaper_wallpaper::WallpaperConfig;
 
 use crate::cli::Cli;
@@ -20,6 +21,9 @@ pub struct AppConfig {
     // Release builds have no console to log to, so they always write the file.
     pub log_file: bool,
     pub benchmark: bool,
+    // The version to check for updates as. None checks as this build, and not at all in a
+    // debug build, which would replace target/'s executable.
+    pub update_from: Option<Version>,
 }
 
 #[derive(Clone, Debug)]
@@ -48,6 +52,7 @@ impl AppConfig {
             log: LogLevels { ours: cli.log_level, engine: cli.bevy_log_level },
             log_file: cli.log_file || !cfg!(debug_assertions),
             benchmark: cli.benchmark,
+            update_from: cli.update_from(),
         };
 
         cfg.scene.suite = cli.suite.clone();

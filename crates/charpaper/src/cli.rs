@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use charpaper_update::Version;
 use clap::Parser;
 
 use crate::logging::LogLevel;
@@ -63,6 +64,13 @@ pub struct Cli {
     #[command(flatten)]
     pub backend: BackendOptions,
 
+    /// Check for a newer release as if this were the given version, such as
+    /// `0.5.0`, even in a debug build. For testing updates against a release
+    /// that exists.
+    #[cfg(feature = "diagnostics")]
+    #[arg(long, value_name = "VERSION")]
+    pub update_from: Option<Version>,
+
     /// Do not replay the mouse input the desktop keeps from the wallpaper.
     ///
     /// The wallpaper still renders; it just stops reacting to the mouse.
@@ -98,5 +106,15 @@ impl Cli {
     #[cfg(not(feature = "diagnostics"))]
     pub fn backend(&self) -> BackendOptions {
         BackendOptions::default()
+    }
+
+    #[cfg(feature = "diagnostics")]
+    pub fn update_from(&self) -> Option<Version> {
+        self.update_from.clone()
+    }
+
+    #[cfg(not(feature = "diagnostics"))]
+    pub fn update_from(&self) -> Option<Version> {
+        None
     }
 }

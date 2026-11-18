@@ -10,6 +10,7 @@ mod login;
 mod pacing;
 mod restart;
 mod save;
+mod update;
 mod wallpaper;
 
 use anyhow::Result;

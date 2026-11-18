@@ -9,6 +9,7 @@ mod screen;
 mod stage;
 mod system;
 mod ui;
+mod update;
 
 pub use audio::Volumes;
 pub use file::Loaded;
@@ -54,3 +55,5 @@ pub use ui::PanelSide;
 pub use ui::Tab;
 pub use ui::UiState;
 pub use ui::UiTheme;
+pub use update::UpdateAction;
+pub use update::UpdateStatus;

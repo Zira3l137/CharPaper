@@ -14,6 +14,7 @@ use charpaper_scene::ScenePlugin;
 use charpaper_settings::DisplayMode;
 use charpaper_settings::STATE_FILE;
 use charpaper_ui::SettingsPanelPlugin;
+use charpaper_update::Version;
 
 use crate::benchmark;
 use crate::benchmark::BenchmarkPlugin;
@@ -26,6 +27,8 @@ use crate::restart;
 use crate::restart::Restart;
 use crate::restart::RestartPlugin;
 use crate::save::StatePlugin;
+use crate::update::Installer;
+use crate::update::UpdatePlugin;
 use crate::wallpaper::WallpaperPlugin;
 
 const CHARACTERS_DIR: &str = "characters";
@@ -99,7 +102,7 @@ pub fn run(mut config: AppConfig) -> Result<()> {
             ScenePlugin { config: config.scene.clone() },
             SettingsPanelPlugin { config: config.ui.clone() },
             PacingPlugin,
-            LoginPlugin { exe },
+            LoginPlugin { exe: exe.clone() },
         ));
     if let Some(err) = log_problem {
         warn!("cannot write {}: {err}", exe_dir.join(logging::LOG_FILE).display());
@@ -111,6 +114,18 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     // The benchmark changes settings and the look as it goes, none of which may be saved, so
     // a new mode couldn't be either.
     let restart = Restart::default();
+    let installer = Installer::default();
+    let check = !config.benchmark && (!cfg!(debug_assertions) || config.update_from.is_some());
+    let current = config.update_from.clone().unwrap_or_else(|| {
+        Version::parse(env!("CARGO_PKG_VERSION")).expect("the workspace version is semver")
+    });
+    app.add_plugins(UpdatePlugin {
+        app_dir: exe_dir.clone(),
+        current,
+        check,
+        installer: installer.clone(),
+        restart: restart.clone(),
+    });
     if config.benchmark {
         app.add_plugins(BenchmarkPlugin { results: exe_dir.join(benchmark::RESULTS_FILE) });
     } else {
@@ -119,10 +134,17 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     }
     let exit = app.run();
 
+    // Bevy has stopped and the windows are off the desktop, so nothing holds the files.
+    if let Some(staged) = installer.take() {
+        match charpaper_update::install(&staged, &exe) {
+            Ok(()) => info!("installed CharPaper {}", staged.version),
+            Err(err) => error!("cannot install CharPaper {}: {err}", staged.version),
+        }
+    }
     if restart.asked()
-        && let Err(err) = restart::start_again()
+        && let Err(err) = restart::start_again(&exe)
     {
-        error!("cannot start again in the new mode: {err}");
+        error!("cannot start again: {err}");
     }
 
     match exit {
