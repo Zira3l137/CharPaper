@@ -1,7 +1,6 @@
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::RawHandleWrapper;
-use bevy::winit::EventLoopProxyWrapper;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::RawWindowHandle;
 use charpaper_wallpaper::ScreenArea;
@@ -10,6 +9,7 @@ use charpaper_wallpaper::WallpaperBackend;
 use charpaper_wallpaper::WallpaperConfig;
 use charpaper_wallpaper::WindowKey;
 
+use crate::pacing::FrameAlarm;
 use crate::wallpaper::Backend;
 use crate::wallpaper::WallpaperSettings;
 use crate::wallpaper::input::PointerOnDesktop;
@@ -65,7 +65,7 @@ fn attach_windows(
         &mut Window,
     )>,
     on_desktop: Res<PointerOnDesktop>,
-    proxy: Option<Res<EventLoopProxyWrapper>>,
+    alarm: Res<FrameAlarm>,
     mut forwarding_started: Local<bool>,
 ) {
     for (window, on, mut attachment, handle, mut settings) in &mut windows {
@@ -108,7 +108,7 @@ fn attach_windows(
     // One source covers every window, those attached later included.
     if !*forwarding_started && windows.iter().any(|(_, _, a, _, _)| *a == Attachment::Attached) {
         *forwarding_started = true;
-        let wake = on_desktop.waker(proxy.as_deref());
+        let wake = on_desktop.waker(alarm.clone());
         if let Some(source) = start_forwarding(backend.0.as_mut(), &config, wake) {
             commands.insert_resource(PointerSourceResource::new(source));
         }

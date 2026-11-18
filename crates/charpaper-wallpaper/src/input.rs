@@ -27,7 +27,7 @@ pub trait PointerSource: Send + 'static {
 }
 
 // Given to the backend to call from its own input thread when a press or wheel turn comes in.
-// Between frames the app sleeps, up to a second while rendering is paused, and only wakes
-// early for input the OS sends to its window, which forwarded input never is. Must return
-// quickly: it runs inside the backend's input path.
+// Between frames the app waits for the next one to be due, up to a second while rendering is
+// paused, and this ends the wait, so a click shows at once. Must return quickly: it runs
+// inside the backend's input path.
 pub type Wake = Box<dyn Fn() + Send>;

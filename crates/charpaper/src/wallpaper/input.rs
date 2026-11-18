@@ -15,14 +15,13 @@ use bevy::window::CursorEntered;
 use bevy::window::CursorLeft;
 use bevy::window::CursorMoved;
 use bevy::window::WindowEvent;
-use bevy::winit::EventLoopProxyWrapper;
-use bevy::winit::WinitUserEvent;
 use charpaper_wallpaper::PointerButton;
 use charpaper_wallpaper::PointerEvent;
 use charpaper_wallpaper::PointerSource;
 use charpaper_wallpaper::Wake;
 use charpaper_wallpaper::WindowKey;
 
+use crate::pacing::FrameAlarm;
 use crate::wallpaper::window_of;
 
 pub(crate) struct InputPlugin;
@@ -55,16 +54,12 @@ impl PointerSourceResource {
 pub(crate) struct PointerOnDesktop(Arc<AtomicBool>);
 
 impl PointerOnDesktop {
-    // Does for forwarded input what winit does for input sent to the window itself: pokes the
-    // event loop so the app runs a frame now.
-    pub(crate) fn waker(&self, proxy: Option<&EventLoopProxyWrapper>) -> Wake {
+    // Ends the wait for the next frame, so forwarded input shows at once.
+    pub(crate) fn waker(&self, alarm: FrameAlarm) -> Wake {
         let on_desktop = self.0.clone();
-        let Some(proxy) = proxy.map(|proxy| (**proxy).clone()) else {
-            return Box::new(|| {});
-        };
         Box::new(move || {
             if on_desktop.load(Ordering::Relaxed) {
-                let _ = proxy.send_event(WinitUserEvent::WakeUp);
+                alarm.ring();
             }
         })
     }
