@@ -38,6 +38,8 @@ pub struct Graphics {
     #[serde(deserialize_with = "DepthOfField::saved")]
     pub depth_of_field: DepthOfField,
     pub fog: bool,
+    // Multiplies every fog box's density, as raising Density in Blender by that much would.
+    pub fog_density: f32,
     pub fog_quality: FogQuality,
     pub fog_dithering: bool,
     pub fog_resolution: FogResolution,
@@ -58,6 +60,7 @@ impl Default for Graphics {
             anti_aliasing: AntiAliasing::default(),
             depth_of_field: DepthOfField::default(),
             fog: true,
+            fog_density: 1.0,
             fog_quality: FogQuality::default(),
             fog_dithering: false,
             fog_resolution: FogResolution::default(),

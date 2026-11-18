@@ -203,5 +203,6 @@ fn scene_fog(graphics: &Graphics) -> SceneFog {
         step_length: graphics.fog_quality.step_length(),
         dithering: graphics.fog_dithering,
         downscale: graphics.fog_resolution.downscale(),
+        density: graphics.fog_density.max(0.0),
     }
 }

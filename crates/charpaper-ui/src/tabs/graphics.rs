@@ -58,6 +58,7 @@ const BACKGROUND_BLUR: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit:
 const LUT_STRENGTH: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
 // Depth of field strength, a stop of aperture apart: each doubles or halves the blur's area.
 const BLUR_STRENGTH_STOPS: [f32; 9] = [0.25, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8, 4.0];
+const FOG_DENSITY_STOPS: [f32; 9] = BLUR_STRENGTH_STOPS;
 // Diameters in pixels. Beyond 128 the near blur would need more tiles around each pixel.
 const MAX_BLUR_STOPS: [f32; 7] = [16.0, 24.0, 32.0, 48.0, 64.0, 96.0, 128.0];
 const HIGHLIGHTS: Scale = Scale { step: 0.25, min: 0.0, max: 3.0, per_unit: 100.0 };
@@ -596,6 +597,23 @@ fn fog() -> impl Bundle {
                 change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.fog, step)),
             }
             .segments(),
+            Setting {
+                label: |l| fl!(l, "label-fog-density"),
+                help: |l| fl!(l, "help-fog-density"),
+                show: |w, _| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let density = graphics.fog_density;
+                    let [min, .., max] = FOG_DENSITY_STOPS;
+                    let shown = number(percent(density), density.ln(), min.ln(), max.ln());
+                    Some(shown.when(graphics.fog && foggy(w)))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        g.fog_density = step_stops(&FOG_DENSITY_STOPS, g.fog_density, step.by());
+                    });
+                },
+            }
+            .stepper(),
             Setting {
                 label: |l| fl!(l, "label-fog-quality"),
                 help: |l| fl!(l, "help-fog-quality"),

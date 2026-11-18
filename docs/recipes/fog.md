@@ -23,6 +23,9 @@ a **Principled Volume** plugged into *Volume*, and nothing in *Surface*.
 - A sun lights fog only while its *Shadow* is ticked.
 - To keep a light out of the fog, set its *Light → Influence → Volume Scatter* to 0. Any
   value above 0 counts as fully on.
+- Viewers can make the fog thinner or thicker with **Graphics → Fog → Density**, from 25%
+  to 400% of what you made. At 100%, the default, it's exactly as in Blender, so make it
+  look right there.
 
 ---
 

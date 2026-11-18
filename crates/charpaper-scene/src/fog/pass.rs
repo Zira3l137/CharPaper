@@ -132,10 +132,13 @@ pub(crate) struct SceneFog {
     pub dithering: bool,
     // Screen pixels per fog pixel, across and down: 1, 2 or 4.
     pub downscale: u32,
+    // Multiplies every fog box's density.
+    pub density: f32,
 }
 
 #[derive(Component, Clone, PartialEq)]
 pub(crate) struct ExtractedFog {
+    density: f32,
     max_steps: u32,
     step_length: f32,
     dithering: bool,
@@ -154,6 +157,7 @@ impl ExtractComponent for SceneFog {
 
     fn extract_component((fog, layers): QueryItem<'_, '_, Self::QueryData>) -> Option<Self::Out> {
         Some(ExtractedFog {
+            density: fog.density,
             max_steps: fog.max_steps,
             step_length: fog.step_length,
             dithering: fog.dithering,
@@ -777,7 +781,7 @@ fn prepare_fog(
                     step_length: fog.step_length,
                     absorption: fog_box.absorption,
                     scattering: fog_box.scattering,
-                    density: fog_box.density,
+                    density: fog_box.density * fog.density,
                     scattering_asymmetry: fog_box.asymmetry,
                     light_intensity: fog_box.light_intensity,
                     dithering: if fog.dithering { 1.0 } else { 0.0 },
