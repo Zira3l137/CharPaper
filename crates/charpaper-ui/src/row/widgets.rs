@@ -182,12 +182,14 @@ impl Setting {
         )
     }
 
-    // A value made of several numbers, such as a color. Its value opens rows of their own under
-    // it, as a picker's opens a list, and a chip of `chip` beside it shows the whole at a glance.
-    pub(crate) fn drawer(self, chip: Swatch, rows: impl Bundle) -> impl Bundle {
+    // A value made of several numbers, such as a color, or one with more to say than fits. Its
+    // value opens rows or other content of their own under it, as a picker's opens a list, and
+    // a chip of `chip`, if any, beside it shows the whole at a glance.
+    pub(crate) fn drawer(self, chip: Option<Swatch>, rows: impl Bundle) -> impl Bundle {
         let title = self.label;
         let chip = (
             Node {
+                display: display(chip.is_some()),
                 width: Val::Px(14.0),
                 height: Val::Px(14.0),
                 flex_shrink: 0.0,
@@ -195,7 +197,7 @@ impl Setting {
                 border_radius: BorderRadius::all(RADIUS),
                 ..default()
             },
-            Fill(chip),
+            Fill(chip.unwrap_or(CLEAR)),
             Stroke(BORDER),
             Pickable::IGNORE,
         );

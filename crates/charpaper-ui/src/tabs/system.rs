@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use charpaper_scene::StageKey;
 use charpaper_scene::focused_changed;
+use charpaper_settings::Changelog;
 use charpaper_settings::ChosenMonitor;
 use charpaper_settings::DisplayMode;
 use charpaper_settings::FpsLimit;
@@ -16,6 +17,7 @@ use charpaper_settings::SystemSettings;
 use charpaper_settings::UiState;
 use charpaper_settings::UpdateAction;
 use charpaper_settings::UpdateStatus;
+use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
 use crate::locale::Languages;
@@ -29,21 +31,32 @@ use crate::section::section;
 use crate::theme::*;
 use crate::widgets::*;
 
-// The list of monitors, which are not rows but a button each.
+// The list of monitors, which are not rows but a button each, and the list of what changed
+// in a newer version.
 pub(crate) struct SystemPlugin;
 
 impl Plugin for SystemPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_click).add_systems(
-            Update,
-            (fill_monitors, show_monitors).chain().run_if(
-                resource_changed::<ScreenSettings>
-                    .or_eager(resource_changed::<Monitors>)
-                    .or_eager(resource_changed::<Locale>)
-                    .or_eager(focused_changed::<StageKey>)
-                    .or_eager(new_panel),
-            ),
-        );
+        app.add_observer(on_click)
+            .add_observer(open_release_page)
+            .add_systems(
+                Update,
+                (fill_monitors, show_monitors).chain().run_if(
+                    resource_changed::<ScreenSettings>
+                        .or_eager(resource_changed::<Monitors>)
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(focused_changed::<StageKey>)
+                        .or_eager(new_panel),
+                ),
+            )
+            .add_systems(
+                Update,
+                fill_changelog.run_if(
+                    resource_changed::<Changelog>
+                        .or_eager(resource_changed::<Locale>)
+                        .or_eager(new_panel),
+                ),
+            );
     }
 }
 
@@ -54,6 +67,12 @@ struct MonitorList;
 // Shows the wallpaper on the monitor with this id, or stops showing it there.
 #[derive(Component)]
 struct MonitorButton(String);
+
+#[derive(Component)]
+struct ChangelogList;
+
+#[derive(Component)]
+struct OpenReleasePage;
 
 // Settings of the app itself rather than of what it shows: how and when it runs, which
 // monitors it is on and which stage each shows, how often it draws and when it stops, and the
@@ -118,7 +137,8 @@ fn app_section() -> impl Bundle {
 // on a click and ignore the wheel passing over them. Both are there only while a newer
 // version is on offer.
 
-// The version on offer, and how its download goes. A click opens its page.
+// The version on offer, and how its download goes. Its value opens what changed since the
+// running version, with a button to the release's page for the rest.
 fn update_version() -> impl Bundle {
     Setting {
         label: |l| fl!(l, "label-update-version"),
@@ -140,13 +160,24 @@ fn update_version() -> impl Bundle {
             };
             Some(Shown::Choice { labels: vec![text], current: Some(0) })
         },
-        change: |w, step| {
-            if let Change::To(_) = step.change {
-                w.write_message(UpdateAction::OpenPage);
-            }
-        },
+        change: |_, _| {},
     }
-    .segments()
+    .drawer(
+        None,
+        children![
+            (
+                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default() },
+                Pickable::IGNORE,
+                ChangelogList,
+            ),
+            translated_button(|l| fl!(l, "update-open-page"))
+                .node(|n| {
+                    n.align_self = AlignSelf::FlexStart;
+                    n.margin = UiRect::vertical(Val::Px(8.0));
+                })
+                .build(OpenReleasePage),
+        ],
+    )
 }
 
 fn update() -> impl Bundle {
@@ -397,7 +428,7 @@ fn accent() -> impl Bundle {
         change: |_, _| {},
     }
     .drawer(
-        ACCENT,
+        Some(ACCENT),
         children![
             Setting {
                 label: |l| fl!(l, "label-accent-hue"),
@@ -445,6 +476,61 @@ fn accent() -> impl Bundle {
             .stepper(),
         ],
     )
+}
+
+// A version's number, then its changes. Their sections are only named when there are several:
+// most versions have little but Other.
+fn fill_changelog(
+    mut commands: Commands,
+    changelog: Res<Changelog>,
+    locale: Res<Locale>,
+    lists: Query<Entity, With<ChangelogList>>,
+) {
+    for list in &lists {
+        commands.entity(list).despawn_children().with_children(|list| {
+            for notes in &changelog.0 {
+                list.spawn((
+                    label(&notes.version, BODY_SIZE, TEXT),
+                    Node { margin: UiRect::top(Val::Px(4.0)), ..default() },
+                ));
+                let titled = notes.sections.len() > 1;
+                for (title, items) in &notes.sections {
+                    if titled {
+                        list.spawn(label(section_title(&locale, title), SMALL_SIZE, TEXT_DIM));
+                    }
+                    for item in items {
+                        list.spawn(label(format!("• {item}"), CONTROL_SIZE, TEXT_LABEL));
+                    }
+                }
+            }
+        });
+    }
+}
+
+// The release notes' section names are cliff.toml's, in English.
+fn section_title(l: &FluentLanguageLoader, title: &str) -> String {
+    match title {
+        "Features" => fl!(l, "changelog-features"),
+        "Fixes" => fl!(l, "changelog-fixes"),
+        "Performance" => fl!(l, "changelog-performance"),
+        "Refactoring" => fl!(l, "changelog-refactoring"),
+        "Documentation" => fl!(l, "changelog-documentation"),
+        "Tests" => fl!(l, "changelog-tests"),
+        "Build" => fl!(l, "changelog-build"),
+        "Reverts" => fl!(l, "changelog-reverts"),
+        "Other" => fl!(l, "changelog-other"),
+        other => other.to_string(),
+    }
+}
+
+fn open_release_page(
+    event: On<Pointer<Click>>,
+    buttons: Query<(), With<OpenReleasePage>>,
+    mut actions: MessageWriter<UpdateAction>,
+) {
+    if buttons.contains(event.entity) {
+        actions.write(UpdateAction::OpenPage);
+    }
 }
 
 // None, following the system's languages, comes first.

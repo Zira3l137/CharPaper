@@ -7,17 +7,21 @@ use ureq::Agent;
 use crate::Error;
 use crate::Platform;
 use crate::REPOSITORY;
+use crate::notes;
+use crate::notes::Notes;
 use crate::platform;
 
 const SUMS_FILE: &str = "SHA256SUMS.txt";
 
-// A newer stable version, with what's needed to download it.
+// The newest stable version, with what's needed to download it.
 #[derive(Debug, Clone)]
 pub struct Release {
     pub version: Version,
     // Its page on GitHub, with the notes.
     pub page: String,
-    pub notes: String,
+    // What changed in every stable version since the running one, this one included, newest
+    // first: someone a few versions behind gets them all.
+    pub changes: Vec<Notes>,
     pub(crate) tag: String,
     pub(crate) archive: Asset,
     pub(crate) sums: Asset,
@@ -36,6 +40,8 @@ struct GitHubRelease {
     html_url: String,
     #[serde(default)]
     body: Option<String>,
+    draft: bool,
+    prerelease: bool,
     assets: Vec<GitHubAsset>,
 }
 
@@ -46,11 +52,13 @@ struct GitHubAsset {
     size: u64,
 }
 
-// GitHub's "latest" is the newest release that is neither a draft nor a pre-release, so the
-// nightly and release candidates never show up here. None when it is no newer than `current`.
+// The newest release that is neither a draft nor a pre-release, so never the nightly or a
+// release candidate. None when it is no newer than `current`. The list rather than GitHub's
+// "latest", which would leave out the notes of the versions in between. It holds the newest
+// hundred releases, which reach further back than anyone will be behind.
 pub fn check(current: &Version) -> Result<Option<Release>, Error> {
     let platform = platform().ok_or(Error::Unsupported)?;
-    let url = format!("https://api.github.com/repos/{REPOSITORY}/releases/latest");
+    let url = format!("https://api.github.com/repos/{REPOSITORY}/releases?per_page=100");
     let text = agent()
         .get(&url)
         .header("Accept", "application/vnd.github+json")
@@ -58,8 +66,21 @@ pub fn check(current: &Version) -> Result<Option<Release>, Error> {
         .call()?
         .body_mut()
         .read_to_string()?;
-    let latest: GitHubRelease = serde_json::from_str(&text)?;
-    let Some(version) = newer(current, &latest.tag_name) else {
+    let releases: Vec<GitHubRelease> = serde_json::from_str(&text)?;
+    let mut ahead: Vec<(Version, GitHubRelease)> = releases
+        .into_iter()
+        .filter(|release| !release.draft && !release.prerelease)
+        .filter_map(|release| Some((newer(current, &release.tag_name)?, release)))
+        .collect();
+    ahead.sort_by(|(a, _), (b, _)| b.cmp(a));
+    let changes = ahead
+        .iter()
+        .map(|(version, release)| Notes {
+            version: version.clone(),
+            sections: notes::parse(release.body.as_deref().unwrap_or_default()),
+        })
+        .collect();
+    let Some((version, latest)) = ahead.into_iter().next() else {
         return Ok(None);
     };
     let find = |name: &str| {
@@ -75,7 +96,7 @@ pub fn check(current: &Version) -> Result<Option<Release>, Error> {
     Ok(Some(Release {
         version,
         page: latest.html_url.clone(),
-        notes: latest.body.clone().unwrap_or_default(),
+        changes,
         archive: find(&archive).ok_or_else(no_archive)?,
         sums: find(SUMS_FILE).ok_or_else(no_archive)?,
         tag: latest.tag_name,

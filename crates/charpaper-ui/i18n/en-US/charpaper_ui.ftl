@@ -163,6 +163,17 @@ update-restarting = { $version } · restarting
 update-install = Install
 update-retry = Try again
 update-skip = Skip
+update-open-page = Open on GitHub
+# Kinds of change in the list of what changed in a newer version.
+changelog-features = New
+changelog-fixes = Fixes
+changelog-performance = Performance
+changelog-refactoring = Code changes
+changelog-documentation = Documentation
+changelog-tests = Tests
+changelog-build = Build
+changelog-reverts = Undone
+changelog-other = Other
 section-display = DISPLAY
 # Above the panel, with several stages: which one the panel shows.
 stage-name = Stage { $letter }
@@ -335,7 +346,7 @@ help-pause-battery = Stops the picture and sound while the computer runs on batt
 help-mode = Wallpaper puts the scene behind the desktop icons, Window in an ordinary window. CharPaper restarts to switch.
 help-start-at-login = Starts CharPaper whenever you sign in to Windows on this computer.
 help-check-updates = Asks GitHub for a newer version each time CharPaper starts. Nothing is downloaded until you click Install.
-help-update-version = A newer CharPaper is out. Click it to see what changed.
+help-update-version = A newer CharPaper is out. Click it to see what changed since your version.
 help-update = Install downloads it and restarts CharPaper with it, keeping your characters and settings. Skip hides this version.
 help-layout = For this monitor's stage. Mirror shows the whole scene on each of its monitors. Span spreads one wide view across them, as if they were a single screen.
 help-master-volume = How loud all of CharPaper's sound is.

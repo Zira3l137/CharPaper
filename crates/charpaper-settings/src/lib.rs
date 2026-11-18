@@ -55,5 +55,7 @@ pub use ui::PanelSide;
 pub use ui::Tab;
 pub use ui::UiState;
 pub use ui::UiTheme;
+pub use update::Changelog;
 pub use update::UpdateAction;
 pub use update::UpdateStatus;
+pub use update::VersionNotes;

@@ -5,6 +5,7 @@
 
 mod download;
 mod install;
+mod notes;
 mod release;
 
 use std::io;
@@ -17,6 +18,8 @@ pub use crate::download::Staged;
 pub use crate::download::download;
 pub use crate::install::install;
 pub use crate::install::tidy;
+pub use crate::notes::Notes;
+pub use crate::notes::Section;
 pub use crate::release::Release;
 pub use crate::release::check;
 // For comparing versions without a semver dependency of one's own.

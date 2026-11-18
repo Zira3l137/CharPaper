@@ -4,9 +4,11 @@ use std::sync::Mutex;
 use std::thread;
 
 use bevy::prelude::*;
+use charpaper_settings::Changelog;
 use charpaper_settings::SystemSettings;
 use charpaper_settings::UpdateAction;
 use charpaper_settings::UpdateStatus;
+use charpaper_settings::VersionNotes;
 use charpaper_update::Release;
 use charpaper_update::Staged;
 use charpaper_update::Version;
@@ -66,6 +68,7 @@ impl Plugin for UpdatePlugin {
         let (sender, receiver) = crossbeam_channel::unbounded();
         app.add_message::<UpdateAction>()
             .init_resource::<UpdateStatus>()
+            .init_resource::<Changelog>()
             .init_resource::<Offered>()
             .insert_resource(self.installer.clone())
             .insert_resource(Worker {
@@ -113,6 +116,7 @@ fn receive(
     settings: Res<SystemSettings>,
     mut offered: ResMut<Offered>,
     mut status: ResMut<UpdateStatus>,
+    mut changelog: ResMut<Changelog>,
     mut exit: MessageWriter<AppExit>,
 ) {
     for report in worker.receiver.try_iter() {
@@ -124,6 +128,7 @@ fn receive(
                 } else {
                     info!("CharPaper {version} is out");
                     *status = UpdateStatus::Available { version };
+                    *changelog = Changelog(release.changes.iter().map(version_notes).collect());
                     offered.0 = Some(release);
                 }
             }
@@ -159,6 +164,7 @@ fn act(
     worker: Res<Worker>,
     mut offered: ResMut<Offered>,
     mut status: ResMut<UpdateStatus>,
+    mut changelog: ResMut<Changelog>,
     mut settings: ResMut<SystemSettings>,
 ) {
     for action in actions.read() {
@@ -182,10 +188,19 @@ fn act(
                 info!("skipping CharPaper {}", release.version);
                 settings.skipped_version = Some(release.version.to_string());
                 *status = UpdateStatus::Idle;
+                *changelog = Changelog::default();
                 offered.0 = None;
             }
             UpdateAction::OpenPage => platform::open_in_browser(&release.page),
         }
+    }
+}
+
+fn version_notes(notes: &charpaper_update::Notes) -> VersionNotes {
+    let sections = notes.sections.iter();
+    VersionNotes {
+        version: notes.version.to_string(),
+        sections: sections.map(|section| (section.title.clone(), section.items.clone())).collect(),
     }
 }
 

@@ -26,6 +26,17 @@ pub enum UpdateStatus {
     },
 }
 
+// What changed in each version since the running one, up to the one on offer, newest first.
+#[derive(Resource, Default, Debug, Clone, PartialEq, Eq)]
+pub struct Changelog(pub Vec<VersionNotes>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VersionNotes {
+    pub version: String,
+    // Each section's title, in English as the release notes have it, and its changes.
+    pub sections: Vec<(String, Vec<String>)>,
+}
+
 // What the panel asks of the updater, about the version it offers.
 #[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateAction {

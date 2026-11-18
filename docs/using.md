@@ -123,7 +123,9 @@ versions count, never the nightly build or a test version. When there is one, a 
 on the button that brings the panel back and on the **System** tab, and **System → App**
 gets two more rows:
 
-- **New version** shows its number. Click it to read what changed.
+- **New version** shows its number. Click it to see what changed since your version, in
+  every version in between if you're a few behind. **Open on GitHub** under the list
+  opens the version's page, with the full notes and the downloads.
 - **Update** has two buttons. **Install** downloads it, checks the download isn't
   damaged, then restarts CharPaper with it. **Skip** stops offering that version;
   the next one is offered as usual.
@@ -139,8 +141,8 @@ with the same name.
 Some things to know:
 
 - **The Blender add-on doesn't update with the app.** Download the new
-  `charpaper_exporter` zip from the version's page, the one **New version** opens, and
-  install it in Blender as you did the first time.
+  `charpaper_exporter` zip from the version's page (**Open on GitHub** under **New
+  version**) and install it in Blender as you did the first time.
 - **0.6.0 and older can't update themselves.** Update one of those by hand: extract
   the new version, then move `characters` and `state.toml` from the old folder into the
   new one.
