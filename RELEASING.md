@@ -70,5 +70,8 @@ Once people have downloaded a version, ship the fix as the next patch version in
 2. Give the target its flags in `.cargo/config.toml`, as Windows has.
 3. Put any files the platform ships next to the executable, such as launch scripts, in
    `packaging/<platform>/` and point the entry's `extras` at it.
+4. Add the platform to `PLATFORMS` in `crates/charpaper-update/src/lib.rs`, with the same
+   name as the matrix entry, so the app finds its own archive when updating itself. A
+   `tar.gz` archive also needs unpacking added beside the zip's in `download.rs`.
 
 Nightly and Release both build through `build.yml`, so neither needs changing.
