@@ -2,6 +2,8 @@
 // loads it: RGB9E5 texels, the six faces of its full-size level first, each laid out as
 // cube.rs renders it.
 
+use thiserror::Error;
+
 use crate::cube::world;
 use crate::ktx2::unpack_rgb9e5;
 
@@ -15,13 +17,27 @@ const SUN_RADIUS_DEG: f32 = 5.0;
 // A sun this far below the horizon, as a share of straight down, is still taken as setting.
 const HORIZON: f32 = 0.02;
 
+/// Why a sky has no sun to follow.
+#[derive(Debug, Clone, Copy, PartialEq, Error)]
+pub enum NoSun {
+    #[error("the skybox is smaller than its size says")]
+    Unreadable,
+    #[error(
+        "its brightest spot is only {over_sky:.0}× the sky's average, and a sun is at least \
+         {SUN_OVER_SKY:.0}×: the sun is clipped in the panorama, or behind clouds"
+    )]
+    Faint { over_sky: f32 },
+    #[error("its brightest spot is {degrees:.1}° below the horizon")]
+    BelowHorizon { degrees: f32 },
+}
+
 /// The direction a sky's sun lies in, Y up and before the sky is turned, from a cubemap of
-/// `size` texels a face whose full-size level starts `data`. None when no spot stands out
-/// from the rest of the sky, as under clouds, or when the brightest is below the horizon.
-pub fn sun_direction(size: u32, data: &[u8]) -> Option<[f32; 3]> {
+/// `size` texels a face whose full-size level starts `data`. Why not, when no spot stands
+/// out from the rest of the sky, as under clouds, or the brightest is below the horizon.
+pub fn sun_direction(size: u32, data: &[u8]) -> Result<[f32; 3], NoSun> {
     let per_face = (size as usize).pow(2);
     if size == 0 || data.len() < per_face * 6 * 4 {
-        return None;
+        return Err(NoSun::Unreadable);
     }
     let luminance = |face: usize, x: u32, y: u32| {
         let i = (face * per_face + (y * size + x) as usize) * 4;
@@ -49,8 +65,9 @@ pub fn sun_direction(size: u32, data: &[u8]) -> Option<[f32; 3]> {
         }
     }
     let mean = (total / count as f64) as f32;
+    let over_sky = if mean > 0.0 { peak / mean } else { 0.0 };
     if peak <= 0.0 || peak < SUN_OVER_SKY * mean {
-        return None;
+        return Err(NoSun::Faint { over_sky });
     }
 
     // Then every texel around what was found, on every face it reaches, as a sun across an
@@ -85,10 +102,13 @@ pub fn sun_direction(size: u32, data: &[u8]) -> Option<[f32; 3]> {
     }
     let length = sum.iter().map(|s| s * s).sum::<f64>().sqrt();
     if length <= 0.0 {
-        return None;
+        return Err(NoSun::Faint { over_sky });
     }
     let sun = sum.map(|s| (s / length) as f32);
-    (sun[1] >= -HORIZON).then_some(sun)
+    if sun[1] < -HORIZON {
+        return Err(NoSun::BelowHorizon { degrees: -sun[1].asin().to_degrees() });
+    }
+    Ok(sun)
 }
 
 // The texel of a face a direction points through, or the nearest on its edge, if the
@@ -170,10 +190,18 @@ mod tests {
     }
 
     #[test]
-    fn a_sky_without_a_sun_or_with_it_set_has_none() {
-        assert_eq!(sun_direction(128, &skybox(None, 128)), None);
-        assert_eq!(sun_direction(128, &skybox(Some(direction(0.4, 0.7)), 128)), None);
-        assert_eq!(sun_direction(128, &[]), None);
+    fn a_sky_without_a_sun_or_with_it_set_has_none_and_says_why() {
+        assert!(matches!(
+            sun_direction(128, &skybox(None, 128)),
+            Err(NoSun::Faint { over_sky }) if (0.9..1.5).contains(&over_sky)
+        ));
+        assert!(matches!(
+            sun_direction(128, &skybox(Some(direction(0.4, 0.7)), 128)),
+            Err(NoSun::BelowHorizon { degrees }) if (30.0..40.0).contains(&degrees)
+        ));
+        assert_eq!(sun_direction(128, &[]), Err(NoSun::Unreadable));
+        let faint = NoSun::Faint { over_sky: 8.4 }.to_string();
+        assert!(faint.contains("only 8× the sky's average") && faint.contains("least 25×"));
     }
 }
 

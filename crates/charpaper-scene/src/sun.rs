@@ -48,26 +48,31 @@ fn find_sky_suns(mut suns: ResMut<SkySuns>, skies: Query<&SceneSky>, images: Res
             continue;
         };
         let sun = sky_sun(image);
-        match sun {
-            Some(sun) => info!("the sky's sun is towards {sun:.3}"),
-            None => info!("the sky has no sun to follow"),
+        match &sun {
+            Ok(sun) => info!("the sky's sun is towards {sun:.3}"),
+            Err(why) => info!("the sky has no sun to find: {why}. The sun stays as Blender has it"),
         }
-        suns.0.insert(id, sun);
+        suns.0.insert(id, sun.ok());
     }
 }
 
 // Only a skybox as CharPaper bakes them, which Bevy keeps with its largest level first.
-fn sky_sun(image: &Image) -> Option<Vec3> {
+fn sky_sun(image: &Image) -> Result<Vec3, String> {
     let descriptor = &image.texture_descriptor;
     let baked = descriptor.format == TextureFormat::Rgb9e5Ufloat
         && descriptor.size.depth_or_array_layers == 6
         && descriptor.size.width == descriptor.size.height
         && (descriptor.mip_level_count == 1 || image.data_order == TextureDataOrder::MipMajor);
     if !baked {
-        return None;
+        let (format, layers) = (descriptor.format, descriptor.size.depth_or_array_layers);
+        return Err(format!(
+            "it isn't a skybox CharPaper baked, but {format:?} in {layers} layers"
+        ));
     }
-    charpaper_bake::sun_direction(descriptor.size.width, image.data.as_deref()?)
+    let data = image.data.as_deref().ok_or("its pixels weren't kept after loading")?;
+    charpaper_bake::sun_direction(descriptor.size.width, data)
         .map(Vec3::from_array)
+        .map_err(|why| why.to_string())
 }
 
 // A directional light looks down its local -Z, so it is turned to look away from the sun.
