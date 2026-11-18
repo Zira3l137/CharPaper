@@ -78,8 +78,8 @@ saved in the `.blend`.
   rendered with Cycles into a 2048×1024 `sky.exr`, which takes a few seconds on every
   export; Cycles is switched on for it if it's off. The panorama replaces any other in the
   folder, and when it changed the baked `.ktx2` maps are deleted so the app bakes them
-  again. The cases where no sky is exported are listed in the main README, under *When the
-  sky isn't exported*. An environment with a World and no collection is just a sky.
+  again. The cases where no sky is exported are listed under
+  [When the sky isn't exported](../../../docs/recipes/sky.md#when-the-sky-isnt-exported). An environment with a World and no collection is just a sky.
 - **Shared data:** objects sharing a mesh (*Alt+D*, or *Link/Transfer Data*) share it in the
   file too, and the app keeps it in memory once. An object with modifiers gets a mesh of its
   own when *Apply Modifiers* is on, since its result is its own. Lights sharing light data
