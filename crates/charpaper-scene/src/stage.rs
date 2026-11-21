@@ -21,7 +21,6 @@ use charpaper_settings::ViewSettings;
 use crate::camera::ShownOrbit;
 use crate::camera::ShownRig;
 use crate::camera::view_bundle;
-use crate::character::CueClock;
 use crate::character::Expressions;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
@@ -65,7 +64,6 @@ use crate::suite::starting_suite;
     ShownOrbit,
     SkinObjects,
     Expressions,
-    CueClock,
     ShownRig,
     ShownEnvironment,
     Baking,

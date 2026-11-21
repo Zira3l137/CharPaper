@@ -14,7 +14,6 @@ use crate::camera::ShownRig;
 use crate::character::Character;
 use crate::character::CharacterClips;
 use crate::character::Expressions;
-use crate::character::PendingClips;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
 use crate::config::SceneConfig;
@@ -201,7 +200,7 @@ impl Teardown<'_, '_> {
         baking.0.clear();
         objects.0.clear();
         expressions.0.clear();
-        commands.entity(stage).remove::<(ActiveSuite, ActiveLook, CharacterClips, PendingClips)>();
+        commands.entity(stage).remove::<(ActiveSuite, ActiveLook, CharacterClips)>();
     }
 }
 

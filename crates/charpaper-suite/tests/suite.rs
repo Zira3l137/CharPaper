@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use charpaper_suite::ClipSet;
+use charpaper_suite::ClipMode;
 use charpaper_suite::EyeKind;
 use charpaper_suite::Suite;
 use charpaper_suite::SuiteError;
@@ -28,22 +28,6 @@ fn model() -> String {
             {{"name": "Spine", "children": [3], "translation": [0, 0.5, 0]}},
             {{"name": "Head"}}
         ],
-        {ACCESSORS}}}"#
-    )
-}
-
-fn animation(armature: &str, clip: &str) -> String {
-    format!(
-        r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0]}}],
-        "nodes": [
-            {{"name": "{armature}", "children": [1]}},
-            {{"name": "Hips", "children": [2]}},
-            {{"name": "Spine", "children": [3]}},
-            {{"name": "Head"}}
-        ],
-        "animations": [{{"name": "{clip}",
-            "channels": [{{"sampler": 0, "target": {{"node": 2, "path": "rotation"}}}}],
-            "samplers": [{{"input": 1, "output": 2}}]}}],
         {ACCESSORS}}}"#
     )
 }
@@ -131,7 +115,8 @@ impl Fixture {
         let fixture = Self(root);
         fixture.write("suite.toml", manifest);
         fixture.write("aki.gltf", &model());
-        fixture.write("animations/idle.gltf", &animation("Armature", "Idle"));
+        fixture.write("clips/idle.json", "read by the app");
+        fixture.write("clips/idle.glb", "read by the app");
         fixture.write("skins/casual.gltf", &outfit());
         fixture.write("skins/dress.gltf", &outfit());
         fixture.write("skins/notes.txt", "ignored");
@@ -161,12 +146,17 @@ impl Drop for Fixture {
 
 #[test]
 fn folder_layout_fills_in_what_the_manifest_leaves_out() {
-    let fixture = Fixture::new("convention", "schema = 1");
+    let fixture = Fixture::new("convention", "schema = 2");
     let suite = fixture.load().unwrap();
 
     assert_eq!(suite.model, Path::new("aki.gltf"));
-    assert_eq!(suite.animations.len(), 1);
-    assert_eq!(suite.animations[0].clips, ClipSet::All);
+    assert_eq!(suite.timeline.seconds(), 250.0 / 24.0);
+    let idle = &suite.clips[0];
+    assert_eq!((suite.clips.len(), idle.name.as_str()), (1, "idle"));
+    assert_eq!(idle.json, Path::new("clips/idle.json"));
+    assert_eq!(idle.glb.as_deref(), Some(Path::new("clips/idle.glb")));
+    assert_eq!((idle.mode, idle.gaze), (ClipMode::Timeline, true));
+    assert_eq!(suite.default_clip, None);
     let skins: Vec<&str> = suite.skins.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(skins, ["casual", "dress"]);
     assert_eq!(suite.skins[1].file, Path::new("skins/dress.gltf"));
@@ -174,32 +164,44 @@ fn folder_layout_fills_in_what_the_manifest_leaves_out() {
 }
 
 #[test]
-fn listing_a_file_replaces_its_discovered_clips() {
+fn clips_are_set_by_name_and_settings_for_missing_ones_are_refused() {
     let manifest = r#"
-        schema = 1
+        schema = 2
+        [timeline]
+        start = 1
+        end = 120
+        fps = 30
         [character]
-        default_animation = "wave"
-        [animations.wave]
-        file = "animations/wave.gltf"
+        default_clip = "wave"
+        [character.clips.wave]
         mode = "once"
-        [animations.broken]
-        file = "animations/wave.gltf"
-        clip = "Nope"
+        label = "Waving"
     "#;
     let fixture = Fixture::new("listed", manifest);
-    fixture.write("animations/wave.gltf", &animation("Armature", "Wave"));
+    fixture.write("clips/wave.json", "{}");
+    fixture.write("clips/stray.glb", "no .json beside it");
     let suite = fixture.load().unwrap();
 
-    let wave = suite.animations.iter().find(|a| a.path.ends_with("wave.gltf")).unwrap();
-    assert!(matches!(&wave.clips, ClipSet::Listed(b) if b.len() == 2));
+    assert_eq!(suite.timeline.seconds(), 4.0);
+    let names: Vec<&str> = suite.clips.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["idle", "wave"]);
+    let wave = &suite.clips[1];
+    assert_eq!(
+        (wave.mode, wave.label.as_deref(), wave.glb.as_ref()),
+        (ClipMode::Once, Some("Waving"), None)
+    );
+    assert_eq!(suite.default_clip.as_deref(), Some("wave"));
+
+    fixture.write("suite.toml", "schema = 2\n[character.clips.run]\nmode = \"hold\"");
+    let err = fixture.load().unwrap_err();
+    assert!(err.to_string().contains("clip \"run\""), "{err}");
 }
 
 #[test]
 fn cues_name_sounds_in_the_sounds_folder() {
     let manifest = r#"
-        schema = 1
-        [animations.walk]
-        file = "animations/idle.gltf"
+        schema = 2
+        [character.clips.idle]
         cues = [{ at = 0.5, sound = "step" }, { at = 0.0, sound = "theme" }]
     "#;
     let fixture = Fixture::new("cues", manifest);
@@ -207,9 +209,8 @@ fn cues_name_sounds_in_the_sounds_folder() {
     fixture.write("sounds/theme.ogg", "theme");
     let suite = fixture.load().unwrap();
 
-    let ClipSet::Listed(bindings) = &suite.animations[0].clips else { panic!("listed") };
     let cues: Vec<(f32, &Path)> =
-        bindings[0].cues.iter().map(|c| (c.at, c.sound.as_path())).collect();
+        suite.clips[0].cues.iter().map(|c| (c.at, c.sound.as_path())).collect();
     assert_eq!(cues, [(0.5, Path::new("sounds/step.ogg")), (0.0, Path::new("sounds/theme.ogg"))]);
 
     fixture.write("suite.toml", manifest.replace("\"step\"", "\"stomp\""));
@@ -220,16 +221,21 @@ fn cues_name_sounds_in_the_sounds_folder() {
 #[test]
 fn bad_manifests_are_rejected() {
     let cases = [
-        ("escape", "schema = 1\n[character]\nmodel = \"../aki.gltf\"", "must be relative"),
-        ("future", "schema = 2", "schema version 2"),
-        ("typo", "schema = 1\n[charater]", "not a valid suite manifest"),
-        ("skin", "schema = 1\n[character]\ndefault_skin = \"gown\"", "default skin \"gown\""),
-        ("camera", "schema = 1\n[camera]\ndefault = \"drone\"", "default camera \"drone\""),
-        ("env", "schema = 1\n[environment]\ndefault = \"moon\"", "default environment \"moon\""),
-        ("env-entry", "schema = 1\n[environments.moon]\nshadows = false", "environment \"moon\""),
-        ("cam-entry", "schema = 1\n[cameras.drone]\nf_stop = 2.0", "camera \"drone\""),
-        ("lighting", "schema = 1\n[lighting.sun]\nilluminance = 1.0", "not a valid suite manifest"),
-        ("skins", "schema = 1\n[skins.casual]", "not a valid suite manifest"),
+        ("escape", "schema = 2\n[character]\nmodel = \"../aki.gltf\"", "must be relative"),
+        ("old", "schema = 1", "export the suite again"),
+        ("future", "schema = 3", "schema version 3"),
+        ("timeline", "schema = 2\n[timeline]\nstart = 10\nend = 5", "timeline from frame 10"),
+        ("clip", "schema = 2\n[character]\ndefault_clip = \"run\"", "default clip \"run\""),
+        ("expression", "schema = 2\n[character.expressions.sad]", "expression \"sad\""),
+        ("actor", "schema = 2\n[environments.stage.actors.Door]", "actor \"stage/Door\""),
+        ("typo", "schema = 2\n[charater]", "not a valid suite manifest"),
+        ("skin", "schema = 2\n[character]\ndefault_skin = \"gown\"", "default skin \"gown\""),
+        ("camera", "schema = 2\n[camera]\ndefault = \"drone\"", "default camera \"drone\""),
+        ("env", "schema = 2\n[environment]\ndefault = \"moon\"", "default environment \"moon\""),
+        ("env-entry", "schema = 2\n[environments.moon]\nshadows = false", "environment \"moon\""),
+        ("cam-entry", "schema = 2\n[cameras.drone]\nf_stop = 2.0", "camera \"drone\""),
+        ("lighting", "schema = 2\n[lighting.sun]\nilluminance = 1.0", "not a valid suite manifest"),
+        ("skins", "schema = 2\n[skins.casual]", "not a valid suite manifest"),
     ];
     for (name, manifest, expected) in cases {
         let err = Fixture::new(name, manifest).load().unwrap_err();
@@ -239,34 +245,34 @@ fn bad_manifests_are_rejected() {
 
 #[test]
 fn two_models_next_to_the_manifest_are_ambiguous() {
-    let fixture = Fixture::new("two-models", "schema = 1");
+    let fixture = Fixture::new("two-models", "schema = 2");
     fixture.write("spare.glb", "unread");
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("the suite folder holds several"), "{err}");
 
-    fixture.write("suite.toml", "schema = 1\n[character]\nmodel = \"aki.gltf\"");
+    fixture.write("suite.toml", "schema = 2\n[character]\nmodel = \"aki.gltf\"");
     assert_eq!(fixture.load().unwrap().model, Path::new("aki.gltf"));
 }
 
 #[test]
 fn cameras_are_found_and_orbit_stays_the_default() {
-    let fixture = Fixture::new("cameras", "schema = 1");
+    let fixture = Fixture::new("cameras", "schema = 2");
     let suite = fixture.load().unwrap();
     let names: Vec<&str> = suite.cameras.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(names, ["closeup", "wide"]);
     assert_eq!(suite.cameras[0].file, Path::new("cameras/closeup.gltf"));
     assert_eq!(suite.default_camera, None);
 
-    fixture.write("suite.toml", "schema = 1\n[camera]\ndefault = \"closeup\"");
+    fixture.write("suite.toml", "schema = 2\n[camera]\ndefault = \"closeup\"");
     assert_eq!(fixture.load().unwrap().default_camera.as_deref(), Some("closeup"));
 
-    fixture.write("suite.toml", "schema = 1\n[camera]\ndefault = \"orbit\"");
+    fixture.write("suite.toml", "schema = 2\n[camera]\ndefault = \"orbit\"");
     assert_eq!(fixture.load().unwrap().default_camera, None);
 }
 
 #[test]
 fn a_camera_file_cannot_take_the_orbit_cameras_name() {
-    let fixture = Fixture::new("orbit-file", "schema = 1");
+    let fixture = Fixture::new("orbit-file", "schema = 2");
     fixture.write("cameras/orbit.glb", "unread");
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("reserved name"), "{err}");
@@ -274,7 +280,7 @@ fn a_camera_file_cannot_take_the_orbit_cameras_name() {
 
 #[test]
 fn lens_settings_reach_their_camera_unless_they_cannot_work() {
-    let manifest = r#"schema = 1
+    let manifest = r#"schema = 2
 [camera]
 f_stop = 0.0
 [cameras.closeup]
@@ -294,7 +300,7 @@ focus_distance = -1.0
 
 #[test]
 fn luts_are_found_and_none_is_a_reserved_name() {
-    let fixture = Fixture::new("luts", "schema = 1\n[post.lut]\nname = \"teal\"");
+    let fixture = Fixture::new("luts", "schema = 2\n[post.lut]\nname = \"teal\"");
     fixture.write("luts/teal.cube", "LUT_3D_SIZE 2\n0 0 0\n");
     fixture.write("luts/warm.cube", "LUT_1D_SIZE 2\n0 0 0\n1 1 1\n");
     fixture.write("luts/readme.txt", "not a LUT");
@@ -303,7 +309,7 @@ fn luts_are_found_and_none_is_a_reserved_name() {
     assert_eq!(names, ["teal", "warm"]);
     assert_eq!(suite.post.lut.name(), Some("teal"));
 
-    fixture.write("suite.toml", "schema = 1\n[post.lut]\nname = \"none\"");
+    fixture.write("suite.toml", "schema = 2\n[post.lut]\nname = \"none\"");
     assert_eq!(fixture.load().unwrap().post.lut.name(), None);
 
     fixture.write("luts/none.cube", "LUT_1D_SIZE 2\n0 0 0\n1 1 1\n");
@@ -313,7 +319,7 @@ fn luts_are_found_and_none_is_a_reserved_name() {
 #[test]
 fn environments_come_from_scenes_and_map_folders() {
     let manifest =
-        "schema = 1\n[environment]\ndefault = \"room\"\n[environments.room]\nexposure = 2.0";
+        "schema = 2\n[environment]\ndefault = \"room\"\n[environments.room]\nexposure = 2.0";
     let fixture = Fixture::new("environments", manifest);
     fixture.write("environment/room.gltf", &camera(&[]));
     fixture.write("environment/room/diffuse.ktx2", ktx2(6, 1, 0));
@@ -338,7 +344,7 @@ fn environments_come_from_scenes_and_map_folders() {
 
 #[test]
 fn environment_folders_bring_their_music_and_ambience() {
-    let fixture = Fixture::new("environment-sound", "schema = 1");
+    let fixture = Fixture::new("environment-sound", "schema = 2");
     fixture.write("environment/room.gltf", &camera(&[]));
     fixture.write("environment/room/ambience.ogg", "rain");
     fixture.write("environment/room/music/02_night.ogg", "second");
@@ -364,7 +370,7 @@ fn environment_folders_bring_their_music_and_ambience() {
 
 #[test]
 fn environment_gifs_are_found_by_material_name() {
-    let fixture = Fixture::new("environment-gifs", "schema = 1");
+    let fixture = Fixture::new("environment-gifs", "schema = 2");
     let scene = r#"{"asset": {"version": "2.0"}, "scenes": [{"nodes": []}],
         "materials": [{"name": "TV screen"}, {"name": "Wall"}]}"#;
     fixture.write("environment/room.gltf", scene);
@@ -382,17 +388,13 @@ fn environment_gifs_are_found_by_material_name() {
 
 #[test]
 fn environment_settings_hold_fog_lights_and_light_lists() {
-    let manifest = r#"schema = 1
+    let manifest = r#"schema = 2
 [environments.foggy]
 no_volume_scatter = ["Lamp"]
 [environments.foggy.fog.Mist]
 density = 0.2
 [environments.foggy.lights.Lamp]
 radius = 0.1
-[environments.foggy.lights.Candle.animation]
-duration = 2.0
-strength = [1.0, 0.5]
-color = [[1.0, 0.8, 0.6], [1.0, 0.7, 0.4]]
 "#;
     let fixture = Fixture::new("fog", manifest);
     fixture.write("environment/foggy.gltf", &foggy_scene());
@@ -401,13 +403,37 @@ color = [[1.0, 0.8, 0.6], [1.0, 0.7, 0.4]]
     assert_eq!(foggy.settings.fog["Mist"].density, Some(0.2));
     assert_eq!(foggy.settings.no_volume_scatter, ["Lamp"]);
     assert_eq!(foggy.settings.lights["Lamp"].radius, Some(0.1));
-    let candle = foggy.settings.lights["Candle"].animation.as_ref().unwrap();
-    assert_eq!((candle.duration, candle.strength.as_deref()), (2.0, Some(&[1.0, 0.5][..])));
+}
+
+#[test]
+fn environment_actors_are_folders_of_clips() {
+    let manifest = r#"schema = 2
+[environments.stage.actors.Door.clips.slam]
+mode = "once"
+"#;
+    let fixture = Fixture::new("actors", manifest);
+    fixture.write("environment/stage/clips/Door/slam.json", "{}");
+    fixture.write("environment/stage/clips/Door/slam.glb", "glb");
+    fixture.write("environment/stage/clips/Fan/spin.json", "{}");
+    let suite = fixture.load().unwrap();
+
+    let stage = &suite.environments[0];
+    let actors: Vec<&str> = stage.actors.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(actors, ["Door", "Fan"]);
+    let slam = &stage.actors[0].clips[0];
+    assert_eq!((slam.name.as_str(), slam.mode), ("slam", ClipMode::Once));
+    assert_eq!(slam.glb.as_deref(), Some(Path::new("environment/stage/clips/Door/slam.glb")));
+    assert_eq!(stage.actors[1].clips[0].mode, ClipMode::Timeline);
+    assert!(stage.settings.actors.is_empty(), "moved out of the environment's look");
+
+    fixture.write("suite.toml", "schema = 2\n[environments.stage.actors.Door.clips.open]");
+    let err = fixture.load().unwrap_err();
+    assert!(err.to_string().contains("clip \"stage/Door/open\""), "{err}");
 }
 
 #[test]
 fn a_panorama_makes_an_environment_whose_maps_are_baked_later() {
-    let fixture = Fixture::new("panorama", "schema = 1");
+    let fixture = Fixture::new("panorama", "schema = 2");
     fixture.write("environment/dusk/sky.hdr", "read only when baking");
     let suite = fixture.load().unwrap();
 
@@ -420,7 +446,7 @@ fn a_panorama_makes_an_environment_whose_maps_are_baked_later() {
     assert!(err.to_string().contains("several panoramas"), "{err}");
 }
 
-fn face(clips: &str) -> String {
+fn face() -> String {
     format!(
         r#"{{"asset": {{"version": "2.0"}}, "scenes": [{{"nodes": [0]}}],
         "nodes": [
@@ -434,41 +460,34 @@ fn face(clips: &str) -> String {
         "meshes": [{{"primitives": [{{"attributes": {{"POSITION": 0}},
             "targets": [{{"POSITION": 0}}, {{"POSITION": 0}}]}}],
             "extras": {{"targetNames": ["mouth_corner_up", "brows_up"]}}}}],
-        "animations": [{clips}],
         {ACCESSORS}}}"#
     )
 }
 
-fn clip(name: &str, node: u32, path: &str) -> String {
-    format!(
-        r#"{{"name": "{name}",
-            "channels": [{{"sampler": 0, "target": {{"node": {node}, "path": "{path}"}}}}],
-            "samplers": [{{"input": 1, "output": 1}}]}}"#
-    )
-}
-
 #[test]
-fn a_skins_clips_that_key_only_shape_keys_are_its_expressions() {
-    let fixture = Fixture::new("expressions", "schema = 1");
-    let clips =
-        [clip("Smile", 4, "weights"), clip("Angry", 4, "weights"), clip("Nod", 3, "rotation")];
-    fixture.write("skins/casual.gltf", face(&clips.join(", ")));
+fn expressions_belong_to_the_character() {
+    let manifest = "schema = 2\n[character.expressions.happy]\nlabel = \"Happy\"";
+    let fixture = Fixture::new("expressions", manifest);
+    fixture.write("expressions/happy.json", "{}");
+    fixture.write("expressions/sleepy.json", "{}");
+    let suite = fixture.load().unwrap();
 
-    let found = charpaper_suite::skin_clips(&fixture.0.join("skins/casual.gltf")).unwrap();
-    assert_eq!(found.expressions, ["Angry", "Smile"]);
-    assert_eq!(found.expression_meshes.into_iter().collect::<Vec<_>>(), ["Face"]);
+    let found: Vec<(&str, Option<&str>)> =
+        suite.expressions.iter().map(|e| (e.name.as_str(), e.label.as_deref())).collect();
+    assert_eq!(found, [("happy", Some("Happy")), ("sleepy", None)]);
+    assert_eq!(suite.expressions[1].json, Path::new("expressions/sleepy.json"));
 }
 
 #[test]
 fn without_a_model_file_the_armature_comes_from_the_default_skin() {
-    let fixture = Fixture::new("no-model", "schema = 1\n[character]\ndefault_skin = \"dress\"");
+    let fixture = Fixture::new("no-model", "schema = 2\n[character]\ndefault_skin = \"dress\"");
     fs::remove_file(fixture.0.join("aki.gltf")).unwrap();
     let suite = fixture.load().unwrap();
     assert!(suite.model_is_skin);
     assert_eq!(suite.model, Path::new("skins/dress.gltf"));
 
     fs::remove_dir_all(fixture.0.join("skins")).unwrap();
-    fixture.write("suite.toml", "schema = 1");
+    fixture.write("suite.toml", "schema = 2");
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("no model and no skin"), "{err}");
 }
@@ -497,7 +516,7 @@ fn camera_pair() -> String {
 
 #[test]
 fn a_camera_file_may_hold_several_cameras_each_with_its_clip() {
-    let fixture = Fixture::new("camera-pair", "schema = 1");
+    let fixture = Fixture::new("camera-pair", "schema = 2");
     fixture.write("cameras/pair.gltf", &camera_pair());
     let suite = fixture.load().unwrap();
 
@@ -517,7 +536,7 @@ fn a_camera_file_may_hold_several_cameras_each_with_its_clip() {
 
 #[test]
 fn gaze_names_bones_of_the_armature_and_optional_shape_keys() {
-    let manifest = r#"schema = 1
+    let manifest = r#"schema = 2
 [gaze]
 eyes = ["Head"]
 neck = "Spine"
@@ -525,7 +544,7 @@ neck = "Spine"
 up = "brows_up"
 "#;
     let fixture = Fixture::new("gaze", manifest);
-    fixture.write("skins/casual.gltf", face(""));
+    fixture.write("skins/casual.gltf", face());
     let suite = fixture.load().unwrap();
     let gaze = suite.gaze.as_ref().unwrap();
     assert_eq!(gaze.bones().collect::<Vec<_>>(), ["Head", "Spine"]);
@@ -538,7 +557,7 @@ up = "brows_up"
 
 #[test]
 fn gaze_needs_no_eye_bones() {
-    let manifest = "schema = 1\n[gaze]\nhead = \"Head\"\n[gaze.shape_keys]\nleft = \"look_l\"";
+    let manifest = "schema = 2\n[gaze]\nhead = \"Head\"\n[gaze.shape_keys]\nleft = \"look_l\"";
     let gaze = Fixture::new("gaze-no-eyes", manifest).load().unwrap().gaze.unwrap();
     assert!(gaze.eyes.is_empty());
     assert_eq!(gaze.bones().collect::<Vec<_>>(), ["Head"]);
@@ -547,7 +566,7 @@ fn gaze_needs_no_eye_bones() {
 
 #[test]
 fn eyes_are_eyeballs_unless_said_otherwise() {
-    let manifest = |kind: &str| format!("schema = 1\n[gaze]\neyes = [\"Head\"]\n{kind}");
+    let manifest = |kind: &str| format!("schema = 2\n[gaze]\neyes = [\"Head\"]\n{kind}");
     let load = |name: &str, kind: &str| Fixture::new(name, &manifest(kind)).load();
     assert_eq!(load("gaze-ball", "").unwrap().gaze.unwrap().eye_kind, EyeKind::Ball);
     let drawn = load("gaze-drawn", "eye_kind = \"drawn\"").unwrap().gaze.unwrap();
@@ -556,11 +575,10 @@ fn eyes_are_eyeballs_unless_said_otherwise() {
 }
 
 #[test]
-fn an_animation_may_opt_out_of_gaze() {
-    let manifest = "schema = 1\n[animations.idle]\nfile = \"animations/idle.gltf\"\ngaze = false";
+fn a_clip_may_opt_out_of_gaze() {
+    let manifest = "schema = 2\n[character.clips.idle]\ngaze = false";
     let suite = Fixture::new("gaze-opt-out", manifest).load().unwrap();
-    let ClipSet::Listed(bindings) = &suite.animations[0].clips else { panic!("listed") };
-    assert!(!bindings[0].gaze);
+    assert!(!suite.clips[0].gaze);
 }
 
 #[test]

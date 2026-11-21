@@ -1,25 +1,33 @@
 #:schema https://raw.githubusercontent.com/Zira3l137/CharPaper/main/schemas/suite.schema.json
 
 # Every key except `schema` is optional. The folder layout already names the
-# model, the skins and every clip in `animations/`; this file only overrides.
+# model, the skins, every clip in `clips/` and every expression in
+# `expressions/`; this file only sets what the folders can't say.
 
-schema = 1
+schema = 2
 name = "Aki"
+
+[timeline]
+start = 1
+end = 240
+fps = 24
 
 [character]
 model = "aki.glb"
 default_skin = "casual"
-default_animation = "idle"
+default_clip = "idle"
 
-[animations.idle]
-file = "animations/locomotion.glb"
-clip = "Idle_Breathing"
-
-[animations.wave]
-file = "animations/gestures.glb"
-clip = "Wave"
+[character.clips.wave]
 mode = "once"
+label = "Waving"
+gaze = false
 cues = [{ at = 0.0, sound = "wave_song" }, { at = 0.8, sound = "giggle" }]
+
+[character.clips.sit]
+mode = "hold"
+
+[character.expressions.happy]
+label = "Happy"
 
 [environment]
 default = "room"
@@ -33,6 +41,10 @@ background = 0.5
 background_blur = 0.3
 no_volume_scatter = ["Desk lamp"]
 no_shadows = ["Desk lamp"]
+
+[environments.room.actors.Door.clips.slam]
+mode = "once"
+cues = [{ at = 0.1, sound = "slam" }]
 
 [environments.room.fog.Dust]
 color = [0.9, 0.85, 0.8]

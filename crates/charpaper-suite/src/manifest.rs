@@ -11,8 +11,10 @@ use serde::Serialize;
 
 pub const MANIFEST_FILE: &str = "suite.toml";
 
-// Bumped only for changes old files can't be read under, not for new optional keys.
-pub const SCHEMA_VERSION: u32 = 1;
+// Bumped only for changes old files can't be read under, not for new optional keys. Only the
+// current version is read: the Blender add-on writes every suite, so an old one is exported
+// again.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// A CharPaper character suite: the `suite.toml` at the root of the suite's
 /// folder.
@@ -20,19 +22,15 @@ pub const SCHEMA_VERSION: u32 = 1;
 #[serde(deny_unknown_fields)]
 #[schemars(title = "CharPaper suite manifest")]
 pub struct Manifest {
-    /// Version of this file's format. Use 1.
-    #[schemars(range(min = 1, max = SCHEMA_VERSION))]
+    /// Version of this file's format. Use 2.
+    #[schemars(range(min = SCHEMA_VERSION, max = SCHEMA_VERSION))]
     pub schema: u32,
     /// Name shown in the app. Defaults to the folder name.
     pub name: Option<String>,
     #[serde(default)]
-    pub character: CharacterSection,
-    /// Named animations, used to rename, pick or change how clips play. Files
-    /// in `animations/` that are not mentioned here are used whole, each clip
-    /// under its own name. Once a file is mentioned, only the clips listed
-    /// for it are used.
+    pub timeline: Timeline,
     #[serde(default)]
-    pub animations: BTreeMap<String, ClipEntry>,
+    pub character: CharacterSection,
     #[serde(default)]
     pub environment: EnvironmentSection,
     /// Settings for each environment, keyed by its name: the `.glb` file name
@@ -71,30 +69,101 @@ pub struct CharacterSection {
     /// Skin worn at start: a file name in `skins/` without its extension.
     /// Defaults to the first skin in name order.
     pub default_skin: Option<String>,
-    /// Animation played at start. Without one the character holds its rest
-    /// pose.
-    pub default_animation: Option<String>,
+    /// Clip played at start: a file name in `clips/` without its extension.
+    /// Without one the character holds its rest pose.
+    pub default_clip: Option<String>,
+    /// Settings for the character's clips, keyed by clip name: a file name in
+    /// `clips/` without its extension. Every clip found there plays on the
+    /// timeline unless set otherwise here.
+    #[serde(default)]
+    pub clips: BTreeMap<String, ClipEntry>,
+    /// Settings for the character's expressions, keyed by name: a file name in
+    /// `expressions/` without its extension. An expression sets shape keys by
+    /// name on whichever skin is worn and loops while chosen.
+    #[serde(default)]
+    pub expressions: BTreeMap<String, ExpressionEntry>,
 }
 
-/// One named animation.
-#[derive(Deserialize, JsonSchema, Debug, Clone)]
+/// The loop everything plays on, as Blender's timeline: the scene's frame
+/// range at its frame rate. Clips in `timeline` mode show the timeline's
+/// frame, so they stay in step with each other.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Timeline {
+    /// First frame, as Blender's Frame Start. Defaults to 1.
+    #[serde(default = "Timeline::default_start")]
+    pub start: i32,
+    /// Last frame, as Blender's Frame End. It is shown for one frame before
+    /// the loop starts over. Defaults to 250.
+    #[serde(default = "Timeline::default_end")]
+    pub end: i32,
+    /// Frames per second, as Blender's Frame Rate. Defaults to 24.
+    #[serde(default = "Timeline::default_fps")]
+    #[schemars(range(min = 0.0))]
+    pub fps: f32,
+}
+
+impl Timeline {
+    fn default_start() -> i32 {
+        1
+    }
+
+    fn default_end() -> i32 {
+        250
+    }
+
+    fn default_fps() -> f32 {
+        24.0
+    }
+
+    /// How long one loop lasts, in seconds: from the first frame to the end of the last.
+    pub fn seconds(&self) -> f64 {
+        f64::from(self.end - self.start + 1) / f64::from(self.fps)
+    }
+}
+
+impl Default for Timeline {
+    fn default() -> Self {
+        Self { start: 1, end: 250, fps: 24.0 }
+    }
+}
+
+/// How one clip plays.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ClipEntry {
-    /// Path to the file holding the clip, relative to this file.
-    pub file: PathBuf,
-    /// The clip's name inside the file (the Blender action name). May be left
-    /// out when the file holds exactly one clip.
-    pub clip: Option<String>,
     #[serde(default)]
-    pub mode: PlayMode,
+    pub mode: ClipMode,
+    /// Name shown in the app. Defaults to the clip's name.
+    pub label: Option<String>,
     /// Whether the character may look towards the cursor while this plays.
     /// Defaults to true. Turn it off where the character has to look somewhere on
-    /// purpose, like a dance or a sleeping pose.
+    /// purpose, like a dance or a sleeping pose. Only the character's clips
+    /// have it.
     pub gaze: Option<bool>,
-    /// Sounds to play as the clip passes given moments. A looping clip plays
-    /// them again on every loop. They all stop when another animation starts.
+    /// Sounds to play as the clip passes given moments, from the pose markers
+    /// of its action. A clip on the timeline plays them again on every loop.
+    /// They stop when the clip does.
     #[serde(default)]
     pub cues: Vec<Cue>,
+}
+
+/// One expression's settings.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ExpressionEntry {
+    /// Name shown in the app. Defaults to the expression's name.
+    pub label: Option<String>,
+}
+
+/// One animated object or armature of an environment.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ActorEntry {
+    /// Settings for its clips, keyed by clip name: a file name in its
+    /// `clips/<actor>/` folder without its extension.
+    #[serde(default)]
+    pub clips: BTreeMap<String, ClipEntry>,
 }
 
 /// A sound played at a moment of an animation.
@@ -231,17 +300,19 @@ impl GazeShapeKeys {
     }
 }
 
-/// How the animation plays. Defaults to `loop`.
+/// How a clip plays. Defaults to `timeline`.
 #[derive(Deserialize, JsonSchema, Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum PlayMode {
-    /// Repeats forever.
+pub enum ClipMode {
+    /// Shows the timeline's frame and loops with it, in step with every
+    /// other clip on the timeline.
     #[default]
-    Loop,
-    /// Plays once, then returns to the default animation.
+    Timeline,
+    /// Plays through from its first frame when started, then hands back to
+    /// what played before.
     Once,
-    /// Holds the clip's first frame.
-    Pose,
+    /// Holds its first frame. For still poses.
+    Hold,
 }
 
 /// What surrounds the character.
@@ -314,6 +385,11 @@ pub struct EnvironmentEntry {
     /// name.
     #[serde(default)]
     pub lights: BTreeMap<String, Light>,
+    /// Settings for the environment's animated objects and armatures, keyed by
+    /// object name. Each one's clips are the files in the environment's
+    /// `clips/<name>/` folder.
+    #[serde(default)]
+    pub actors: BTreeMap<String, ActorEntry>,
 }
 
 /// A light's settings beyond glTF's.
@@ -324,22 +400,6 @@ pub struct Light {
     /// Radius: it widens and softens the light's reflections. Its shadows stay
     /// sharp. Defaults to 0, a point.
     pub radius: Option<f32>,
-    /// The light's keyed Strength and Color, looped.
-    pub animation: Option<LightAnimation>,
-}
-
-/// A light's Strength and Color sampled evenly over a loop, read in between
-/// samples and from the last back to the first.
-#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct LightAnimation {
-    /// How long the loop lasts, in seconds.
-    pub duration: f32,
-    /// The light's strength at each sample, times its strength in the file.
-    pub strength: Option<Vec<f32>>,
-    /// The light's linear color at each sample, times its color in the file,
-    /// which export leaves white.
-    pub color: Option<Vec<[f32; 3]>>,
 }
 
 /// A box of fog, set up like Blender's Principled Volume. Colors are linear,

@@ -27,5 +27,6 @@ fn example_manifest_parses() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schemas/suite.example.toml");
     let text = fs::read_to_string(path).unwrap();
     let manifest: charpaper_suite::Manifest = toml::from_str(&text).unwrap();
-    assert_eq!(manifest.animations.len(), 2);
+    assert_eq!(manifest.character.clips.len(), 2);
+    assert_eq!(manifest.environments["room"].actors["Door"].clips.len(), 1);
 }

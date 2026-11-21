@@ -14,16 +14,21 @@ use crate::document::read_document;
 use crate::error::SuiteError;
 use crate::manifest::Camera;
 use crate::manifest::CameraEntry;
+use crate::manifest::ClipEntry;
+use crate::manifest::ClipMode;
+use crate::manifest::Cue;
 use crate::manifest::EnvironmentEntry;
+use crate::manifest::ExpressionEntry;
 use crate::manifest::Gaze;
 use crate::manifest::MANIFEST_FILE;
 use crate::manifest::Manifest;
 use crate::manifest::NO_LUT;
-use crate::manifest::PlayMode;
 use crate::manifest::Post;
 use crate::manifest::SCHEMA_VERSION;
+use crate::manifest::Timeline;
 
-const ANIMATIONS_DIR: &str = "animations";
+const CLIPS_DIR: &str = "clips";
+const EXPRESSIONS_DIR: &str = "expressions";
 const SKINS_DIR: &str = "skins";
 const CAMERAS_DIR: &str = "cameras";
 const LUTS_DIR: &str = "luts";
@@ -48,10 +53,12 @@ pub struct Suite {
     // No model file of its own, so `model` is the default skin's file, whose meshes are that
     // skin's and must not show twice.
     pub model_is_skin: bool,
-    pub animations: Vec<AnimationFile>,
+    pub timeline: Timeline,
+    pub clips: Vec<ClipFile>,
+    pub default_clip: Option<String>,
+    pub expressions: Vec<ExpressionFile>,
     pub skins: Vec<Skin>,
     pub default_skin: Option<String>,
-    pub default_animation: Option<String>,
     pub cameras: Vec<ExportedCamera>,
     pub default_camera: Option<String>,
     pub environments: Vec<Environment>,
@@ -62,26 +69,31 @@ pub struct Suite {
     pub gaze: Option<Gaze>,
 }
 
+// A clip is its .json, which every clip has, and the .glb beside it when it keys bones or
+// objects.
 #[derive(Debug, Clone, PartialEq)]
-pub struct AnimationFile {
-    pub path: PathBuf,
-    pub clips: ClipSet,
-}
-
-// Once suite.toml mentions a file, only the clips it lists are used.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ClipSet {
-    All,
-    Listed(Vec<ClipBinding>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClipBinding {
+pub struct ClipFile {
     pub name: String,
-    pub clip: Option<String>,
-    pub mode: PlayMode,
+    pub json: PathBuf,
+    pub glb: Option<PathBuf>,
+    pub mode: ClipMode,
+    pub label: Option<String>,
     pub gaze: bool,
     pub cues: Vec<ClipCue>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExpressionFile {
+    pub name: String,
+    pub json: PathBuf,
+    pub label: Option<String>,
+}
+
+// An environment's animated object or armature, by its object's name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Actor {
+    pub name: String,
+    pub clips: Vec<ClipFile>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -124,6 +136,8 @@ pub struct Environment {
     pub ambience: Option<PathBuf>,
     // GIFs that play on the scene's materials, keyed by the material each is named after.
     pub animated: BTreeMap<String, PathBuf>,
+    pub actors: Vec<Actor>,
+    // Its `actors` are moved out into `actors`, so these are only how it looks.
     pub settings: EnvironmentEntry,
 }
 
@@ -214,8 +228,12 @@ impl Suite {
 
     pub fn resolve(root: impl AsRef<Path>, manifest: Manifest) -> Result<Self, SuiteError> {
         let root = root.as_ref();
-        if manifest.schema == 0 || manifest.schema > SCHEMA_VERSION {
+        if manifest.schema != SCHEMA_VERSION {
             return Err(SuiteError::Schema { found: manifest.schema, supported: SCHEMA_VERSION });
+        }
+        let timeline = manifest.timeline;
+        if !(timeline.fps.is_finite() && timeline.fps > 0.0 && timeline.end >= timeline.start) {
+            return Err(SuiteError::Timeline(timeline));
         }
 
         let name = match &manifest.name {
@@ -223,7 +241,14 @@ impl Suite {
             None => root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
         };
 
-        let animations = resolve_animations(root, &manifest)?;
+        let clips = clip_files(root, Path::new(CLIPS_DIR), &manifest.character.clips, "")?;
+        let expressions = expression_files(root, &manifest.character.expressions)?;
+        let default_clip = match &manifest.character.default_clip {
+            Some(name) if !clips.iter().any(|c| &c.name == name) => {
+                return Err(SuiteError::UnknownDefault { kind: "clip", name: name.clone() });
+            }
+            default => default.clone(),
+        };
         let skins: Vec<Skin> = named_files(root, SKINS_DIR, "skin")?
             .into_iter()
             .map(|(name, file)| Skin { name, file })
@@ -298,10 +323,12 @@ impl Suite {
             name,
             model,
             model_is_skin,
-            animations,
+            timeline,
+            clips,
+            default_clip,
+            expressions,
             skins,
             default_skin,
-            default_animation: manifest.character.default_animation,
             cameras,
             default_camera,
             environments,
@@ -327,41 +354,90 @@ pub fn discover(dir: impl AsRef<Path>) -> Result<Vec<PathBuf>, SuiteError> {
     Ok(found)
 }
 
-fn resolve_animations(root: &Path, manifest: &Manifest) -> Result<Vec<AnimationFile>, SuiteError> {
-    let mut listed: BTreeMap<PathBuf, Vec<ClipBinding>> = BTreeMap::new();
-    for (name, entry) in &manifest.animations {
-        let cues = entry
-            .cues
-            .iter()
-            .map(|cue| {
-                let file = Path::new(SOUNDS_DIR).join(format!("{}.ogg", cue.sound));
-                Ok(ClipCue { at: cue.at, sound: existing(root, &file)? })
-            })
-            .collect::<Result<_, SuiteError>>()?;
-        let binding = ClipBinding {
-            name: name.clone(),
-            clip: entry.clip.clone(),
+// Settings for a clip that isn't there are refused, so a typo doesn't go unnoticed. `owner`
+// prefixes clip names in that error, for an environment's actors.
+fn clip_files(
+    root: &Path,
+    dir: &Path,
+    settings: &BTreeMap<String, ClipEntry>,
+    owner: &str,
+) -> Result<Vec<ClipFile>, SuiteError> {
+    let found = files_in(root, &dir.to_string_lossy())?;
+    let mut clips = Vec::new();
+    for json in found.iter().filter(|p| has_extension(p, &["json"])) {
+        let name = stem(json);
+        let glb = Some(json.with_extension("glb")).filter(|path| found.contains(path));
+        let entry = settings.get(&name).cloned().unwrap_or_default();
+        clips.push(ClipFile {
+            json: json.clone(),
+            glb,
             mode: entry.mode,
+            label: entry.label,
             gaze: entry.gaze.unwrap_or(true),
-            cues,
-        };
-        listed.entry(existing(root, &entry.file)?).or_default().push(binding);
+            cues: cues(root, &entry.cues)?,
+            name,
+        });
     }
-
-    let mut files: Vec<AnimationFile> = listed
-        .into_iter()
-        .map(|(path, bindings)| AnimationFile { path, clips: ClipSet::Listed(bindings) })
-        .collect();
-
-    for path in files_in(root, ANIMATIONS_DIR)?.into_iter().filter(|p| is_gltf(p)) {
-        if !files.iter().any(|f| f.path == path) {
-            debug!("discovered animation file {}", path.display());
-            files.push(AnimationFile { path, clips: ClipSet::All });
+    for path in found.iter().filter(|p| is_gltf(p)) {
+        if !clips.iter().any(|c| c.glb.as_ref() == Some(path)) {
+            warn!("{} has no .json beside it, so it is not a clip", path.display());
         }
     }
+    if let Some(name) = settings.keys().find(|name| !clips.iter().any(|c| &c.name == *name)) {
+        return Err(SuiteError::UnknownEntry { kind: "clip", name: format!("{owner}{name}") });
+    }
+    Ok(clips)
+}
 
-    files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(files)
+fn cues(root: &Path, cues: &[Cue]) -> Result<Vec<ClipCue>, SuiteError> {
+    cues.iter()
+        .map(|cue| {
+            let file = Path::new(SOUNDS_DIR).join(format!("{}.ogg", cue.sound));
+            Ok(ClipCue { at: cue.at, sound: existing(root, &file)? })
+        })
+        .collect()
+}
+
+fn expression_files(
+    root: &Path,
+    settings: &BTreeMap<String, ExpressionEntry>,
+) -> Result<Vec<ExpressionFile>, SuiteError> {
+    let expressions: Vec<ExpressionFile> = files_in(root, EXPRESSIONS_DIR)?
+        .into_iter()
+        .filter(|p| has_extension(p, &["json"]))
+        .map(|json| {
+            let name = stem(&json);
+            let label = settings.get(&name).and_then(|entry| entry.label.clone());
+            ExpressionFile { name, json, label }
+        })
+        .collect();
+    if let Some(name) = settings.keys().find(|name| !expressions.iter().any(|e| &e.name == *name)) {
+        return Err(SuiteError::UnknownEntry { kind: "expression", name: name.clone() });
+    }
+    Ok(expressions)
+}
+
+fn actors(root: &Path, environment: &mut Environment) -> Result<Vec<Actor>, SuiteError> {
+    let settings = std::mem::take(&mut environment.settings.actors);
+    let dir = environment.folder().join(CLIPS_DIR);
+    let mut actors = Vec::new();
+    for folder in read_dir(&root.join(&dir))?.into_iter().filter(|p| p.is_dir()) {
+        let name = folder.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let clips = settings.get(&name).map(|actor| &actor.clips);
+        let owner = format!("{}/{name}/", environment.name);
+        let clips = clip_files(root, &dir.join(&name), clips.unwrap_or(&BTreeMap::new()), &owner)?;
+        actors.push(Actor { name, clips });
+    }
+    actors.sort_by(|a, b| a.name.cmp(&b.name));
+    if let Some(name) = settings.keys().find(|name| !actors.iter().any(|a| &a.name == *name)) {
+        let name = format!("{}/{name}", environment.name);
+        return Err(SuiteError::UnknownEntry { kind: "actor", name });
+    }
+    Ok(actors)
+}
+
+fn stem(path: &Path) -> String {
+    path.file_stem().unwrap_or_default().to_string_lossy().into_owned()
 }
 
 fn resolve_cameras(root: &Path, manifest: &Manifest) -> Result<Vec<ExportedCamera>, SuiteError> {
@@ -504,6 +580,9 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
             return Err(SuiteError::UnknownEntry { kind: "environment", name: name.clone() });
         };
         environment.settings = settings.clone();
+    }
+    for environment in found.values_mut() {
+        environment.actors = actors(root, environment)?;
     }
 
     Ok(found.into_values().collect())

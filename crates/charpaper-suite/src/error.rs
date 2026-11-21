@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::manifest::Timeline;
+
 #[derive(Debug, Error)]
 pub enum SuiteError {
     #[error("cannot read {path}")]
@@ -18,8 +20,17 @@ pub enum SuiteError {
         source: toml::de::Error,
     },
 
-    #[error("schema version {found} is not supported; this build understands 1 to {supported}")]
+    #[error(
+        "schema version {found} is not supported; this build reads version {supported} only, so \
+         export the suite again with the Blender add-on"
+    )]
     Schema { found: u32, supported: u32 },
+
+    #[error(
+        "timeline from frame {} to {} at {} fps can't play: the end must not come before the \
+         start, and fps must be above 0", .0.start, .0.end, .0.fps
+    )]
+    Timeline(Timeline),
 
     #[error("{0:?} must be relative to the suite folder and must not contain `..`")]
     UnsafePath(PathBuf),

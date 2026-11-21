@@ -4,13 +4,6 @@
   "description": "A CharPaper character suite: the `suite.toml` at the root of the suite's\nfolder.",
   "type": "object",
   "properties": {
-    "animations": {
-      "description": "Named animations, used to rename, pick or change how clips play. Files\nin `animations/` that are not mentioned here are used whole, each clip\nunder its own name. Once a file is mentioned, only the clips listed\nfor it are used.",
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/$defs/ClipEntry"
-      }
-    },
     "camera": {
       "$ref": "#/$defs/Camera"
     },
@@ -56,11 +49,14 @@
       "$ref": "#/$defs/Post"
     },
     "schema": {
-      "description": "Version of this file's format. Use 1.",
+      "description": "Version of this file's format. Use 2.",
       "type": "integer",
       "format": "uint32",
-      "maximum": 1,
-      "minimum": 1
+      "maximum": 2,
+      "minimum": 2
+    },
+    "timeline": {
+      "$ref": "#/$defs/Timeline"
     }
   },
   "additionalProperties": false,
@@ -68,6 +64,20 @@
     "schema"
   ],
   "$defs": {
+    "ActorEntry": {
+      "description": "One animated object or armature of an environment.",
+      "type": "object",
+      "properties": {
+        "clips": {
+          "description": "Settings for its clips, keyed by clip name: a file name in its\n`clips/<actor>/` folder without its extension.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ClipEntry"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "BackgroundBlur": {
       "description": "How blurred the sky looks behind the scene, from 0 to 1.",
       "type": "number",
@@ -174,8 +184,15 @@
       "description": "The character itself.",
       "type": "object",
       "properties": {
-        "default_animation": {
-          "description": "Animation played at start. Without one the character holds its rest\npose.",
+        "clips": {
+          "description": "Settings for the character's clips, keyed by clip name: a file name in\n`clips/` without its extension. Every clip found there plays on the\ntimeline unless set otherwise here.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ClipEntry"
+          }
+        },
+        "default_clip": {
+          "description": "Clip played at start: a file name in `clips/` without its extension.\nWithout one the character holds its rest pose.",
           "type": [
             "string",
             "null"
@@ -188,6 +205,13 @@
             "null"
           ]
         },
+        "expressions": {
+          "description": "Settings for the character's expressions, keyed by name: a file name in\n`expressions/` without its extension. An expression sets shape keys by\nname on whichever skin is worn and loops while chosen.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ExpressionEntry"
+          }
+        },
         "model": {
           "description": "Path to the model (the armature), relative to this file. Only needed\nwhen more than one .glb/.gltf sits next to this file. Without a model\nfile at all, the armature comes from the default skin, since every\nskin carries a copy of it.",
           "type": [
@@ -199,41 +223,54 @@
       "additionalProperties": false
     },
     "ClipEntry": {
-      "description": "One named animation.",
+      "description": "How one clip plays.",
       "type": "object",
       "properties": {
-        "clip": {
-          "description": "The clip's name inside the file (the Blender action name). May be left\nout when the file holds exactly one clip.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "cues": {
-          "description": "Sounds to play as the clip passes given moments. A looping clip plays\nthem again on every loop. They all stop when another animation starts.",
+          "description": "Sounds to play as the clip passes given moments, from the pose markers\nof its action. A clip on the timeline plays them again on every loop.\nThey stop when the clip does.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Cue"
           }
         },
-        "file": {
-          "description": "Path to the file holding the clip, relative to this file.",
-          "type": "string"
-        },
         "gaze": {
-          "description": "Whether the character may look towards the cursor while this plays.\nDefaults to true. Turn it off where the character has to look somewhere on\npurpose, like a dance or a sleeping pose.",
+          "description": "Whether the character may look towards the cursor while this plays.\nDefaults to true. Turn it off where the character has to look somewhere on\npurpose, like a dance or a sleeping pose. Only the character's clips\nhave it.",
           "type": [
             "boolean",
             "null"
           ]
         },
+        "label": {
+          "description": "Name shown in the app. Defaults to the clip's name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "mode": {
-          "$ref": "#/$defs/PlayMode"
+          "$ref": "#/$defs/ClipMode"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "file"
+      "additionalProperties": false
+    },
+    "ClipMode": {
+      "description": "How a clip plays. Defaults to `timeline`.",
+      "oneOf": [
+        {
+          "description": "Shows the timeline's frame and loops with it, in step with every\nother clip on the timeline.",
+          "type": "string",
+          "const": "timeline"
+        },
+        {
+          "description": "Plays through from its first frame when started, then hands back to\nwhat played before.",
+          "type": "string",
+          "const": "once"
+        },
+        {
+          "description": "Holds its first frame. For still poses.",
+          "type": "string",
+          "const": "hold"
+        }
       ]
     },
     "Cue": {
@@ -261,6 +298,13 @@
       "description": "One environment's settings. Its lights come from its own `.glb`; these\nonly adjust how the scene is shown while it is.",
       "type": "object",
       "properties": {
+        "actors": {
+          "description": "Settings for the environment's animated objects and armatures, keyed by\nobject name. Each one's clips are the files in the environment's\n`clips/<name>/` folder.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ActorEntry"
+          }
+        },
         "background": {
           "description": "How bright the sky looks behind the scene, as a share of how brightly\nit lights it: 0 hides it, 1 shows it as it is. Like Blender's Light\nPath trick, it leaves the lighting alone. Defaults to 1.",
           "type": [
@@ -365,6 +409,20 @@
       "properties": {
         "default": {
           "description": "Environment shown at start. Defaults to the first in name order.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExpressionEntry": {
+      "description": "One expression's settings.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "description": "Name shown in the app. Defaults to the expression's name.",
           "type": [
             "string",
             "null"
@@ -820,17 +878,6 @@
       "description": "A light's settings beyond glTF's.",
       "type": "object",
       "properties": {
-        "animation": {
-          "description": "The light's keyed Strength and Color, looped.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LightAnimation"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "radius": {
           "description": "The size of a point or spot light's bulb, in meters, as Blender's\nRadius: it widens and softens the light's reflections. Its shadows stay\nsharp. Defaults to 0, a point.",
           "type": [
@@ -841,48 +888,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "LightAnimation": {
-      "description": "A light's Strength and Color sampled evenly over a loop, read in between\nsamples and from the last back to the first.",
-      "type": "object",
-      "properties": {
-        "color": {
-          "description": "The light's linear color at each sample, times its color in the file,\nwhich export leaves white.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "number",
-              "format": "float"
-            },
-            "maxItems": 3,
-            "minItems": 3
-          }
-        },
-        "duration": {
-          "description": "How long the loop lasts, in seconds.",
-          "type": "number",
-          "format": "float"
-        },
-        "strength": {
-          "description": "The light's strength at each sample, times its strength in the file.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "number",
-            "format": "float"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "duration"
-      ]
     },
     "Lut": {
       "description": "A color lookup table from `luts/`: the .cube files grading apps like\nResolve and Photoshop export. It grades the finished image, after\neverything else but the grain.",
@@ -905,26 +910,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "PlayMode": {
-      "description": "How the animation plays. Defaults to `loop`.",
-      "oneOf": [
-        {
-          "description": "Repeats forever.",
-          "type": "string",
-          "const": "loop"
-        },
-        {
-          "description": "Plays once, then returns to the default animation.",
-          "type": "string",
-          "const": "once"
-        },
-        {
-          "description": "Holds the clip's first frame.",
-          "type": "string",
-          "const": "pose"
-        }
-      ]
     },
     "Post": {
       "description": "Effects applied to the finished image.",
@@ -983,6 +968,32 @@
         },
         "vignette": {
           "$ref": "#/$defs/Vignette"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Timeline": {
+      "description": "The loop everything plays on, as Blender's timeline: the scene's frame\nrange at its frame rate. Clips in `timeline` mode show the timeline's\nframe, so they stay in step with each other.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "description": "Last frame, as Blender's Frame End. It is shown for one frame before\nthe loop starts over. Defaults to 250.",
+          "type": "integer",
+          "format": "int32",
+          "default": 250
+        },
+        "fps": {
+          "description": "Frames per second, as Blender's Frame Rate. Defaults to 24.",
+          "type": "number",
+          "format": "float",
+          "default": 24.0,
+          "minimum": 0.0
+        },
+        "start": {
+          "description": "First frame, as Blender's Frame Start. Defaults to 1.",
+          "type": "integer",
+          "format": "int32",
+          "default": 1
         }
       },
       "additionalProperties": false

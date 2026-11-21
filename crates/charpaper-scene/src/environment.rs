@@ -4,9 +4,6 @@
 
 use std::collections::HashMap;
 
-use bevy::animation::graph::AnimationNodeType;
-use bevy::app::AnimationSystems;
-use bevy::ecs::system::SystemParam;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::light::EnvironmentMapLight;
 use bevy::light::NotShadowCaster;
@@ -24,7 +21,6 @@ use crate::SceneSet;
 use crate::assets::GPU_ONLY;
 use crate::assets::asset_path;
 use crate::camera::SceneCamera;
-use crate::character::Armature;
 use crate::look::LightTree;
 use crate::sky::SceneSky;
 use crate::stage::StageOf;
@@ -45,14 +41,9 @@ impl Plugin for EnvironmentPlugin {
                 (switch_environment, finish_bakes, equip_new_cameras, spawn_environment_scenes)
                     .chain()
                     .in_set(SceneSet::Run),
-            )
-            .add_systems(PostUpdate, follow_character.before(AnimationSystems));
+            );
     }
 }
-
-// Clips counted as the same length when they differ by less than this, in seconds: well
-// under a frame, while two clips exported from one frame range come out exactly equal.
-pub(crate) const SAME_LENGTH: f32 = 0.001;
 
 #[derive(Component, Default)]
 pub(crate) struct ShownEnvironment {
@@ -63,15 +54,10 @@ pub(crate) struct ShownEnvironment {
 #[derive(Component)]
 pub(crate) struct EnvironmentRoot {
     file: Handle<Gltf>,
-    clips: Vec<Handle<AnimationClip>>,
 }
 
 #[derive(Component)]
 pub(crate) struct AwaitingScene;
-
-// The clips an environment player loops, by their place in its graph.
-#[derive(Component)]
-pub(crate) struct PropClips(Vec<(AnimationNodeIndex, Handle<AnimationClip>)>);
 
 #[derive(Component, Default)]
 pub(crate) struct Baking(pub HashMap<String, Task<Result<(), String>>>);
@@ -168,7 +154,7 @@ pub(crate) fn switch_environment(
             let root = commands
                 .spawn((
                     Name::new(format!("Environment {}", environment.name)),
-                    EnvironmentRoot { file, clips: Vec::new() },
+                    EnvironmentRoot { file },
                     AwaitingScene,
                     Transform::default(),
                     Visibility::default(),
@@ -295,11 +281,11 @@ fn equip_new_cameras(
 
 pub(crate) fn spawn_environment_scenes(
     mut commands: Commands,
-    roots: Query<(Entity, &mut EnvironmentRoot), With<AwaitingScene>>,
+    roots: Query<(Entity, &EnvironmentRoot), With<AwaitingScene>>,
     gltfs: Res<Assets<Gltf>>,
     assets: Res<AssetServer>,
 ) {
-    for (entity, mut root) in roots {
+    for (entity, root) in &roots {
         if assets.load_state(root.file.id()).is_failed() {
             warn!("the environment's file failed to load");
             commands.entity(entity).remove::<AwaitingScene>();
@@ -314,69 +300,17 @@ pub(crate) fn spawn_environment_scenes(
             warn!("the environment's file holds no scene");
             continue;
         };
-        root.clips = gltf.animations.clone();
         commands.entity(entity).insert(WorldAssetRoot(scene));
     }
 }
 
-// Every player gets every clip. A clip only moves the nodes its own player drives.
 pub(crate) fn on_environment_ready(
     ready: On<WorldInstanceReady>,
-    roots: Query<&EnvironmentRoot>,
-    children: Query<&Children>,
-    mut players: Query<&mut AnimationPlayer>,
-    mut graphs: ResMut<Assets<AnimationGraph>>,
+    roots: Query<(), With<EnvironmentRoot>>,
     mut commands: Commands,
 ) {
-    let Ok(root) = roots.get(ready.entity) else {
-        return;
-    };
-    commands.entity(ready.entity).insert(EnvironmentReady);
-    if root.clips.is_empty() {
-        return;
-    }
-
-    let (graph, nodes) = AnimationGraph::from_clips(root.clips.iter().cloned());
-    let graph = graphs.add(graph);
-    let clips: Vec<_> = nodes.iter().copied().zip(root.clips.iter().cloned()).collect();
-    for entity in children.iter_descendants(ready.entity) {
-        let Ok(mut player) = players.get_mut(entity) else {
-            continue;
-        };
-        commands
-            .entity(entity)
-            .insert((AnimationGraphHandle(graph.clone()), PropClips(clips.clone())));
-        for &node in &nodes {
-            player.play(node).repeat();
-        }
-    }
-    info!("environment: looping {} clip(s)", nodes.len());
-}
-
-// Each animation player keeps its own clock, started when its file finished loading, while
-// Blender plays the character and the props on one timeline. So a prop clip exactly as long
-// as the character's playing clip is put at the same moment of its loop every frame, before
-// both advance by the same step. Other prop clips loop on their own.
-fn follow_character(
-    clock: CharacterClock,
-    mut props: Query<(Entity, &mut AnimationPlayer, &PropClips), Without<Armature>>,
-    clips: Res<Assets<AnimationClip>>,
-    stage_of: StageOf,
-) {
-    let leads = clock.leads();
-    if leads.is_empty() {
-        return;
-    }
-    for (prop, mut player, own) in &mut props {
-        let Some(&(length, time)) = stage_of.get(prop).and_then(|stage| leads.get(&stage)) else {
-            continue;
-        };
-        for (node, clip) in &own.0 {
-            let same = clips.get(clip).is_some_and(|c| (c.duration() - length).abs() < SAME_LENGTH);
-            if let (true, Some(active)) = (same, player.animation_mut(*node)) {
-                active.seek_to(time);
-            }
-        }
+    if roots.contains(ready.entity) {
+        commands.entity(ready.entity).insert(EnvironmentReady);
     }
 }
 
@@ -407,52 +341,5 @@ fn uncast_shadows(
         if meshes.contains(entity) && listed(unshadowed, entity, &tree.names, &tree.parents) {
             commands.entity(entity).insert(NotShadowCaster);
         }
-    }
-}
-
-// Each stage's character and the clip it plays, which other loops of the same length follow.
-#[derive(SystemParam)]
-pub(crate) struct CharacterClock<'w, 's> {
-    armatures: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static AnimationPlayer,
-            &'static AnimationTransitions,
-            &'static AnimationGraphHandle,
-        ),
-        With<Armature>,
-    >,
-    graphs: Res<'w, Assets<AnimationGraph>>,
-    clips: Res<'w, Assets<AnimationClip>>,
-    stage_of: StageOf<'w, 's>,
-}
-
-impl CharacterClock<'_, '_> {
-    // By stage: how long the character's playing clip is, and how far into it it is.
-    pub(crate) fn leads(&self) -> HashMap<Entity, (f32, f32)> {
-        let mut leads = HashMap::new();
-        for (armature, player, transitions, graph) in &self.armatures {
-            let Some(node) = transitions.get_main_animation() else {
-                continue;
-            };
-            let (Some(active), Some(stage)) = (player.animation(node), self.stage_of.get(armature))
-            else {
-                continue;
-            };
-            let Some(AnimationNodeType::Clip(clip)) = self
-                .graphs
-                .get(&graph.0)
-                .and_then(|graph| graph.get(node))
-                .map(|node| &node.node_type)
-            else {
-                continue;
-            };
-            if let Some(clip) = self.clips.get(clip) {
-                leads.insert(stage, (clip.duration(), active.seek_time()));
-            }
-        }
-        leads
     }
 }
