@@ -1912,6 +1912,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "charpaper-anim"
+version = "0.7.0"
+dependencies = [
+ "glam",
+ "gltf",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "charpaper-audio"
 version = "0.7.0"
 dependencies = [

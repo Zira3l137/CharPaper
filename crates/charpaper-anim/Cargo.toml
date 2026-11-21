@@ -1,0 +1,14 @@
+[package]
+name = "charpaper-anim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Bevy-free on purpose, so the mixer is tested on its own.
+[dependencies]
+glam.workspace = true
+# utils reads accessors; bevy_gltf turns it on too, so the full build compiles gltf once.
+gltf = { workspace = true, features = ["utils"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
