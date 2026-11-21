@@ -24,6 +24,7 @@ use crate::camera::view_bundle;
 use crate::character::Expressions;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
+use crate::clips::Timeline;
 use crate::config::SceneConfig;
 use crate::environment::Baking;
 use crate::environment::ShownEnvironment;
@@ -64,6 +65,7 @@ use crate::suite::starting_suite;
     ShownOrbit,
     SkinObjects,
     Expressions,
+    Timeline,
     ShownRig,
     ShownEnvironment,
     Baking,

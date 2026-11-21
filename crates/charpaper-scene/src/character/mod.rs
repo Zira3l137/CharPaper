@@ -14,6 +14,7 @@ pub use skin::SkinObjects;
 
 use crate::SceneSet;
 use crate::assets::load_armature;
+use crate::clips::Mixing;
 use crate::state::CharacterState;
 use crate::state::prefer;
 use crate::suite::ActiveSuite;
@@ -27,10 +28,13 @@ impl Plugin for CharacterPlugin {
         app.add_observer(binding::mark_ready)
             .add_observer(drivers::keep_rest_pose)
             .add_systems(PostUpdate, drivers::drive_shape_keys.after(TransformSystems::Propagate))
+            .add_systems(PostUpdate, animation::mix_character.in_set(Mixing::Pose))
             .add_systems(Update, (spawn_character, animation::list_clips).in_set(SceneSet::Fill))
             .add_systems(
                 Update,
                 (
+                    (animation::build_actor, animation::add_loaded_clips, animation::play_selected)
+                        .chain(),
                     (
                         binding::bind_skins,
                         skin::list_skin_objects,

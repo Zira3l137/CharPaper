@@ -1972,6 +1972,7 @@ name = "charpaper-scene"
 version = "0.7.0"
 dependencies = [
  "bevy",
+ "charpaper-anim",
  "charpaper-audio",
  "charpaper-bake",
  "charpaper-drivers",
@@ -1980,6 +1981,7 @@ dependencies = [
  "charpaper-suite",
  "crossbeam-channel",
  "image",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

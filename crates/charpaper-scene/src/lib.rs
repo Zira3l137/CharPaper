@@ -4,6 +4,7 @@ mod assets;
 mod bevy_fixes;
 mod camera;
 mod character;
+mod clips;
 mod config;
 mod depth_of_field;
 mod environment;
@@ -95,6 +96,7 @@ impl Plugin for ScenePlugin {
                 ambient_occlusion::AmbientOcclusionPlugin,
                 suite::SuitePlugin,
                 character::CharacterPlugin,
+                clips::ClipsPlugin,
                 camera::CameraPlugin,
                 environment::EnvironmentPlugin,
                 lights::LightsPlugin,
