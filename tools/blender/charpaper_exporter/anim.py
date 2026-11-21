@@ -131,36 +131,9 @@ def add_track(anim_data, name, action, slot=None, frame_range=None):
     return track
 
 
-def active_track(target, source):
-    """Plays the action `source` plays from an NLA track of `target`, named after the action.
-    Both are objects, or both shape keys. Returns the track, or None when `source` plays
-    nothing."""
-    data = source.animation_data
-    action = data.action if data else None
-    if action is None:
-        return None
-    anim_data = target.animation_data or target.animation_data_create()
-    return add_track(anim_data, action.name, action, getattr(data, "action_slot", None))
-
-
 def object_track(obj, name, action, frame_range=None):
     slot = pick_slot(
         action, "OBJECT", lambda s: bool(fcurves(action, s)), "OB" + obj.name
     )
     data = obj.animation_data or obj.animation_data_create()
-    return add_track(data, name, action, slot, frame_range)
-
-
-def key_track(mesh_obj, name, action, frame_range=None):
-    key = mesh_obj.data.shape_keys
-    own = set(key.key_blocks.keys())
-    if is_layered(action):
-        slot = pick_slot(action, "KEY", lambda s: bool(key_names(action, s) & own), "KE" + key.name)
-        if slot is None:
-            return None
-    else:
-        slot = None
-        if not key_names(action) & own:
-            return None
-    data = key.animation_data or key.animation_data_create()
     return add_track(data, name, action, slot, frame_range)

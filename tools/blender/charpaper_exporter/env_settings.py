@@ -14,7 +14,6 @@ import bpy
 import mathutils
 
 from . import anim
-from . import lights as light_settings
 
 KEYS = ("fog", "no_volume_scatter", "no_shadows", "lights")
 
@@ -384,13 +383,10 @@ def table(collection):
 
 
 def light_table(obj):
-    """What glTF can't carry of a light: a point or spot light's Radius, and its keyed
-    Strength and Color."""
+    """What glTF can't carry of a light: a point or spot light's Radius. Its keyed Strength
+    and Color are its clips'."""
     table = {}
     light = obj.data
     if light.type in {"POINT", "SPOT"} and light.shadow_soft_size > 0.0:
         table["radius"] = float(light.shadow_soft_size)
-    keys = light_settings.keyed(light, bpy.context.scene)
-    if keys is not None:
-        table["animation"] = light_settings.animation_table(keys)
     return table

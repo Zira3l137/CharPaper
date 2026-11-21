@@ -1,13 +1,17 @@
 import fnmatch
 import os
+import textwrap
 import traceback
 
 import bpy
 from bpy.props import EnumProperty
 from bpy.props import IntProperty
+from bpy.props import StringProperty
 from bpy.types import Operator
 
+from . import actors
 from . import anim
+from . import clips
 from . import cues
 from . import env_settings
 from . import exporters
@@ -215,12 +219,14 @@ class CHARPAPER_OT_export(Operator):
             ("ALL", "All", ""),
             ("MODEL", "Model", ""),
             ("SKIN", "Skin", ""),
-            ("ANIMATION", "Animation", ""),
+            ("ACTOR", "Actor", "One actor's clips"),
+            ("EXPRESSIONS", "Expressions", ""),
             ("ENVIRONMENT", "Environment", ""),
             ("CAMERA", "Camera", ""),
         )
     )
     index: IntProperty(default=-1)
+    actor: StringProperty(description="The actor whose clips to export, by its object's name")
 
     def _jobs(self, suite):
         def pick(kind, entries):
@@ -234,7 +240,12 @@ class CHARPAPER_OT_export(Operator):
         if self.what in {"ALL", "MODEL"} and suite.export_model and suite.armature:
             jobs.append(("MODEL", None))
         jobs += pick("SKIN", suite.skins)
-        jobs += pick("ANIMATION", suite.animations)
+        if self.what == "ALL":
+            jobs += [("ACTOR", actor) for actor in actors.all_actors(suite)]
+        elif self.what == "ACTOR":
+            jobs += [("ACTOR", a) for a in [actors.find(suite, self.actor)] if a is not None]
+        if self.what in {"ALL", "EXPRESSIONS"}:
+            jobs.append(("EXPRESSIONS", None))
         jobs += pick("ENVIRONMENT", suite.environments)
         jobs += pick("CAMERA", suite.cameras)
         return jobs
@@ -255,16 +266,28 @@ class CHARPAPER_OT_export(Operator):
         findings = validate.check(context, suite)
         _store(suite, findings)
 
-        done, failed, exported_animations, model_exported = [], [], [], False
-        lenses, environments = {}, {}
+        done, failed, model_exported = [], [], False
+        lenses, environments, exported, alerts = {}, {}, {}, []
         with object_mode(context):
             for kind, entry in self._jobs(suite):
-                label = entry.name if entry else "model"
+                label = entry.name if entry is not None else kind.lower()
                 missing = self._missing(context.scene, suite, kind, entry)
                 if missing:
                     failed.append(f"{label}: {missing}")
                     continue
                 try:
+                    if kind == "ACTOR":
+                        actor_clips = actors.clips(entry)
+                        written = clips.export_actor(context, suite, entry, actor_clips, folder)
+                        done += written.files
+                        for note in written.notes:
+                            self.report({"WARNING"}, note)
+                        environment = entry.environment.name if entry.environment else None
+                        exported[(environment, entry.name)] = (entry, actor_clips, written.cues)
+                        continue
+                    if kind == "EXPRESSIONS":
+                        done += clips.export_expressions(context, suite, folder)
+                        continue
                     result = self._export(context, suite, kind, entry, folder)
                 except Exception as error:
                     traceback.print_exc()
@@ -272,12 +295,11 @@ class CHARPAPER_OT_export(Operator):
                     continue
                 done.append(result.path)
                 done += result.written
+                alerts += result.alerts
                 for note in result.notes:
                     self.report({"WARNING"}, note)
                 if result.skipped:
                     print(f"CharPaper: {os.path.basename(result.path)}: exporter lacks {', '.join(result.skipped)}")
-                if kind == "ANIMATION":
-                    exported_animations.append(entry)
                 if kind == "CAMERA":
                     lenses[file_stem(entry.name)] = lens.table(entry.camera, context.scene.render)
                 if kind == "ENVIRONMENT":
@@ -285,22 +307,26 @@ class CHARPAPER_OT_export(Operator):
                     environments[file_stem(entry.name)] = {**table, **result.settings}
                 model_exported |= kind == "MODEL"
 
-        cue_tables = {}
-        if exported_animations:
+        # Cues name sounds; a cue whose sound isn't there is left out.
+        wanted = {sound for _, _, tables in exported.values() for cues_of in tables.values() for _, sound in cues_of}
+        if wanted:
             try:
-                cue_tables, written, notes = cues.export(context, folder, exported_animations)
+                written, present, notes = cues.write_sounds(folder, wanted)
                 done += written
                 for note in notes:
                     self.report({"WARNING"}, note)
             except Exception as error:
                 traceback.print_exc()
                 failed.append(f"sounds: {error}")
+                present = set()
+            for _, _, tables in exported.values():
+                for name, cues_of in tables.items():
+                    tables[name] = [(at, sound) for at, sound in cues_of if sound in present]
 
         if suite.write_manifest and done:
             try:
                 self._write_manifest(
-                    suite, folder, exported_animations, model_exported, lenses, environments,
-                    cue_tables,
+                    context.scene, suite, folder, model_exported, lenses, environments, exported
                 )
             except Exception as error:
                 traceback.print_exc()
@@ -310,11 +336,22 @@ class CHARPAPER_OT_export(Operator):
             self.report({"ERROR"}, failure)
         _report_findings(self, findings)
         self.report({"INFO"}, f"Exported {len(done)} file(s) to {folder}")
+        if alerts:
+            for alert in alerts:
+                finding = suite.findings.add()
+                finding.name, finding.severity = alert.message, "WARNING"
+                finding.object_name = alert.object_name
+            suite.alerts.clear()
+            for alert in alerts:
+                item = suite.alerts.add()
+                item.name, item.object_name = alert.message, alert.object_name
+            if context.window is not None:
+                bpy.ops.charpaper.export_alerts("INVOKE_DEFAULT")
         return {"FINISHED"} if done else {"CANCELLED"}
 
     @staticmethod
     def _missing(scene, suite, kind, entry):
-        if kind in {"MODEL", "SKIN", "ANIMATION"} and suite.armature is None:
+        if kind in {"MODEL", "SKIN"} and suite.armature is None:
             return "no armature picked"
         if kind == "SKIN" and entry.collection is None:
             return "no collection picked"
@@ -330,29 +367,72 @@ class CHARPAPER_OT_export(Operator):
             return exporters.model(context, suite, folder)
         if kind == "SKIN":
             return exporters.skin(context, suite, entry, folder)
-        if kind == "ANIMATION":
-            return exporters.animation(context, suite, entry, folder)
         if kind == "ENVIRONMENT":
             return exporters.environment(context, suite, entry, folder)
         return exporters.camera(context, suite, entry, folder)
 
     @staticmethod
-    def _write_manifest(
-        suite, folder, exported_animations, model_exported, lenses, environments, cue_tables
-    ):
+    def _write_manifest(scene, suite, folder, model_exported, lenses, environments, exported):
         path = manifest.path(folder)
         existing = toml_io.load(path) if os.path.isfile(path) else {}
         data = manifest.update(
             existing,
             suite,
+            scene,
             exporters.extension(suite),
-            exported_animations,
             model_exported,
             lenses,
             environments,
-            cue_tables,
+            exported,
         )
         manifest.write(folder, data)
+
+
+class CHARPAPER_OT_export_alerts(Operator):
+    bl_idname = "charpaper.export_alerts"
+    bl_label = "Exported, but the result will look wrong"
+    bl_description = "What the last export did that changes how the character looks in the app"
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=520, confirm_text="OK, I understand")
+
+    def draw(self, context):
+        layout = self.layout
+        width = 70
+        for i, alert in enumerate(suite_of(context).alerts):
+            box = layout.box()
+            col = box.column(align=True)
+            lines = textwrap.wrap(alert.name, width) or [""]
+            col.label(text=lines[0], icon="ERROR")
+            for line in lines[1:]:
+                col.label(text=line, icon="BLANK1")
+            if alert.object_name:
+                op = box.operator("charpaper.select_object", text="Show it", icon="RESTRICT_SELECT_OFF")
+                op.name = alert.object_name
+
+    def execute(self, context):
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_select_object(Operator):
+    bl_idname = "charpaper.select_object"
+    bl_label = "Show"
+    bl_description = "Select this object"
+
+    name: StringProperty()
+
+    def execute(self, context):
+        obj = bpy.data.objects.get(self.name)
+        if obj is None or obj.name not in context.view_layer.objects:
+            self.report({"WARNING"}, "Nothing to select in this view layer")
+            return {"CANCELLED"}
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        for other in context.view_layer.objects:
+            other.select_set(False)
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        return {"FINISHED"}
 
 
 class CHARPAPER_OT_load_manifest(Operator):
@@ -376,7 +456,7 @@ class CHARPAPER_OT_load_manifest(Operator):
         if unmatched:
             self.report(
                 {"WARNING"},
-                f"{len(unmatched)} animation(s) match no action here and stay as they are: "
+                f"{len(unmatched)} clip(s) match no action here and stay as they are: "
                 + ", ".join(unmatched[:5]),
             )
         else:
@@ -431,6 +511,8 @@ classes = (
     CHARPAPER_OT_eye_remove,
     CHARPAPER_OT_validate,
     CHARPAPER_OT_export,
+    CHARPAPER_OT_export_alerts,
+    CHARPAPER_OT_select_object,
     CHARPAPER_OT_load_manifest,
     CHARPAPER_OT_open_folder,
     CHARPAPER_OT_show_finding,

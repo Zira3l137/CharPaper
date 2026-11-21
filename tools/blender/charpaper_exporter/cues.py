@@ -85,40 +85,6 @@ def write_sounds(folder, names):
     return written, present, notes
 
 
-def export(context, folder, entries):
-    """Writes the sounds the exported clips' markers name, and returns their cue tables by
-    action name, the written files, and notes.
-
-    An action with markers gets a table, even an empty one, and its markers decide its cues.
-    One without gets none, so cues written into suite.toml by hand are kept.
-    """
-    render = context.scene.render
-    fps = render.fps / render.fps_base
-    actions = {
-        clip.action for entry in entries for clip in entry.clips if clip.enabled and clip.action
-    }
-    found = {a.name: of(a, fps) for a in actions if markers(a)}
-    names = {name for table in found.values() for _, name in table}
-    written, notes = [], []
-    for name in sorted(names):
-        target = path(folder, name)
-        sound = find_sound(name)
-        if sound is None:
-            if not os.path.isfile(target):
-                notes.append(f"no sound named {name!r} here or in {SOUNDS_DIR}/; its cues are left out")
-            continue
-        try:
-            _write_ogg(sound, target)
-            written.append(target)
-        except Exception as error:
-            notes.append(f"sound {sound.name!r}: {error}")
-    tables = {
-        action: [{"at": at, "sound": name} for at, name in table if os.path.isfile(path(folder, name))]
-        for action, table in found.items()
-    }
-    return tables, written, notes
-
-
 def source_path(sound):
     return bpy.path.abspath(sound.filepath, library=sound.library)
 

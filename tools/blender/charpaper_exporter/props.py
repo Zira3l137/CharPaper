@@ -453,6 +453,8 @@ class CHARPAPER_PG_suite(PropertyGroup):
     gltf: PointerProperty(type=CHARPAPER_PG_gltf)
 
     findings: CollectionProperty(type=CHARPAPER_PG_finding)
+    # What the last export did that changes how the result looks, for its popup.
+    alerts: CollectionProperty(type=CHARPAPER_PG_finding)
     finding_index: IntProperty()
     validated: BoolProperty()
 

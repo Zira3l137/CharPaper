@@ -172,7 +172,7 @@ def _sampled(curves, frames):
     return {name: [round(curve.evaluate(f), 5) for f in frames] for name, curve in sorted(curves.items())}
 
 
-def _write(path, data):
+def write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as file:
         json.dump(data, file, separators=(",", ":"))
@@ -224,7 +224,7 @@ def export_actor(context, suite, actor, clips, folder):
             # Older exporters lack some of NODES_ONLY's switches and do without.
             _export_nodes(context, suite, actor, clip, glb_path)
             done.files.append(glb_path)
-        _write(json_path, data)
+        write_json(json_path, data)
         done.files.append(json_path)
         start, end = span(scene, clip)
         done.cues[name] = cues.within(clip.action, start, end, fps(scene))
@@ -250,19 +250,11 @@ def export_expressions(context, suite, folder):
         data = {"format": FORMAT, "fps": round(fps(scene), 6), "frames": len(frames)}
         data["shape_keys"] = _sampled(keys, frames)
         path = os.path.join(directory, clip.name + ".json")
-        _write(path, data)
+        write_json(path, data)
         written.append(path)
         kept.add(clip.name + ".json")
     _remove_others(directory, kept)
     return written
-
-
-def camera_json(camera_path, nodes, scene):
-    """The .json beside a moving camera's .glb, which is its clip's .glb too."""
-    path = os.path.splitext(camera_path)[0] + ".json"
-    frames = scene.frame_end - scene.frame_start + 1
-    _write(path, {"format": FORMAT, "fps": round(fps(scene), 6), "frames": frames, "nodes": nodes})
-    return path
 
 
 def _remove_others(directory, kept):
