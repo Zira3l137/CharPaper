@@ -4,7 +4,7 @@ use crate::character::skin::SkinFile;
 use crate::character::skin::SkinRoot;
 
 // The expressions the worn skin can play, for the panel's picker.
-#[derive(Component, Default, Debug)]
+#[derive(Component, Default, Debug, PartialEq)]
 pub struct Expressions(pub Vec<String>);
 
 pub(crate) fn spawn_skin_scenes(

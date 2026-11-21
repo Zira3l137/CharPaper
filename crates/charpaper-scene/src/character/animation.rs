@@ -19,6 +19,9 @@ use charpaper_suite::ClipMode;
 use crate::assets::asset_path;
 use crate::character::Armature;
 use crate::character::binding::InstanceReady;
+use crate::character::expression::Expressions;
+use crate::character::skin::ShownSkin;
+use crate::character::skin_keys::SkinKeys;
 use crate::clips::ClipAsset;
 use crate::clips::Timeline;
 use crate::clips::due;
@@ -33,16 +36,19 @@ use crate::suite::Remembered;
 const CROSSFADE: Duration = Duration::from_millis(250);
 
 // The mixer's slots for the character, bottom up. A Once clip plays above the body's clip, so
-// that clip shows again when it ends.
+// that clip shows again when it ends. The expression plays above both, so it wins on the shape
+// keys it keys and leaves the rest to the body.
 const BODY: usize = 0;
 const BODY_ONCE: usize = 1;
-const SLOTS: usize = 2;
+const FACE: usize = 2;
+const SLOTS: usize = 3;
 
 // The character's clips as suite.toml and the clips folder name them, each loading from the
 // moment the suite is picked.
 #[derive(Component, Default)]
 pub struct CharacterClips {
     clips: BTreeMap<String, Clip>,
+    expressions: BTreeMap<String, Handle<ClipAsset>>,
     // The cues' sounds, loaded up front so the first one isn't late.
     sounds: BTreeMap<PathBuf, Handle<AudioSource>>,
 }
@@ -70,10 +76,18 @@ pub(crate) struct CharacterActor {
     actor: Actor,
     nodes: Vec<Entity>,
     ids: BTreeMap<String, ClipId>,
+    expressions: BTreeMap<String, ClipId>,
     // The pick this has acted on, and the clip under a Once clip, which the pick goes back to.
     chosen: Option<String>,
     under: Option<String>,
+    face: Option<String>,
     events: Vec<Event>,
+}
+
+impl CharacterActor {
+    pub(crate) fn mixer(&self) -> &Actor {
+        &self.actor
+    }
 }
 
 // A sound one of a stage's clips played, as a child of that stage.
@@ -97,11 +111,14 @@ pub(crate) fn list_clips(
             let entry = Clip { mode: clip.mode, gaze: clip.gaze, file, cues: clip.cues.clone() };
             clips.insert(clip.name.clone(), entry);
         }
+        let expressions = (suite.expressions.iter())
+            .map(|e| (e.name.clone(), assets.load(asset_path(suite, &e.json))))
+            .collect();
         // A Once clip would play at start and leave nothing under it.
         let offered = |name: &str| clips.get(name).is_some_and(|c| c.mode != ClipMode::Once);
         state.animation =
             prefer(suite.remembered(remembered).animation, offered, suite.default_clip.clone());
-        commands.entity(stage).insert(CharacterClips { clips, sounds });
+        commands.entity(stage).insert(CharacterClips { clips, expressions, sounds });
     }
 }
 
@@ -132,8 +149,10 @@ pub(crate) fn build_actor(
             actor: Actor::new(rig, SLOTS, CROSSFADE.as_secs_f32()),
             nodes: entities,
             ids: BTreeMap::new(),
+            expressions: BTreeMap::new(),
             chosen: None,
             under: None,
+            face: None,
             events: Vec::new(),
         };
         commands.entity(armature).insert(actor);
@@ -150,13 +169,16 @@ pub(crate) fn add_loaded_clips(
         let Some(clips) = stage_of.get(armature).and_then(|stage| stages.get(stage).ok()) else {
             continue;
         };
-        for (name, clip) in &clips.clips {
-            if actor.ids.contains_key(name) {
+        let actor = &mut *actor;
+        let wanted = (clips.clips.iter().map(|(name, clip)| (name, &clip.file, false)))
+            .chain(clips.expressions.iter().map(|(name, file)| (name, file, true)));
+        for (name, file, expression) in wanted {
+            let ids = if expression { &mut actor.expressions } else { &mut actor.ids };
+            if ids.contains_key(name) {
                 continue;
             }
-            if let Some(file) = files.get(&clip.file) {
-                let id = actor.actor.add_clip(file.0.clone());
-                actor.ids.insert(name.clone(), id);
+            if let Some(file) = files.get(file) {
+                ids.insert(name.clone(), actor.actor.add_clip(file.0.clone()));
             }
         }
     }
@@ -212,6 +234,47 @@ pub(crate) fn play_selected(
                 commands.entity(sound).insert(FadeOut(CROSSFADE));
             }
         }
+    }
+}
+
+// The expressions the worn skin can play are those keying at least one of its shape keys.
+pub(crate) fn play_expression(
+    mut armatures: Query<(Entity, &mut CharacterActor)>,
+    stage_of: StageOf,
+    mut stages: Query<(&CharacterState, &ShownSkin, &mut Expressions)>,
+    skins: Query<&SkinKeys>,
+) {
+    for (armature, mut actor) in &mut armatures {
+        let Some(stage) = stage_of.get(armature) else {
+            continue;
+        };
+        let Ok((state, shown, mut offered)) = stages.get_mut(stage) else {
+            continue;
+        };
+        let Some(keys) = shown.root.and_then(|root| skins.get(root).ok()) else {
+            continue;
+        };
+        let actor = &mut *actor;
+        let playable: Vec<String> = (actor.expressions.iter())
+            .filter(|(_, id)| {
+                let clip = actor.actor.clip(**id);
+                clip.shape_keys.iter().any(|(name, _)| keys.names.contains(name))
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        if offered.0 != playable {
+            offered.0 = playable;
+        }
+
+        let wanted = state.expression().filter(|name| offered.0.iter().any(|e| e == name));
+        if wanted == actor.face.as_deref() {
+            continue;
+        }
+        match wanted.and_then(|name| actor.expressions.get(name)) {
+            Some(&id) => actor.actor.play(FACE, id, Mode::Timeline),
+            None => actor.actor.stop(FACE),
+        }
+        actor.face = wanted.map(str::to_string);
     }
 }
 

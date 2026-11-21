@@ -3,6 +3,7 @@ mod binding;
 mod drivers;
 mod expression;
 mod skin;
+mod skin_keys;
 
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
@@ -28,14 +29,23 @@ impl Plugin for CharacterPlugin {
         app.add_observer(binding::mark_ready)
             .add_observer(drivers::keep_rest_pose)
             .add_systems(PostUpdate, drivers::drive_shape_keys.after(TransformSystems::Propagate))
-            .add_systems(PostUpdate, animation::mix_character.in_set(Mixing::Pose))
+            .add_systems(
+                PostUpdate,
+                (animation::mix_character, skin_keys::write_skin_keys).chain().in_set(Mixing::Pose),
+            )
             .add_systems(Update, (spawn_character, animation::list_clips).in_set(SceneSet::Fill))
             .add_systems(
                 Update,
                 (
-                    (animation::build_actor, animation::add_loaded_clips, animation::play_selected)
+                    (
+                        animation::build_actor,
+                        animation::add_loaded_clips,
+                        animation::play_selected,
+                        animation::play_expression,
+                    )
                         .chain(),
                     (
+                        skin_keys::list_skin_keys,
                         binding::bind_skins,
                         skin::list_skin_objects,
                         skin::apply_hidden_objects,
