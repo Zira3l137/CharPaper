@@ -515,7 +515,7 @@ fn camera_pair() -> String {
 }
 
 #[test]
-fn a_camera_file_may_hold_several_cameras_each_with_its_clip() {
+fn a_camera_file_may_hold_several_cameras_and_a_glb_one_a_clip() {
     let fixture = Fixture::new("camera-pair", "schema = 2");
     fixture.write("cameras/pair.gltf", &camera_pair());
     let suite = fixture.load().unwrap();
@@ -525,9 +525,16 @@ fn a_camera_file_may_hold_several_cameras_each_with_its_clip() {
     let front = &suite.cameras[0];
     assert_eq!(front.file, Path::new("cameras/pair.gltf"));
     assert_eq!(front.node.as_deref(), Some("Front"));
-    assert_eq!(front.clip.as_deref(), Some("FrontPush"));
-    assert_eq!(suite.cameras[1].clip.as_deref(), Some("SideSway"));
-    assert_eq!(suite.cameras[2].node, None);
+    assert_eq!((front.clip.as_ref(), suite.cameras[2].node.as_ref()), (None, None));
+
+    // A .gltf can't be a clip's .glb, so only a .glb camera file moves.
+    fixture.write("cameras/pair.json", "{}");
+    assert_eq!(fixture.load().unwrap().cameras[0].clip, None);
+    fixture.write("cameras/dolly.glb", "read by the app");
+    fixture.write("cameras/dolly.json", "{}");
+    let suite = fixture.load().unwrap();
+    let dolly = suite.cameras.iter().find(|c| c.name == "dolly").unwrap();
+    assert_eq!(dolly.clip.as_deref(), Some(Path::new("cameras/dolly.json")));
 
     fixture.write("cameras/Front.gltf", &camera(&[]));
     let err = fixture.load().unwrap_err();

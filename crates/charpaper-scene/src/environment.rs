@@ -3,6 +3,7 @@
 // panorama are baked in the background the first time it shows, and appear when done.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use bevy::gltf::GltfLoaderSettings;
 use bevy::light::EnvironmentMapLight;
@@ -22,6 +23,9 @@ use crate::assets::GPU_ONLY;
 use crate::assets::asset_path;
 use crate::camera::SceneCamera;
 use crate::look::LightTree;
+use crate::props::PropActor;
+use crate::props::light_of;
+use crate::props::rig_of;
 use crate::sky::SceneSky;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
@@ -38,7 +42,13 @@ impl Plugin for EnvironmentPlugin {
             .add_systems(Update, choose_environment.in_set(SceneSet::Fill))
             .add_systems(
                 Update,
-                (switch_environment, finish_bakes, equip_new_cameras, spawn_environment_scenes)
+                (
+                    switch_environment,
+                    finish_bakes,
+                    equip_new_cameras,
+                    spawn_environment_scenes,
+                    bind_actors,
+                )
                     .chain()
                     .in_set(SceneSet::Run),
             );
@@ -64,6 +74,9 @@ pub(crate) struct Baking(pub HashMap<String, Task<Result<(), String>>>);
 
 #[derive(Component)]
 pub(crate) struct EnvironmentReady;
+
+#[derive(Component)]
+pub(crate) struct ActorsBound;
 
 pub(crate) fn shown_environment<'a>(
     suite: Option<&'a ActiveSuite>,
@@ -147,6 +160,7 @@ pub(crate) fn switch_environment(
                 .load_builder()
                 .with_settings(|s: &mut GltfLoaderSettings| {
                     s.load_cameras = false;
+                    s.load_animations = false;
                     s.load_meshes = GPU_ONLY;
                     s.load_materials = GPU_ONLY;
                 })
@@ -311,6 +325,51 @@ pub(crate) fn on_environment_ready(
 ) {
     if roots.contains(ready.entity) {
         commands.entity(ready.entity).insert(EnvironmentReady);
+    }
+}
+
+// Each of the environment's actors is the node of its name. Its clips move it and everything
+// under it, apart from the actors under it, which move on their own.
+fn bind_actors(
+    mut commands: Commands,
+    roots: Query<(Entity, &ChildOf), (With<EnvironmentReady>, Without<ActorsBound>)>,
+    stages: Query<(Option<&ActiveSuite>, &ShownEnvironment)>,
+    assets: Res<AssetServer>,
+    children: Query<&Children>,
+    nodes: Query<(&Name, &Transform)>,
+    lights: Query<AnyOf<(&PointLight, &SpotLight, &DirectionalLight)>>,
+) {
+    for (root, stage) in &roots {
+        commands.entity(root).insert(ActorsBound);
+        let Ok((suite, shown)) = stages.get(stage.parent()) else {
+            continue;
+        };
+        let (Some(suite), Some(environment)) = (suite, shown_environment(suite, shown)) else {
+            continue;
+        };
+        let named =
+            |entity: Entity, name: &str| nodes.get(entity).is_ok_and(|(n, _)| n.as_str() == name);
+        let mut found = Vec::new();
+        for actor in &environment.actors {
+            match children.iter_descendants(root).find(|&e| named(e, &actor.name)) {
+                Some(entity) => found.push((actor, entity)),
+                None => warn!(
+                    "environment {:?}: no object {:?} for its clips",
+                    environment.name, actor.name
+                ),
+            }
+        }
+        let actors: HashSet<Entity> = found.iter().map(|&(_, entity)| entity).collect();
+        for (actor, entity) in found {
+            let prop = PropActor::new(
+                &actor.name,
+                rig_of(entity, &actors, &children, &nodes),
+                &actor.clips,
+                (&suite.0, &assets),
+                light_of(entity, &children, &lights),
+            );
+            commands.entity(entity).insert(prop);
+        }
     }
 }
 

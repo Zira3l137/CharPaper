@@ -2,10 +2,14 @@
 // Camera is switched off; the stage's view copies the rig's transform, and every camera under
 // it the rig's projection. Only the rig in use is loaded, as a child of its stage.
 
+use std::collections::HashSet;
+
 use bevy::gltf::GltfLoaderSettings;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 use charpaper_suite::CameraEntry;
+use charpaper_suite::ClipFile;
+use charpaper_suite::ClipMode;
 use charpaper_suite::ExportedCamera;
 use charpaper_suite::ORBIT_CAMERA;
 
@@ -15,6 +19,8 @@ use crate::camera::SceneView;
 use crate::camera::focus::FocusTarget;
 use crate::camera::orbit::OrbitCamera;
 use crate::camera::orbit::update_camera_transform;
+use crate::props::PropActor;
+use crate::props::rig_of;
 use crate::stage::Stage;
 use crate::state::CharacterState;
 use crate::state::prefer;
@@ -33,7 +39,7 @@ pub(crate) struct CameraRig {
     pub name: String,
     pub settings: CameraEntry,
     node: Option<String>,
-    clip: Option<Handle<AnimationClip>>,
+    clip: Option<ClipFile>,
     _file: Handle<Gltf>,
 }
 
@@ -89,7 +95,10 @@ pub(crate) fn switch_rig(
             .map(|camera| {
                 let file = assets
                     .load_builder()
-                    .with_settings(|s: &mut GltfLoaderSettings| s.load_lights = false)
+                    .with_settings(|s: &mut GltfLoaderSettings| {
+                        s.load_lights = false;
+                        s.load_animations = false;
+                    })
                     .load(asset_path(suite, &camera.file));
                 (file, camera.clone())
             });
@@ -120,10 +129,16 @@ pub(crate) fn spawn_rig(
             warn!("camera {name:?}: its file holds no scene");
             continue;
         };
-        let clip = match &camera.clip {
-            Some(clip) => gltf.named_animations.get(clip.as_str()).cloned(),
-            None => gltf.animations.first().cloned(),
-        };
+        // On the timeline, so a camera keyed over the character's frames moves in step with it.
+        let clip = camera.clip.map(|json| ClipFile {
+            name: name.clone(),
+            json,
+            glb: Some(camera.file.clone()),
+            mode: ClipMode::Timeline,
+            label: None,
+            gaze: false,
+            cues: Vec::new(),
+        });
         let rig =
             CameraRig { name, settings: camera.settings, node: camera.node, clip, _file: file };
         let root = commands
@@ -143,15 +158,15 @@ pub(crate) fn spawn_rig(
 // frame later and let it render once over the real one.
 pub(crate) fn on_rig_ready(
     ready: On<WorldInstanceReady>,
-    rigs: Query<&CameraRig>,
+    rigs: Query<(&CameraRig, &ChildOf)>,
+    suites: Query<&ActiveSuite>,
+    assets: Res<AssetServer>,
     children: Query<&Children>,
-    names: Query<&Name>,
+    nodes: Query<(&Name, &Transform)>,
     mut cameras: Query<&mut Camera>,
-    mut players: Query<&mut AnimationPlayer>,
-    mut graphs: ResMut<Assets<AnimationGraph>>,
     mut commands: Commands,
 ) {
-    let Ok(rig) = rigs.get(ready.entity) else {
+    let Ok((rig, stage)) = rigs.get(ready.entity) else {
         return;
     };
 
@@ -163,10 +178,9 @@ pub(crate) fn on_rig_ready(
         }
     }
 
+    let named = |lens: Entity, node: &str| nodes.get(lens).is_ok_and(|(n, _)| n.as_str() == node);
     let lens = match &rig.node {
-        Some(node) => {
-            lenses.iter().copied().find(|&l| names.get(l).is_ok_and(|n| n.as_str() == node))
-        }
+        Some(node) => lenses.iter().copied().find(|&l| named(l, node)),
         None => lenses.first().copied(),
     };
     let Some(lens) = lens else {
@@ -175,25 +189,19 @@ pub(crate) fn on_rig_ready(
     };
     commands.entity(ready.entity).insert(Lens(lens));
 
-    let Some(clip) = &rig.clip else {
+    let (Some(clip), Ok(suite)) = (&rig.clip, suites.get(stage.parent())) else {
         info!("camera {:?} ready, static", rig.name);
         return;
     };
-    let roots: Vec<Entity> =
-        children.iter_descendants(ready.entity).filter(|&e| players.contains(e)).collect();
-    if roots.is_empty() {
-        warn!("camera {:?}: its clip animates nothing, so it stays static", rig.name);
-        return;
-    }
-    let (graph, nodes) = AnimationGraph::from_clips([clip.clone()]);
-    let graph = graphs.add(graph);
-    for root in roots {
-        commands.entity(root).insert(AnimationGraphHandle(graph.clone()));
-        if let Ok(mut player) = players.get_mut(root) {
-            player.play(nodes[0]).repeat();
-        }
-    }
-    info!("camera {:?} ready, looping its clip", rig.name);
+    let prop = PropActor::new(
+        &rig.name,
+        rig_of(ready.entity, &HashSet::new(), &children, &nodes),
+        std::slice::from_ref(clip),
+        (&suite.0, &assets),
+        None,
+    );
+    commands.entity(ready.entity).insert(prop);
+    info!("camera {:?} ready, moving on the timeline", rig.name);
 }
 
 // GlobalTransform is written too, the cameras' as well as the view's, because propagation

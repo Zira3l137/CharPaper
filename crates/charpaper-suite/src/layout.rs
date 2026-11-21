@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::Component;
@@ -119,7 +118,9 @@ pub struct ExportedCamera {
     pub name: String,
     pub file: PathBuf,
     pub node: Option<String>,
-    pub clip: Option<String>,
+    // The .json beside a .glb camera file that moves, the file being its clip's .glb. In a file
+    // holding several cameras, it moves them all.
+    pub clip: Option<PathBuf>,
     pub settings: CameraEntry,
 }
 
@@ -445,22 +446,24 @@ fn resolve_cameras(root: &Path, manifest: &Manifest) -> Result<Vec<ExportedCamer
     for (name, file) in named_files(root, CAMERAS_DIR, "camera")? {
         // An unreadable file stays one camera here; the app reports it when it loads the file.
         let found = read_document(&root.join(&file)).map(|d| camera_nodes(&d)).unwrap_or_default();
+        let json = file.with_extension("json");
+        let clip = (has_extension(&file, &["glb"]) && root.join(&json).is_file()).then_some(json);
         if found.len() <= 1 {
             cameras.push(ExportedCamera {
                 name,
                 file,
                 node: None,
-                clip: None,
+                clip,
                 settings: CameraEntry::default(),
             });
             continue;
         }
-        for (node, clip) in found {
+        for node in found {
             let camera = ExportedCamera {
                 name: node.clone(),
                 file: file.clone(),
                 node: Some(node),
-                clip,
+                clip: clip.clone(),
                 settings: CameraEntry::default(),
             };
             cameras.push(camera);
@@ -503,26 +506,10 @@ fn above_zero(value: &mut Option<f32>, what: &str) {
     }
 }
 
-fn camera_nodes(doc: &Document) -> Vec<(String, Option<String>)> {
-    let mut parents = vec![None; doc.nodes().len()];
-    for node in doc.nodes() {
-        for child in node.children() {
-            parents[child.index()] = Some(node.index());
-        }
-    }
+fn camera_nodes(doc: &Document) -> Vec<String> {
     doc.nodes()
         .filter(|node| node.camera().is_some())
-        .map(|node| {
-            let carriers: HashSet<usize> =
-                std::iter::successors(Some(node.index()), |&i| parents[i]).collect();
-            let clip = doc
-                .animations()
-                .find(|a| a.channels().any(|c| carriers.contains(&c.target().node().index())))
-                .and_then(|a| a.name().map(str::to_string));
-            let name =
-                node.name().map_or_else(|| format!("GltfNode{}", node.index()), str::to_string);
-            (name, clip)
-        })
+        .map(|node| node.name().map_or_else(|| format!("GltfNode{}", node.index()), str::to_string))
         .collect()
 }
 

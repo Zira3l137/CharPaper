@@ -13,6 +13,7 @@ mod gaze;
 mod lights;
 mod look;
 mod lut;
+mod props;
 mod render;
 mod screens;
 mod shadows;
@@ -109,6 +110,7 @@ impl Plugin for ScenePlugin {
                 depth_of_field::DepthOfFieldPlugin,
                 look::LookPlugin,
                 lut::LutPlugin,
+                props::PropsPlugin,
                 render::RenderPlugin,
                 shadows::ShadowsPlugin,
                 shape_keys::ShapeKeysPlugin,
