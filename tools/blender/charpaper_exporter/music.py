@@ -28,6 +28,23 @@ def source(item_path):
     return os.path.normpath(bpy.path.abspath(item_path)) if item_path else ""
 
 
+def stored_path(path):
+    """How a picked file is kept: relative to the .blend when it is in the .blend's folder or
+    below, so the two move together, and absolute anywhere else, so moving the .blend alone
+    doesn't lose it."""
+    if not path:
+        return path
+    full = os.path.normpath(bpy.path.abspath(path))
+    if not bpy.data.filepath:
+        return full
+    home = os.path.dirname(os.path.normpath(bpy.data.filepath))
+    try:
+        inside = os.path.commonpath([os.path.normcase(full), os.path.normcase(home)]) == os.path.normcase(home)
+    except ValueError:
+        inside = False
+    return bpy.path.relpath(full) if inside else full
+
+
 def title(track):
     return track.name.strip() or os.path.splitext(os.path.basename(track.filepath))[0]
 

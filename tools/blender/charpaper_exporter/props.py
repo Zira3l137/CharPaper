@@ -175,9 +175,22 @@ class CHARPAPER_PG_animation(PropertyGroup):
     )
 
 
+def _keep_path(owner, name):
+    from .music import stored_path
+
+    kept = stored_path(getattr(owner, name))
+    if kept != getattr(owner, name):
+        setattr(owner, name, kept)
+
+
 def _sound_picked(self, context):
+    _keep_path(self, "ambience")
     if self.ambience:
         self.export_sound = True
+
+
+def _track_picked(self, context):
+    _keep_path(self, "filepath")
 
 
 class CHARPAPER_PG_track(PropertyGroup):
@@ -187,6 +200,7 @@ class CHARPAPER_PG_track(PropertyGroup):
         subtype="FILE_PATH",
         options=RELATIVE_PATH,
         description="The sound file, in any format Blender plays",
+        update=_track_picked,
     )
     # What the last export wrote and from what, so an unchanged track isn't converted again.
     written: StringProperty(options={"HIDDEN"})

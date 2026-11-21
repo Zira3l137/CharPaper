@@ -5,7 +5,6 @@ import time
 import traceback
 
 import bpy
-from bpy.props import BoolProperty
 from bpy.props import CollectionProperty
 from bpy.props import EnumProperty
 from bpy.props import IntProperty
@@ -241,12 +240,12 @@ class CHARPAPER_OT_music_add(Operator):
     bl_description = "Add sound files to the end of the environment's playlist, in file-name order"
     bl_options = {"REGISTER", "UNDO"}
 
-    directory: StringProperty(subtype="DIR_PATH", options={"HIDDEN", "SKIP_SAVE"})
+    # The file browser fills these. `filepath` is the file under the cursor, and the fallback
+    # for the folder should `directory` come back empty.
+    filepath: StringProperty(subtype="FILE_PATH", options={"HIDDEN", "SKIP_SAVE"})
+    directory: StringProperty(subtype="FILE_PATH", options={"HIDDEN", "SKIP_SAVE"})
     files: CollectionProperty(type=bpy.types.OperatorFileListElement, options={"HIDDEN", "SKIP_SAVE"})
     filter_glob: StringProperty(default=";".join("*" + e for e in sorted(AUDIO)), options={"HIDDEN"})
-    relative_path: BoolProperty(
-        name="Relative Path", default=True, description="Keep the files' paths relative to the .blend"
-    )
 
     @classmethod
     def poll(cls, context):
@@ -258,18 +257,20 @@ class CHARPAPER_OT_music_add(Operator):
 
     def execute(self, context):
         entry = _environment(context)
+        folder = self.directory or os.path.dirname(self.filepath)
+        folder = os.path.normpath(bpy.path.abspath(folder)) if folder else ""
         names = sorted((f.name for f in self.files if f.name), key=_natural)
-        for name in names:
-            path = os.path.join(self.directory, name)
-            if self.relative_path and bpy.data.filepath:
-                try:
-                    path = bpy.path.relpath(path)
-                except ValueError:
-                    pass
+        if not names and self.filepath:
+            names = [os.path.basename(self.filepath)]
+        found = [n for n in names if folder and os.path.isfile(os.path.join(folder, n))]
+        if len(found) < len(names):
+            lost = ", ".join(n for n in names if n not in found)
+            self.report({"ERROR"}, f"Blender didn't say which folder these are in, so they weren't added: {lost}")
+        for name in found:
             track = entry.music.add()
             track.name = os.path.splitext(name)[0]
-            track.filepath = path
-        if names:
+            track.filepath = music.stored_path(os.path.join(folder, name))
+        if found:
             entry.music_index = len(entry.music) - 1
             entry.export_sound = True
         return {"FINISHED"}

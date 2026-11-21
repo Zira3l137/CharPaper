@@ -23,6 +23,8 @@ pick the environment, then its *Sound* panel.
 1. Tick **Sound**. Adding a track or an ambience ticks it for you.
 2. Under *Music*, press **+** and pick the files. Several at once are added in file-name order.
    The arrows change the order; the name in the list is what the app's panel shows.
+   A file in the .blend's folder or below is kept relative to the .blend, so the two can move
+   together; one anywhere else is kept by its full path.
 3. Under *Ambience*, pick one sound that loops underneath: rain, wind, a room's hum. It
    loops for as long as the environment shows, so its end should flow into its start.
 4. Export all, or **Export sound** to write just these.
