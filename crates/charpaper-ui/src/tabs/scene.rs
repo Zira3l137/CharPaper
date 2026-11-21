@@ -67,8 +67,13 @@ fn animation() -> impl Bundle {
                 help: |l| fl!(l, "help-animation"),
                 show: |w, _| {
                     let state = w.focused::<CharacterState>()?;
+                    let suite = w.focused::<ActiveSuite>()?;
                     let options = animations(w);
-                    Some(choice(&options, &state.animation, name).when(!options.is_empty()))
+                    let label = |clip: &Option<String>| match clip {
+                        Some(clip) => labelled(&suite.clips, clip, |c| (&c.name, &c.label)),
+                        None => name(clip),
+                    };
+                    Some(choice(&options, &state.animation, label).when(!options.is_empty()))
                 },
                 change: |w, step| {
                     let options = animations(w);
@@ -205,7 +210,7 @@ fn suites(world: &World) -> Vec<Option<String>> {
     world.resource::<AvailableSuites>().0.iter().cloned().map(Some).collect()
 }
 
-// Clips arrive a moment after the suite, once their files have loaded.
+// Listed as soon as the suite is picked; a pick plays once its clip's file has loaded.
 fn animations(world: &World) -> Vec<Option<String>> {
     let clips = world.focused::<CharacterClips>();
     clips
@@ -224,8 +229,14 @@ fn environments(world: &World) -> Option<Vec<Option<String>>> {
     Some(suite.environments.iter().map(|e| Some(e.name.clone())).collect())
 }
 
-// Neutral is an empty name; see CharacterState::expressions. Expressions arrive with the worn
-// skin's file, so they follow every skin change.
+// The name suite.toml gives a clip or an expression to show, else its file's.
+fn labelled<T>(all: &[T], name: &str, parts: impl Fn(&T) -> (&String, &Option<String>)) -> String {
+    let label = all.iter().map(&parts).find(|(own, _)| own.as_str() == name);
+    label.and_then(|(_, label)| label.clone()).unwrap_or_else(|| name.to_string())
+}
+
+// Neutral is an empty name; see CharacterState::expressions. Only those keying the worn skin's
+// shape keys are offered, so they follow every skin change.
 fn expressions(world: &World) -> Option<Vec<String>> {
     let expressions = world.focused::<Expressions>()?;
     Some(std::iter::once(String::new()).chain(expressions.0.iter().cloned()).collect())
@@ -234,9 +245,13 @@ fn expressions(world: &World) -> Option<Vec<String>> {
 fn show_expression(world: &World, l: &FluentLanguageLoader) -> Option<Shown> {
     let state = world.focused::<CharacterState>()?;
     let options = expressions(world)?;
+    let suite = world.focused::<ActiveSuite>()?;
     let current = state.expression().unwrap_or_default().to_string();
     let neutral = fl!(l, "expression-neutral");
-    let label = |name: &String| if name.is_empty() { neutral.clone() } else { name.clone() };
+    let label = |name: &String| match name.is_empty() {
+        true => neutral.clone(),
+        false => labelled(&suite.expressions, name, |e| (&e.name, &e.label)),
+    };
     Some(choice(&options, &current, label).when(options.len() > 1))
 }
 
