@@ -1,6 +1,6 @@
-import fnmatch
 import os
 import textwrap
+import time
 import traceback
 
 import bpy
@@ -10,7 +10,6 @@ from bpy.props import StringProperty
 from bpy.types import Operator
 
 from . import actors
-from . import anim
 from . import clips
 from . import cues
 from . import env_settings
@@ -28,7 +27,7 @@ from .props import suite_of
 
 LISTS = {
     "SKIN": ("skins", "skin_index"),
-    "ANIMATION": ("animations", "animation_index"),
+    "EXPRESSION": ("expressions", "expression_index"),
     "ENVIRONMENT": ("environments", "environment_index"),
     "CAMERA": ("cameras", "camera_index"),
 }
@@ -49,7 +48,7 @@ def _store(suite, findings):
 def _report_findings(op, findings):
     warnings = sum(1 for f in findings if f.severity == "WARNING")
     if warnings:
-        op.report({"WARNING"}, f"{warnings} warning(s), see Validation")
+        op.report({"WARNING"}, f"{warnings} warning(s), see Warnings")
 
 
 class CHARPAPER_OT_list_add(Operator):
@@ -74,7 +73,7 @@ class CHARPAPER_OT_list_add(Operator):
             item.name = context.object.name.lower()
             data = context.object.animation_data
             item.action = data.action if data else None
-        else:
+        elif self.kind != "EXPRESSION":
             item.name = f"{self.kind.lower()}{len(collection)}"
         setattr(suite, index, len(collection) - 1)
         return {"FINISHED"}
@@ -98,74 +97,124 @@ class CHARPAPER_OT_list_remove(Operator):
         return {"FINISHED"}
 
 
-class CHARPAPER_OT_sync_clips(Operator):
-    bl_idname = "charpaper.sync_clips"
-    bl_label = "Sync clips"
-    bl_description = "List every action that animates the armature. New ones are ticked if they match the pattern"
+def current_actor(suite):
+    """The actor the Animation panel shows: the one picked, else the character, else the first."""
+    found = actors.all_actors(suite)
+    picked = next((a for a in found if a.name == suite.actor), None)
+    return picked or (found[0] if found else None)
+
+
+def _listed(actor):
+    """The actor's own list, which first takes on the clip its active action implies, so that
+    editing the list never drops what played until then."""
+    stored = actor.obj.charpaper.clips
+    if len(stored) == 0:
+        for clip in actors.clips(actor):
+            item = stored.add()
+            item.action, item.extra = clip.action, clip.extra
+    return stored
+
+
+class CHARPAPER_OT_actor_select(Operator):
+    bl_idname = "charpaper.actor_select"
+    bl_label = "Show its clips"
+    bl_description = "Show this actor's clips"
+
+    name: StringProperty()
+
+    def execute(self, context):
+        suite_of(context).actor = self.name
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_clip_add(Operator):
+    bl_idname = "charpaper.clip_add"
+    bl_label = "Add clip"
+    bl_description = "Add this action as a clip of the actor"
+    bl_options = {"REGISTER", "UNDO"}
+
+    action: StringProperty()
+
+    def execute(self, context):
+        suite = suite_of(context)
+        actor = current_actor(suite)
+        action = bpy.data.actions.get(self.action)
+        if actor is None or action is None:
+            return {"CANCELLED"}
+        stored = _listed(actor)
+        if not any(c.action == action for c in stored):
+            stored.add().action = action
+        actor.obj.charpaper.clip_index = next(i for i, c in enumerate(stored) if c.action == action)
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_clip_add_all(Operator):
+    bl_idname = "charpaper.clip_add_all"
+    bl_label = "Add all that fit"
+    bl_description = "Add every action that keys this actor's bones, shape keys, light or transform"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        suite = suite_of(context)
+        actor = current_actor(suite)
+        if actor is None:
+            return {"CANCELLED"}
+        stored = _listed(actor)
+        added = 0
+        for action in actors.fitting_actions(actor, suite):
+            if not any(c.action == action for c in stored):
+                stored.add().action = action
+                added += 1
+        self.report({"INFO"}, f"{added} clip(s) added")
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_clip_remove(Operator):
+    bl_idname = "charpaper.clip_remove"
+    bl_label = "Remove clip"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        actor = current_actor(suite_of(context))
+        if actor is None:
+            return {"CANCELLED"}
+        stored = _listed(actor)
+        index = actor.obj.charpaper.clip_index
+        if 0 <= index < len(stored):
+            stored.remove(index)
+            actor.obj.charpaper.clip_index = max(0, index - 1)
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_clip_edit(Operator):
+    bl_idname = "charpaper.clip_edit"
+    bl_label = "Edit as a list"
+    bl_description = "Make the active action a clip of the list, to change how it plays or add others"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        actor = current_actor(suite_of(context))
+        if actor is None:
+            return {"CANCELLED"}
+        _listed(actor)
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_clip_star(Operator):
+    bl_idname = "charpaper.clip_star"
+    bl_label = "Starts with"
+    bl_description = "The clip the character starts with. Click again to start in the rest pose"
     bl_options = {"REGISTER", "UNDO"}
 
     index: IntProperty()
 
     def execute(self, context):
         suite = suite_of(context)
-        if suite.armature is None:
-            self.report({"WARNING"}, "Pick the armature first")
+        clip = suite.armature.charpaper.clips[self.index] if suite.armature else None
+        if clip is None or clip.action is None:
             return {"CANCELLED"}
-        entry = suite.animations[self.index]
-        for i in reversed(range(len(entry.clips))):
-            if entry.clips[i].action is None:
-                entry.clips.remove(i)
-        known = {clip.action for clip in entry.clips}
-        for action in sorted(anim.armature_actions(suite.armature), key=lambda a: a.name.lower()):
-            if action not in known:
-                clip = entry.clips.add()
-                clip.action = action
-                clip.name = action.name
-                clip.enabled = fnmatch.fnmatchcase(action.name, entry.pattern or "*")
-        return {"FINISHED"}
-
-
-class CHARPAPER_OT_tick_clips(Operator):
-    bl_idname = "charpaper.tick_clips"
-    bl_label = "Tick clips"
-    bl_options = {"REGISTER", "UNDO"}
-
-    index: IntProperty()
-    how: EnumProperty(items=(("ALL", "All", ""), ("NONE", "None", ""), ("MATCH", "Match", "")))
-
-    def execute(self, context):
-        entry = suite_of(context).animations[self.index]
-        for clip in entry.clips:
-            if self.how == "MATCH":
-                clip.enabled = bool(clip.action) and fnmatch.fnmatchcase(clip.action.name, entry.pattern or "*")
-            else:
-                clip.enabled = self.how == "ALL"
-        return {"FINISHED"}
-
-
-class CHARPAPER_OT_sync_expressions(Operator):
-    bl_idname = "charpaper.sync_expressions"
-    bl_label = "Sync expressions"
-    bl_description = "List every shape key action that keys this skin's meshes. New ones start unticked"
-    bl_options = {"REGISTER", "UNDO"}
-
-    index: IntProperty()
-
-    def execute(self, context):
-        entry = suite_of(context).skins[self.index]
-        if entry.collection is None:
-            self.report({"WARNING"}, "Pick the skin's collection first")
-            return {"CANCELLED"}
-        for i in reversed(range(len(entry.expressions))):
-            if entry.expressions[i].action is None:
-                entry.expressions.remove(i)
-        known = {e.action for e in entry.expressions}
-        meshes = [o for o in entry.collection.all_objects if o.type == "MESH"]
-        for action in sorted(anim.shape_key_actions(meshes), key=lambda a: a.name.lower()):
-            if action not in known:
-                item = entry.expressions.add()
-                item.action = action
-                item.enabled = False
+        name = file_stem(clip.action.name)
+        suite.default_clip = "" if suite.default_clip == name else name
         return {"FINISHED"}
 
 
@@ -336,6 +385,8 @@ class CHARPAPER_OT_export(Operator):
             self.report({"ERROR"}, failure)
         _report_findings(self, findings)
         self.report({"INFO"}, f"Exported {len(done)} file(s) to {folder}")
+        warnings = sum(1 for f in suite.findings if f.severity == "WARNING") + len(alerts)
+        suite.last_export = f"{time.strftime('%H:%M')} · {len(done)} files · {warnings} warnings"
         if alerts:
             for alert in alerts:
                 finding = suite.findings.add()
@@ -504,9 +555,12 @@ class CHARPAPER_OT_show_finding(Operator):
 classes = (
     CHARPAPER_OT_list_add,
     CHARPAPER_OT_list_remove,
-    CHARPAPER_OT_sync_clips,
-    CHARPAPER_OT_tick_clips,
-    CHARPAPER_OT_sync_expressions,
+    CHARPAPER_OT_actor_select,
+    CHARPAPER_OT_clip_add,
+    CHARPAPER_OT_clip_add_all,
+    CHARPAPER_OT_clip_remove,
+    CHARPAPER_OT_clip_edit,
+    CHARPAPER_OT_clip_star,
     CHARPAPER_OT_eye_add,
     CHARPAPER_OT_eye_remove,
     CHARPAPER_OT_validate,

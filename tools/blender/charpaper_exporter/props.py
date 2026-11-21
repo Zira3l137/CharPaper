@@ -110,6 +110,9 @@ def _is_shape_key_action(self, action):
     return anim.is_shape_key_action(action)
 
 
+# The expression, clip and animation groups below, a skin's expressions and the suite's
+# animations and default_animation hold settings from before clips lived on objects. Only
+# migrate.py reads them, to move a .blend's settings over the first time it opens.
 class CHARPAPER_PG_expression(PropertyGroup):
     action: PointerProperty(type=bpy.types.Action, poll=_is_shape_key_action)
     enabled: BoolProperty(name="Export", default=True)
@@ -365,6 +368,8 @@ class CHARPAPER_PG_finding(PropertyGroup):
     severity: StringProperty()
     object_name: StringProperty()
     bone_name: StringProperty()
+    # The clip it is about, by name, to mark its row.
+    clip: StringProperty()
 
 
 CLIP_MODES = (
@@ -449,6 +454,7 @@ class CHARPAPER_PG_suite(PropertyGroup):
     actor: StringProperty()
     # Set once this suite's settings from before clips lived on objects have been moved there.
     migrated: BoolProperty()
+    last_export: StringProperty()
     gaze: PointerProperty(type=CHARPAPER_PG_gaze)
     gltf: PointerProperty(type=CHARPAPER_PG_gltf)
 
