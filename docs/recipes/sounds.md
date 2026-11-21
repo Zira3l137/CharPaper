@@ -17,16 +17,32 @@ clip passes that frame, so on every loop, and stops it when another animation st
 
 ## Music and background sound
 
-These aren't exported. Put them in by hand:
+Each environment has its own music and one ambience, set in the add-on: *Environments*,
+pick the environment, then its *Sound* panel.
 
-- `environment/<name>/music/` holds the tracks. They play in file-name order, so number
-  them: `01 morning.ogg`, `02 rain.ogg`.
-- `environment/<name>/ambience.ogg` loops underneath: rain, wind, a room's hum.
+1. Tick **Sound**. Adding a track or an ambience ticks it for you.
+2. Under *Music*, press **+** and pick the files. Several at once are added in file-name order.
+   The arrows change the order; the name in the list is what the app's panel shows.
+3. Under *Ambience*, pick one sound that loops underneath: rain, wind, a room's hum. It
+   loops for as long as the environment shows, so its end should flow into its start.
+4. Export all, or **Export sound** to write just these.
+
+Any format Blender plays works: the add-on converts each file to Ogg Vorbis and numbers the
+tracks to keep their order, as `music/01 - Morning.ogg`, `music/02 - Rain.ogg`, and writes
+`ambience.ogg`. A track that hasn't changed since the last export isn't converted again.
+
+With *Sound* ticked, the folder mirrors the panel: export removes the `.ogg` files in
+`music/` that aren't in the list, and `ambience.ogg` when no ambience is picked. Check
+warns before that happens. With *Sound* off, the add-on leaves both alone, so music you put
+there by hand stays: `environment/<name>/music/` plays in file-name order, and
+`environment/<name>/ambience.ogg` loops underneath.
 
 ## The format
 
-**Every sound must be Ogg Vorbis** (`.ogg`). MP3 and WAV don't play, and neither does an
-Opus file named `.ogg`. Audacity and most converters can save Ogg Vorbis.
+**Every sound the app plays is Ogg Vorbis** (`.ogg`). The add-on converts what it exports,
+including an Opus file named `.ogg`. Files you put in the suite by hand must already be Ogg
+Vorbis: MP3 and WAV don't play, and neither does Opus. Audacity and most converters can save
+Ogg Vorbis.
 
 ---
 

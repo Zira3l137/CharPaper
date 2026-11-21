@@ -10,6 +10,7 @@ use charpaper_audio::Sound;
 use charpaper_audio::SoundFailed;
 use charpaper_settings::MusicOrder;
 use charpaper_settings::MusicSettings;
+use charpaper_suite::track_title;
 
 use crate::SceneSet;
 use crate::assets::asset_path;
@@ -85,8 +86,7 @@ pub struct Soundscape {
 
 impl Soundscape {
     pub fn tracks(&self) -> Vec<String> {
-        let name = |p: &PathBuf| p.file_stem().map(|s| s.to_string_lossy().into_owned());
-        self.music.iter().map(|p| name(p).unwrap_or_default()).collect()
+        self.music.iter().map(|p| track_title(p)).collect()
     }
 
     pub fn playing(&self) -> Option<usize> {

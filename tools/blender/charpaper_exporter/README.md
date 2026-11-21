@@ -25,6 +25,7 @@ saved in the `.blend`.
 | Animation   | the armature + ticked clips, plus copies of the skins' meshes whose shape keys the clips key, without materials or textures | `animations/<name>.glb` |
 | Environment | everything in its collection except cameras, with active actions; its World as a panorama | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/`, the panorama in `environment/<name>/` |
 | Camera      | the camera, the empties it hangs from, its focus object, and one action | `cameras/<name>.glb` |
+| Sound       | an environment's music, in order, and its ambience, converted to Ogg Vorbis | `environment/<name>/music/01 - <title>.ogg`, `environment/<name>/ambience.ogg` |
 
 - **Clips** and **expressions** are named after their Blender actions. *Shown as* renames a
   clip in the app only.

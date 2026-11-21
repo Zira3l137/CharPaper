@@ -28,8 +28,8 @@ characters/
     │   ├── room.glb          a place: its objects and its lights
     │   └── room/             extras for the environment of the same name
     │       ├── sky.hdr       its sky and reflections, from its World
-    │       ├── music/        .ogg tracks (you put these here)
-    │       ├── ambience.ogg  background sound (you put this here)
+    │       ├── music/        its music, as 01 - Title.ogg, 02 - …
+    │       ├── ambience.ogg  background sound that loops under the music
     │       └── animated/     GIFs that play on its materials
     ├── cameras/
     │   └── closeup.glb       a camera, with its animation if it has one

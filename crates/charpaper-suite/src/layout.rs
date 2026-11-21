@@ -630,6 +630,17 @@ fn sole(
 }
 
 // A missing folder is just empty: every sub-folder of a suite is optional.
+/// What the settings panel calls a music track: its file name, less the `01 - ` the Blender
+/// add-on puts in front to keep the playlist's order.
+pub fn track_title(path: &Path) -> String {
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let digits = stem.bytes().take_while(u8::is_ascii_digit).count();
+    match stem[digits..].strip_prefix(" - ") {
+        Some(title) if digits > 0 && !title.is_empty() => title.to_owned(),
+        _ => stem,
+    }
+}
+
 fn files_in(root: &Path, dir: &str) -> Result<Vec<PathBuf>, SuiteError> {
     let mut files: Vec<PathBuf> = read_dir(&root.join(dir))?
         .into_iter()

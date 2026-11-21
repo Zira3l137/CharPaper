@@ -13,6 +13,7 @@ from . import sky
 from . import gaze as gaze_bones
 from . import gltf
 from . import lens
+from . import music
 from .checks import Finding
 from .exporters import CAMERAS_DIR
 from .exporters import ENVIRONMENT_DIR
@@ -68,6 +69,7 @@ def check(context, suite):
     for entry in suite.environments:
         if entry.enabled:
             _check_environment(context.scene, entry, armature, add)
+    music.check(suite, add, Finding)
     for entry in suite.cameras:
         if entry.enabled:
             _check_camera(suite, entry, add)

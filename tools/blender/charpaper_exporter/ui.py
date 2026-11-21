@@ -1,3 +1,4 @@
+import os
 import textwrap
 
 import bpy
@@ -11,6 +12,7 @@ from . import clips
 from . import cues
 from . import drivers
 from . import env_settings
+from . import music
 from .operators import current_actor
 from .props import file_stem
 from .props import suite_of
@@ -91,6 +93,18 @@ class CHARPAPER_UL_cameras(_Entries):
 
     def draw_target(self, context, row, item):
         row.label(text="moves" if item.action else "still", icon="PLAY" if item.action else "CAMERA_DATA")
+
+
+class CHARPAPER_UL_music(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        number = row.row()
+        number.active = False
+        number.label(text=f"{index + 1:02d}")
+        row.prop(item, "name", text="", emboss=False)
+        path = music.source(item.filepath)
+        if not path or not os.path.isfile(path):
+            row.label(text="", icon="ERROR")
 
 
 class CHARPAPER_UL_expressions(UIList):
@@ -424,6 +438,60 @@ class CHARPAPER_PT_environments(_Sidebar, Panel):
             box.label(text=f"{len(fog)} fog boxes: " + ", ".join(o.name for o in fog), icon="MOD_FLUID")
 
 
+class CHARPAPER_PT_sound(_Sidebar, Panel):
+    bl_label = "Sound"
+    bl_parent_id = "CHARPAPER_PT_environments"
+
+    @classmethod
+    def poll(cls, context):
+        suite = suite_of(context)
+        return 0 <= suite.environment_index < len(suite.environments)
+
+    def draw_header(self, context):
+        suite = suite_of(context)
+        self.layout.prop(suite.environments[suite.environment_index], "export_sound", text="")
+
+    def draw_header_preset(self, context):
+        suite = suite_of(context)
+        entry = suite.environments[suite.environment_index]
+        tracks = len(entry.music)
+        parts = [f"{tracks} track{'s' if tracks != 1 else ''}"] + (["ambience"] if entry.ambience else [])
+        self.layout.label(text=" · ".join(parts))
+
+    def draw(self, context):
+        suite = suite_of(context)
+        entry = suite.environments[suite.environment_index]
+        layout = self.layout
+        layout.active = entry.export_sound
+
+        layout.label(text="Music, played in this order", icon="SOUND")
+        row = layout.row()
+        row.template_list("CHARPAPER_UL_music", "", entry, "music", entry, "music_index", rows=4)
+        side = row.column(align=True)
+        side.operator("charpaper.music_add", text="", icon="ADD")
+        side.operator("charpaper.music_remove", text="", icon="REMOVE")
+        side.separator()
+        side.operator("charpaper.music_move", text="", icon="TRIA_UP").direction = "UP"
+        side.operator("charpaper.music_move", text="", icon="TRIA_DOWN").direction = "DOWN"
+        if 0 <= entry.music_index < len(entry.music):
+            layout.prop(entry.music[entry.music_index], "filepath", text="")
+
+        col = layout.column(align=True)
+        col.label(text="Ambience, looping under the music", icon="FORCE_TURBULENCE")
+        col.prop(entry, "ambience", text="")
+
+        names = music.file_names(entry)
+        hint = layout.column()
+        hint.active = False
+        shown = f"music/{names[0]}" + (f" … {names[-1]}" if len(names) > 1 else "") if names else "music/"
+        _wrapped(hint, f"→ {shown}, ambience.ogg. Converted to Ogg Vorbis; Vorbis .ogg files are copied as they are.", context)
+        op = layout.operator("charpaper.export", text="Export sound", icon="EXPORT")
+        op.what, op.index = "SOUND", suite.environment_index
+        for finding in warnings_about(suite):
+            if finding.sound == entry.name:
+                _wrapped(layout.box(), finding.name, context, icon="ERROR")
+
+
 class CHARPAPER_PT_cameras(_Sidebar, Panel):
     bl_label = "Cameras"
 
@@ -589,6 +657,7 @@ classes = (
     CHARPAPER_UL_skins,
     CHARPAPER_UL_environments,
     CHARPAPER_UL_cameras,
+    CHARPAPER_UL_music,
     CHARPAPER_UL_expressions,
     CHARPAPER_UL_clips,
     CHARPAPER_MT_add_clip,
@@ -599,6 +668,7 @@ classes = (
     CHARPAPER_PT_gaze,
     CHARPAPER_PT_animation,
     CHARPAPER_PT_environments,
+    CHARPAPER_PT_sound,
     CHARPAPER_PT_cameras,
     CHARPAPER_PT_hotspots,
     CHARPAPER_PT_warnings,

@@ -27,12 +27,14 @@ LIGHT_KEPT = {"energy", "color"}
 
 
 class Finding:
-    def __init__(self, message, obj=None, bone="", severity="WARNING", clip=""):
+    def __init__(self, message, obj=None, bone="", severity="WARNING", clip="", sound=""):
         self.message = message
         self.object_name = obj.name if obj is not None else ""
         self.bone_name = bone
         self.severity = severity
         self.clip = clip
+        # The environment whose music or ambience it is about.
+        self.sound = sound
 
 
 def _examples(names, limit=3):

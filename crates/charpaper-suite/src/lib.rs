@@ -40,6 +40,7 @@ pub use layout::SPECULAR_MAP;
 pub use layout::Skin;
 pub use layout::Suite;
 pub use layout::discover;
+pub use layout::track_title;
 pub use manifest::ActorEntry;
 pub use manifest::BackgroundBlur;
 pub use manifest::Camera;

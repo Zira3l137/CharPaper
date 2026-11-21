@@ -1,9 +1,12 @@
 import os
+import re
 import textwrap
 import time
 import traceback
 
 import bpy
+from bpy.props import BoolProperty
+from bpy.props import CollectionProperty
 from bpy.props import EnumProperty
 from bpy.props import IntProperty
 from bpy.props import StringProperty
@@ -18,9 +21,11 @@ from . import gaze
 from . import gltf
 from . import lens
 from . import manifest
+from . import music
 from . import sky
 from . import toml_io
 from . import validate
+from .audio import AUDIO
 from .isolate import object_mode
 from .props import file_stem
 from .props import suite_of
@@ -43,6 +48,7 @@ def _store(suite, findings):
         item.object_name = finding.object_name
         item.bone_name = finding.bone_name
         item.clip = getattr(finding, "clip", "")
+        item.sound = getattr(finding, "sound", "")
     suite.validated = True
 
 
@@ -219,6 +225,98 @@ class CHARPAPER_OT_clip_star(Operator):
         return {"FINISHED"}
 
 
+def _environment(context):
+    suite = suite_of(context)
+    index = suite.environment_index
+    return suite.environments[index] if 0 <= index < len(suite.environments) else None
+
+
+def _natural(name):
+    return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", name)]
+
+
+class CHARPAPER_OT_music_add(Operator):
+    bl_idname = "charpaper.music_add"
+    bl_label = "Add music"
+    bl_description = "Add sound files to the end of the environment's playlist, in file-name order"
+    bl_options = {"REGISTER", "UNDO"}
+
+    directory: StringProperty(subtype="DIR_PATH", options={"HIDDEN", "SKIP_SAVE"})
+    files: CollectionProperty(type=bpy.types.OperatorFileListElement, options={"HIDDEN", "SKIP_SAVE"})
+    filter_glob: StringProperty(default=";".join("*" + e for e in sorted(AUDIO)), options={"HIDDEN"})
+    relative_path: BoolProperty(
+        name="Relative Path", default=True, description="Keep the files' paths relative to the .blend"
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return _environment(context) is not None
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        entry = _environment(context)
+        names = sorted((f.name for f in self.files if f.name), key=_natural)
+        for name in names:
+            path = os.path.join(self.directory, name)
+            if self.relative_path and bpy.data.filepath:
+                try:
+                    path = bpy.path.relpath(path)
+                except ValueError:
+                    pass
+            track = entry.music.add()
+            track.name = os.path.splitext(name)[0]
+            track.filepath = path
+        if names:
+            entry.music_index = len(entry.music) - 1
+            entry.export_sound = True
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_music_remove(Operator):
+    bl_idname = "charpaper.music_remove"
+    bl_label = "Remove track"
+    bl_description = "Take the track out of the playlist. The next export removes its file"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        entry = _environment(context)
+        return entry is not None and 0 <= entry.music_index < len(entry.music)
+
+    def execute(self, context):
+        entry = _environment(context)
+        entry.music.remove(entry.music_index)
+        entry.music_index = min(entry.music_index, len(entry.music) - 1)
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_music_move(Operator):
+    bl_idname = "charpaper.music_move"
+    bl_label = "Move track"
+    bl_description = "Play the track earlier or later"
+    bl_options = {"REGISTER", "UNDO"}
+
+    direction: EnumProperty(items=(("UP", "Up", ""), ("DOWN", "Down", "")))
+
+    @classmethod
+    def poll(cls, context):
+        entry = _environment(context)
+        return entry is not None and len(entry.music) > 1
+
+    def execute(self, context):
+        entry = _environment(context)
+        index = entry.music_index
+        other = index - 1 if self.direction == "UP" else index + 1
+        if not (0 <= index < len(entry.music) and 0 <= other < len(entry.music)):
+            return {"CANCELLED"}
+        entry.music.move(index, other)
+        entry.music_index = other
+        return {"FINISHED"}
+
+
 class CHARPAPER_OT_eye_add(Operator):
     bl_idname = "charpaper.eye_add"
     bl_label = "Add eye"
@@ -272,6 +370,7 @@ class CHARPAPER_OT_export(Operator):
             ("ACTOR", "Actor", "One actor's clips"),
             ("EXPRESSIONS", "Expressions", ""),
             ("ENVIRONMENT", "Environment", ""),
+            ("SOUND", "Sound", "An environment's music and ambience"),
             ("CAMERA", "Camera", ""),
         )
     )
@@ -296,7 +395,12 @@ class CHARPAPER_OT_export(Operator):
             jobs += [("ACTOR", a) for a in [actors.find(suite, self.actor)] if a is not None]
         if self.what in {"ALL", "EXPRESSIONS"}:
             jobs.append(("EXPRESSIONS", None))
-        jobs += pick("ENVIRONMENT", suite.environments)
+        environments = pick("ENVIRONMENT", suite.environments)
+        jobs += environments
+        if self.what == "SOUND" and 0 <= self.index < len(suite.environments):
+            jobs.append(("SOUND", suite.environments[self.index]))
+        else:
+            jobs += [("SOUND", entry) for _, entry in environments if entry.export_sound]
         jobs += pick("CAMERA", suite.cameras)
         return jobs
 
@@ -337,6 +441,12 @@ class CHARPAPER_OT_export(Operator):
                         continue
                     if kind == "EXPRESSIONS":
                         done += clips.export_expressions(context, suite, folder)
+                        continue
+                    if kind == "SOUND":
+                        written, notes = music.export(entry, folder)
+                        done += written
+                        for note in notes:
+                            self.report({"WARNING"}, note)
                         continue
                     result = self._export(context, suite, kind, entry, folder)
                 except Exception as error:
@@ -562,6 +672,9 @@ classes = (
     CHARPAPER_OT_clip_remove,
     CHARPAPER_OT_clip_edit,
     CHARPAPER_OT_clip_star,
+    CHARPAPER_OT_music_add,
+    CHARPAPER_OT_music_remove,
+    CHARPAPER_OT_music_move,
     CHARPAPER_OT_eye_add,
     CHARPAPER_OT_eye_remove,
     CHARPAPER_OT_validate,

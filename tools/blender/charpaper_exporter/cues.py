@@ -1,17 +1,13 @@
 import os
-import shutil
 import tempfile
 
-import aud
 import bpy
 
+from . import audio
+from .audio import AUDIO
 from .props import file_stem
 
 SOUNDS_DIR = "sounds"
-OGG = {".ogg", ".oga"}
-AUDIO = OGG | {".wav", ".flac", ".mp3", ".aac", ".m4a", ".opus", ".aif", ".aiff"}
-# Vorbis at this rate is indistinguishable from the source for effects and voices.
-BITRATE = 192_000
 
 
 def sound_name(name):
@@ -90,29 +86,12 @@ def source_path(sound):
 
 
 def _write_ogg(sound, target):
-    # Written in a scratch folder first, so a failed conversion never leaves half a file.
+    if sound.packed_file is None:
+        audio.to_ogg(source_path(sound), target)
+        return
     with tempfile.TemporaryDirectory() as scratch:
-        if sound.packed_file is not None:
-            ext = os.path.splitext(sound.filepath or sound.name)[1].lower()
-            source = os.path.join(scratch, "packed" + ext)
-            with open(source, "wb") as file:
-                file.write(sound.packed_file.data)
-        else:
-            source = source_path(sound)
-            if not os.path.isfile(source):
-                raise FileNotFoundError(f"its file {source} is missing")
-            ext = os.path.splitext(source)[1].lower()
-
-        if ext in OGG:
-            converted = source
-        else:
-            converted = os.path.join(scratch, "converted.ogg")
-            aud.Sound.file(source).write(
-                converted,
-                format=aud.FORMAT_FLOAT32,
-                container=aud.CONTAINER_OGG,
-                codec=aud.CODEC_VORBIS,
-                bitrate=BITRATE,
-            )
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        shutil.copyfile(converted, target)
+        ext = os.path.splitext(sound.filepath or sound.name)[1].lower()
+        source = os.path.join(scratch, "packed" + ext)
+        with open(source, "wb") as file:
+            file.write(sound.packed_file.data)
+        audio.to_ogg(source, target)

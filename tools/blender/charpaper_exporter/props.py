@@ -167,6 +167,19 @@ class CHARPAPER_PG_animation(PropertyGroup):
     )
 
 
+def _sound_picked(self, context):
+    if self.ambience:
+        self.export_sound = True
+
+
+class CHARPAPER_PG_track(PropertyGroup):
+    # `name` is the title the app shows.
+    filepath: StringProperty(name="File", subtype="FILE_PATH", description="The sound file, in any format Blender plays")
+    # What the last export wrote and from what, so an unchanged track isn't converted again.
+    written: StringProperty(options={"HIDDEN"})
+    stamp: StringProperty(options={"HIDDEN"})
+
+
 class CHARPAPER_PG_environment(PropertyGroup):
     enabled: BoolProperty(name="Export", default=True)
     collection: PointerProperty(type=bpy.types.Collection)
@@ -181,6 +194,21 @@ class CHARPAPER_PG_environment(PropertyGroup):
         description="The World to export the sky from. Empty takes the scene's, but keeps a "
         "panorama you put in the folder yourself",
     )
+    export_sound: BoolProperty(
+        name="Sound",
+        description="Write the music and ambience below into the environment's folder, replacing "
+        "the .ogg files in its music folder and its ambience.ogg. Off leaves them as they are",
+    )
+    music: CollectionProperty(type=CHARPAPER_PG_track)
+    music_index: IntProperty()
+    ambience: StringProperty(
+        name="Ambience",
+        subtype="FILE_PATH",
+        description="One sound that loops under the music while this environment shows. Its end "
+        "should flow into its start",
+        update=_sound_picked,
+    )
+    ambience_stamp: StringProperty(options={"HIDDEN"})
 
 
 class CHARPAPER_PG_camera(PropertyGroup):
@@ -370,6 +398,7 @@ class CHARPAPER_PG_finding(PropertyGroup):
     bone_name: StringProperty()
     # The clip it is about, by name, to mark its row.
     clip: StringProperty()
+    sound: StringProperty()
 
 
 CLIP_MODES = (
@@ -470,6 +499,7 @@ classes = (
     CHARPAPER_PG_skin,
     CHARPAPER_PG_clip,
     CHARPAPER_PG_animation,
+    CHARPAPER_PG_track,
     CHARPAPER_PG_environment,
     CHARPAPER_PG_camera,
     CHARPAPER_PG_bone,
