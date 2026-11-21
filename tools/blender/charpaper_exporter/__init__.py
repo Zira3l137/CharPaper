@@ -1,5 +1,6 @@
 from . import front
 from . import gaze
+from . import migrate
 from . import operators
 from . import props
 from . import ui
@@ -17,6 +18,7 @@ bl_info = {
 
 def register():
     props.register()
+    migrate.register()
     operators.register()
     gaze.register()
     front.register()
@@ -28,4 +30,5 @@ def unregister():
     front.unregister()
     gaze.unregister()
     operators.unregister()
+    migrate.unregister()
     props.unregister()

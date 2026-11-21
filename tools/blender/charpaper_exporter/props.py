@@ -367,6 +367,49 @@ class CHARPAPER_PG_finding(PropertyGroup):
     bone_name: StringProperty()
 
 
+CLIP_MODES = (
+    ("TIMELINE", "Timeline", "Shows the timeline's frame and loops with it, in step with every other clip on it"),
+    ("ONCE", "Once", "Plays through from its first frame when started, then hands back to what played before"),
+    ("HOLD", "Hold", "Holds its first frame. For still poses"),
+)
+
+
+class CHARPAPER_PG_actor_clip(PropertyGroup):
+    action: PointerProperty(type=bpy.types.Action, name="Action")
+    extra: PointerProperty(
+        type=bpy.types.Action,
+        name="Also plays",
+        description=(
+            "A second action played with this clip: its shape keys on Blender older than 4.4, "
+            "where they can't share the action, or a lamp's Strength and Color"
+        ),
+    )
+    mode: EnumProperty(name="Plays", items=CLIP_MODES, default="TIMELINE")
+    label: StringProperty(name="Shown as", description="Name the app shows. Empty: the action's name")
+    gaze: BoolProperty(
+        name="Gaze",
+        default=True,
+        description="Let the character follow the cursor during this clip. Turn off for dances or lying poses",
+    )
+
+
+class CHARPAPER_PG_actor(PropertyGroup):
+    clips: CollectionProperty(type=CHARPAPER_PG_actor_clip)
+    clip_index: IntProperty()
+
+
+class CHARPAPER_PG_character_expression(PropertyGroup):
+    action: PointerProperty(type=bpy.types.Action, poll=_is_shape_key_action, name="Action")
+    label: StringProperty(name="Shown as", description="Name the app shows. Empty: the action's name")
+
+
+def character_clip_names(suite):
+    armature = suite.armature
+    if armature is None:
+        return []
+    return [file_stem(c.action.name) for c in armature.charpaper.clips if c.action is not None]
+
+
 class CHARPAPER_PG_suite(PropertyGroup):
     folder: StringProperty(name="Folder", subtype="DIR_PATH", default="//charpaper/")
     suite_name: StringProperty(name="Name", description="Name the app shows. Empty: the folder name")
@@ -399,6 +442,13 @@ class CHARPAPER_PG_suite(PropertyGroup):
         name="Camera", search=_search(lambda s: [ORBIT] + [e.name for e in s.cameras])
     )
 
+    expressions: CollectionProperty(type=CHARPAPER_PG_character_expression)
+    expression_index: IntProperty()
+    default_clip: StringProperty(name="Clip", search=_search(character_clip_names))
+    # The actor the Animation panel shows, by its object's name.
+    actor: StringProperty()
+    # Set once this suite's settings from before clips lived on objects have been moved there.
+    migrated: BoolProperty()
     gaze: PointerProperty(type=CHARPAPER_PG_gaze)
     gltf: PointerProperty(type=CHARPAPER_PG_gltf)
 
@@ -418,6 +468,9 @@ classes = (
     CHARPAPER_PG_gaze,
     CHARPAPER_PG_gltf,
     CHARPAPER_PG_finding,
+    CHARPAPER_PG_actor_clip,
+    CHARPAPER_PG_actor,
+    CHARPAPER_PG_character_expression,
     CHARPAPER_PG_suite,
 )
 
@@ -426,9 +479,11 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.charpaper = PointerProperty(type=CHARPAPER_PG_suite)
+    bpy.types.Object.charpaper = PointerProperty(type=CHARPAPER_PG_actor)
 
 
 def unregister():
+    del bpy.types.Object.charpaper
     del bpy.types.Scene.charpaper
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
