@@ -42,6 +42,7 @@ def _store(suite, findings):
         item.severity = finding.severity
         item.object_name = finding.object_name
         item.bone_name = finding.bone_name
+        item.clip = getattr(finding, "clip", "")
     suite.validated = True
 
 

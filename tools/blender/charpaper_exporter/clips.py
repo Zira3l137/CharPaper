@@ -71,17 +71,81 @@ def clip_folder(actor):
 
 
 def keyed_nodes(actor, action, suite):
-    """The nodes an action keys on the actor: its bones the file has, and the actor itself when
-    it keys the object's own transform."""
+    """The nodes an action moves on the actor: its bones the file has, and the actor itself when
+    it keys the object's own transform. A bone moves when it is keyed, driven, or held by a
+    constraint whose target moves, as a deform bone following a keyed control does in a rig."""
     obj = actor.obj
     nodes = []
     if obj.type == "ARMATURE":
         bones = obj.data.bones
         exported = {b.name for b in bones if b.use_deform or not suite.gltf.deform_bones_only}
-        nodes.extend(sorted(anim.bone_names(action) & exported))
+        nodes.extend(sorted(moved_bones(obj, anim.bone_names(action)) & exported))
     if any(TRANSFORM_PATH.match(c.data_path) for c in anim.fcurves(action) if not c.mute):
         nodes.append(obj.name)
     return nodes
+
+
+def _targets(constraint):
+    pairs = []
+    for target, sub in (("target", "subtarget"), ("pole_target", "pole_subtarget")):
+        if hasattr(constraint, target):
+            pairs.append((getattr(constraint, target), getattr(constraint, sub, "")))
+    for item in getattr(constraint, "targets", ()):
+        pairs.append((getattr(item, "target", None), getattr(item, "subtarget", "")))
+    return [(obj, sub) for obj, sub in pairs if obj is not None]
+
+
+def _animated(obj):
+    while obj is not None:
+        data = obj.animation_data
+        if data is not None and (data.action is not None or len(data.nla_tracks) > 0 or len(data.drivers) > 0):
+            return True
+        obj = obj.parent
+    return False
+
+
+def moved_bones(armature, keyed):
+    """The bones whose own transform changes when `keyed` are keyed."""
+    local = set(keyed)
+    data = armature.animation_data
+    for driver in data.drivers if data else ():
+        match = anim.BONE_PATH.match(driver.data_path)
+        if match:
+            local.add(match.group(1).replace('\\"', '"').replace("\\\\", "\\"))
+
+    def world_moves(name):
+        bone = armature.data.bones.get(name)
+        while bone is not None:
+            if bone.name in local:
+                return True
+            bone = bone.parent
+        return False
+
+    changed = True
+    while changed:
+        changed = False
+        for pose_bone in armature.pose.bones:
+            if pose_bone.name in local:
+                continue
+            for constraint in pose_bone.constraints:
+                if constraint.mute or constraint.influence <= 0.0:
+                    continue
+                moves = any(
+                    (obj == armature and sub and world_moves(sub)) or (obj != armature and _animated(obj))
+                    for obj, sub in _targets(constraint)
+                )
+                if not moves:
+                    continue
+                chain = [pose_bone]
+                if constraint.type in {"IK", "SPLINE_IK"}:
+                    length = constraint.chain_count or len(pose_bone.parent_recursive) + 1
+                    chain = [pose_bone, *pose_bone.parent_recursive][:length]
+                for bone in chain:
+                    if bone.name not in local:
+                        local.add(bone.name)
+                        changed = True
+                break
+    return local
 
 
 def _curves(action, wanted):
