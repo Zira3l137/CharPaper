@@ -53,6 +53,14 @@ def redraw_views():
                 area.tag_redraw()
 
 
+# Blender 5 warns on a "//" path in a field not marked as taking one; 4.2 has no such mark.
+RELATIVE_PATH = (
+    {"PATH_SUPPORTS_BLEND_RELATIVE"}
+    if "is_path_supports_blend_relative" in bpy.types.StringProperty.bl_rna.properties
+    else set()
+)
+
+
 def file_stem(name):
     return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip().rstrip(".") or "unnamed"
 
@@ -174,7 +182,12 @@ def _sound_picked(self, context):
 
 class CHARPAPER_PG_track(PropertyGroup):
     # `name` is the title the app shows.
-    filepath: StringProperty(name="File", subtype="FILE_PATH", description="The sound file, in any format Blender plays")
+    filepath: StringProperty(
+        name="File",
+        subtype="FILE_PATH",
+        options=RELATIVE_PATH,
+        description="The sound file, in any format Blender plays",
+    )
     # What the last export wrote and from what, so an unchanged track isn't converted again.
     written: StringProperty(options={"HIDDEN"})
     stamp: StringProperty(options={"HIDDEN"})
@@ -204,6 +217,7 @@ class CHARPAPER_PG_environment(PropertyGroup):
     ambience: StringProperty(
         name="Ambience",
         subtype="FILE_PATH",
+        options=RELATIVE_PATH,
         description="One sound that loops under the music while this environment shows. Its end "
         "should flow into its start",
         update=_sound_picked,
@@ -445,7 +459,7 @@ def character_clip_names(suite):
 
 
 class CHARPAPER_PG_suite(PropertyGroup):
-    folder: StringProperty(name="Folder", subtype="DIR_PATH", default="//charpaper/")
+    folder: StringProperty(name="Folder", subtype="DIR_PATH", default="//charpaper/", options=RELATIVE_PATH)
     suite_name: StringProperty(name="Name", description="Name the app shows. Empty: the folder name")
     armature: PointerProperty(type=bpy.types.Object, poll=_is_armature, name="Armature")
     export_model: BoolProperty(

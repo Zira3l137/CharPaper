@@ -103,8 +103,10 @@ class CHARPAPER_UL_music(UIList):
         number.label(text=f"{index + 1:02d}")
         row.prop(item, "name", text="", emboss=False)
         path = music.source(item.filepath)
-        if not path or not os.path.isfile(path):
-            row.label(text="", icon="ERROR")
+        found = bool(path) and os.path.isfile(path)
+        file = row.row()
+        file.active = found
+        file.label(text=os.path.basename(path) if path else "no file", icon="FILE_SOUND" if found else "ERROR")
 
 
 class CHARPAPER_UL_expressions(UIList):
