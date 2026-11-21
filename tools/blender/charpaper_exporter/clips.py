@@ -1,0 +1,274 @@
+"""Writes clips as the app's mixer reads them: per clip a .json, and a .glb beside it when the
+clip moves bones or objects.
+
+The .glb carries node transforms, which the glTF exporter puts in the app's axes. The .json
+lists the nodes the action really keys, since the exporter bakes every bone, and holds the
+shape-key and light curves by name, one value a frame: glTF animates a mesh's shape keys as one
+block and needs the mesh in the file, and has no place for a light's Strength or Color.
+
+A timeline clip covers the scene's frame range, unless its action has a Manual Frame Range: the
+NLA strip it plays from starts at the scene's first frame, so before the action's first key the
+clip holds its first pose, after the last its last, and a Cycles modifier repeats, as Blender
+shows it. A Once clip covers its action's own keys; a Hold clip its first frame.
+"""
+
+import json
+import os
+
+from . import anim
+from . import cues
+from . import gltf
+from .actors import TRANSFORM_PATH
+from .actors import shape_keys_of
+from .isolate import isolated
+from .isolate import showing
+from .props import file_stem
+
+FORMAT = 1
+CLIPS_DIR = "clips"
+EXPRESSIONS_DIR = "expressions"
+ENVIRONMENT_DIR = "environment"
+CAMERAS_DIR = "cameras"
+LIGHT_PATHS = {"energy", "color"}
+
+# A clip's .glb holds nodes only: nothing in it is drawn.
+NODES_ONLY = {
+    "export_format": "GLB",
+    "export_animations": True,
+    "export_animation_mode": "NLA_TRACKS",
+    "export_lights": False,
+    "export_cameras": False,
+    "export_materials": "NONE",
+    "export_image_format": "NONE",
+    "export_morph": False,
+    # A keyed bone that holds still would otherwise lose its channel, and the app refuses a
+    # clip whose .json names a node its .glb doesn't move.
+    "export_optimize_animation_keep_anim_armature": True,
+    "export_optimize_animation_keep_anim_object": True,
+}
+
+
+def fps(scene):
+    return scene.render.fps / scene.render.fps_base
+
+
+def span(scene, clip):
+    """The frames a clip covers, first and last included."""
+    action = clip.action
+    first, last = (round(f) for f in action.frame_range)
+    if clip.mode == "HOLD":
+        return first, first
+    if clip.mode == "TIMELINE" and not action.use_frame_range:
+        return scene.frame_start, scene.frame_end
+    return first, max(last, first)
+
+
+def clip_folder(actor):
+    if actor.is_character:
+        return CLIPS_DIR
+    environment = file_stem(actor.environment.name)
+    return os.path.join(ENVIRONMENT_DIR, environment, CLIPS_DIR, file_stem(actor.name))
+
+
+def keyed_nodes(actor, action, suite):
+    """The nodes an action keys on the actor: its bones the file has, and the actor itself when
+    it keys the object's own transform."""
+    obj = actor.obj
+    nodes = []
+    if obj.type == "ARMATURE":
+        bones = obj.data.bones
+        exported = {b.name for b in bones if b.use_deform or not suite.gltf.deform_bones_only}
+        nodes.extend(sorted(anim.bone_names(action) & exported))
+    if any(TRANSFORM_PATH.match(c.data_path) for c in anim.fcurves(action) if not c.mute):
+        nodes.append(obj.name)
+    return nodes
+
+
+def _curves(action, wanted):
+    return [c for c in anim.fcurves(action) if not c.mute and wanted(c)] if action else []
+
+
+def shape_key_curves(clip):
+    """The clip's shape key curves by name, from its second action or else its own."""
+    by_name = {}
+    for action in (clip.action, clip.extra):
+        for curve in _curves(action, lambda c: anim.KEY_PATH.match(c.data_path)):
+            name = anim.KEY_PATH.match(curve.data_path).group(1)
+            name = name.replace('\\"', '"').replace("\\\\", "\\")
+            if curve.data_path.endswith(".value"):
+                by_name[name] = curve
+    return by_name
+
+
+def light_curves(clip):
+    curves = {}
+    for action in (clip.action, clip.extra):
+        for curve in _curves(action, lambda c: c.data_path in LIGHT_PATHS):
+            key = "energy" if curve.data_path == "energy" else curve.array_index
+            if key == "energy" or key < 3:
+                curves[key] = curve
+    return curves
+
+
+def light_samples(light, clip, frames):
+    """A lamp's Strength and linear Color at each frame, or None when the clip keys neither."""
+    curves = light_curves(clip)
+    if not curves:
+        return None
+    value = lambda key, still, f: curves[key].evaluate(f) if key in curves else still
+    energies = [max(value("energy", light.energy, f), 0.0) for f in frames]
+    colors = [[max(value(i, light.color[i], f), 0.0) for i in range(3)] for f in frames]
+    return energies, colors, "energy" in curves, any(i in curves for i in range(3))
+
+
+def light_base(actor, clips, scene):
+    """What the environment's file gives a lamp, which its clips' curves multiply: its highest
+    Strength over all its clips, and white when any keys its Color. None for a lamp no clip
+    lights."""
+    obj = actor.obj
+    if obj.type != "LIGHT":
+        return None
+    peak, colored = None, False
+    for clip in clips:
+        start, end = span(scene, clip)
+        samples = light_samples(obj.data, clip, range(start, end + 1))
+        if samples is None:
+            continue
+        energies, _, keyed_strength, keyed_color = samples
+        if keyed_strength:
+            peak = max(peak or 0.0, max(energies))
+        colored = colored or keyed_color
+    if peak is None and not colored:
+        return None
+    return (peak if peak is not None else obj.data.energy), colored
+
+
+def clip_json(actor, clip, suite, scene, base=None):
+    start, end = span(scene, clip)
+    frames = range(start, end + 1)
+    data = {"format": FORMAT, "fps": round(fps(scene), 6), "frames": len(frames)}
+    nodes = keyed_nodes(actor, clip.action, suite)
+    if nodes:
+        data["nodes"] = nodes
+    keys = shape_key_curves(clip)
+    if keys:
+        data["shape_keys"] = _sampled(keys, frames)
+    if actor.obj.type == "LIGHT" and base is not None:
+        samples = light_samples(actor.obj.data, clip, frames)
+        if samples is not None:
+            energies, colors, keyed_strength, keyed_color = samples
+            light = {}
+            peak, white = base
+            if keyed_strength and peak > 0.0:
+                light["strength"] = [round(e / peak, 5) for e in energies]
+            if keyed_color and white:
+                light["color"] = [[round(c, 5) for c in color] for color in colors]
+            if light:
+                data["light"] = light
+    return data
+
+
+def _sampled(curves, frames):
+    return {name: [round(curve.evaluate(f), 5) for f in frames] for name, curve in sorted(curves.items())}
+
+
+def _write(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(data, file, separators=(",", ":"))
+        file.write("\n")
+
+
+def _export_nodes(context, suite, actor, clip, path):
+    """The clip's .glb: the actor as a node, its parents above it, playing the action over the
+    clip's frames."""
+    options = dict(gltf.settings_options(suite.gltf))
+    options.update(gltf.LOCKED)
+    options.update(NODES_ONLY)
+    with isolated(context) as iso:
+        copy = iso.stand_in_with_ancestors(actor.obj)
+        anim.object_track(copy, clip.name, clip.action, span(context.scene, clip))
+        iso.finish()
+        with showing(context, iso.scene):
+            return gltf.export(path, options)
+
+
+class Written:
+    """What exporting one actor's clips did."""
+
+    def __init__(self):
+        self.files = []
+        self.notes = []
+        # By clip name: [(seconds, sound name)] from its pose markers.
+        self.cues = {}
+
+
+def export_actor(context, suite, actor, clips, folder):
+    """Writes the actor's clips into its clip folder, which then holds only them."""
+    scene = context.scene
+    directory = os.path.join(folder, clip_folder(actor))
+    done = Written()
+    base = light_base(actor, clips, scene)
+    kept = set()
+    for clip in clips:
+        name = clip.name
+        if name in kept:
+            done.notes.append(f"{actor.name}: two clips play {clip.action.name}; the second is left out")
+            continue
+        kept.add(name)
+        data = clip_json(actor, clip, suite, scene, base)
+        json_path = os.path.join(directory, name + ".json")
+        if "nodes" in data:
+            glb_path = os.path.join(directory, name + ".glb")
+            os.makedirs(directory, exist_ok=True)
+            # Older exporters lack some of NODES_ONLY's switches and do without.
+            _export_nodes(context, suite, actor, clip, glb_path)
+            done.files.append(glb_path)
+        _write(json_path, data)
+        done.files.append(json_path)
+        start, end = span(scene, clip)
+        done.cues[name] = cues.within(clip.action, start, end, fps(scene))
+    _remove_others(directory, {n + ext for n in kept for ext in (".json", ".glb")})
+    return done
+
+
+def export_expressions(context, suite, folder):
+    """Writes each expression's .json into expressions/, which then holds only them."""
+    from .actors import Clip
+
+    scene = context.scene
+    directory = os.path.join(folder, EXPRESSIONS_DIR)
+    written, kept = [], set()
+    for expression in suite.expressions:
+        if expression.action is None:
+            continue
+        # Over its own keys: the app loops an expression on its own length.
+        clip = Clip(expression.action, mode="ONCE")
+        start, end = span(scene, clip)
+        frames = range(start, end + 1)
+        keys = shape_key_curves(clip)
+        data = {"format": FORMAT, "fps": round(fps(scene), 6), "frames": len(frames)}
+        data["shape_keys"] = _sampled(keys, frames)
+        path = os.path.join(directory, clip.name + ".json")
+        _write(path, data)
+        written.append(path)
+        kept.add(clip.name + ".json")
+    _remove_others(directory, kept)
+    return written
+
+
+def camera_json(camera_path, nodes, scene):
+    """The .json beside a moving camera's .glb, which is its clip's .glb too."""
+    path = os.path.splitext(camera_path)[0] + ".json"
+    frames = scene.frame_end - scene.frame_start + 1
+    _write(path, {"format": FORMAT, "fps": round(fps(scene), 6), "frames": frames, "nodes": nodes})
+    return path
+
+
+def _remove_others(directory, kept):
+    # A clip removed from a list must not linger in the app. Only clip files are touched.
+    if not os.path.isdir(directory):
+        return
+    for entry in os.listdir(directory):
+        if entry.endswith((".json", ".glb")) and entry not in kept:
+            os.remove(os.path.join(directory, entry))

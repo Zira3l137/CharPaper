@@ -56,6 +56,35 @@ def of(action, fps):
     return sorted((round((m.frame - start) / fps, 4), sound_name(m.name)) for m in inside)
 
 
+def within(action, start, end, fps):
+    """(seconds from `start`, sound name) for each pose marker of the action from frame `start`
+    to `end`."""
+    found = [m for m in markers(action) if start <= m.frame <= end]
+    return sorted((round((m.frame - start) / fps, 4), sound_name(m.name)) for m in found)
+
+
+def write_sounds(folder, names):
+    """Writes each named Sound into the suite's sounds folder. Returns the written files, the
+    names whose file is there now, and notes."""
+    written, present, notes = [], set(), []
+    for name in sorted(names):
+        target = path(folder, name)
+        sound = find_sound(name)
+        if sound is None:
+            if os.path.isfile(target):
+                present.add(name)
+            else:
+                notes.append(f"no sound named {name!r} here or in {SOUNDS_DIR}/; its cues are left out")
+            continue
+        try:
+            _write_ogg(sound, target)
+            written.append(target)
+            present.add(name)
+        except Exception as error:
+            notes.append(f"sound {sound.name!r}: {error}")
+    return written, present, notes
+
+
 def export(context, folder, entries):
     """Writes the sounds the exported clips' markers name, and returns their cue tables by
     action name, the written files, and notes.

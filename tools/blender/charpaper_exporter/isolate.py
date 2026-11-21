@@ -55,6 +55,38 @@ class Isolation:
         self.copies[obj] = copy
         return copy
 
+    def stand_in(self, obj):
+        """An empty in the object's place, under its name: a node that animates as the object
+        does without carrying its mesh or light into the file."""
+        if obj in self.copies:
+            return self.copies[obj]
+        name = self._step_aside(obj)
+        empty = bpy.data.objects.new(name, None)
+        empty.rotation_mode = obj.rotation_mode
+        empty.matrix_basis = obj.matrix_basis.copy()
+        empty.parent_type, empty.parent_bone = obj.parent_type, obj.parent_bone
+        self.scene.collection.objects.link(empty)
+        self.copies[obj] = empty
+        # Parented in finish(), which keeps the original's parent inverse.
+        empty.matrix_parent_inverse = obj.matrix_parent_inverse.copy()
+        return empty
+
+    def stand_in_with_ancestors(self, obj):
+        """The object and every object above it as stand-ins, an armature among them copied
+        whole: glTF turns only root nodes to its axes, so a node keeps its parents to come out
+        as in the file it animates."""
+        chain = []
+        current = obj
+        while current is not None:
+            chain.append(current)
+            current = current.parent
+        for item in reversed(chain):
+            if item.type == "ARMATURE":
+                self.add(item)
+            else:
+                self.stand_in(item)
+        return self.copies[obj]
+
     def _own(self, data, keep_drivers):
         if data in self._data:
             return self._data[data]

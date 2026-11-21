@@ -143,12 +143,12 @@ def active_track(target, source):
     return add_track(anim_data, action.name, action, getattr(data, "action_slot", None))
 
 
-def object_track(obj, name, action):
+def object_track(obj, name, action, frame_range=None):
     slot = pick_slot(
         action, "OBJECT", lambda s: bool(fcurves(action, s)), "OB" + obj.name
     )
     data = obj.animation_data or obj.animation_data_create()
-    return add_track(data, name, action, slot)
+    return add_track(data, name, action, slot, frame_range)
 
 
 def key_track(mesh_obj, name, action, frame_range=None):
