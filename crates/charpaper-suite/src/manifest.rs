@@ -55,6 +55,10 @@ pub struct Manifest {
     /// Makes the character look towards the mouse cursor. Without this
     /// section it never does.
     pub gaze: Option<Gaze>,
+    /// Places on the character or on an environment's armatures that react
+    /// to the mouse, keyed by name. Each plays clips when clicked or hovered.
+    #[serde(default)]
+    pub hotspots: BTreeMap<String, Hotspot>,
 }
 
 /// The character itself.
@@ -146,6 +150,10 @@ pub struct ClipEntry {
     /// They stop when the clip does.
     #[serde(default)]
     pub cues: Vec<Cue>,
+    /// Keeps the clip out of the app's list of animations, for clips only
+    /// hotspots play, like a flinch.
+    #[serde(default)]
+    pub reaction_only: bool,
 }
 
 /// One expression's settings.
@@ -298,6 +306,76 @@ impl GazeShapeKeys {
     pub fn named(&self) -> impl Iterator<Item = &str> {
         [&self.left, &self.right, &self.up, &self.down].into_iter().flatten().map(String::as_str)
     }
+}
+
+/// A place that reacts to the mouse: capsules around bones. When it is set
+/// off, every actor it lists clips for plays one of them, picked at random
+/// but never the one it played last time; the character's and a door's clips
+/// played together stay in step. A clip plays through once whatever its mode,
+/// then what played before shows again. While its clips play, setting the
+/// hotspot off again does nothing.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Hotspot {
+    #[serde(default)]
+    pub trigger: Trigger,
+    /// Where the hotspot is: any number of capsules, each around one bone.
+    pub areas: Vec<HotspotArea>,
+    /// What plays when it is set off.
+    pub clips: Vec<HotspotClip>,
+    /// Plays its clips over what other hotspots set off, instead of stopping
+    /// them. Each layered clip moves only the bones and shape keys it keys.
+    /// Defaults to false: it stops the reactions playing on the actors it
+    /// plays on, and takes their place.
+    #[serde(default)]
+    pub layer: bool,
+    /// The character's expression while the hotspot's clips play: a name
+    /// from `character.expressions`. Then the chosen one comes back.
+    pub expression: Option<String>,
+    /// Seconds after it is set off before it can be again. Defaults to 0.
+    #[schemars(range(min = 0.0))]
+    pub cooldown: Option<f32>,
+}
+
+/// What sets a hotspot off.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Trigger {
+    /// A left click on it: pressed and let go on it, without dragging.
+    #[default]
+    Click,
+    /// The cursor resting on it for a moment. It goes off again only after the
+    /// cursor has left it.
+    Hover,
+}
+
+/// A capsule around a bone: the line from its head to its tail, grown by
+/// `radius` on every side. It follows the bone as it moves.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct HotspotArea {
+    /// The armature the bone is in: the name of one of an environment's
+    /// actors. Leave it out for the character's. An actor that isn't in the
+    /// environment shown has no hotspot there.
+    pub actor: Option<String>,
+    pub bone: String,
+    /// The bone's length, from head to tail, in the armature's units.
+    #[schemars(range(min = 0.0))]
+    pub length: f32,
+    /// How far the capsule reaches from the bone, in the armature's units.
+    #[schemars(range(min = 0.0))]
+    pub radius: f32,
+}
+
+/// One clip a hotspot plays.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct HotspotClip {
+    /// Whose clip: the name of one of an environment's actors. Leave it out
+    /// for the character's.
+    pub actor: Option<String>,
+    /// The clip's name, as in `character.clips` or the actor's `clips`.
+    pub clip: String,
 }
 
 /// How a clip plays. Defaults to `timeline`.

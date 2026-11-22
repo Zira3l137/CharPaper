@@ -6,6 +6,7 @@ use charpaper_suite::ClipMode;
 use charpaper_suite::EyeKind;
 use charpaper_suite::Suite;
 use charpaper_suite::SuiteError;
+use charpaper_suite::Trigger;
 
 const ACCESSORS: &str = r#""buffers": [{"uri": "unused.bin", "byteLength": 64}],
 "bufferViews": [{"buffer": 0, "byteLength": 64}],
@@ -595,4 +596,72 @@ fn a_sun_gets_as_many_cascades_as_the_depth_needs() {
     for (depth, cascades) in cases.into_iter().chain([(61.0, 4), (150.0, 4), (1000.0, 4)]) {
         assert_eq!(sun_cascades(depth), cascades, "{depth} m");
     }
+}
+
+#[test]
+fn hotspots_name_clips_and_expressions_that_exist() {
+    let manifest = r#"schema = 2
+[character.clips.flinch]
+mode = "once"
+reaction_only = true
+
+[hotspots.Head]
+expression = "startled"
+cooldown = 1.5
+areas = [
+    { bone = "Head", length = 0.2, radius = 0.12 },
+    { actor = "Door", bone = "Hinge", length = 1.0, radius = 0.1 },
+]
+clips = [{ clip = "flinch" }, { actor = "Door", clip = "slam" }]
+
+[hotspots.Belly]
+trigger = "hover"
+layer = true
+areas = [{ bone = "Spine", length = 0.3, radius = 0.15 }]
+clips = [{ clip = "idle" }]
+"#;
+    let fixture = Fixture::new("hotspots", manifest);
+    fixture.write("clips/flinch.json", "{}");
+    fixture.write("expressions/startled.json", "{}");
+    fixture.write("environment/stage/clips/Door/slam.json", "{}");
+    let suite = fixture.load().unwrap();
+
+    let head = &suite.hotspots["Head"];
+    assert_eq!((head.trigger, head.layer, head.cooldown), (Trigger::Click, false, Some(1.5)));
+    assert_eq!(head.areas[1].actor.as_deref(), Some("Door"));
+    assert_eq!(head.clips[1].clip, "slam");
+    assert_eq!(
+        (suite.hotspots["Belly"].trigger, suite.hotspots["Belly"].layer),
+        (Trigger::Hover, true)
+    );
+    let flinch = suite.clips.iter().find(|c| c.name == "flinch").unwrap();
+    assert!(flinch.reaction_only);
+    assert!(!suite.clips.iter().find(|c| c.name == "idle").unwrap().reaction_only);
+
+    let broken = [
+        (r#"clips = [{ clip = "wave" }]"#, "the character has no clip \"wave\""),
+        (r#"clips = [{ actor = "Door", clip = "open" }]"#, "Door has no clip \"open\""),
+        (r#"clips = [{ actor = "Window", clip = "open" }]"#, "Window has no clip"),
+        (
+            r#"clips = []
+expression = "sad""#,
+            "no expression \"sad\"",
+        ),
+    ];
+    for (clips, problem) in broken {
+        let text = format!(
+            "schema = 2\n[hotspots.Hand]\nareas = [{{ bone = \"Hand\", length = 0.1, radius = 0.05 }}]\n{clips}"
+        );
+        fixture.write("suite.toml", &text);
+        let err = fixture.load().unwrap_err().to_string();
+        assert!(err.contains("hotspot \"Hand\"") && err.contains(problem), "{err}");
+    }
+    let flat = "schema = 2\n[hotspots.Hand]\nareas = [{ bone = \"Hand\", length = 0.1, radius = 0.0 }]\nclips = []";
+    fixture.write("suite.toml", flat);
+    assert!(fixture.load().unwrap_err().to_string().contains("radius above 0"));
+    let stray = "schema = 2\n[hotspots.Hand]\nareas = [{ actor = \"Lamp\", bone = \"B\", length = 0.1, radius = 0.1 }]\nclips = []";
+    fixture.write("suite.toml", stray);
+    assert!(
+        fixture.load().unwrap_err().to_string().contains("no environment has the actor \"Lamp\"")
+    );
 }

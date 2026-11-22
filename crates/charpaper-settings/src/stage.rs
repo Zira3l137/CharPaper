@@ -36,6 +36,8 @@ pub struct StageSeeds(pub BTreeMap<StageId, StageSeed>);
 #[serde(default)]
 pub struct GazeSettings {
     pub follow_cursor: bool,
+    // Whether the suite's hotspots react to clicks and the cursor resting on them.
+    pub reactions: bool,
     // How readily the character turns for the cursor: 1 is as its author set it up.
     pub strength: f32,
 }
@@ -72,7 +74,7 @@ impl Default for ViewSettings {
 
 impl Default for GazeSettings {
     fn default() -> Self {
-        Self { follow_cursor: true, strength: 1.0 }
+        Self { follow_cursor: true, reactions: true, strength: 1.0 }
     }
 }
 

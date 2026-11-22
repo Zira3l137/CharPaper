@@ -10,6 +10,7 @@ mod depth_of_field;
 mod environment;
 mod fog;
 mod gaze;
+mod hotspots;
 mod lights;
 mod look;
 mod lut;
@@ -111,6 +112,7 @@ impl Plugin for ScenePlugin {
                 look::LookPlugin,
                 lut::LutPlugin,
                 props::PropsPlugin,
+                hotspots::HotspotsPlugin,
                 render::RenderPlugin,
                 shadows::ShadowsPlugin,
                 shape_keys::ShapeKeysPlugin,

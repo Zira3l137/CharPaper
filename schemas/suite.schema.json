@@ -38,6 +38,13 @@
         }
       ]
     },
+    "hotspots": {
+      "description": "Places on the character or on an environment's armatures that react\nto the mouse, keyed by name. Each plays clips when clicked or hovered.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Hotspot"
+      }
+    },
     "name": {
       "description": "Name shown in the app. Defaults to the folder name.",
       "type": [
@@ -249,6 +256,11 @@
         },
         "mode": {
           "$ref": "#/$defs/ClipMode"
+        },
+        "reaction_only": {
+          "description": "Keeps the clip out of the app's list of animations, for clips only\nhotspots play, like a flinch.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false
@@ -874,6 +886,110 @@
       },
       "additionalProperties": false
     },
+    "Hotspot": {
+      "description": "A place that reacts to the mouse: capsules around bones. When it is set\noff, every actor it lists clips for plays one of them, picked at random\nbut never the one it played last time; the character's and a door's clips\nplayed together stay in step. A clip plays through once whatever its mode,\nthen what played before shows again. While its clips play, setting the\nhotspot off again does nothing.",
+      "type": "object",
+      "properties": {
+        "areas": {
+          "description": "Where the hotspot is: any number of capsules, each around one bone.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HotspotArea"
+          }
+        },
+        "clips": {
+          "description": "What plays when it is set off.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HotspotClip"
+          }
+        },
+        "cooldown": {
+          "description": "Seconds after it is set off before it can be again. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float",
+          "minimum": 0.0
+        },
+        "expression": {
+          "description": "The character's expression while the hotspot's clips play: a name\nfrom `character.expressions`. Then the chosen one comes back.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "layer": {
+          "description": "Plays its clips over what other hotspots set off, instead of stopping\nthem. Each layered clip moves only the bones and shape keys it keys.\nDefaults to false: it stops the reactions playing on the actors it\nplays on, and takes their place.",
+          "type": "boolean",
+          "default": false
+        },
+        "trigger": {
+          "$ref": "#/$defs/Trigger"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "areas",
+        "clips"
+      ]
+    },
+    "HotspotArea": {
+      "description": "A capsule around a bone: the line from its head to its tail, grown by\n`radius` on every side. It follows the bone as it moves.",
+      "type": "object",
+      "properties": {
+        "actor": {
+          "description": "The armature the bone is in: the name of one of an environment's\nactors. Leave it out for the character's. An actor that isn't in the\nenvironment shown has no hotspot there.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bone": {
+          "type": "string"
+        },
+        "length": {
+          "description": "The bone's length, from head to tail, in the armature's units.",
+          "type": "number",
+          "format": "float",
+          "minimum": 0.0
+        },
+        "radius": {
+          "description": "How far the capsule reaches from the bone, in the armature's units.",
+          "type": "number",
+          "format": "float",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "bone",
+        "length",
+        "radius"
+      ]
+    },
+    "HotspotClip": {
+      "description": "One clip a hotspot plays.",
+      "type": "object",
+      "properties": {
+        "actor": {
+          "description": "Whose clip: the name of one of an environment's actors. Leave it out\nfor the character's.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clip": {
+          "description": "The clip's name, as in `character.clips` or the actor's `clips`.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clip"
+      ]
+    },
     "Light": {
       "description": "A light's settings beyond glTF's.",
       "type": "object",
@@ -1017,6 +1133,21 @@
           "description": "Blender's \"Filmic\" view transform.",
           "type": "string",
           "const": "blender_filmic"
+        }
+      ]
+    },
+    "Trigger": {
+      "description": "What sets a hotspot off.",
+      "oneOf": [
+        {
+          "description": "A left click on it: pressed and let go on it, without dragging.",
+          "type": "string",
+          "const": "click"
+        },
+        {
+          "description": "The cursor resting on it for a moment. It goes off again only after the\ncursor has left it.",
+          "type": "string",
+          "const": "hover"
         }
       ]
     },

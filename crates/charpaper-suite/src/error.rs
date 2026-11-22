@@ -64,4 +64,7 @@ pub enum SuiteError {
 
     #[error("settings are given for {kind} {name:?}, which the suite does not have")]
     UnknownEntry { kind: &'static str, name: String },
+
+    #[error("hotspot {hotspot:?}: {problem}")]
+    Hotspot { hotspot: String, problem: String },
 }

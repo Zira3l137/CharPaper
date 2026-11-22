@@ -19,9 +19,11 @@ use crate::character::Armature;
 use crate::character::CharacterClips;
 use crate::character::ShownSkin;
 use crate::character::SkinObjects;
+use crate::hotspots::Hotspots;
 use crate::render::ScreenParts;
 use crate::screens::Screen;
 use crate::screens::ScreenPlace;
+use crate::screens::in_picture;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
@@ -318,20 +320,26 @@ fn aim(
         &GazeSettings,
         &CharacterState,
         Option<&CharacterClips>,
+        Option<&Hotspots>,
         &Graphics,
         &mut GazeRig,
     )>,
     screens: Query<(&Screen, &ScreenParts, Option<&ScreenPlace>)>,
+    windows: Query<&Window>,
     cameras: Query<(&Camera, &GlobalTransform), With<SceneCamera>>,
     stage_of: StageOf,
     mut bones: Bones,
 ) {
-    for (stage, settings, state, clips, graphics, mut rig) in &mut stages {
+    for (stage, settings, state, clips, hotspots, graphics, mut rig) in &mut stages {
         let seen = cursor.0.and_then(|at| {
-            let (position, camera) = seen_from(stage, at, &screens, &stage_of)?;
-            Some((position, cameras.get(camera).ok()?))
+            let (position, camera, window) = seen_from(stage, at, &screens, &stage_of)?;
+            let window = windows.get(window).ok()?;
+            let size = UVec2::new(window.physical_width(), window.physical_height()).as_vec2();
+            let camera = cameras.get(camera).ok()?;
+            Some((in_picture(camera.0, position / size)?, camera))
         });
-        let watched = Watched { cursor: cursor.0, seen, settings, state, clips };
+        let reacting = hotspots.is_some_and(|hotspots| hotspots.gaze_off);
+        let watched = Watched { cursor: cursor.0, seen, settings, state, clips, reacting };
         aim_stage(&time, graphics, watched, &mut rig, &mut bones);
     }
 }
@@ -344,10 +352,10 @@ fn seen_from(
     at: CursorAt,
     screens: &Query<(&Screen, &ScreenParts, Option<&ScreenPlace>)>,
     stage_of: &StageOf,
-) -> Option<(Vec2, Entity)> {
+) -> Option<(Vec2, Entity, Entity)> {
     let (_, on, on_place) = screens.iter().find(|(screen, ..)| screen.window == at.window)?;
     if stage_of.get(on.camera) == Some(stage) {
-        return Some((at.position, on.camera));
+        return Some((at.position, on.camera, at.window));
     }
     let desktop = on_place?.0.min.as_vec2() + at.position;
     let away = |place: &IRect| {
@@ -356,9 +364,9 @@ fn seen_from(
     screens
         .iter()
         .filter(|(_, parts, _)| stage_of.get(parts.camera) == Some(stage))
-        .filter_map(|(_, parts, place)| Some((place?.0, parts.camera)))
-        .min_by(|(a, _), (b, _)| away(a).total_cmp(&away(b)))
-        .map(|(place, camera)| (desktop - place.min.as_vec2(), camera))
+        .filter_map(|(screen, parts, place)| Some((place?.0, parts.camera, screen.window)))
+        .min_by(|(a, ..), (b, ..)| away(a).total_cmp(&away(b)))
+        .map(|(place, camera, window)| (desktop - place.min.as_vec2(), camera, window))
 }
 
 // What the character watches: the cursor, and how one of the stage's screens sees it.
@@ -368,12 +376,14 @@ struct Watched<'a> {
     settings: &'a GazeSettings,
     state: &'a CharacterState,
     clips: Option<&'a CharacterClips>,
+    // A reaction that lets the cursor go plays.
+    reacting: bool,
 }
 
 fn aim_stage(
     time: &Time,
     graphics: &Graphics,
-    Watched { cursor, seen, settings, state, clips }: Watched,
+    Watched { cursor, seen, settings, state, clips, reacting }: Watched,
     rig: &mut GazeRig,
     bones: &mut Bones,
 ) {
@@ -396,7 +406,8 @@ fn aim_stage(
         .animation
         .as_deref()
         .and_then(|name| clips.as_ref()?.get(name))
-        .is_none_or(|clip| clip.gaze);
+        .is_none_or(|clip| clip.gaze)
+        && !reacting;
     let wanted =
         settings.follow_cursor && cursor.is_some() && allowed && rig.still_secs < IDLE_SECS;
 

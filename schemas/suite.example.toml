@@ -104,3 +104,15 @@ left = "EyesLook_Left"
 right = "EyesLook_Right"
 up = "EyesLook_Up"
 down = "EyesLook_Down"
+
+# A click on the head or the hair plays the wave, with the happy face, and slams the room's
+# door at the same moment.
+[hotspots.Head]
+trigger = "click"
+expression = "happy"
+cooldown = 2.0
+areas = [
+    { bone = "Head", length = 0.2, radius = 0.12 },
+    { bone = "Hair.01", length = 0.15, radius = 0.06 },
+]
+clips = [{ clip = "wave" }, { actor = "Door", clip = "slam" }]

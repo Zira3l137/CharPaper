@@ -25,6 +25,7 @@ use crate::character::skin_keys::SkinKeys;
 use crate::clips::ClipAsset;
 use crate::clips::Timeline;
 use crate::clips::due;
+use crate::hotspots::Reactions;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
@@ -37,11 +38,14 @@ const CROSSFADE: Duration = Duration::from_millis(250);
 
 // The mixer's slots for the character, bottom up. A Once clip plays above the body's clip, so
 // that clip shows again when it ends. The expression plays above both, so it wins on the shape
-// keys it keys and leaves the rest to the body.
+// keys it keys and leaves the rest to the body. Reactions play above all that, with the
+// expression a hotspot sets on top.
 const BODY: usize = 0;
 const BODY_ONCE: usize = 1;
 const FACE: usize = 2;
-const SLOTS: usize = 3;
+pub(crate) const REACTIONS: Reactions = Reactions { replacing: 3, layers: 4..7 };
+const REACTION_FACE: usize = 7;
+const SLOTS: usize = 8;
 
 // The character's clips as suite.toml and the clips folder name them, each loading from the
 // moment the suite is picked.
@@ -56,13 +60,15 @@ pub struct CharacterClips {
 pub(crate) struct Clip {
     pub mode: ClipMode,
     pub gaze: bool,
+    pub reaction_only: bool,
     file: Handle<ClipAsset>,
     cues: Vec<ClipCue>,
 }
 
 impl CharacterClips {
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.clips.keys().map(String::as_str)
+    /// The clips the viewer can pick: all but those only hotspots play.
+    pub fn offered(&self) -> impl Iterator<Item = &str> {
+        self.clips.iter().filter(|(_, clip)| !clip.reaction_only).map(|(name, _)| name.as_str())
     }
 
     pub(crate) fn get(&self, name: &str) -> Option<&Clip> {
@@ -88,6 +94,28 @@ impl CharacterActor {
     pub(crate) fn mixer(&self) -> &Actor {
         &self.actor
     }
+
+    pub(crate) fn mixer_mut(&mut self) -> &mut Actor {
+        &mut self.actor
+    }
+
+    pub(crate) fn node(&self, name: &str) -> Option<Entity> {
+        let at = self.actor.rig().nodes.iter().position(|(own, _)| own == name)?;
+        self.nodes.get(at).copied()
+    }
+
+    // None while it is still loading.
+    pub(crate) fn clip_id(&self, name: &str) -> Option<ClipId> {
+        self.ids.get(name).copied()
+    }
+
+    // A hotspot's expression, over the chosen one, or none.
+    pub(crate) fn reaction_face(&mut self, expression: Option<&str>) {
+        match expression.and_then(|name| self.expressions.get(name)) {
+            Some(&id) => self.actor.play(REACTION_FACE, id, Mode::Timeline),
+            None => self.actor.stop(REACTION_FACE),
+        }
+    }
 }
 
 // A sound one of a stage's clips played, as a child of that stage.
@@ -108,14 +136,22 @@ pub(crate) fn list_clips(
                 sounds.entry(cue.sound.clone()).or_insert_with(load);
             }
             let file = assets.load(asset_path(suite, &clip.json));
-            let entry = Clip { mode: clip.mode, gaze: clip.gaze, file, cues: clip.cues.clone() };
+            let entry = Clip {
+                mode: clip.mode,
+                gaze: clip.gaze,
+                reaction_only: clip.reaction_only,
+                file,
+                cues: clip.cues.clone(),
+            };
             clips.insert(clip.name.clone(), entry);
         }
         let expressions = (suite.expressions.iter())
             .map(|e| (e.name.clone(), assets.load(asset_path(suite, &e.json))))
             .collect();
         // A Once clip would play at start and leave nothing under it.
-        let offered = |name: &str| clips.get(name).is_some_and(|c| c.mode != ClipMode::Once);
+        let offered = |name: &str| {
+            clips.get(name).is_some_and(|c| c.mode != ClipMode::Once && !c.reaction_only)
+        };
         state.animation =
             prefer(suite.remembered(remembered).animation, offered, suite.default_clip.clone());
         commands.entity(stage).insert(CharacterClips { clips, expressions, sounds });

@@ -218,6 +218,22 @@ impl Actor {
         self.slots[slot].leave();
     }
 
+    /// Where a clip laid over others should play among `slots`: where a clip moving any of the
+    /// same parts plays, so it takes them over; else in a slot with nothing playing; else in the
+    /// first.
+    pub fn slot_for(&self, slots: std::ops::Range<usize>, clip: ClipId) -> usize {
+        let parts = |id: ClipId| {
+            let bound = &self.clips[id.0];
+            let nodes = bound.nodes.iter().map(|&(target, _)| (false, target));
+            nodes.chain(bound.shape_keys.iter().map(|&(target, _)| (true, target)))
+        };
+        let shares = |id: ClipId| parts(id).any(|part| parts(clip).any(|own| own == part));
+        let current = |slot: usize| self.playing(slot).map(|(id, _)| id);
+        (slots.clone().find(|&slot| current(slot).is_some_and(shares)))
+            .or_else(|| slots.clone().find(|&slot| current(slot).is_none()))
+            .unwrap_or(slots.start)
+    }
+
     pub fn playing(&self, slot: usize) -> Option<(ClipId, Mode)> {
         self.slots[slot].current().map(|entry| (entry.clip, entry.mode))
     }

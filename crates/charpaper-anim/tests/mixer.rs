@@ -218,3 +218,24 @@ fn marks_come_due_once_each_including_round_the_loop() {
     assert!(!passed(Some(1.5), 0.5).passes(1.0));
     assert!(!Event::Finished { slot: 0, clip }.passes(0.0));
 }
+
+#[test]
+fn a_layer_takes_the_slot_of_one_moving_the_same_parts_or_a_free_one() {
+    let mut actor = Actor::new(rig(), 4, 0.0);
+    let reach = actor.add_clip(clip(1.0, &["arm"], &[]));
+    let wave = actor.add_clip(clip(1.0, &["arm"], &[]));
+    let blink = actor.add_clip(clip(1.0, &[], &[("blink", 1.0)]));
+    let smile = actor.add_clip(clip(1.0, &[], &[("smile", 1.0)]));
+    let layers = 1..4;
+
+    assert_eq!(actor.slot_for(layers.clone(), reach), 1);
+    actor.play(1, reach, Mode::Once);
+    assert_eq!(actor.slot_for(layers.clone(), wave), 1, "both move arm");
+    assert_eq!(actor.slot_for(layers.clone(), blink), 2, "moves nothing the first does");
+    actor.play(2, blink, Mode::Once);
+    actor.play(3, smile, Mode::Once);
+    let both = actor.add_clip(clip(1.0, &[], &[("smile", 1.0), ("blink", 1.0)]));
+    assert_eq!(actor.slot_for(layers.clone(), both), 2, "the first slot it shares parts with");
+    let other = actor.add_clip(clip(1.0, &[], &[("frown", 1.0)]));
+    assert_eq!(actor.slot_for(layers, other), 1, "none free: the first");
+}

@@ -28,6 +28,7 @@ use crate::clips::ClipAsset;
 use crate::clips::Mixing;
 use crate::clips::Timeline;
 use crate::clips::due;
+use crate::hotspots::Reactions;
 use crate::stage::StageOf;
 
 pub(crate) struct PropsPlugin;
@@ -38,9 +39,10 @@ impl Plugin for PropsPlugin {
     }
 }
 
-// A prop's own clip plays in the first slot; the second is for Once clips played on it.
+// A prop's own clip plays in the first slot; reactions play above it.
 const BASE: usize = 0;
-const SLOTS: usize = 2;
+pub(crate) const REACTIONS: Reactions = Reactions { replacing: 1, layers: 2..5 };
+const SLOTS: usize = 5;
 const FADE: Duration = Duration::from_millis(250);
 
 #[derive(Component)]
@@ -56,6 +58,7 @@ pub(crate) struct PropActor {
 }
 
 struct PropClip {
+    name: String,
     file: Handle<ClipAsset>,
     mode: ClipMode,
     cues: Vec<ClipCue>,
@@ -125,6 +128,7 @@ impl PropActor {
         let clips = clips
             .iter()
             .map(|clip| PropClip {
+                name: clip.name.clone(),
                 file: assets.load(asset_path(suite, &clip.json)),
                 mode: clip.mode,
                 cues: clip.cues.clone(),
@@ -147,6 +151,30 @@ impl PropActor {
             started: false,
             events: Vec::new(),
         }
+    }
+}
+
+impl PropActor {
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(crate) fn mixer(&self) -> &Actor {
+        &self.actor
+    }
+
+    pub(crate) fn mixer_mut(&mut self) -> &mut Actor {
+        &mut self.actor
+    }
+
+    pub(crate) fn node(&self, name: &str) -> Option<Entity> {
+        let at = self.actor.rig().nodes.iter().position(|(own, _)| own == name)?;
+        self.nodes.get(at).copied()
+    }
+
+    // None while it is still loading.
+    pub(crate) fn clip_id(&self, name: &str) -> Option<ClipId> {
+        self.clips.iter().find(|clip| clip.name == name)?.id
     }
 }
 

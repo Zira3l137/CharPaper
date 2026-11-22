@@ -32,3 +32,11 @@ pub struct Unseen;
 // The camera a Screen's UI draws through, added once the scene has made it.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct ScreenUi(pub Entity);
+
+// Where a point `across` the window, as a fraction of its size from the top-left, is in the
+// camera's picture. The picture is rendered at the graphics scale, so it can be smaller than
+// the window.
+pub(crate) fn in_picture(camera: &Camera, across: Vec2) -> Option<Vec2> {
+    across.is_finite().then_some(())?;
+    Some(across * camera.logical_viewport_size()?)
+}

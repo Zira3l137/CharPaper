@@ -137,6 +137,7 @@ pub(crate) fn spawn_rig(
             mode: ClipMode::Timeline,
             label: None,
             gaze: false,
+            reaction_only: false,
             cues: Vec::new(),
         });
         let rig =

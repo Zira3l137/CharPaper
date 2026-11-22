@@ -8,7 +8,9 @@ mod skin_keys;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 
+pub(crate) use animation::CharacterActor;
 pub use animation::CharacterClips;
+pub(crate) use animation::REACTIONS;
 pub use expression::Expressions;
 pub(crate) use skin::ShownSkin;
 pub use skin::SkinObjects;

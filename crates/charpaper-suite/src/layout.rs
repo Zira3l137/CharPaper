@@ -19,6 +19,7 @@ use crate::manifest::Cue;
 use crate::manifest::EnvironmentEntry;
 use crate::manifest::ExpressionEntry;
 use crate::manifest::Gaze;
+use crate::manifest::Hotspot;
 use crate::manifest::MANIFEST_FILE;
 use crate::manifest::Manifest;
 use crate::manifest::NO_LUT;
@@ -66,6 +67,7 @@ pub struct Suite {
     pub post: Post,
     pub camera: Camera,
     pub gaze: Option<Gaze>,
+    pub hotspots: BTreeMap<String, Hotspot>,
 }
 
 // A clip is its .json, which every clip has, and the .glb beside it when it keys bones or
@@ -78,6 +80,7 @@ pub struct ClipFile {
     pub mode: ClipMode,
     pub label: Option<String>,
     pub gaze: bool,
+    pub reaction_only: bool,
     pub cues: Vec<ClipCue>,
 }
 
@@ -319,6 +322,11 @@ impl Suite {
         let mut camera = manifest.camera;
         above_zero(&mut camera.f_stop, "camera: `f_stop`");
 
+        for (name, hotspot) in &manifest.hotspots {
+            check_hotspot(hotspot, &clips, &expressions, &environments)
+                .map_err(|problem| SuiteError::Hotspot { hotspot: name.clone(), problem })?;
+        }
+
         Ok(Self {
             root: root.to_path_buf(),
             name,
@@ -338,6 +346,7 @@ impl Suite {
             post: manifest.post,
             camera,
             gaze: manifest.gaze,
+            hotspots: manifest.hotspots,
         })
     }
 
@@ -375,6 +384,7 @@ fn clip_files(
             mode: entry.mode,
             label: entry.label,
             gaze: entry.gaze.unwrap_or(true),
+            reaction_only: entry.reaction_only,
             cues: cues(root, &entry.cues)?,
             name,
         });
@@ -388,6 +398,53 @@ fn clip_files(
         return Err(SuiteError::UnknownEntry { kind: "clip", name: format!("{owner}{name}") });
     }
     Ok(clips)
+}
+
+// Names that point at nothing are refused, as for settings: the add-on writes them, so one
+// that doesn't match is a suite out of date. An actor only has to be in one environment.
+fn check_hotspot(
+    hotspot: &Hotspot,
+    clips: &[ClipFile],
+    expressions: &[ExpressionFile],
+    environments: &[Environment],
+) -> Result<(), String> {
+    let actor = |name: &str| environments.iter().flat_map(|e| &e.actors).find(|a| a.name == name);
+    for area in &hotspot.areas {
+        if let Some(name) = &area.actor
+            && actor(name).is_none()
+        {
+            return Err(format!("no environment has the actor {name:?}"));
+        }
+        let finite = area.length.is_finite() && area.radius.is_finite();
+        if !finite || area.length < 0.0 || area.radius <= 0.0 {
+            return Err(format!(
+                "bone {:?} needs a length of 0 or more and a radius above 0",
+                area.bone
+            ));
+        }
+    }
+    for wanted in &hotspot.clips {
+        let found = match &wanted.actor {
+            None => clips.iter().any(|c| c.name == wanted.clip),
+            Some(name) => {
+                let named = environments.iter().flat_map(|e| &e.actors).filter(|a| &a.name == name);
+                named.flat_map(|a| &a.clips).any(|c| c.name == wanted.clip)
+            }
+        };
+        if !found {
+            let owner = wanted.actor.as_deref().unwrap_or("the character");
+            return Err(format!("{owner} has no clip {:?}", wanted.clip));
+        }
+    }
+    if let Some(name) = &hotspot.expression
+        && !expressions.iter().any(|e| &e.name == name)
+    {
+        return Err(format!("the character has no expression {name:?}"));
+    }
+    if hotspot.cooldown.is_some_and(|c| !(c.is_finite() && c >= 0.0)) {
+        return Err("`cooldown` must be 0 or more seconds".into());
+    }
+    Ok(())
 }
 
 fn cues(root: &Path, cues: &[Cue]) -> Result<Vec<ClipCue>, SuiteError> {

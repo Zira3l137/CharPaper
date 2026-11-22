@@ -137,7 +137,22 @@ fn gaze() -> impl Bundle {
                     });
                 },
             }
-            .stepper()
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-reactions"),
+                help: |l| fl!(l, "help-reactions"),
+                // Only for a suite with hotspots.
+                show: |w, l| {
+                    let gaze = w.focused::<GazeSettings>()?;
+                    let has_hotspots =
+                        w.focused::<ActiveSuite>().is_some_and(|s| !s.hotspots.is_empty());
+                    Some(switch(l, gaze.reactions).when(has_hotspots))
+                },
+                change: |w, step| {
+                    w.edit(|gaze: &mut GazeSettings| flip(&mut gaze.reactions, step));
+                },
+            }
+            .segments()
         ],
     )
 }
@@ -214,7 +229,7 @@ fn suites(world: &World) -> Vec<Option<String>> {
 fn animations(world: &World) -> Vec<Option<String>> {
     let clips = world.focused::<CharacterClips>();
     clips
-        .map(|clips| clips.names().map(|name| Some(name.to_string())).collect())
+        .map(|clips| clips.offered().map(|name| Some(name.to_string())).collect())
         .unwrap_or_default()
 }
 
