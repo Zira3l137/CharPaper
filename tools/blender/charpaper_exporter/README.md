@@ -16,7 +16,23 @@ blender --command extension build --source-dir tools/blender/charpaper_exporter
 ```
 
 The panel is in the 3D Viewport sidebar (N), tab **CharPaper**. Everything you set there is
-saved in the `.blend`.
+saved in the `.blend`, except **CharPaper app**, which is an add-on preference and shared by
+every .blend on the computer.
+
+## Where it exports
+
+- **Into the app**, by default: `<app>/characters/<folder name>/`. The app's folder is found
+  from **CharPaper app**, which may point at the folder with `charpaper.exe` (or
+  `charpaper` on other systems), at the executable, at its `characters` folder, or at the
+  folder the download was unpacked into (of several apps there, the newest). The folder name
+  is **Folder name**, else the Name, else the .blend's name, with characters Windows doesn't
+  allow in a file name replaced by `_`. The first export into the app fills in **Folder
+  name**, so renaming the character later keeps exporting into the same folder.
+- **Custom folder:** any folder, written to as it is. A path starting with `//` is relative
+  to the .blend, which must be saved.
+- The Suite panel shows the folder, or why there's none; Check reports it as an error and
+  export stops. A .blend saved before this setting existed keeps exporting where it did: to its
+  picked folder, or to `//charpaper/` next to the .blend if a suite.toml is already there.
 
 ## What goes where
 

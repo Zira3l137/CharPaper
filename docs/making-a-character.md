@@ -116,8 +116,7 @@ These save the most trouble.
 10. **Materials: Principled BSDF with image textures.** Anything built from procedural
     nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't.
 11. **At most 256 shape keys on a mesh.**
-12. **Save your .blend before exporting.** Unless you pick another folder, the suite is
-    written next to it.
+12. **Save your .blend often.** The add-on's settings live in it.
 
 ## The add-on
 
@@ -128,13 +127,28 @@ your app. To update it, uninstall the old one first, then install the new zip an
 Blender.
 
 **Open it.** In the 3D Viewport press **N** and pick the **CharPaper** tab. Everything you
-set there is saved in the .blend.
+set there is saved in the .blend, except where CharPaper is (below).
+
+**Tell it where CharPaper is.** Once per computer: in the **Suite** panel, click the folder
+icon of **CharPaper app** and pick the folder you unpacked CharPaper into, the one with
+`charpaper.exe` in it. Picking `charpaper.exe` itself, its `characters` folder, or the
+folder you unpacked the download into works too; the add-on finds the app from there. The
+add-on then exports every character straight into the app's `characters` folder, so
+there's nothing to copy. The line under it shows where exactly, with a ✓, or in red what's
+wrong. It's kept with Blender's preferences, not in the .blend, so every .blend on this
+computer uses it. (It's also under *Edit → Preferences → Add-ons → CharPaper Exporter*.)
+If you move or update CharPaper to another folder, pick the new one.
+
+**Or export somewhere else.** Tick **Custom folder** and pick any folder; suite.toml goes
+straight into it. For a character you're sending to someone, or keeping out of the app's
+list while it's unfinished. To see it in the app, copy that folder into the app's
+`characters` folder.
 
 The tab has these panels, top to bottom:
 
 | Panel | What's in it |
 |---|---|
-| **Suite** | The folder and name, the timeline (read from your scene), what the app starts with, and the **Check** and **Export all** buttons. |
+| **Suite** | The name, where CharPaper is and where the character goes, the timeline (read from your scene), what the app starts with, and the **Check** and **Export all** buttons. |
 | **Character** | The armature. Under it: **Skins** (outfits), **Expressions** (faces) and **Gaze** (following the cursor). |
 | **Animation** | Everything that moves, grouped: the character first, then each environment's objects. Pick one to see and edit its clips. |
 | **Environments** | The places, their sky, and under each, **Sound**: its music and ambience. |
@@ -173,9 +187,11 @@ for every feature.
 
 ## Your first character, step by step
 
-1. **Suite → Folder:** the character's folder, like `…\CharPaper\characters\aki\`.
-   Exporting straight into the app's `characters` folder saves you copying.
-   **Suite → Name:** what the panel shows.
+1. **Suite → Name:** what the app's list shows, like `Aki`. **CharPaper app:** where the
+   app is, if you haven't picked it yet (see [The add-on](#the-add-on)). The character's
+   folder is named after the Name, `characters\Aki`, unless you type another **Folder
+   name**. After the first export the folder name stays as it is, so renaming the
+   character later doesn't make a second copy next to the first.
 2. **Set the timeline.** In *Output Properties*, set the frame rate and the frame range your
    idle loops over, like 1–240 at 24 fps. The Suite panel shows the result: "a 10.0 s loop".
 3. **Character → Armature:** your character's armature.
@@ -191,13 +207,14 @@ for every feature.
 8. Press **Check**, read the Warnings, then press **Export all**.
 
 **Look at it.** Start the app with `run-windowed.bat` and pick your character in the Scene
-tab. After a change in Blender, export again, then switch to another character and back in
-the app, or restart it.
+tab. If the app was already running during the first export, restart it: a new character
+shows in the list only after a restart. After a change in Blender, export again, then
+switch to another character and back in the app, or restart it.
 
 ## Testing your character
 
 - Run `run-windowed.bat` while you work. A window is easier to check than the desktop.
-- `charpaper.exe --windowed --suite aki` opens straight into the folder `characters\aki`.
+- `charpaper.exe --windowed --suite Aki` opens straight into the folder `characters\Aki`.
 - Read `charpaper.log` after a change. It lists the skins, clips, expressions and
   drivers it found, and warns about what it couldn't use. If the character doesn't load
   at all, the log says which line of suite.toml is wrong.

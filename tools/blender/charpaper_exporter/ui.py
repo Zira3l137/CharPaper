@@ -14,6 +14,7 @@ from . import drivers
 from . import env_settings
 from . import hotspots as hotspot_spots
 from . import music
+from . import paths
 from .exporters import STOP_SHAPE_KEYS
 from .exporters import UNLINK_ACTION
 from .operators import current_actor
@@ -239,6 +240,31 @@ def _split(layout):
     return layout
 
 
+def _destination(layout, suite, context):
+    """Where the suite goes: into the app's characters folder, worked out from where the app
+    is, or a folder of the artist's own."""
+    col = layout.column()
+    if not suite.custom_folder:
+        prefs = paths.preferences()
+        if prefs is not None:
+            col.prop(prefs, "app_folder")
+        col.prop(suite, "character_folder")
+    else:
+        col.prop(suite, "folder")
+    col.prop(suite, "custom_folder")
+    folder, why = paths.folder(suite)
+    box = layout.box()
+    row = box.row()
+    if folder is None:
+        row.alert = True
+        row.label(text="", icon=SEVERITY_TAGS["ERROR"])
+        _wrapped(row.column(), why, context)
+        return
+    row.label(text="", icon="CHECKMARK")
+    _wrapped(row.column(), f"Exports to {folder}", context)
+    row.operator("charpaper.open_folder", text="", icon="FILE_FOLDER")
+
+
 class CHARPAPER_PT_suite(_Sidebar, Panel):
     bl_label = "Suite"
 
@@ -249,10 +275,8 @@ class CHARPAPER_PT_suite(_Sidebar, Panel):
         suite = suite_of(context)
         scene = context.scene
         layout = _split(self.layout)
-        row = layout.row(align=True)
-        row.prop(suite, "folder")
-        row.operator("charpaper.open_folder", text="", icon="FILE_FOLDER")
         layout.prop(suite, "suite_name")
+        _destination(layout, suite, context)
 
         box = layout.box()
         frames = scene.frame_end - scene.frame_start + 1

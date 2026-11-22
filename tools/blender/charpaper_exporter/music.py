@@ -13,6 +13,7 @@ import tempfile
 import bpy
 
 from . import audio
+from . import paths
 from .exporters import ENVIRONMENT_DIR
 from .props import file_stem
 
@@ -146,11 +147,10 @@ def _write_ambience(entry, here, notes):
 
 
 def check(suite, add, finding):
-    folder = os.path.normpath(bpy.path.abspath(suite.folder))
-    resolvable = not (suite.folder.startswith("//") and not bpy.data.filepath)
+    folder, _ = paths.folder(suite)
     for entry in suite.environments:
         if entry.enabled:
-            _check(entry, folder if resolvable else None, lambda m, s="WARNING": add(finding(m, severity=s, sound=entry.name)))
+            _check(entry, folder, lambda m, s="WARNING": add(finding(m, severity=s, sound=entry.name)))
 
 
 def _check(entry, folder, warn):

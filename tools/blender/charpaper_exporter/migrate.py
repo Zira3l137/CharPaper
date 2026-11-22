@@ -1,10 +1,15 @@
 """Moves a suite's settings from before clips lived on objects into the new places, once, when a
 .blend that has them opens: the old animation files' clips onto the armature's clip list, the
-skins' expressions onto the character's. The old settings are left as they were."""
+skins' expressions onto the character's. The old settings are left as they were. A suite from
+before the app's folder could be picked keeps exporting where it did."""
+
+import os
 
 import bpy
 from bpy.app.handlers import persistent
 
+from . import manifest
+from .props import DEFAULT_FOLDER
 from .props import file_stem
 
 MODES = {"LOOP": "TIMELINE", "ONCE": "ONCE", "POSE": "HOLD"}
@@ -64,8 +69,21 @@ def _expressions(suite):
     return moved
 
 
+def settle_folder(suite):
+    """Before a suite could go into the app's characters folder, each went to a folder of its
+    own: one picked, or the default next to the .blend. Those that were exported there keep it."""
+    if suite.folder_settled:
+        return
+    suite.folder_settled = True
+    if suite.folder != DEFAULT_FOLDER:
+        suite.custom_folder = True
+    elif bpy.data.filepath:
+        suite.custom_folder = os.path.isfile(manifest.path(bpy.path.abspath(suite.folder)))
+
+
 def migrate_all():
     for scene in bpy.data.scenes:
+        settle_folder(scene.charpaper)
         moved = migrate(scene.charpaper)
         if moved is not None:
             clips, expressions = moved

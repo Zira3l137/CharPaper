@@ -14,7 +14,8 @@ See also: [Testing your character](making-a-character.md#testing-your-character)
 
 | What you see | Why, and what to do |
 |---|---|
-| The character doesn't appear in the list | Its folder has no `suite.toml`, or isn't directly inside `characters`. |
+| The character doesn't appear in the list | The app was running when it was first exported: restart it. Or the add-on exports it somewhere else: the Suite panel's **Exports to** line says where. With **Custom folder** ticked, copy the folder into `characters` yourself. |
+| Export says there's nowhere to export to | **CharPaper app** isn't picked, or no `charpaper.exe` is where it points (the app was moved or updated into another folder). Pick the folder CharPaper is in. |
 | It's in the list but nothing shows | suite.toml has an error. Read `charpaper.log`. |
 | The log says the schema version isn't supported | The suite was exported by an older add-on. Install the add-on from the same release as the app, open the .blend, and **Export all**. |
 | A hotspot names a clip or expression that doesn't exist | A clip was renamed or removed after the hotspot was made. Fix the hotspot in the add-on and export again. |

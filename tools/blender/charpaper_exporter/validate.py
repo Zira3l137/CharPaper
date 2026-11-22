@@ -9,6 +9,7 @@ from . import checks
 from . import drivers
 from . import env_settings
 from . import front
+from . import paths
 from . import sky
 from . import gaze as gaze_bones
 from . import gltf
@@ -49,8 +50,9 @@ def check(context, suite):
 
     if not gltf.available():
         add(Finding("the glTF exporter add-on is disabled; enable it in Preferences > Add-ons"))
-    if suite.folder.startswith("//") and not bpy.data.filepath:
-        add(Finding("the folder is relative to the .blend, which is not saved yet"))
+    folder, why = paths.folder(suite)
+    if folder is None:
+        add(Finding(f"nowhere to export to: {why[0].lower()}{why[1:]}", severity="ERROR"))
     if suite.gltf.image_format == "WEBP":
         add(Finding("WebP images only load if the app is built with Bevy's webp feature", severity="INFO"))
 
@@ -212,7 +214,10 @@ def _check_names(suite, add):
 
 def _on_disk(suite, subdir):
     """What an earlier export left in a subfolder, by file stem or folder name."""
-    folder = os.path.join(bpy.path.abspath(suite.folder), subdir)
+    folder, _ = paths.folder(suite)
+    if folder is None:
+        return set()
+    folder = os.path.join(folder, subdir)
     return {os.path.splitext(name)[0] for name in os.listdir(folder)} if os.path.isdir(folder) else set()
 
 
@@ -554,8 +559,8 @@ def _in_skin(suite, obj):
 
 
 def _check_stale_formats(suite, add):
-    folder = bpy.path.abspath(suite.folder)
-    if not os.path.isdir(folder):
+    folder, _ = paths.folder(suite)
+    if folder is None or not os.path.isdir(folder):
         return
     other = ".gltf" if suite.gltf.file_format == "GLB" else ".glb"
     groups = (

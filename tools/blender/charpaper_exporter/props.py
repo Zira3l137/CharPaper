@@ -562,8 +562,33 @@ def character_clip_names(suite):
     return [file_stem(c.action.name) for c in armature.charpaper.clips if c.action is not None]
 
 
+DEFAULT_FOLDER = "//charpaper/"
+
+
+def _settle_folder(suite, _context):
+    suite.folder_settled = True
+
+
 class CHARPAPER_PG_suite(PropertyGroup):
-    folder: StringProperty(name="Folder", subtype="DIR_PATH", default="//charpaper/", options=RELATIVE_PATH)
+    custom_folder: BoolProperty(
+        name="Custom folder",
+        description="Export to a folder of your own instead of the app's characters folder",
+        update=_settle_folder,
+    )
+    folder: StringProperty(
+        name="Folder",
+        subtype="DIR_PATH",
+        default=DEFAULT_FOLDER,
+        options=RELATIVE_PATH,
+        description="The suite's folder, where suite.toml goes",
+    )
+    character_folder: StringProperty(
+        name="Folder name",
+        description="The character's folder in the app's characters folder. Empty: its Name, "
+        "or the .blend's name, kept from the first export on",
+    )
+    # Whether custom_folder was worked out for a .blend from before it existed.
+    folder_settled: BoolProperty()
     suite_name: StringProperty(name="Name", description="Name the app shows. Empty: the folder name")
     armature: PointerProperty(type=bpy.types.Object, poll=_is_armature, name="Armature")
     export_model: BoolProperty(

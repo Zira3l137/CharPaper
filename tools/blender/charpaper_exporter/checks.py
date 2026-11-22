@@ -12,6 +12,7 @@ from . import anim
 from . import clips as clip_files
 from . import cues
 from . import drivers
+from . import paths
 from .actors import TRANSFORM_PATH
 from .actors import shape_keys_of
 from .exporters import STOP_SHAPE_KEYS
@@ -328,8 +329,6 @@ def _range(curves):
 def _copied_from(action, slot, curves, frames):
     """Another action whose slot of the same name keys the same curves at those frames: the one
     Blender's New copied this one from."""
-    import bpy
-
     wanted = {(c.data_path, c.array_index): {round(k.co.x) for k in c.keyframe_points} & frames for c in curves}
     for other in bpy.data.actions:
         if other == action or slot is None:
@@ -439,12 +438,12 @@ def _check_markers(suite, scene, actor, clip, add):
             actor.obj,
             clip=clip.name,
         ))
-    folder = bpy.path.abspath(suite.folder)
+    folder, _ = paths.folder(suite)
     unknown = {
         cues.sound_name(m.name)
         for m in cues.markers(clip.action)
         if cues.find_sound(cues.sound_name(m.name)) is None
-        and not os.path.isfile(cues.path(folder, cues.sound_name(m.name)))
+        and not (folder and os.path.isfile(cues.path(folder, cues.sound_name(m.name))))
     }
     if unknown:
         add(Finding(

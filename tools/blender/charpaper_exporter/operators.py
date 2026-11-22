@@ -23,6 +23,7 @@ from . import hotspots
 from . import lens
 from . import manifest
 from . import music
+from . import paths
 from . import sky
 from . import toml_io
 from . import validate
@@ -426,10 +427,12 @@ class CHARPAPER_OT_export(Operator):
         if not gltf.available():
             self.report({"ERROR"}, "The glTF exporter add-on is disabled")
             return {"CANCELLED"}
-        if suite.folder.startswith("//") and not bpy.data.filepath:
-            self.report({"ERROR"}, "Save the .blend first, or pick an absolute folder")
+        folder, why = paths.folder(suite)
+        if folder is None:
+            self.report({"ERROR"}, why)
             return {"CANCELLED"}
-        folder = os.path.normpath(bpy.path.abspath(suite.folder))
+        new = not os.path.isfile(manifest.path(folder))
+        paths.keep_name(suite)
         os.makedirs(folder, exist_ok=True)
         # A previewed look is not the character's own pose, and must not be exported or validated as it.
         gaze.stop(context)
@@ -518,7 +521,10 @@ class CHARPAPER_OT_export(Operator):
             finding.name, finding.severity = f"export failed: {failure}", "ERROR"
             suite.validated = True
         _report_findings(self, findings)
-        self.report({"INFO"}, f"Exported {len(done)} file(s) to {folder}")
+        report = f"Exported {len(done)} file(s) to {folder}"
+        if new and done and not suite.custom_folder:
+            report += ". A new character shows in CharPaper's list after a restart"
+        self.report({"INFO"}, report)
         warnings = sum(1 for f in suite.findings if f.severity == "WARNING")
         errors = len(failed) + len(alerts)
         problems = f"{errors} errors · {warnings} warnings" if errors else f"{warnings} warnings"
@@ -692,7 +698,11 @@ class CHARPAPER_OT_load_manifest(Operator):
 
     def execute(self, context):
         suite = suite_of(context)
-        path = manifest.path(bpy.path.abspath(suite.folder))
+        folder, why = paths.folder(suite)
+        if folder is None:
+            self.report({"WARNING"}, why)
+            return {"CANCELLED"}
+        path = manifest.path(folder)
         if not os.path.isfile(path):
             self.report({"WARNING"}, f"No suite.toml in {os.path.dirname(path)}")
             return {"CANCELLED"}
@@ -719,7 +729,10 @@ class CHARPAPER_OT_open_folder(Operator):
     bl_label = "Open folder"
 
     def execute(self, context):
-        folder = bpy.path.abspath(suite_of(context).folder)
+        folder, why = paths.folder(suite_of(context))
+        if folder is None:
+            self.report({"WARNING"}, why)
+            return {"CANCELLED"}
         if not os.path.isdir(folder):
             self.report({"WARNING"}, "Nothing exported there yet")
             return {"CANCELLED"}

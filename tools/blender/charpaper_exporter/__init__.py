@@ -3,6 +3,7 @@ from . import gaze
 from . import hotspots
 from . import migrate
 from . import operators
+from . import paths
 from . import props
 from . import ui
 
@@ -19,6 +20,7 @@ bl_info = {
 
 def register():
     props.register()
+    paths.register()
     migrate.register()
     operators.register()
     gaze.register()
@@ -34,4 +36,5 @@ def unregister():
     gaze.unregister()
     operators.unregister()
     migrate.unregister()
+    paths.unregister()
     props.unregister()
