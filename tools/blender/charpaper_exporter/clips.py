@@ -68,6 +68,22 @@ def span(scene, clip):
     return first, max(last, first)
 
 
+def stretched_by(clip):
+    """The slot that keeps a once-played clip running past its body's keys, as (label, first,
+    last), or None."""
+    frames = lambda curves: [k.co.x for c in curves for k in c.keyframe_points]
+    groups = clip.groups()
+    body = next((frames(curves) for _, slot, curves in groups if slot is not None and slot == clip.slot), [])
+    if not body:
+        return None
+    first, last = min(body), max(body)
+    for label, slot, curves in groups:
+        keyed = frames(curves)
+        if keyed and not (slot is not None and slot == clip.slot) and (max(keyed) > last + 1 or min(keyed) < first - 1):
+            return label, round(min(keyed)), round(max(keyed))
+    return None
+
+
 def clip_folder(actor):
     if actor.is_character:
         return CLIPS_DIR

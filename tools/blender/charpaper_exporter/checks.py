@@ -258,6 +258,8 @@ def _check_span(scene, actor, clip, add):
     if clip.mode == "ONCE":
         if some_cycle:
             add(Finding(f"clip {name!r} plays Once, so its Cycles modifier repeats nothing", obj, severity="INFO", clip=name))
+        if not action.use_frame_range:
+            _check_stretch(actor, clip, add)
         if action.use_frame_range:
             own_start, own_end = (round(f) for f in action.frame_range)
             if own_end > last + 1:
@@ -315,6 +317,64 @@ def _check_span(scene, actor, clip, add):
             obj,
             severity="WARNING" if actor.is_character else "INFO",
             clip=name,
+        ))
+
+
+def _range(curves):
+    frames = [k.co.x for c in curves for k in c.keyframe_points]
+    return (round(min(frames)), round(max(frames))) if frames else None
+
+
+def _copied_from(action, slot, curves, frames):
+    """Another action whose slot of the same name keys the same curves at those frames: the one
+    Blender's New copied this one from."""
+    import bpy
+
+    wanted = {(c.data_path, c.array_index): {round(k.co.x) for k in c.keyframe_points} & frames for c in curves}
+    for other in bpy.data.actions:
+        if other == action or slot is None:
+            continue
+        theirs = next((s for s in anim.slots(other) if s.identifier == slot.identifier), None)
+        if theirs is None:
+            continue
+        for curve in anim.fcurves(other, theirs):
+            mine = wanted.get((curve.data_path, curve.array_index))
+            if mine and mine <= {round(k.co.x) for k in curve.keyframe_points}:
+                return other
+    return None
+
+
+def _check_stretch(actor, clip, add):
+    """A Once clip lasts from its first key to its last in any slot it plays. A slot keyed far
+    past the body, like a face slot holding an idle's keys copied with the action, makes the
+    reaction that long, and plays those keys in it."""
+    groups = clip.groups()
+    body = next((curves for _, slot, curves in groups if slot is not None and slot == clip.slot), None)
+    body_range = _range(body) if body else None
+    if body_range is None:
+        return
+    first, last = body_range
+    for label, slot, curves in groups:
+        keyed = _range(curves)
+        if keyed is None or (slot is not None and slot == clip.slot):
+            continue
+        if keyed[1] <= last + 1 and keyed[0] >= first - 1:
+            continue
+        outside = {f for c in curves for f in (round(k.co.x) for k in c.keyframe_points) if f > last + 1 or f < first - 1}
+        source = _copied_from(clip.action, slot, curves, outside)
+        copied = (
+            f" Those keys are also in {source.name}'s {label}: Blender's New copied that action, slots and "
+            f"keys, so the reaction plays {source.name}'s keys too. Make the reaction a fresh action: unlink "
+            "the current one, then New"
+            if source
+            else " If that's not meant, take those keys out"
+        )
+        add(Finding(
+            f"clip {clip.name!r} plays once from frame {min(first, keyed[0])} to {max(last, keyed[1])}: its "
+            f"slot {label} is keyed from {keyed[0]} to {keyed[1]}, though its body keys run {first}–{last}, so "
+            f"it lasts that long and a hotspot playing it can't go off again until then.{copied}",
+            actor.obj,
+            clip=clip.name,
         ))
 
 

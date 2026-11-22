@@ -84,21 +84,26 @@ class Clip:
         """The clip's name in the app and its files' name."""
         return file_stem(self.action.name)
 
-    def curves(self):
-        """Its unmuted curves: the action's object curves through its slot, the curves of its
-        other slots (shape keys, a light), and its second action's."""
+    def groups(self):
+        """Its unmuted curves by where they come from, as (label, slot or None, curves): the
+        action's object curves through its slot, each of its other slots (shape keys, a light),
+        and its second action."""
         found = []
         object_slots_ = {s.handle for s in object_slots(self.action)}
         if anim.is_layered(self.action):
             for slot in anim.slots(self.action):
                 if slot.handle in object_slots_ and slot != self.slot:
                     continue
-                found.extend(anim.fcurves(self.action, slot))
+                found.append((slot.identifier, slot, anim.fcurves(self.action, slot)))
         else:
-            found.extend(anim.fcurves(self.action))
+            found.append((self.action.name, None, anim.fcurves(self.action)))
         if self.extra is not None:
-            found.extend(anim.fcurves(self.extra))
-        return [c for c in found if not c.mute]
+            found.append((self.extra.name, None, anim.fcurves(self.extra)))
+        return [(label, slot, [c for c in curves if not c.mute]) for label, slot, curves in found]
+
+    def curves(self):
+        """Its unmuted curves, from all its groups."""
+        return [c for _, _, curves in self.groups() for c in curves]
 
     def bone_names(self):
         return {

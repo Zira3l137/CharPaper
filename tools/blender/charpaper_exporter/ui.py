@@ -479,6 +479,12 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
         hint = box.column()
         hint.active = False
         _wrapped(hint, f"Frames {start}–{end} · keys " + " · ".join(parts), context)
+        stretch = clips.stretched_by(view) if view.mode == "ONCE" and not clip.action.use_frame_range else None
+        if stretch:
+            label, first, last = stretch
+            row = box.row()
+            row.alert = True
+            row.label(text=f"Slot {label}, keyed {first}–{last}, sets its length", icon="ERROR")
         for finding in suite.findings:
             if finding.clip == file_stem(clip.action.name):
                 finding_box(layout, finding, context)
