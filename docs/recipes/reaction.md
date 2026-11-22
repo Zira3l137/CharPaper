@@ -15,6 +15,11 @@ other, with three differences:
 - It plays **over** the animation the viewer picked, and takes over only what it keys.
 - It's usually kept out of the app's animation list with **Only for hotspots**.
 
+This page is about that kind, the clips under a hotspot's **Plays once**. Loops and poses
+for **While held**, and animations a hotspot switches to with **Then**, are made the same
+way; only their **Plays** differs (*Timeline* or *Hold*). See
+[Hotspots](hotspots.md#while-held) and [Hotspot ideas](hotspot-ideas.md).
+
 A reaction can move the body, change the face, move correctives, and play sounds, all in
 one clip. In Blender 4.4 and newer, all of it can live in **one action**.
 
@@ -58,9 +63,9 @@ See [Sounds](sounds.md#sounds-an-animation-makes).
 **5. Add it as a clip.**
 
 1. In the **Animation** panel, with the character picked, press **Add** and pick `Giggle`.
-2. Tick **Only for hotspots**. That makes it play Once and keeps it out of the app's
-   animation list. (Leave it unticked and set **Plays** to *Once* instead if the viewer
-   should also be able to pick it.)
+2. Tick **Only for hotspots**. That keeps it out of the app's animation list, and sets
+   **Plays** to *Once*. (Leave it unticked and set **Plays** to *Once* yourself if the
+   viewer should also be able to pick it.)
 3. If the reaction turns the head or the eyes on purpose, untick **Gaze**. Otherwise gaze
    keeps pulling the head towards the cursor during it.
 4. Read the line under the settings: "Frames 500–540 · keys 12 nodes · 9 shape keys (…) ·
@@ -68,10 +73,11 @@ See [Sounds](sounds.md#sounds-an-animation-makes).
    what you keyed. If the frames are the idle's, or the whole scene's, see
    [When it looks wrong](#when-it-looks-wrong).
 
-**6. Give it a hotspot.** In the **Hotspots** panel, select the belly bone in Pose Mode,
-press **+**, fit the capsule, and add `Giggle` under **What plays**. If the giggle only
-fits some of the character's animations (it was made sitting, say), add those under
-**Only during these animations**. See [Hotspots](hotspots.md).
+**6. Give it a hotspot.** Select the belly bone in Pose Mode. In the **Hotspots** panel,
+press **+** and pick **Click on the selected bones**, fit the capsule, and add `Giggle`
+under **Plays once**. If the giggle only fits some of the character's animations (it was
+made sitting, say), add those under **Only during these animations**. See
+[Your first hotspot](hotspots.md#your-first-hotspot).
 
 **7. Put the idle back on the armature** (optional, for your own sake). Pick it again in
 the Action Editor, so the viewport shows the idle while you work. The add-on exports each
@@ -121,12 +127,13 @@ expression wins.
 |---|---|
 | **Once** (or *Only for hotspots*) | From its first key to its last, of all its slots together. |
 | **Once**, with the action's **Manual Frame Range** on | That range, whatever the keys. Check warns when the range runs past the keys. |
-| **Timeline** | **The whole timeline.** Don't use Timeline for reactions; Check warns. |
-| **Hold** | One frame: it's over as it starts. Check warns. |
+| **Timeline** | **The whole timeline.** Don't use Timeline under Plays once; Check warns. A loop goes under [While held](hotspots.md#while-held). |
+| **Hold** | One frame: it's over as it starts. Check warns. A pose goes under [While held](hotspots.md#while-held). |
 
-When it ends it fades back to what played before, over a quarter of a second. The hotspot
-can go off again as soon as its clips have ended **and** its **Cooldown** has passed since
-it went off, whichever is later.
+When it ends it fades back to what played before, over a quarter of a second: into the
+hotspot's *While* loop, if it has one, or its *Then* animation. The hotspot can go off
+again as soon as its clips have ended **and** its **Cooldown** has passed since it went
+off, whichever is later.
 
 A *Cycles* modifier on a reaction's curves repeats nothing: a Once clip plays once. Make it
 longer by keying it longer.
@@ -139,6 +146,10 @@ longer by keying it longer.
 - **A new reaction replaces the last** on the same actor, unless its hotspot has **Layer**
   on. Then it plays over the others, for small additions like a blush or an ear twitch.
   A layered reaction that keys the same parts as one already layered takes its place.
+- **Over a While loop:** a hotspot's own once-only clips play above its loop, and fade
+  into it as they end.
+- **Into a Then animation:** the new animation starts underneath as the reaction fades
+  out, so end the reaction close to its pose. A sit-down should end seated.
 - **Gaze** lets go while a reaction with *Gaze* unticked plays, and comes back after.
 - **Expressions:** a reaction's face keys, and its hotspot's Expression, win over the
   expression the viewer picked, while the reaction plays.
@@ -155,7 +166,7 @@ These are the ones that actually happen:
    the idle. Fix: make a fresh empty action and copy the keys you want into it.
 2. **Two slots for the armature in one action.** The clip's settings then show a red
    **Slot** field: pick the reaction's slot there.
-3. **The clip plays Timeline.** It lasts the whole loop. Tick *Only for hotspots*.
+3. **The clip plays Timeline.** It lasts the whole loop. Set **Plays** to *Once*.
 4. **A face or skirt slot keyed further than the body.** The reaction lasts until that
    slot's last key.
 5. **A Manual Frame Range left on the action** (from copying, or from an old setup). The
@@ -183,4 +194,4 @@ Look at the clip's line in the Animation panel first. It says what the add-on wi
 
 ---
 
-← [Hotspots](hotspots.md) · [All recipes](../making-a-character.md#recipes) · [An environment](environment.md) →
+← [Hotspots](hotspots.md) · [All recipes](../making-a-character.md#recipes) · [Hotspot ideas](hotspot-ideas.md) →

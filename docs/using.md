@@ -73,10 +73,15 @@ With the **Orbit** camera chosen (it's the one every character has):
 accident. Cameras made by the character's author can't be moved.
 
 **Touching the character.** Some characters react when you click them, or rest the
-pointer on them: a giggle when poked, a wave when you hover over a hand. Their author
-decides where and how. A click counts only if you press and let go without dragging, so
-turning the view never sets one off. **Reactions** in the Scene tab's **Cursor** section
-switches them off.
+pointer on them: a giggle when poked, a purr while you hover over its head. Some react to
+you being away, too: dozing off when the mouse has kept still for a while, waving when you
+come back to the desktop. Their author decides where and how. A click counts only if you
+press and let go without dragging, so turning the view never sets one off.
+
+A reaction can also change what the character does from then on: a click that makes it
+sit down, and another that makes it stand up. The animation it switches to shows in the
+Scene tab as if you had picked it, and you can pick another any time. **Reactions** in the
+Scene tab's **Cursor** section switches all of this off.
 
 Your desktop icons work as always. CharPaper only listens to the mouse over the desktop
 and never takes a click away from anything. Clicking an icon that happens to sit over a

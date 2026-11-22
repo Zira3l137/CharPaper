@@ -26,8 +26,9 @@ For 3D artists working in Blender.
 - [A facial expression](recipes/expression.md): shape key actions the viewer can pick for the face.
 - [Shape keys that follow the body](recipes/correctives.md): correctives: drivers, or keys inside a clip.
 - [Following the cursor (gaze)](recipes/gaze.md): eyes, head and neck that turn towards the mouse.
-- [Hotspots](recipes/hotspots.md): places on the character or a prop that react to a click or to the cursor resting on them.
+- [Hotspots](recipes/hotspots.md): reactions to clicks, the cursor, the mouse keeping still or coming back: clips played once, loops while held, and switching what plays after.
 - [A reaction](recipes/reaction.md): making the clip a hotspot plays: body, face, correctives and sound, and the pitfalls.
+- [Hotspot ideas](recipes/hotspot-ideas.md): step by step: escalating pokes, stroking, sitting and standing, dozing off, saying hello, a lamp, a door.
 - [An environment](recipes/environment.md): the place around the character: its lights, moving props and screens.
 - [A sky](recipes/sky.md): the panorama that lights the scene and shows behind it.
 - [A sun that matches the sky](recipes/sun.md): a Sun light whose shadows follow the sky as it turns.

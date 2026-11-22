@@ -36,6 +36,7 @@ which line.
 | `[character.expressions.<name>]` | An expression's `label`. `<name>` is a file name in `expressions/`. |
 | `[environment]` | `default`: the environment shown first. |
 | `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `sun_follows_sky`, `exposure`, `[…fog.<object>]` fog boxes, and `no_volume_scatter` and `no_shadows`, the lights and objects left out of fog and shadows. |
+| `[environments.<name>.actors.<object>]` | A prop's `default_clip`: the `timeline` or `hold` clip it plays by itself. Left out: its first `timeline` clip by name, else its first `hold` one. The add-on writes it from the ★. |
 | `[environments.<name>.actors.<object>.clips.<clip>]` | How a prop's clip plays: `mode` and `cues`, as for the character. The clips are the files in `environment/<name>/clips/<object>/`. |
 | `[hotspots.<name>]` | Something that reacts: to a click or the cursor resting on a place, or to the mouse keeping still or coming back. `trigger`, `after`, `areas`, `clips`, `while`, `then`, `during`, `layer`, `expression` and `cooldown`. See below. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |

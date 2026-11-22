@@ -61,9 +61,19 @@ clips like the character's, each with its **Plays** setting:
 
 | Plays | On a prop |
 |---|---|
-| **Timeline** | The prop plays it all the time, in step with the timeline. If it has several, the first one in the list plays. |
-| **Once** | Doesn't play by itself. It waits for a [hotspot](hotspots.md): a door that opens when clicked, a lamp that flickers when the character is poked. When it ends, the prop goes back to its Timeline clip. |
-| **Hold** | A still pose, if it has no Timeline clip. |
+| **Timeline** | A loop. The ★ one plays all the time; the others are other states hotspots switch to. |
+| **Hold** | A still pose. The ★ one is held all the time; the others are states hotspots switch to. |
+| **Once** | Doesn't play by itself. A [hotspot](hotspots.md) plays it over the ★ clip, which comes back after: a door that rattles when clicked. |
+
+**The ★** marks the clip the prop plays by itself. Click the ☆ on a Timeline or Hold clip
+to move it there. With none starred, it's the first Timeline clip in the list, else the
+first Hold one.
+
+**Its other Timeline and Hold clips are states.** Hotspots switch the prop to them with
+**Then**, play them while held with **While**, and wait for them with **Only during**: a
+lamp's *On* and *Off*, a door's *Closed* and *Open*. A prop switched by a hotspot goes back
+to its ★ clip when its environment is shown again, or the app restarts. See
+[Hotspot ideas](hotspot-ideas.md) for a lamp and a door, step by step.
 
 The viewer can't pick a prop's clips in the app; only the timeline and hotspots play them.
 Each prop's clips are exported into `environment/<name>/clips/<prop>/`, and its export
@@ -109,4 +119,4 @@ An environment's sky and its fog have pages of their own: [A sky](sky.md) and
 
 ---
 
-← [A reaction](reaction.md) · [All recipes](../making-a-character.md#recipes) · [A sky](sky.md) →
+← [Hotspot ideas](hotspot-ideas.md) · [All recipes](../making-a-character.md#recipes) · [A sky](sky.md) →

@@ -43,7 +43,7 @@ See also: [An outfit (skin)](recipes/outfit.md) · [An animation](recipes/animat
 
 ## Reactions and hotspots
 
-See also: [Hotspots](recipes/hotspots.md) · [A reaction](recipes/reaction.md)
+See also: [Hotspots](recipes/hotspots.md) · [A reaction](recipes/reaction.md) · [Hotspot ideas](recipes/hotspot-ideas.md)
 
 | What you see | Why, and what to do |
 |---|---|
@@ -54,6 +54,17 @@ See also: [Hotspots](recipes/hotspots.md) · [A reaction](recipes/reaction.md)
 | A prop's hotspot does nothing | Its environment isn't the one shown, or the prop's bone isn't exported (*Deform bones only*). |
 | Clicking a desktop icon sets off a hotspot | Clicks on desktop icons count. Keep click hotspots away from where icons sit. |
 | A hotspot goes off when I only wanted to orbit | It doesn't for drags. A click that barely moves counts as a click. |
+| The While loop plays once, then freezes | It's shorter than the scene range and doesn't repeat. Give its curves a **Cycles** modifier, or its action a **Manual Frame Range** of its own frames. |
+| The While loop starts mid-way through | A Timeline clip shows the timeline's frame. Make the loop even, so any point is a good start, or use a Hold pose. |
+| A click hotspot goes off on press, not on release | It has something under **While held down**: those go off as the button goes down, so the loop can start. |
+| After a hotspot with **Then**, the character stays in the new animation | That's what Then does, and the app remembers it as the viewer's pick. Give another hotspot a Then back, or pick the animation in the Scene tab. |
+| The character pops when Then takes over | The reaction ends far from the new animation's pose. Make its last frames match the new animation's first. |
+| Nothing else reacts while one hotspot plays | A hotspot with **Then** holds the others back until it has switched, so states can't be left half-done. |
+| A prop forgot its state | A prop switched by Then goes back to its ★ clip when its environment is shown again, or the app restarts. |
+| The prop plays the wrong clip by itself | It plays its ★ clip: star the right one in the **Animation** panel, and export the environment again. |
+| A *Mouse keeps still* hotspot goes off while I'm working | In wallpaper mode, the mouse in another app's window counts as still. Make **After** longer, or use **Only during** to limit it. |
+| A *Mouse comes back* hotspot doesn't go off | The mouse wasn't away for **After** seconds, or its **Only during** doesn't match what plays. |
+| The 5th poke still plays the first clip | *In a row* means going off again within 3 seconds of when it could. Waiting longer than that between pokes starts over at 1. |
 
 ## Gaze
 

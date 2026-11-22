@@ -199,19 +199,24 @@ every .blend on the computer.
     Changing a field updates the pose, and named shape keys are set too. The character's
     own pose and shape key values are put back when it is turned off, on a frame change, before a save and at
     export.
-- **Hotspots** are capsules around bones of the character's armature or of an exported
-  environment's armature, from the bone's head to its tail, grown by a radius. *Add
-  hotspot* and *Add selected bones* take the bones selected in Pose Mode, several
-  armatures at once; the radius starts at 30% of the bone's length. The panel's eye icon
-  draws them in the viewport in each hotspot's color tag, in the current pose. Each plays
-  clips that are clips of their actors (one at random per actor, never the same twice in a
-  row), and may set an expression, layer over other reactions, cool down, and wait for some
-  of the character's Timeline or Hold clips (*Only during*; empty: any). A hotspot whose
-  *Only during* clips are none of them exported is left out, since without them it would
-  go off during any animation. A hotspot
-  whose bones or clips weren't exported this time is left out of suite.toml, and the report
-  says so. The add-on owns `[hotspots]` once one is made in it; *Load suite.toml* reads them
-  back.
+- **Hotspots** go off on a click or hover on capsules around bones (of the character's
+  armature or an exported environment's), or when the mouse keeps still or comes back for
+  *After* seconds; the panel's **+** makes each kind. A capsule runs from the bone's head
+  to its tail, grown by a radius that starts at 30% of the bone's length; *Add selected
+  bones* takes those selected in Pose Mode, several armatures at once. The eye icon draws
+  them in each hotspot's color tag, in the current pose. A hotspot plays clips once (one
+  at random per actor, never the same twice in a row, each from its *From the time in a
+  row* on), plays a Timeline or Hold clip per actor on and on while held (*While*), and
+  switches actors to a Timeline or Hold clip after (*Then*). *Only during* lists what its
+  actors must be playing: the character's pick, or a prop's ★ clip or Then state. Each list's
+  **+** offers only clips that fit it. A hotspot whose bones, clips, While or Then clips
+  weren't exported this time is left out of suite.toml, as is one none of whose *Only
+  during* clips is, and the report says so. The add-on owns `[hotspots]` once one is made
+  in it; *Load suite.toml* reads them back.
+- **A prop's ★** is the clip it plays by itself, written as its `default_clip`; with none
+  starred, its first Timeline clip in the list, else its first Hold one. *Only for hotspots*
+  no longer fixes a clip's mode: ticking it sets Once, and Timeline or Hold make loops and
+  poses for *While*.
 - Your scene is never changed. Each file is exported from temporary copies in a throwaway
   scene, so your NLA tracks, active actions and selection stay as they were. Only the gaze
   preview poses the character, and it puts the pose back.

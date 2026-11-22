@@ -20,7 +20,8 @@ the viewer can pick in the Scene tab, or that a [hotspot](hotspots.md) plays.
    - **Gaze:** whether the character may follow the cursor during it. Untick it where it
      must look somewhere on purpose: a dance, sleeping.
    - **Only for hotspots:** keeps the clip out of the app's animation list, for clips only
-     a [reaction](reaction.md) plays.
+     [hotspots](hotspots.md) play. Ticking it sets **Plays** to *Once*, what most of them
+     are; set *Timeline* for a loop a hotspot plays while held, or *Hold* for a pose.
 4. Click the **☆** next to the clip the character starts with. It turns into **★**.
    A *Once* clip can't be the start: it would play once and leave nothing under it.
 

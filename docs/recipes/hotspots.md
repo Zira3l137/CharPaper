@@ -2,156 +2,261 @@
 
 # Hotspots
 
-**On this page:** [What a hotspot is](#what-a-hotspot-is) · [Making one](#making-one) · [The settings](#the-settings) · [How it behaves in the app](#how-it-behaves-in-the-app) · [Hotspots on props](#hotspots-on-props) · [What Check warns about](#what-check-warns-about) · [Good to know](#good-to-know)
+**On this page:** [What a hotspot is](#what-a-hotspot-is) · [Your first hotspot](#your-first-hotspot) · [The panel, top to bottom](#the-panel-top-to-bottom) · [Plays once](#plays-once) · [While held](#while-held) · [Then](#then) · [Only during](#only-during) · [Props: the ★ and their states](#props-the--and-their-states) · [How it behaves in the app](#how-it-behaves-in-the-app) · [What Check warns about](#what-check-warns-about) · [Good to know](#good-to-know)
 
 ## What a hotspot is
 
-A hotspot is a place on the character, or on a prop of an environment, that reacts to the
-viewer: a **click** on it, or the cursor **resting** on it. When it goes off, it plays
-clips (a giggle when the belly is poked, a door that swings open) and can change the face
-while they play.
+A hotspot makes the scene react to the viewer. It goes off on one of four things:
 
-A hotspot is made of:
+| When | It goes off… | Needs bones? |
+|---|---|---|
+| **Click** | when the viewer clicks a spot on the character or a prop | Yes |
+| **Hover** | when the cursor rests on that spot for a moment | Yes |
+| **Mouse keeps still** | when the mouse hasn't moved for a while, and again after as long while it stays still | No |
+| **Mouse comes back** | when the mouse moves on the desktop again after a while away | No |
 
-- **Where:** one or more **capsules around bones**. A capsule runs along a bone from its
-  head to its tail, with a radius you set. It follows the bone as the character moves, so
-  a hotspot on the hand stays on the hand while it waves.
-- **What plays:** clips, of the character and of props. Each one is a clip you already
-  added in the Animation panel.
-- **When:** on a click or on hover, how soon it may go off again, and during which of the
-  character's animations.
+When it goes off, it can do any of these, for the character and for props alike:
 
-Making the clips themselves is the next recipe, [A reaction](reaction.md). Make at least one
-first, or the hotspot has nothing to play.
+- **Plays once:** a reaction that plays through and ends. A giggle, a flinch, a door
+  rattling.
+- **While held:** an animation that plays on and on for as long as the hotspot is held:
+  the button pressed down, the cursor resting on it, or the mouse kept still. A purr while
+  the head is stroked, a sleeping pose while nobody is at the computer.
+- **Then:** an animation that takes over afterwards and stays. The character standing up
+  and staying up, a lamp switched off.
 
-## Making one
+And it can wait: **Only during** lists what must be playing for it to work at all, so a
+reaction made for sitting doesn't fire while the character lies down.
 
-1. Open the **Hotspots** panel. Make sure the eye icon in its header is open: that draws
-   the hotspots in the viewport.
-2. Select the armature, go to **Pose Mode** and select the bones the hotspot covers: say
-   `spine.002` for the belly, or both hands.
-3. Press **+** in the Hotspots panel. The hotspot is made with those bones as its areas, and
-   drawn in the viewport as wire capsules in its color. The color tag in the list is the
-   same color.
-4. Rename it by double-clicking its name. The name only matters to you, and appears in
-   warnings.
-5. **Fit the capsules.** Each area in the **Where** list has its radius next to the bone's
-   name. Drag it until the capsule covers what the viewer would click: wide enough for the
-   belly, but not so wide it catches the arm hanging next to it. The selected hotspot is
-   drawn solid, the selected area thicker; the others are faint. Click the bone icon next
-   to an area to select that bone.
-6. More bones later? Select them in Pose Mode and press **Add selected bones**.
-7. **What plays:** press **+** under the clip list. The menu lists each actor (the
-   character, then the props) with its clips. Pick one. Add several for variety (below).
-8. Set the **Trigger**, and the rest of the settings if you need them.
-9. **Only during these animations:** if the reaction only fits some poses, press **+**
-   under that list and pick them. A giggle made for sitting shouldn't play while the
-   character lies down. Leave the list empty for a hotspot that fits every animation.
-10. **Check**, then **Export all**. The hotspot is written into suite.toml.
+That's all there is to it. A hotspot can use any mix of the three, and most use only one.
+Some examples, all step by step, are in [Hotspot ideas](hotspot-ideas.md).
 
-The capsules are drawn in the pose of the current frame, through the mesh. Scrub the
-timeline to see them follow the bones. They're sized in the armature's units, so on a
-correctly scaled character a radius of 0.05 is 5 cm.
+The clips themselves are made in Blender like any other: see [A reaction](reaction.md).
+Each one must be in its actor's clip list in the **Animation** panel before a hotspot can
+use it.
 
-## The settings
+## Your first hotspot
 
-| Setting | What it does |
+A belly that giggles when clicked:
+
+1. Make a `Giggle` action on the armature and add it in **Animation** as a clip, with
+   **Only for hotspots** ticked. See [A reaction](reaction.md#step-by-step).
+2. Open the **Hotspots** panel. The eye icon in its header should be open: it draws the
+   hotspots in the 3D Viewport.
+3. Select the armature, enter **Pose Mode**, and select the belly bone (`spine.002`, say).
+4. In the Hotspots panel, press **+** and pick **Click on the selected bones**. A wire
+   capsule appears around the bone, in the hotspot's color.
+5. Double-click the hotspot's name to call it `Belly`.
+6. **Fit the capsule.** In the **Where** list, drag the number next to the bone's name (its
+   radius) until the capsule covers the belly. Not wider: it shouldn't catch an arm hanging
+   beside it.
+7. Under **Plays once**, press **+** and pick **Giggle** under *Character*.
+8. **Check**, then **Export all**. Click the belly in the app.
+
+## The panel, top to bottom
+
+Pick a hotspot in the list and its settings show below it, in the order things happen:
+
+| Section | What it's for |
 |---|---|
-| **Trigger** | **Click**: a left click on it, pressed and let go without dragging. **Hover**: the cursor resting on it for about a third of a second. |
-| **Layer** | Off (the default): it **stops** reactions other hotspots set off on the same actor and takes their place. On: it plays **over** them, moving only what its clips key. Use it for small things that go with anything: a blush, an ear twitch. |
-| **Expression** | One of the character's [expressions](expression.md), shown while its clips play. Empty: the face stays as it is, apart from what the clips key. |
-| **Cooldown** | Seconds after it goes off before it can go off again. 0: as soon as its clips end. |
+| **When** | The trigger. *Mouse keeps still* and *Mouse comes back* also ask **After, seconds**: how long first. |
+| **Where** | Click and hover only: the bones it sits on, each with the radius of its capsule. |
+| **Plays once** | Clips that play through once when it goes off. |
+| **While held down** / **While hovered** / **While the mouse keeps still** | What plays on and on while it's held. The name follows the trigger; *Mouse comes back* has none. |
+| **Then** | What plays on and on afterwards. |
+| **Only during** | What must be playing for it to go off. |
+| **Expression**, **Cooldown**, **Layer** | The face it shows, how soon it may go off again, and whether it plays over other reactions. |
 
-**Only during these animations:** the character's animations during which the hotspot
-works. The **+** menu offers the clips the viewer can pick to play on and on: *Timeline*
-and *Hold* ones. A *Once* clip the viewer picks plays over the animation they picked before
-it, and counts as that one. Empty: any animation.
+Every **+** in it opens a menu grouped by actor, the character first, then each prop, and
+lists only the clips that fit that list. If what you want isn't there, it's either not in
+that actor's clip list in **Animation**, or it's the wrong kind for that list (below).
+Each empty list shows a grey line saying what happens without it.
 
-- While another animation plays, the hotspot isn't there at all: a click goes through to
-  a hotspot behind it, if one fits.
-- When the viewer switches to an animation the hotspot doesn't list, its reaction still
-  playing fades out right away.
-- Two hotspots can share bones, each listing different animations: a knee poke for
-  sitting and another for lying down, each with a reaction made for that pose.
+Warnings about the hotspot show at the bottom of its settings.
 
-**Several clips for one actor:** each time the hotspot goes off, each actor plays **one** of
-its clips in the list, picked at random, and never the same one twice in a row. Three
-giggles keep a poke from getting old.
+## Plays once
 
-**Clips of several actors:** they all play at once. A hotspot on the character's hand can
-play a wave on the character and a lamp flicker on a prop together.
+The reaction. Each clip plays from its first key to its last, then fades back to what
+played before.
+
+- **One at random:** with several clips of the same actor, each time it goes off that
+  actor plays one of them, never the same one twice in a row. Three giggles keep a poke
+  from getting old.
+- **Several actors at once:** a clip for the character and one for a prop play together,
+  in step. Poke the character, and it flinches while the cat on the shelf startles.
+- **From the Nth time in a row:** pick a clip in the list and set **From the time in a
+  row**. At 5, it plays only from the fifth time in a row on, *instead of* the clips with
+  a lower number. The list shows "from ×5" on it. That's how a character gets annoyed
+  after being poked five times. *In a row* means the hotspot going off again within 3
+  seconds of when it could; for *Mouse keeps still*, without the mouse moving in between.
+  Wait longer, and it counts from 1 again.
+
+Clips here should be **Once** clips. A *Timeline* clip would last the whole timeline, and a
+*Hold* clip shows for a moment only. Check warns about both.
+
+## While held
+
+What plays on and on while the hotspot is **held**:
+
+| When | Held means |
+|---|---|
+| Click | the mouse button stays pressed. The hotspot goes off as soon as it's **pressed**, not when it's let go. |
+| Hover | the cursor stays on it. |
+| Mouse keeps still | the mouse stays still. It lets go the moment the mouse moves. |
+| Mouse comes back | — (the mouse coming back is a moment; the list isn't shown) |
+
+Put a **Timeline** clip here for a loop (purring, swaying), or a **Hold** clip for a pose
+(shy, covering its eyes). When the hotspot lets go, it fades out over a quarter of a second.
+
+- **One per actor:** picking a second clip for the same actor replaces the first.
+- **With Plays once too:** the once-only clip plays first, over the loop, and fades into it
+  as it ends. A flinch that settles into a purr.
+- **Plays once can stay empty:** a hotspot with only a loop under While is fine.
+- **A loop has to repeat on its own length.** A Timeline clip is exported over the whole
+  scene range. A 48-frame purr in a 240-frame scene plays once, then holds its last pose,
+  unless its curves have a **Cycles** modifier or its action a **Manual Frame Range** of its
+  own 48 frames. Its length should fit the scene's a whole number of times (48 in 240 does),
+  or it jumps where the timeline starts over. Check says when it doesn't fit.
+- **A loop joins mid-cycle.** A Timeline clip shows the timeline's frame, so it starts
+  wherever the scene is in its loop. Even loops don't show it; a loop with a clear start
+  (a wind-up into a sway) would. Hold poses aren't affected.
+
+## Then
+
+What each actor plays **on and on after** the hotspot is done: when it lets go, or, without
+anything under While, when its once-only clips end.
+
+- **A Timeline or Hold clip**, one per actor. For the character, one the viewer could pick
+  too: not *Only for hotspots*, since it becomes the viewer's pick.
+- **It takes over smoothly.** The new animation starts underneath while the reaction fades
+  out on top, so the reaction's last pose fades straight into it. Make the reaction end
+  close to the new animation's pose: a stand-up should end standing.
+- **The character's Then is remembered.** It becomes the animation picked in the app's
+  Scene tab, as if the viewer had picked it, and is still playing after a restart.
+- **A prop's Then lasts until its environment is shown again,** or the app restarts. Then
+  the prop is back to its ★ clip.
+- **Nothing interrupts it.** Once a hotspot with a Then has gone off, no other hotspot goes
+  off until it has switched. A click can't cut a stand-up short.
+- **The viewer wins.** If the viewer picks another animation in the panel mid-reaction, the
+  reaction stops and its Then is dropped.
+
+Then plus Only during is how things get **states**: sitting → standing, a lamp on → off.
+See [Hotspot ideas](hotspot-ideas.md).
+
+## Only during
+
+What has to be playing for the hotspot to work. For each actor listed, what that actor
+plays on and on must be one of the clips listed for it.
+
+- **For the character**, that's the animation the viewer picked in the panel, or that a
+  Then switched it to. A *Once* clip the viewer picks plays over that one and counts as it.
+- **For a prop**, that's its ★ clip, or the one a Then switched it to.
+- **Empty:** it works during anything.
+
+While its actors play something else, the hotspot isn't there at all: a click goes through
+to a hotspot behind it. When the viewer switches to an animation it doesn't list, a
+reaction of it still playing fades out right away.
+
+Two hotspots can share bones, each listing different animations: a knee poke for sitting,
+another for lying down, each with a reaction made for that pose.
+
+## Props: the ★ and their states
+
+A prop plays one clip by itself, all the time: the one with the **★** in its clip list in
+the **Animation** panel. Click the ☆ on another Timeline or Hold clip to move it. With none
+starred, it's the first Timeline clip in the list (else the first Hold one).
+
+Its other clips wait for hotspots:
+
+- **Once** clips play over the ★ clip and hand back to it: a door rattling.
+- **Timeline** and **Hold** clips are **other states** of the prop: hotspots switch to them
+  with **Then**, play them while held with **While**, and wait for them with **Only
+  during**. A lamp's *On* and *Off*, a door's *Closed* and *Open*.
+
+The viewer can't pick a prop's clips; only hotspots do.
+
+A hotspot can also **sit on a prop**: select its armature's bones in Pose Mode and add them
+like the character's. Even both at once: enter Pose Mode with both armatures selected. A
+prop that should be clicked needs an armature, even a one-bone one. Its areas only work
+while its environment is shown.
 
 ## How it behaves in the app
 
-- **A click** goes off when the mouse button is pressed and let go on the same hotspot
-  without moving more than a few pixels, so dragging to orbit the camera never sets it off.
-- **Hover** goes off once the cursor has rested on it for about a third of a second, and
-  doesn't go off again until the cursor has left it and come back.
-- **It can't go off while its clips still play**, nor before its cooldown has passed since
-  it last went off. Whichever comes later.
-- **When hotspots overlap**, the one nearest to the viewer under the cursor wins. A click
-  hotspot and a hover hotspot on the same place both work: one for clicks, one for hovering.
-- **The settings panel blocks them.** Clicks on the panel never reach a hotspot behind it.
-- **A reaction ends with its keys:** each clip plays from its first key to its last, then
-  fades back over a quarter of a second to what played before.
-- **The viewer can switch reactions off** with **Reactions** under **Cursor** in the Scene
-  tab. That row only shows for characters that have hotspots.
-- **On the desktop, clicks on desktop icons count.** A click on an icon that sits over a
-  hotspot sets the hotspot off too. Icons usually line the left edge of the screen, so
-  the character's middle is the safest place for click hotspots.
-
-## Hotspots on props
-
-A hotspot can sit on a bone of **an armature in one of your environments**: a door, a
-chest, a pet with a rig. Select that armature's bones in Pose Mode and add them the same
-way. You can even select bones of the character and of a prop together: enter Pose Mode
-with both armatures selected.
-
-- The hotspot only works while that environment is shown. In another environment its
-  areas on that prop simply aren't there.
-- A prop's **Once** clips don't play by themselves: they wait for a hotspot. That's how a
-  door opens only when clicked. See [An environment](environment.md#props-that-move).
-- Props have no expressions; a hotspot's **Expression** is always the character's.
+- **Click:** pressed and let go on the same spot without moving more than a few pixels, so
+  dragging to turn the view never sets it off. With something under *While held down*, it
+  goes off on the press instead.
+- **Hover:** after the cursor rests on it for about a third of a second. It doesn't go off
+  again until the cursor has left it and come back.
+- **Mouse keeps still:** after **After** seconds without the mouse moving over the desktop,
+  and again every **After** seconds while it stays still. In wallpaper mode, the mouse
+  being in another app's window counts as still: the character may doze off while the
+  viewer works, and wake when they come back to the desktop.
+- **Mouse comes back:** the mouse moving on the desktop after keeping still, or being in
+  other windows, for **After** seconds. Defaults: 60 seconds for *still*, 300 for *comes
+  back*.
+- **It can't go off again while its clips still play**, nor before its **Cooldown** has
+  passed since it last went off.
+- **Overlapping spots:** the one nearest the viewer under the cursor wins, among those of
+  the same kind. A click spot and a hover spot on the same place both work.
+- **The settings panel blocks them:** clicks on the panel never reach the scene behind it.
+- **Desktop icons don't:** a click on an icon over a hotspot sets the hotspot off too.
+  Icons usually line the left edge of the screen, so keep click spots toward the middle.
+- **The viewer can turn reactions off** with **Reactions** under **Cursor** in the Scene
+  tab. That stops every hotspot, still and comes-back ones included.
 
 ## What Check warns about
 
-Each warning shows in the hotspot's own box and in Warnings, tagged with the hotspot's name.
+Warnings show in the hotspot's settings and in the **Warnings** panel, with its name.
 
-- **Has no bones, so nothing sets it off**, or an area has no bone or names a bone the
-  armature doesn't have (renamed, or another armature).
-- **Sits on a bone *Deform bones only* leaves out of the file**: the app wouldn't find it.
-  Use a deform bone near it, or turn *Deform bones only* off in Export settings.
-- **Sits on an armature that isn't the character's or in an exported environment.**
-- **Plays nothing**, or plays something that isn't one of that actor's clips: add the clip
-  in the Animation panel first.
-- **Plays a Timeline clip:** a Timeline clip is exported over the whole timeline, so as a
-  reaction it would last the whole loop and block the hotspot until then. Make it *Once*,
-  or tick *Only for hotspots*.
-- **Plays a Hold clip:** a single frame, so the reaction is over as it starts.
-- **Goes off only during a Once clip, or one only for hotspots:** those are never the
-  animation playing. If that's all its list holds, it **can never go off**, and it's left
-  out of suite.toml.
-- **Shows an expression that isn't one of the character's.**
-- **Sets an expression but plays nothing on the character** (a tip): the face changes only
-  while the props' clips play.
-- **Two hotspots with the same name:** only the last one is exported.
+**Where:**
+- *Has no bones, so nothing sets it off* (click and hover), or an area names a bone the
+  armature doesn't have.
+- *Sits on a bone Deform bones only leaves out*: use a deform bone near it, or turn
+  *Deform bones only* off in Export settings.
+- *Sits on an armature that isn't the character's or in an exported environment.*
+- *Has bones, but reacts to the mouse anywhere* (a tip, for still and comes-back ones): its
+  bones are left out.
 
-When you export only part of the character, a hotspot whose bones or clips aren't exported
-yet is left out of suite.toml, and the export report says so. So is one none of whose
-*Only during* animations is exported yet: written without them, it would go off during
-any animation. *Export all* writes them all.
+**What plays:**
+- *Plays nothing*: give it a clip under Plays once, While or Then.
+- *Isn't one of that actor's clips*: add it in **Animation** first.
+- *Plays a Timeline clip once*: it would last the whole timeline. Make it Once, or move it
+  to While.
+- *Plays a Hold clip once*: its pose shows for a moment only. Move it to While to hold it.
+- *Plays nothing on X the first N times in a row* (a tip): every clip of X waits for a
+  later time.
+
+**While, Then and Only during:**
+- *A Once clip under While or Then*: those play on and on, so they need Timeline or Hold.
+- *A clip only for hotspots under the character's Then or Only during*: the viewer can't
+  pick it, so the character never plays it on and on.
+- *Two While or Then animations for one actor*: only one can play.
+- *Waits for a prop to play a clip that only a Then reaches, and no hotspot's Then does*:
+  the prop never plays it, so the hotspot never goes off.
+- *Can never go off*: none of its Only during animations can ever be playing.
+- *Isn't held* (comes-back hotspots): its While animations are left out.
+
+**Other:**
+- *Shows an expression that isn't one of the character's.*
+- *Sets an expression but plays nothing on the character* (a tip).
+- *Two hotspots with the same name*: only the last is exported.
+
+When you export only part of the character, a hotspot whose bones, clips, While or Then
+animations aren't exported yet is left out of suite.toml, and the report says so; so is
+one none of whose Only during animations is exported. *Export all* writes everything.
 
 ## Good to know
 
 - **The add-on owns the hotspots in suite.toml** once you've made one in Blender. If you
-  wrote hotspots by hand in suite.toml, press **Load suite.toml** first, or exporting
-  replaces them with the panel's.
-- **Areas follow bones, not meshes.** A capsule can't follow a skirt's cloth or a shape
-  key. Put the area on the bone that moves the part.
-- **Big, simple capsules work best.** The viewer clicks fast and roughly. A hotspot that's
-  hard to find is a hotspot nobody finds.
-- **Hidden parts don't hide hotspots.** A hotspot on a jacket's bone still works when the
+  wrote some by hand, press **Load suite.toml** first, or exporting replaces them.
+- **Areas follow bones, not meshes.** A capsule can't follow cloth or a shape key: put it
+  on the bone that moves that part.
+- **Big, simple spots work best.** People click quickly and roughly.
+- **Hidden parts don't hide hotspots.** A spot on a jacket's bone still works when the
   viewer has taken the jacket off.
+- **Colors:** each hotspot's tag in the list is the color its capsules are drawn in. The
+  picked hotspot is drawn solid, its picked area thicker, the others faint, through the
+  mesh, in the pose of the current frame.
 
 ---
 
