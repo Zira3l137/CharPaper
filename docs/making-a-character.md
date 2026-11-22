@@ -122,14 +122,22 @@ These save the most trouble.
 
 **Install it** (Blender 4.2 or newer). On the CharPaper website, open **Download Blender
 Add-on** and **drag Latest version into the Blender window**, as you would from Blender's
-own extensions site:
+own extensions site.
 
-1. The first time, Blender says the add-on comes from a repository it doesn't know, and
-   offers to add the **CharPaper** repository. Add it. If it asks to allow online access,
-   allow it: Blender needs it to download the add-on and to check for updates.
-2. If the add-on isn't installed right after, drag the link in once more.
-3. From then on, new versions show up in Blender as updates, under *Edit → Preferences →
-   Get Extensions*. Keep the add-on at the same version as your app.
+**The first time, it takes two drags.** Blender only installs from sites you've said you
+trust, and asks once:
+
+1. **Drag the link into Blender.** Blender says *"The dropped extension comes from an
+   unknown repository"*. That's expected: it's asking whether you trust the CharPaper site.
+   Press **Add Repository...**.
+2. **In the Add Repository window,** tick **Check for Updates on Startup**, so new versions
+   show up by themselves, and press **OK**. If Blender asks to allow online access, allow
+   it: it needs it to download the add-on.
+3. **Drag the link in again.** Blender now knows the site and asks whether to install the
+   add-on. Press **OK**.
+
+From then on, one drag installs it, and new versions show up as updates under *Edit →
+Preferences → Get Extensions*. Keep the add-on at the same version as your app.
 
 **Or install it from disk**, for the experimental version or without online access: click
 the link to download the zip, then in Blender *Edit → Preferences → Get Extensions → ⌄ (top
