@@ -905,7 +905,7 @@
           }
         },
         "cooldown": {
-          "description": "Seconds after its clips end before it can be set off again. Defaults\nto 0: as soon as they end.",
+          "description": "Seconds after it is set off before it can be again. Defaults to 0.",
           "type": [
             "number",
             "null"
