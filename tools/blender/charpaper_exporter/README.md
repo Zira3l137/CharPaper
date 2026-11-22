@@ -7,8 +7,13 @@ A Blender add-on (4.2 to 5.2) that exports a whole CharPaper character suite fro
 
 ## Install
 
-Zip this folder (the zip must contain `charpaper_exporter/` with the files inside), then in
-Blender: *Edit > Preferences > Get Extensions > ⌄ > Install from Disk…* and pick the zip.
+From the website: drag the add-on's *Latest version* link into Blender. The link names the
+website's extensions listing (`blender/index.json`, written by the Pages workflow from the
+release's zip with `packaging/blender_listing.py`), which Blender adds as a repository the
+first time; it then offers each new release as an update.
+
+From disk: zip this folder's contents, with `blender_manifest.toml` at the zip's root, then
+in Blender: *Edit > Preferences > Get Extensions > ⌄ > Install from Disk…* and pick the zip.
 Or build the zip with Blender itself:
 
 ```

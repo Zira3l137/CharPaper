@@ -120,11 +120,22 @@ These save the most trouble.
 
 ## The add-on
 
-**Install it.** On the page you downloaded CharPaper from, also download
-`charpaper_exporter-….zip`. In Blender: *Edit → Preferences → Get Extensions → ⌄ (top
-right) → Install from Disk…* and pick the zip. Use the add-on from the same release as
-your app. To update it, uninstall the old one first, then install the new zip and restart
-Blender.
+**Install it** (Blender 4.2 or newer). On the CharPaper website, open **Download Blender
+Add-on** and **drag Latest version into the Blender window**, as you would from Blender's
+own extensions site:
+
+1. The first time, Blender says the add-on comes from a repository it doesn't know, and
+   offers to add the **CharPaper** repository. Add it. If it asks to allow online access,
+   allow it: Blender needs it to download the add-on and to check for updates.
+2. If the add-on isn't installed right after, drag the link in once more.
+3. From then on, new versions show up in Blender as updates, under *Edit → Preferences →
+   Get Extensions*. Keep the add-on at the same version as your app.
+
+**Or install it from disk**, for the experimental version or without online access: click
+the link to download the zip, then in Blender *Edit → Preferences → Get Extensions → ⌄ (top
+right) → Install from Disk…* and pick it. An add-on installed from disk gets no updates: to
+update it, uninstall it, install the new zip, and restart Blender. To switch to the dragged
+kind, uninstall the one from disk first.
 
 **Open it.** In the 3D Viewport press **N** and pick the **CharPaper** tab. Everything you
 set there is saved in the .blend, except where CharPaper is (below).

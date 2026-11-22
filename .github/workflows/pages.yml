@@ -2,13 +2,16 @@ name: Website
 
 # Publishes site/ to GitHub Pages whenever it changes on main, and after every release, which
 # starts this workflow when it is done. The folder is the website as it is served, apart from
-# the stable download links, which are pointed at the latest release here.
+# the stable download links, which are pointed at the latest release here, and the Blender
+# extensions listing for the latest add-on, written here as blender/index.json: Blender installs
+# an add-on dragged in from the page only from a repository listing it, and offers its updates.
 
 on:
   push:
     branches: [main]
     paths:
       - "site/**"
+      - "packaging/blender_listing.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -31,28 +34,49 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/configure-pages@v6
+        id: pages
+
       # The stable links name the latest release's files, which carry its version. Without a
       # release yet, they stay on the releases page. Pre-releases are never "latest".
+      #
+      # A link marked data-blender also carries the listing's address and the Blender versions
+      # the add-on fits, which Blender reads from a link dropped into it. Without the add-on in
+      # the release, it stays a plain download.
       - name: Point the stable downloads at the latest release
         env:
           GH_TOKEN: ${{ github.token }}
+          SITE: ${{ steps.pages.outputs.base_url }}
         run: |
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)
           echo "latest release: ${tag:-none}"
           if [[ -z $tag ]]; then exit 0; fi
-          TAG=$tag python3 - site/index.html:Version site/ru/index.html:Версия <<'EOF'
+          addon="charpaper_exporter-$tag.zip"
+          query=""
+          if gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$addon" --dir "$RUNNER_TEMP"; then
+            query=$(python3 packaging/blender_listing.py "$RUNNER_TEMP/$addon" \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$addon" \
+              "$SITE/blender/index.json" site/blender/index.json)
+            echo "blender listing: $SITE/blender/index.json"
+          else
+            echo "::warning::$tag has no $addon: the add-on link stays a plain download"
+          fi
+          TAG=$tag QUERY=$query python3 - site/index.html:Version site/ru/index.html:Версия <<'EOF'
           import os, re, sys
-          tag = os.environ["TAG"]
+          tag, query = os.environ["TAG"], os.environ["QUERY"]
           base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
+
+          def link(m):
+              url = f"{base}/{m[1].replace('{tag}', tag)}"
+              if m[2] and query:
+                  url += "?" + query.replace("&", "&amp;")
+              return f'href="{url}" data-asset="{m[1]}"{m[2] or ""}'
+
           # Each page with the word its language puts before a version number.
           for argument in sys.argv[1:]:
               path, word = argument.split(":")
               page = open(path, encoding="utf-8").read()
-              page, links = re.subn(
-                  r'href="[^"]*" data-asset="([^"]+)"',
-                  lambda m: f'href="{base}/{m[1].replace("{tag}", tag)}" data-asset="{m[1]}"',
-                  page,
-              )
+              page, links = re.subn(r'href="[^"]*" data-asset="([^"]+)"( data-blender)?', link, page)
               page, labels = re.subn(
                   r"<span data-version>[^<]*</span>",
                   f"<span data-version>{word} {tag.removeprefix('v')}</span>",
@@ -64,7 +88,6 @@ jobs:
               print(f"{path}: {links} links point at {tag}")
           EOF
 
-      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
