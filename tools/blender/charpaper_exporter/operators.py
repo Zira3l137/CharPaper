@@ -18,6 +18,7 @@ from . import env_settings
 from . import exporters
 from . import gaze
 from . import gltf
+from . import hotspots
 from . import lens
 from . import manifest
 from . import music
@@ -48,6 +49,7 @@ def _store(suite, findings):
         item.bone_name = finding.bone_name
         item.clip = getattr(finding, "clip", "")
         item.sound = getattr(finding, "sound", "")
+        item.hotspot = getattr(finding, "hotspot", "")
     suite.validated = True
 
 
@@ -486,9 +488,11 @@ class CHARPAPER_OT_export(Operator):
 
         if suite.write_manifest and done:
             try:
-                self._write_manifest(
+                left_out = self._write_manifest(
                     context.scene, suite, folder, model_exported, lenses, environments, exported
                 )
+                for note in left_out:
+                    self.report({"WARNING"}, note)
             except Exception as error:
                 traceback.print_exc()
                 failed.append(f"suite.toml: {error}")
@@ -536,8 +540,10 @@ class CHARPAPER_OT_export(Operator):
 
     @staticmethod
     def _write_manifest(scene, suite, folder, model_exported, lenses, environments, exported):
+        """Writes suite.toml. Returns what of the hotspots it left out."""
         path = manifest.path(folder)
         existing = toml_io.load(path) if os.path.isfile(path) else {}
+        spots, left_out = hotspots.tables(suite, folder)
         data = manifest.update(
             existing,
             suite,
@@ -547,8 +553,10 @@ class CHARPAPER_OT_export(Operator):
             lenses,
             environments,
             exported,
+            hotspots=spots,
         )
         manifest.write(folder, data)
+        return left_out if suite.hotspots_owned else []
 
 
 class CHARPAPER_OT_export_alerts(Operator):
@@ -601,7 +609,7 @@ class CHARPAPER_OT_select_object(Operator):
 class CHARPAPER_OT_load_manifest(Operator):
     bl_idname = "charpaper.load_manifest"
     bl_label = "Load suite.toml"
-    bl_description = "Fill the panel from the suite.toml in the folder: name, defaults, clip settings and gaze"
+    bl_description = "Fill the panel from the suite.toml in the folder: name, defaults, clip settings, gaze and hotspots"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -616,10 +624,11 @@ class CHARPAPER_OT_load_manifest(Operator):
             self.report({"ERROR"}, f"suite.toml: {error}")
             return {"CANCELLED"}
         unmatched = manifest.load_into(suite, data)
+        unmatched += hotspots.load_into(suite, data)
         if unmatched:
             self.report(
                 {"WARNING"},
-                f"{len(unmatched)} clip(s) match no action here and stay as they are: "
+                f"{len(unmatched)} name(s) match nothing here and are left out: "
                 + ", ".join(unmatched[:5]),
             )
         else:

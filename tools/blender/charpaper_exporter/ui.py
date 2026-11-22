@@ -12,6 +12,7 @@ from . import clips
 from . import cues
 from . import drivers
 from . import env_settings
+from . import hotspots as hotspot_spots
 from . import music
 from .operators import current_actor
 from .props import file_stem
@@ -19,6 +20,8 @@ from .props import suite_of
 
 MODE_ICONS = {"TIMELINE": "TIME", "ONCE": "PLAY", "HOLD": "PAUSE"}
 MODE_NAMES = {"TIMELINE": "Timeline", "ONCE": "Once", "HOLD": "Hold"}
+TRIGGER_NAMES = {"CLICK": "Click", "HOVER": "Hover"}
+TRIGGER_ICONS = {"CLICK": "RESTRICT_SELECT_OFF", "HOVER": "HIDE_OFF"}
 LAYERED = bpy.app.version >= (4, 4, 0)
 
 
@@ -143,6 +146,8 @@ class CHARPAPER_UL_clips(UIList):
         sounds = len(cues.markers(item.action))
         if sounds:
             row.label(text=str(sounds), icon="SPEAKER")
+        if item.reaction_only:
+            row.label(text="", icon="HAND")
         row.label(text=MODE_NAMES[item.mode], icon=MODE_ICONS[item.mode])
 
 
@@ -376,6 +381,7 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
         box.row().prop(clip, "mode", expand=True)
         if actor.is_character:
             box.prop(clip, "gaze")
+            box.prop(clip, "reaction_only")
         if clip.extra or actor.obj.type == "LIGHT" or not LAYERED:
             box.prop(clip, "extra")
         if clip.action is None:
@@ -521,14 +527,101 @@ class CHARPAPER_PT_cameras(_Sidebar, Panel):
             box.label(text="Depth of Field off: the whole image is sharp", icon="CAMERA_DATA")
 
 
+class CHARPAPER_UL_hotspots(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.prop(item, "name", text="", emboss=False)
+        if any(f.hotspot == item.name for f in warnings_about(suite_of(context))):
+            row.label(text="", icon="ERROR")
+        if item.layer:
+            row.label(text="", icon="RENDERLAYERS")
+        trigger = row.row()
+        trigger.active = False
+        trigger.label(text=TRIGGER_NAMES[item.trigger], icon=TRIGGER_ICONS[item.trigger])
+
+
+class CHARPAPER_UL_hotspot_areas(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        suite = suite_of(context)
+        row = layout.row(align=True)
+        if item.armature is None:
+            row.label(text="Pick an armature", icon="ERROR")
+            return
+        found = item.armature.data.bones.get(item.bone) is not None
+        op = row.operator("charpaper.hotspot_area_select", text="", icon="BONE_DATA", emboss=False)
+        op.index = index
+        owner = "" if item.armature == suite.armature else f"{item.armature.name} · "
+        row.label(text=owner + (item.bone or "no bone"), icon="NONE" if found else "ERROR")
+        row.prop(item, "radius", text="")
+
+
+class CHARPAPER_UL_hotspot_clips(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        suite = suite_of(context)
+        row = layout.row(align=True)
+        resolved, _ = hotspot_spots.resolve_clip(suite, item)
+        if resolved is None:
+            name = item.action.name if item.action else "nothing picked"
+            row.label(text=name, icon="ERROR")
+            return
+        actor, clip = resolved
+        row.label(text=clip.action.name, icon=MODE_ICONS[clip.mode])
+        owner = row.row()
+        owner.active = False
+        owner.label(text="Character" if actor.is_character else actor.name)
+
+
 class CHARPAPER_PT_hotspots(_Sidebar, Panel):
     bl_label = "Hotspots"
     bl_options = {"DEFAULT_CLOSED"}
 
+    def draw_header_preset(self, context):
+        suite = suite_of(context)
+        row = self.layout.row(align=True)
+        if len(suite.hotspots):
+            row.label(text=str(len(suite.hotspots)))
+        row.prop(suite, "show_hotspots", text="", icon="HIDE_OFF" if suite.show_hotspots else "HIDE_ON", emboss=False)
+
     def draw(self, context):
-        row = self.layout.row()
-        row.active = False
-        row.label(text="Clicks and hovers that play clips come with reactions.", icon="INFO")
+        suite = suite_of(context)
+        layout = self.layout
+        row = layout.row()
+        row.template_list("CHARPAPER_UL_hotspots", "", suite, "hotspots", suite, "hotspot_index", rows=3)
+        side = row.column(align=True)
+        side.operator("charpaper.hotspot_add", text="", icon="ADD")
+        side.operator("charpaper.hotspot_remove", text="", icon="REMOVE")
+        spot = hotspot_spots.current(suite)
+        if spot is None:
+            hint = layout.column()
+            hint.active = False
+            _wrapped(hint, "A hotspot plays clips when a bone is clicked or the cursor rests on it. "
+                     "Select bones in Pose Mode, then add one.", context)
+            return
+
+        box = _split(layout.box())
+        box.row().prop(spot, "trigger", expand=True)
+        box.prop(spot, "layer")
+        box.prop(spot, "expression", icon="SHAPEKEY_DATA")
+        box.prop(spot, "cooldown")
+
+        layout.label(text="Where: capsules around bones", icon="BONE_DATA")
+        row = layout.row()
+        row.template_list("CHARPAPER_UL_hotspot_areas", "", spot, "areas", spot, "area_index", rows=2)
+        side = row.column(align=True)
+        side.operator("charpaper.hotspot_bones_add", text="", icon="ADD")
+        side.operator("charpaper.hotspot_area_remove", text="", icon="REMOVE")
+        layout.operator("charpaper.hotspot_bones_add", icon="ADD")
+
+        layout.label(text="What plays: one at random per actor", icon="ACTION")
+        row = layout.row()
+        row.template_list("CHARPAPER_UL_hotspot_clips", "", spot, "clips", spot, "clip_index", rows=2)
+        side = row.column(align=True)
+        side.menu("CHARPAPER_MT_hotspot_clip", text="", icon="ADD")
+        side.operator("charpaper.hotspot_clip_remove", text="", icon="REMOVE")
+
+        for finding in warnings_about(suite):
+            if finding.hotspot == spot.name:
+                _wrapped(layout.box(), finding.name, context, icon="ERROR")
 
 
 class CHARPAPER_PT_gaze(_Sidebar, Panel):
@@ -662,6 +755,9 @@ classes = (
     CHARPAPER_UL_music,
     CHARPAPER_UL_expressions,
     CHARPAPER_UL_clips,
+    CHARPAPER_UL_hotspots,
+    CHARPAPER_UL_hotspot_areas,
+    CHARPAPER_UL_hotspot_clips,
     CHARPAPER_MT_add_clip,
     CHARPAPER_PT_suite,
     CHARPAPER_PT_character,

@@ -73,6 +73,8 @@ def clip_table(clip, cues, previous, character):
         table["label"] = clip.label
     if character and not clip.gaze:
         table["gaze"] = False
+    if character and clip.reaction_only:
+        table["reaction_only"] = True
     # Pose markers decide the cues; an action without any keeps those typed by hand.
     if cues:
         table["cues"] = [{"at": at, "sound": sound} for at, sound in cues]
@@ -90,7 +92,7 @@ def clips_tables(clips, cue_tables, previous, character):
     return tables
 
 
-def update(data, suite, scene, extension, model_exported, lenses, environments, exported):
+def update(data, suite, scene, extension, model_exported, lenses, environments, exported, hotspots=None):
     """`exported` maps (environment name or None, actor name) to the actor's exported clips
     and their cue tables; None is the character. What the add-on exports it owns: an exported
     actor's clips table is rewritten whole."""
@@ -176,6 +178,12 @@ def update(data, suite, scene, extension, model_exported, lenses, environments, 
         data["gaze"] = gaze_table(suite.gaze, suite.armature)
     elif suite.gaze.mode == "REMOVE":
         data.pop("gaze", None)
+
+    # Hotspots typed into suite.toml stay until the panel has had its own.
+    if suite.hotspots_owned:
+        data.pop("hotspots", None)
+        if hotspots:
+            data["hotspots"] = hotspots
     return data
 
 
@@ -276,4 +284,5 @@ def _load_clips(obj, tables, character):
         clip.label = table.get("label", "")
         if character:
             clip.gaze = table.get("gaze", True)
+            clip.reaction_only = table.get("reaction_only", False)
     return unmatched

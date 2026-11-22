@@ -38,6 +38,7 @@ class Clip:
 
     def __init__(self, action, extra=None, mode="TIMELINE", label="", gaze=True, stored=None):
         self.action = action
+        self.reaction_only = bool(stored is not None and stored.reaction_only)
         # A second action played with it: a mesh's shape keys or a lamp's light.
         self.extra = extra
         self.mode = mode

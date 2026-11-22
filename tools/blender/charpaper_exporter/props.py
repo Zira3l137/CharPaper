@@ -427,6 +427,7 @@ class CHARPAPER_PG_finding(PropertyGroup):
     # The clip it is about, by name, to mark its row.
     clip: StringProperty()
     sound: StringProperty()
+    hotspot: StringProperty()
 
 
 CLIP_MODES = (
@@ -453,6 +454,10 @@ class CHARPAPER_PG_actor_clip(PropertyGroup):
         default=True,
         description="Let the character follow the cursor during this clip. Turn off for dances or lying poses",
     )
+    reaction_only: BoolProperty(
+        name="Only for hotspots",
+        description="Keep it out of the app's list of animations: a flinch only a hotspot should play",
+    )
 
 
 class CHARPAPER_PG_actor(PropertyGroup):
@@ -463,6 +468,74 @@ class CHARPAPER_PG_actor(PropertyGroup):
 class CHARPAPER_PG_character_expression(PropertyGroup):
     action: PointerProperty(type=bpy.types.Action, poll=_is_shape_key_action, name="Action")
     label: StringProperty(name="Shown as", description="Name the app shows. Empty: the action's name")
+
+
+def expression_names(suite):
+    return [file_stem(e.action.name) for e in suite.expressions if e.action is not None]
+
+
+def _redraw(self, context):
+    redraw_views()
+
+
+def _area_bone_search(self, context, edit_text):
+    if self.armature is None or self.armature.type != "ARMATURE":
+        return []
+    text = edit_text.lower()
+    return [name for name in self.armature.data.bones.keys() if text in name.lower()]
+
+
+class CHARPAPER_PG_hotspot_area(PropertyGroup):
+    armature: PointerProperty(type=bpy.types.Object, poll=_is_armature, name="Armature", update=_redraw)
+    bone: StringProperty(name="Bone", search=_area_bone_search, update=_redraw)
+    radius: FloatProperty(
+        name="Radius",
+        description="How far the capsule reaches from the bone on every side, in the armature's units",
+        default=0.05,
+        min=0.001,
+        soft_max=1.0,
+        precision=3,
+        step=0.5,
+        update=_redraw,
+    )
+
+
+class CHARPAPER_PG_hotspot_clip(PropertyGroup):
+    actor: PointerProperty(type=bpy.types.Object, name="Actor")
+    action: PointerProperty(type=bpy.types.Action, name="Clip")
+
+
+TRIGGERS = (
+    ("CLICK", "Click", "A left click on it, pressed and let go without dragging"),
+    ("HOVER", "Hover", "The cursor resting on it for a moment. It goes off again once the cursor has left"),
+)
+
+
+class CHARPAPER_PG_hotspot(PropertyGroup):
+    trigger: EnumProperty(name="Trigger", items=TRIGGERS, default="CLICK")
+    layer: BoolProperty(
+        name="Layer",
+        description=(
+            "Play over the reactions other hotspots set off, moving only what its clips key. Off: "
+            "stop them and take their place"
+        ),
+    )
+    expression: StringProperty(
+        name="Expression",
+        search=_search(expression_names),
+        description="The character's expression while its clips play. Empty: none",
+    )
+    cooldown: FloatProperty(
+        name="Cooldown",
+        description="Seconds after it goes off before it can again",
+        min=0.0,
+        soft_max=10.0,
+        precision=1,
+    )
+    areas: CollectionProperty(type=CHARPAPER_PG_hotspot_area)
+    area_index: IntProperty(update=_redraw)
+    clips: CollectionProperty(type=CHARPAPER_PG_hotspot_clip)
+    clip_index: IntProperty()
 
 
 def character_clip_names(suite):
@@ -515,6 +588,18 @@ class CHARPAPER_PG_suite(PropertyGroup):
     gaze: PointerProperty(type=CHARPAPER_PG_gaze)
     gltf: PointerProperty(type=CHARPAPER_PG_gltf)
 
+    hotspots: CollectionProperty(type=CHARPAPER_PG_hotspot)
+    hotspot_index: IntProperty(update=_redraw)
+    show_hotspots: BoolProperty(
+        name="Show hotspots",
+        default=True,
+        update=_redraw,
+        description="Draw the hotspots' capsules in the viewport. The picked hotspot is orange",
+    )
+    # Whether [hotspots] in suite.toml is the panel's to write: once it has had hotspots, or
+    # read them from suite.toml. Until then hotspots written there by hand are kept.
+    hotspots_owned: BoolProperty()
+
     findings: CollectionProperty(type=CHARPAPER_PG_finding)
     # What the last export did that changes how the result looks, for its popup.
     alerts: CollectionProperty(type=CHARPAPER_PG_finding)
@@ -537,6 +622,9 @@ classes = (
     CHARPAPER_PG_actor_clip,
     CHARPAPER_PG_actor,
     CHARPAPER_PG_character_expression,
+    CHARPAPER_PG_hotspot_area,
+    CHARPAPER_PG_hotspot_clip,
+    CHARPAPER_PG_hotspot,
     CHARPAPER_PG_suite,
 )
 

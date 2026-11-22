@@ -1,5 +1,6 @@
 from . import front
 from . import gaze
+from . import hotspots
 from . import migrate
 from . import operators
 from . import props
@@ -22,11 +23,13 @@ def register():
     operators.register()
     gaze.register()
     front.register()
+    hotspots.register()
     ui.register()
 
 
 def unregister():
     ui.unregister()
+    hotspots.unregister()
     front.unregister()
     gaze.unregister()
     operators.unregister()

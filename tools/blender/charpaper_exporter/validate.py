@@ -12,6 +12,7 @@ from . import front
 from . import sky
 from . import gaze as gaze_bones
 from . import gltf
+from . import hotspots
 from . import lens
 from . import music
 from .checks import Finding
@@ -70,6 +71,7 @@ def check(context, suite):
         if entry.enabled:
             _check_environment(context.scene, entry, armature, add)
     music.check(suite, add, Finding)
+    hotspots.check(suite, add, Finding)
     for entry in suite.cameras:
         if entry.enabled:
             _check_camera(suite, entry, add)
