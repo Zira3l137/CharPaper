@@ -25,10 +25,27 @@ from .props import file_stem
 from .props import redraw_views
 from .props import suite_of
 
-PICKED_COLOR = (1.0, 0.55, 0.1, 0.95)
-AREA_COLOR = (1.0, 0.85, 0.4, 1.0)
-OTHER_COLOR = (0.45, 0.7, 1.0, 0.45)
 TRIGGERS = {"CLICK": "click", "HOVER": "hover"}
+# As the panel shows clip modes: blue, orange, violet.
+MODE_TAGS = {"TIMELINE": "COLLECTION_COLOR_05", "ONCE": "COLLECTION_COLOR_02", "HOLD": "COLLECTION_COLOR_06"}
+
+# Each hotspot's color, by its place in the list: one of the theme's collection colors, as the
+# panel's tag shows it, leaving out red and yellow, which mean an error and a warning there.
+TAGS = (4, 5, 6, 7, 8, 2)
+FALLBACK = {2: (0.95, 0.64, 0.33), 4: (0.48, 0.8, 0.48), 5: (0.36, 0.71, 0.92), 6: (0.55, 0.35, 0.85),
+            7: (0.78, 0.45, 0.72), 8: (0.48, 0.33, 0.25)}
+
+
+def tag(index):
+    return f"COLLECTION_COLOR_0{TAGS[index % len(TAGS)]}"
+
+
+def tag_color(index):
+    number = TAGS[index % len(TAGS)]
+    try:
+        return tuple(bpy.context.preferences.themes[0].collection_color[number - 1].color)
+    except (AttributeError, IndexError):
+        return FALLBACK[number]
 
 _handle = None
 
@@ -278,19 +295,22 @@ def _draw():
     suite = getattr(bpy.context.scene, "charpaper", None)
     if suite is None or not suite.show_hotspots or not len(suite.hotspots):
         return
+    # (color, width): the picked hotspot solid and thick, its picked area thicker still, the
+    # others faint.
     groups = {}
     for index, spot in enumerate(suite.hotspots):
+        rgb = tag_color(index)
         for at, area in enumerate(spot.areas):
             armature = area.armature
             pose_bone = armature.pose.bones.get(area.bone) if armature is not None and armature.pose else None
             if pose_bone is None:
                 continue
             if index != suite.hotspot_index:
-                color = OTHER_COLOR
+                look = ((*rgb, 0.5), 1.0)
             else:
-                color = AREA_COLOR if at == spot.area_index else PICKED_COLOR
+                look = ((*rgb, 1.0), 3.0 if at == spot.area_index else 2.0)
             matrix = armature.matrix_world @ pose_bone.matrix
-            groups.setdefault(color, []).extend(_capsule(matrix, pose_bone.bone.length, area.radius))
+            groups.setdefault(look, []).extend(_capsule(matrix, pose_bone.bone.length, area.radius))
     if not groups:
         return
     shader = gpu.shader.from_builtin("POLYLINE_UNIFORM_COLOR")
@@ -299,8 +319,8 @@ def _draw():
     depth_test = gpu.state.depth_test_get()
     gpu.state.depth_test_set("NONE")
     gpu.state.blend_set("ALPHA")
-    for color, points in groups.items():
-        shader.uniform_float("lineWidth", 2.0 if color is not OTHER_COLOR else 1.0)
+    for (color, width), points in groups.items():
+        shader.uniform_float("lineWidth", width)
         shader.uniform_float("color", color)
         batch_for_shader(shader, "LINES", {"pos": points}).draw(shader)
     gpu.state.blend_set("NONE")
@@ -487,10 +507,10 @@ class CHARPAPER_MT_hotspot_clip(Menu):
         if not found:
             layout.label(text="No actor has clips yet: add them in Animation")
         for actor, clips in found:
-            layout.label(text="Character" if actor.is_character else actor.name)
+            layout.label(text="Character" if actor.is_character else actor.name, icon="OUTLINER_OB_ARMATURE" if actor.obj.type == "ARMATURE" else "OBJECT_DATA")
             # Once clips first: they are what reactions are made of.
             for clip in sorted(clips, key=lambda c: (c.mode != "ONCE", c.name)):
-                icon = "PLAY" if clip.mode == "ONCE" else "TIME" if clip.mode == "TIMELINE" else "PAUSE"
+                icon = MODE_TAGS[clip.mode]
                 op = layout.operator("charpaper.hotspot_clip_add", text=clip.action.name, icon=icon)
                 op.actor, op.action = actor.obj.name, clip.action.name
 

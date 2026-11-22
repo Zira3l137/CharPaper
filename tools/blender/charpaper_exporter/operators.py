@@ -501,14 +501,20 @@ class CHARPAPER_OT_export(Operator):
 
         for failure in failed:
             self.report({"ERROR"}, failure)
+            # Kept in the Warnings panel too: the status bar's report soon goes.
+            finding = suite.findings.add()
+            finding.name, finding.severity = f"export failed: {failure}", "ERROR"
+            suite.validated = True
         _report_findings(self, findings)
         self.report({"INFO"}, f"Exported {len(done)} file(s) to {folder}")
-        warnings = sum(1 for f in suite.findings if f.severity == "WARNING") + len(alerts)
-        suite.last_export = f"{time.strftime('%H:%M')} · {len(done)} files · {warnings} warnings"
+        warnings = sum(1 for f in suite.findings if f.severity == "WARNING")
+        errors = len(failed) + len(alerts)
+        problems = f"{errors} errors · {warnings} warnings" if errors else f"{warnings} warnings"
+        suite.last_export = f"{time.strftime('%H:%M')} · {len(done)} files · {problems}"
         if alerts:
             for alert in alerts:
                 finding = suite.findings.add()
-                finding.name, finding.severity = alert.message, "WARNING"
+                finding.name, finding.severity = alert.message, "ERROR"
                 finding.object_name, finding.fix = alert.object_name, alert.fix
             suite.alerts.clear()
             for alert in alerts:
@@ -621,8 +627,9 @@ class CHARPAPER_OT_export_alerts(Operator):
         for i, alert in enumerate(suite_of(context).alerts):
             box = layout.box()
             col = box.column(align=True)
+            col.alert = True
             lines = textwrap.wrap(alert.name, width) or [""]
-            col.label(text=lines[0], icon="ERROR")
+            col.label(text=lines[0], icon="CANCEL")
             for line in lines[1:]:
                 col.label(text=line, icon="BLANK1")
             row = box.row()

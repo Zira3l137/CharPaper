@@ -19,26 +19,73 @@ from .operators import current_actor
 from .props import file_stem
 from .props import suite_of
 
-MODE_ICONS = {"TIMELINE": "TIME", "ONCE": "PLAY", "HOLD": "PAUSE"}
+# The colored tags are Blender's collection colors, so they follow the theme: red, orange,
+# yellow, green, blue, violet, pink, brown.
+MODE_TAGS = hotspot_spots.MODE_TAGS
 MODE_NAMES = {"TIMELINE": "Timeline", "ONCE": "Once", "HOLD": "Hold"}
+SEVERITY_TAGS = {"ERROR": "COLLECTION_COLOR_01", "WARNING": "COLLECTION_COLOR_03", "INFO": "COLLECTION_COLOR_05"}
+SEVERITY_ICONS = {"ERROR": "CANCEL", "WARNING": "ERROR", "INFO": "INFO"}
 TRIGGER_NAMES = {"CLICK": "Click", "HOVER": "Hover"}
-TRIGGER_ICONS = {"CLICK": "RESTRICT_SELECT_OFF", "HOVER": "HIDE_OFF"}
+TRIGGER_ICONS = {"CLICK": "MOUSE_LMB", "HOVER": "MOUSE_MOVE"}
+OBJECT_ICONS = {
+    "ARMATURE": "OUTLINER_OB_ARMATURE",
+    "LIGHT": "OUTLINER_OB_LIGHT",
+    "EMPTY": "OUTLINER_OB_EMPTY",
+    "MESH": "OUTLINER_OB_MESH",
+}
 LAYERED = bpy.app.version >= (4, 4, 0)
 
 
 def warnings_about(suite, obj_name="", clip=""):
+    """Errors and warnings, not tips."""
     return [
         f
         for f in suite.findings
-        if f.severity == "WARNING"
+        if f.severity in {"ERROR", "WARNING"}
         and (not obj_name or f.object_name == obj_name)
         and (not clip or f.clip == clip)
     ]
 
 
+def _flag(row, found):
+    """Marks a row by the worst of what is wrong with it: red for an error, yellow for a
+    warning."""
+    if any(f.severity == "ERROR" for f in found):
+        row.alert = True
+        row.label(text="", icon=SEVERITY_TAGS["ERROR"])
+    elif found:
+        row.label(text="", icon=SEVERITY_TAGS["WARNING"])
+
+
 def _warn_icon(row, suite, obj_name="", clip=""):
-    if warnings_about(suite, obj_name, clip):
-        row.label(text="", icon="ERROR")
+    _flag(row, warnings_about(suite, obj_name, clip))
+
+
+def finding_box(layout, finding, context, show=None):
+    """A finding as its own box: an error in red, a warning plain, a tip dimmed, each with its
+    color's tag."""
+    box = layout.box()
+    row = box.row()
+    row.label(text="", icon=SEVERITY_TAGS.get(finding.severity, "NONE"))
+    col = row.column()
+    col.alert = finding.severity == "ERROR"
+    col.active = finding.severity != "INFO"
+    _wrapped(col, finding.name, context, icon=SEVERITY_ICONS.get(finding.severity, "NONE"))
+    if show is not None and finding.object_name:
+        row.operator("charpaper.show_finding", text="", icon="RESTRICT_SELECT_OFF", emboss=False).index = show
+    if finding.fix == STOP_SHAPE_KEYS:
+        box.operator("charpaper.stop_shape_keys", icon="PAUSE").name = finding.object_name
+    return box
+
+
+def _counts(layout, findings):
+    """How many of each kind, each by its tag."""
+    row = layout.row(align=True)
+    for severity in ("ERROR", "WARNING", "INFO"):
+        count = sum(1 for f in findings if f.severity == severity)
+        if count:
+            row.label(text=str(count), icon=SEVERITY_TAGS[severity])
+    return row
 
 
 def _wrapped(layout, text, context, icon="NONE"):
@@ -65,8 +112,10 @@ class _Entries(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
         row.prop(item, "enabled", text="")
-        row.prop(item, "name", text="", emboss=False)
-        self.draw_target(context, row, item)
+        body = row.row(align=True)
+        body.active = item.enabled
+        body.prop(item, "name", text="", emboss=False)
+        self.draw_target(context, body, item)
         op = row.operator("charpaper.export", text="", icon="EXPORT", emboss=False)
         op.what = self.kind
         op.index = index
@@ -80,8 +129,8 @@ class CHARPAPER_UL_skins(_Entries):
 
     def draw_target(self, context, row, item):
         suite = suite_of(context)
-        if item.collection and any(warnings_about(suite, o.name) for o in item.collection.all_objects):
-            row.label(text="", icon="ERROR")
+        objects = item.collection.all_objects if item.collection else ()
+        _flag(row, [f for o in objects for f in warnings_about(suite, o.name)])
         row.label(text=item.collection.name if item.collection else "-", icon="OUTLINER_COLLECTION")
 
 
@@ -109,7 +158,8 @@ class CHARPAPER_UL_music(UIList):
         path = music.source(item.filepath)
         found = bool(path) and os.path.isfile(path)
         file = row.row()
-        file.active = found
+        file.alert = not found
+        file.active = not found
         file.label(text=os.path.basename(path) if path else "no file", icon="FILE_SOUND" if found else "ERROR")
 
 
@@ -117,6 +167,7 @@ class CHARPAPER_UL_expressions(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
         if item.action is None:
+            row.alert = True
             row.label(text="Pick an action", icon="ERROR")
             return
         row.label(text=item.action.name, icon="SHAPEKEY_DATA")
@@ -138,6 +189,7 @@ class CHARPAPER_UL_clips(UIList):
             )
             star.index = index
         if item.action is None:
+            row.alert = True
             row.label(text="Pick an action", icon="ERROR")
             return
         row.label(text=item.action.name)
@@ -149,7 +201,9 @@ class CHARPAPER_UL_clips(UIList):
             row.label(text=str(sounds), icon="SPEAKER")
         if item.reaction_only:
             row.label(text="", icon="HAND")
-        row.label(text=MODE_NAMES[item.mode], icon=MODE_ICONS[item.mode])
+        if data == getattr(suite.armature, "charpaper", None) and not item.gaze:
+            row.label(text="", icon="HIDE_ON")
+        row.label(text=MODE_NAMES[item.mode], icon=MODE_TAGS[item.mode])
 
 
 class CHARPAPER_MT_add_clip(Menu):
@@ -185,9 +239,7 @@ class CHARPAPER_PT_suite(_Sidebar, Panel):
     bl_label = "Suite"
 
     def draw_header_preset(self, context):
-        warnings = len(warnings_about(suite_of(context)))
-        if warnings:
-            self.layout.label(text=str(warnings), icon="ERROR")
+        _counts(self.layout, warnings_about(suite_of(context)))
 
     def draw(self, context):
         suite = suite_of(context)
@@ -223,8 +275,16 @@ class CHARPAPER_PT_suite(_Sidebar, Panel):
         row.operator("charpaper.export", text="Export all", icon="EXPORT").what = "ALL"
         if suite.last_export:
             row = layout.row()
-            row.active = False
-            row.label(text=f"Last export {suite.last_export}", icon="CHECKMARK")
+            severities = {f.severity for f in suite.findings}
+            if "ERROR" in severities:
+                row.alert = True
+                icon = SEVERITY_TAGS["ERROR"]
+            elif "WARNING" in severities:
+                icon = SEVERITY_TAGS["WARNING"]
+            else:
+                row.active = False
+                icon = "CHECKMARK"
+            row.label(text=f"Last export {suite.last_export}", icon=icon)
 
 
 class CHARPAPER_PT_character(_Sidebar, Panel):
@@ -271,10 +331,7 @@ class CHARPAPER_PT_skins(_Sidebar, Panel):
         _wrapped(hint, "Exported with its sliders as they are: no action may play on its shape keys.", context)
         for finding in warnings_about(suite):
             if any(finding.object_name == o.name for o in entry.collection.all_objects):
-                box = layout.box()
-                _wrapped(box, finding.name, context, icon="ERROR")
-                if finding.fix == STOP_SHAPE_KEYS:
-                    box.operator("charpaper.stop_shape_keys", icon="PAUSE").name = finding.object_name
+                finding_box(layout, finding, context)
 
 
 class CHARPAPER_PT_expressions(_Sidebar, Panel):
@@ -340,7 +397,8 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
                 label.active = False
                 label.label(text=heading.upper() if each.is_character else heading)
             row = col.row(align=True)
-            icon = {"ARMATURE": "ARMATURE_DATA", "LIGHT": "LIGHT"}.get(each.obj.type, "OBJECT_DATA")
+            row.alert = any(f.severity == "ERROR" for f in warnings_about(suite, each.name))
+            icon = OBJECT_ICONS.get(each.obj.type, "OBJECT_DATA")
             selected = each.name == actor.name
             op = row.operator("charpaper.actor_select", text=each.name, icon=icon, depress=selected, emboss=selected)
             op.name = each.name
@@ -403,8 +461,9 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
         hint = box.column()
         hint.active = False
         _wrapped(hint, f"Frames {start}–{end} · keys " + " · ".join(parts), context)
-        for finding in warnings_about(suite, clip=file_stem(clip.action.name)):
-            _wrapped(layout.box(), finding.name, context, icon="ERROR")
+        for finding in suite.findings:
+            if finding.clip == file_stem(clip.action.name):
+                finding_box(layout, finding, context)
 
 
 class CHARPAPER_PT_environments(_Sidebar, Panel):
@@ -499,9 +558,9 @@ class CHARPAPER_PT_sound(_Sidebar, Panel):
         _wrapped(hint, f"→ {shown}, ambience.ogg. Converted to Ogg Vorbis; Vorbis .ogg files are copied as they are.", context)
         op = layout.operator("charpaper.export", text="Export sound", icon="EXPORT")
         op.what, op.index = "SOUND", suite.environment_index
-        for finding in warnings_about(suite):
+        for finding in suite.findings:
             if finding.sound == entry.name:
-                _wrapped(layout.box(), finding.name, context, icon="ERROR")
+                finding_box(layout, finding, context)
 
 
 class CHARPAPER_PT_cameras(_Sidebar, Panel):
@@ -534,11 +593,13 @@ class CHARPAPER_PT_cameras(_Sidebar, Panel):
 class CHARPAPER_UL_hotspots(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
+        row.label(text="", icon=hotspot_spots.tag(index))
         row.prop(item, "name", text="", emboss=False)
-        if any(f.hotspot == item.name for f in warnings_about(suite_of(context))):
-            row.label(text="", icon="ERROR")
+        _flag(row, [f for f in warnings_about(suite_of(context)) if f.hotspot == item.name])
         if item.layer:
             row.label(text="", icon="RENDERLAYERS")
+        if item.expression:
+            row.label(text="", icon="SHAPEKEY_DATA")
         trigger = row.row()
         trigger.active = False
         trigger.label(text=TRIGGER_NAMES[item.trigger], icon=TRIGGER_ICONS[item.trigger])
@@ -549,13 +610,16 @@ class CHARPAPER_UL_hotspot_areas(UIList):
         suite = suite_of(context)
         row = layout.row(align=True)
         if item.armature is None:
+            row.alert = True
             row.label(text="Pick an armature", icon="ERROR")
             return
         found = item.armature.data.bones.get(item.bone) is not None
         op = row.operator("charpaper.hotspot_area_select", text="", icon="BONE_DATA", emboss=False)
         op.index = index
         owner = "" if item.armature == suite.armature else f"{item.armature.name} · "
-        row.label(text=owner + (item.bone or "no bone"), icon="NONE" if found else "ERROR")
+        name = row.row(align=True)
+        name.alert = not found
+        name.label(text=owner + (item.bone or "no bone"), icon="NONE" if found else "ERROR")
         row.prop(item, "radius", text="")
 
 
@@ -566,10 +630,11 @@ class CHARPAPER_UL_hotspot_clips(UIList):
         resolved, _ = hotspot_spots.resolve_clip(suite, item)
         if resolved is None:
             name = item.action.name if item.action else "nothing picked"
+            row.alert = True
             row.label(text=name, icon="ERROR")
             return
         actor, clip = resolved
-        row.label(text=clip.action.name, icon=MODE_ICONS[clip.mode])
+        row.label(text=clip.action.name, icon=MODE_TAGS[clip.mode])
         owner = row.row()
         owner.active = False
         owner.label(text="Character" if actor.is_character else actor.name)
@@ -623,9 +688,9 @@ class CHARPAPER_PT_hotspots(_Sidebar, Panel):
         side.menu("CHARPAPER_MT_hotspot_clip", text="", icon="ADD")
         side.operator("charpaper.hotspot_clip_remove", text="", icon="REMOVE")
 
-        for finding in warnings_about(suite):
+        for finding in suite.findings:
             if finding.hotspot == spot.name:
-                _wrapped(layout.box(), finding.name, context, icon="ERROR")
+                finding_box(layout, finding, context)
 
 
 class CHARPAPER_PT_gaze(_Sidebar, Panel):
@@ -701,9 +766,8 @@ class CHARPAPER_PT_warnings(_Sidebar, Panel):
         suite = suite_of(context)
         if not suite.validated:
             return
-        warnings = len(warnings_about(suite))
-        if warnings:
-            self.layout.label(text=str(warnings), icon="ERROR")
+        if suite.findings:
+            _counts(self.layout, suite.findings)
         else:
             self.layout.label(text="clean", icon="CHECKMARK")
 
@@ -716,15 +780,16 @@ class CHARPAPER_PT_warnings(_Sidebar, Panel):
         if not suite.findings:
             layout.label(text="Nothing to warn about", icon="CHECKMARK")
             return
-        for i, finding in enumerate(suite.findings):
-            box = layout.box()
-            row = box.row()
-            col = row.column()
-            _wrapped(col, finding.name, context, icon="ERROR" if finding.severity == "WARNING" else "INFO")
-            if finding.object_name:
-                row.operator("charpaper.show_finding", text="", icon="RESTRICT_SELECT_OFF", emboss=False).index = i
-            if finding.fix == STOP_SHAPE_KEYS:
-                box.operator("charpaper.stop_shape_keys", icon="PAUSE").name = finding.object_name
+        legend = layout.row()
+        legend.active = False
+        legend.label(text="Error", icon=SEVERITY_TAGS["ERROR"])
+        legend.label(text="Warning", icon=SEVERITY_TAGS["WARNING"])
+        legend.label(text="Tip", icon=SEVERITY_TAGS["INFO"])
+        # Worst first, each kind in the order found.
+        order = {"ERROR": 0, "WARNING": 1, "INFO": 2}
+        ranked = sorted(enumerate(suite.findings), key=lambda pair: order.get(pair[1].severity, 3))
+        for i, finding in ranked:
+            finding_box(layout, finding, context, show=i)
 
 
 class CHARPAPER_PT_gltf(_Sidebar, Panel):
