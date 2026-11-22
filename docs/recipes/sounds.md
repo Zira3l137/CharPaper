@@ -8,12 +8,24 @@
 
 Footsteps, a giggle: they are *pose markers* on the action.
 
-1. In the Action Editor, turn on *Marker → Show Pose Markers*.
-2. Put a marker on the frame where the sound should start.
-3. Name the marker after a sound loaded in the .blend: `step_l` matches `step_l.wav`.
+1. **Load the sound into the .blend.** The easiest way: open a *Video Sequencer* editor,
+   *Add → Sound*, and pick the file. That makes a Sound in the .blend named after the file.
+   You can delete the strip afterwards, but then give the Sound a fake user (the shield
+   icon in *Blender File* view of the Outliner) or it's gone when you save.
+2. In the Action Editor, with the clip's action shown, turn on *Marker → Show Pose
+   Markers*.
+3. Put a marker on the frame where the sound should start (*Marker → Add Marker*, or **M**).
+4. Rename the marker (*Marker → Rename Marker*, or **F2**) after the sound: `step_l`
+   matches the Sound `step_l.wav`, with or without the extension.
+
+The clip's line in the Animation panel lists the sounds it found and when they play. A
+marker that names no Sound, or sits outside the clip's frames, plays nothing, and Check
+says so.
 
 The add-on converts each sound to `sounds/<name>.ogg`. The app plays it every time the
-clip passes that frame, so on every loop, and stops it when another animation starts.
+clip passes that frame: on every loop of a Timeline clip, once for a Once clip or a
+[reaction](reaction.md). Sounds of the viewer's animation stop when another animation is
+picked. Sounds work on the clips of props too: a door's creak, keyed on the door's clip.
 
 ## Music and background sound
 

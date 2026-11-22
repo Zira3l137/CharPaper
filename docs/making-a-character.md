@@ -4,9 +4,9 @@
 
 This part is for 3D artists. You need Blender 4.2 or newer and know your way around it:
 collections, armatures, actions, shape keys. You don't need to know anything about game
-engines.
+engines or code.
 
-**On this page:** [How a character is put together](#how-a-character-is-put-together) · [Before you start: rules of thumb](#before-you-start-rules-of-thumb) · [Your first character, step by step](#your-first-character-step-by-step) · [Testing your character](#testing-your-character) · [Recipes](#recipes) · [Reference](#reference)
+**On this page:** [How a character is put together](#how-a-character-is-put-together) · [How things move: one timeline](#how-things-move-one-timeline) · [Before you start: rules of thumb](#before-you-start-rules-of-thumb) · [The add-on](#the-add-on) · [Your first character, step by step](#your-first-character-step-by-step) · [Testing your character](#testing-your-character) · [Recipes](#recipes) · [Reference](#reference)
 
 ## How a character is put together
 
@@ -22,19 +22,24 @@ characters/
     │   ├── casual.glb        one outfit: every mesh the character wears in it
     │   ├── casual.drivers.json   that outfit's shape key drivers, if it has any
     │   └── pajamas.glb
-    ├── animations/
-    │   └── basics.glb        one or more animation clips
+    ├── clips/
+    │   ├── Idle.json         one clip of the character: its timing and shape keys
+    │   └── Idle.glb          the bones it moves
+    ├── expressions/
+    │   └── Happy.json        one facial expression
     ├── environment/
     │   ├── room.glb          a place: its objects and its lights
     │   └── room/             extras for the environment of the same name
+    │       ├── clips/Door/   clips of the room's moving objects, one folder each
     │       ├── sky.hdr       its sky and reflections, from its World
     │       ├── music/        its music, as 01 - Title.ogg, 02 - …
     │       ├── ambience.ogg  background sound that loops under the music
     │       └── animated/     GIFs that play on its materials
     ├── cameras/
-    │   └── closeup.glb       a camera, with its animation if it has one
+    │   ├── closeup.glb       a camera
+    │   └── closeup.json      its movement, if it moves
     ├── sounds/
-    │   └── step_l.ogg        sounds that animations play
+    │   └── step_l.ogg        sounds that clips play
     └── luts/
         └── teal-orange.cube  color grades (you put these here)
 ```
@@ -45,16 +50,44 @@ The ideas behind it:
   drawn on it: body, hair, clothes, all of it. Switching skins takes off everything and
   puts on everything in the new one. So each skin needs its own copy of the body, or of
   the parts of it that show.
-- **Files find each other by name.** Skins and animations are matched to the armature by
-  bone names. Nothing else ties them together.
-- **Folders are the settings.** A file in `skins/` is a skin, named after the file. A file
-  in `environment/` is an environment. `suite.toml` only holds what the folders can't say.
+- **Files find each other by name.** Clips find bones by their names, and shape keys by
+  theirs, on whichever skin is worn. Nothing else ties the files together, so **don't
+  rename bones or shape keys** without exporting everything again.
+- **Every action is a clip.** A *clip* is one action the app can play: on the character, on
+  a moving object of an environment (a door, a fan, a lamp), or on a camera. Each object
+  keeps its own list of clips in the add-on.
+- **Folders are the settings.** A file in `skins/` is a skin, named after the file.
+  `suite.toml` only holds what the folders can't say.
 - **Only what's on screen is in memory.** The skins, environments and cameras you aren't
   looking at aren't loaded. Switching reads them from disk, which takes a moment, and
   that's on purpose: twenty outfits cost no more than one.
 - **No light of its own.** The app adds no sun and no fill light. The character is lit
   only by what the environment brings: its lamps and its sky. No environment, or one
   without lights, gives a black character.
+
+## How things move: one timeline
+
+**The app plays what Blender's timeline shows.** Your scene's frame range and frame rate
+(*Output Properties*) become one timeline that loops for ever, and everything plays on it
+at once: the character, the props, the cameras. A door keyed over frames 1–120 next to a
+character keyed over frames 1–120 moves in step with it in the app, exactly as when you
+press play in Blender.
+
+Each clip says how it plays, with its **Plays** setting:
+
+| Plays | What it does | Use it for |
+|---|---|---|
+| **Timeline** | Shows the timeline's frame, so it stays in step with everything else, and loops with it. | Idles, loops, everything that runs all the time. |
+| **Once** | Plays from its first key to its last when started, then hands back to what played before. | A wave picked in the panel, reactions to clicks. |
+| **Hold** | Holds its first frame. | Still poses. |
+
+A clip moves **only what it keys**. A clip that keys an arm leaves the legs to whatever else
+plays. Clips fade into each other over a quarter of a second, so switching never pops.
+
+A clip that loops on its own length (with a *Cycles* modifier, or the action's *Manual
+Frame Range*) should fit the timeline a whole number of times, or it restarts early when
+the timeline does. The add-on's Check tells you when it doesn't, and which end frame would
+fix it.
 
 ## Before you start: rules of thumb
 
@@ -66,75 +99,113 @@ These save the most trouble.
 2. **Standing on Z, facing −Y.** That is, facing you in Blender's front view (Numpad 1).
 3. **Uniform scale on the armature and everything above it.** A scale like (1, 1, 1.2)
    skews bones in the app. Apply it.
-4. **Don't rename bones or the armature object between exports.** Names are how files find
-   each other. If you rename something, export everything again.
-5. **Names become file names.** Keep skin, environment, camera and material names simple.
-   Characters that Windows doesn't allow in a file name are replaced with `_`.
+4. **Don't rename bones, shape keys or the armature object between exports.** Names are how
+   files find each other. If you rename something, export everything again.
+5. **Names become file names.** Keep action, skin, environment, camera and material names
+   simple. Characters that Windows doesn't allow in a file name are replaced with `_`.
 6. **Don't name a camera `orbit` or a color grade `none`.** The app uses those names
    itself, and the character won't load.
-7. **Give every action a clear name.** The action's name is what the panel shows.
-8. **Materials: Principled BSDF with image textures.** Anything built from procedural
-   nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't.
-9. **At most 256 shape keys on a mesh.**
-10. **Save your .blend before exporting.** Unless you pick another folder, the suite is
+7. **Give every action a clear name.** The action's name is what the panel shows, unless
+   you give the clip a *Shown as* name.
+8. **Make each new action from nothing.** In Blender 4.4 and newer, pressing **New** in the
+   Action Editor while an action is assigned makes a **copy** of it, keys and all. Unlink
+   the current action first (the **X**), then press **New**. See
+   [An animation](recipes/animation.md#start-every-action-empty).
+9. **Leave shape key sliders at 0 when you export a skin**, unless that's the face you want
+   it to rest with. A slider no clip keys stays in the app where it was in Blender.
+10. **Materials: Principled BSDF with image textures.** Anything built from procedural
+    nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't.
+11. **At most 256 shape keys on a mesh.**
+12. **Save your .blend before exporting.** Unless you pick another folder, the suite is
     written next to it.
 
-## Your first character, step by step
+## The add-on
 
-**Install the add-on.** On the page you downloaded CharPaper from, also download
+**Install it.** On the page you downloaded CharPaper from, also download
 `charpaper_exporter-….zip`. In Blender: *Edit → Preferences → Get Extensions → ⌄ (top
 right) → Install from Disk…* and pick the zip. Use the add-on from the same release as
-your app.
+your app. To update it, uninstall the old one first, then install the new zip and restart
+Blender.
 
-**Open the panel.** In the 3D Viewport press **N** and pick the **CharPaper** tab.
-Everything you set there is saved in the .blend.
+**Open it.** In the 3D Viewport press **N** and pick the **CharPaper** tab. Everything you
+set there is saved in the .blend.
 
-**Fill it in.**
+The tab has these panels, top to bottom:
 
-1. **Suite → Folder:** the character's folder, like `…\CharPaper\characters\aki\`.
-   Exporting straight into the app's `characters` folder saves you copying.
-2. **Suite → Name:** what the panel shows. **Armature:** your character's armature.
-3. **Skins:** press **+**, name the skin (`casual`), and pick the **Collection** that holds
-   its meshes.
-4. **Animations:** press **+** and name the file (`basics`). Press the refresh button
-   next to *Clips* to list your actions, and tick the ones to export. For each, pick a
-   **Mode**: *Loop*, *Once*, or *Pose*.
-5. **Environments:** press **+**, name it (`room`), and pick the collection that holds the
-   place and **its lights**.
-6. **Suite → Starts with:** which skin, animation and environment show first.
-7. Press **Validate** and read what it says, then **Export All**.
+| Panel | What's in it |
+|---|---|
+| **Suite** | The folder and name, the timeline (read from your scene), what the app starts with, and the **Check** and **Export all** buttons. |
+| **Character** | The armature. Under it: **Skins** (outfits), **Expressions** (faces) and **Gaze** (following the cursor). |
+| **Animation** | Everything that moves, grouped: the character first, then each environment's objects. Pick one to see and edit its clips. |
+| **Environments** | The places, their sky, and under each, **Sound**: its music and ambience. |
+| **Cameras** | Your own cameras, and the action each moves with. |
+| **Hotspots** | Places on the character or a prop that react to clicks and to the cursor. |
+| **Warnings** | What Check found, worst first. |
+| **Export settings** | The glTF options. Leave them alone unless you know why you're changing one. |
 
-**Look at it.** Start the app with `run-windowed.bat` and pick your character in the Scene
-tab. After a change in Blender, export again and restart the app.
+**Colors tell you what needs attention.** The tags are Blender's own collection colors,
+so they follow your theme:
+
+| You see | It means |
+|---|---|
+| 🟥 Red text and tag | **An error.** An export step failed, or a file came out wrong. Fix it and export again. |
+| 🟨 Yellow tag | **A warning.** Something will most likely look wrong in the app. |
+| 🟦 Blue tag, dimmed text | **A tip.** Worth knowing, often harmless. |
+| A row that turns red | Something it needs is missing: an action, a bone, a sound file. |
+| 🟦 / 🟧 / 🟪 tag on a clip | Its mode: **Timeline** blue, **Once** orange, **Hold** violet. |
 
 Good to know about the add-on:
 
-- **Validation only warns.** It never stops an export. The arrow next to a warning selects
-  what the warning is about.
-- **Your scene is never changed.** Each file is exported from temporary copies, so your
-  NLA tracks, active actions and selection stay as they were.
-- **You don't have to export everything every time.** Every entry has its own export
-  button, and a checkbox to leave it out of *Export All*.
+- **Check only warns.** It never stops an export. Many warnings come with a button that
+  fixes them (**Stop it**, **Unlink it**), and the arrow next to a warning selects what it's
+  about. Export all runs Check first.
+- **Your scene is never changed by an export.** Each file is exported from temporary
+  copies, so your NLA tracks, active actions and selection stay as they were.
+- **You don't have to export everything every time.** Skins, environments and cameras have
+  their own export button and a checkbox to leave them out of *Export all*; an object's
+  clips export from the Animation panel.
 - **suite.toml is updated, not replaced.** What you typed into it by hand is kept, and the
-  previous version is saved as `suite.toml.bak`.
-- **glTF Settings** in the panel has the export options in one place. Leave them alone
-  unless you know why you're changing one. In particular, keep **Lights** on *Standard*.
+  previous version is saved as `suite.toml.bak`. **Load suite.toml** fills the panel from
+  an existing file.
 
 The add-on's own [README](../tools/blender/charpaper_exporter/README.md) has the fine print
-for every feature in the recipes.
+for every feature.
+
+## Your first character, step by step
+
+1. **Suite → Folder:** the character's folder, like `…\CharPaper\characters\aki\`.
+   Exporting straight into the app's `characters` folder saves you copying.
+   **Suite → Name:** what the panel shows.
+2. **Set the timeline.** In *Output Properties*, set the frame rate and the frame range your
+   idle loops over, like 1–240 at 24 fps. The Suite panel shows the result: "a 10.0 s loop".
+3. **Character → Armature:** your character's armature.
+4. **Character → Skins:** press **+**, name the skin (`casual`), and pick the
+   **Collection** that holds its meshes.
+5. **Animation:** the character is listed first. Press **Add** and pick your idle action,
+   or **Add all that fit** for every action that moves this armature. Click the **☆** next
+   to the idle so the character starts with it. Set each clip's **Plays**: *Timeline*,
+   *Once* or *Hold*.
+6. **Environments:** press **+**, name it (`room`), and pick the collection that holds the
+   place and **its lights**.
+7. **Suite → Starts with:** which skin, clip, environment and camera show first.
+8. Press **Check**, read the Warnings, then press **Export all**.
+
+**Look at it.** Start the app with `run-windowed.bat` and pick your character in the Scene
+tab. After a change in Blender, export again, then switch to another character and back in
+the app, or restart it.
 
 ## Testing your character
 
 - Run `run-windowed.bat` while you work. A window is easier to check than the desktop.
 - `charpaper.exe --windowed --suite aki` opens straight into the folder `characters\aki`.
 - Read `charpaper.log` after a change. It lists the skins, clips, expressions and
-  drivers it found, and warns about what it couldn't use.
+  drivers it found, and warns about what it couldn't use. If the character doesn't load
+  at all, the log says which line of suite.toml is wrong.
 - **The app remembers what you picked last.** For every character it keeps the skin,
   animation, camera, environment, hidden parts, orbit position and picture edits you last
-  had, and they win over your suite.toml defaults. So a changed `default_skin`, orbit
-  `radius` or `[post]` value may seem to do nothing. To see the character as a new
-  viewer would, close the app and delete `state.toml`. For picture settings alone,
-  **Restore defaults** is enough.
+  had, and they win over your *Starts with* defaults. So a changed default may seem to do
+  nothing. To see the character as a new viewer would, close the app and delete
+  `state.toml`. For picture settings alone, **Restore defaults** is enough.
 - The app reads a suite when it shows it. After exporting, switch to another character
   and back, or restart. A brand-new character folder appears in the list only after a
   restart.
@@ -147,16 +218,18 @@ the app makes of it.
 | Recipe | What it covers |
 |---|---|
 | [An outfit (skin)](recipes/outfit.md) | Put meshes in a collection, and each object becomes a part the viewer can switch. |
-| [An animation](recipes/animation.md) | Actions on the armature, and how each plays: loop, once or pose. |
-| [A facial expression](recipes/expression.md) | Shape key actions that loop on the face. |
+| [An animation](recipes/animation.md) | Clips on the timeline, once or held; what a clip moves; slots and other Blender 4.4 traps. |
+| [A facial expression](recipes/expression.md) | Shape key actions the viewer can pick for the face. |
 | [Shape keys that follow the body](recipes/correctives.md) | Correctives: drivers, or keys inside a clip. |
 | [Following the cursor (gaze)](recipes/gaze.md) | Eyes, head and neck that turn towards the mouse. |
+| [Hotspots](recipes/hotspots.md) | Places that react to a click or to the cursor resting on them. |
+| [A reaction](recipes/reaction.md) | Making the clip a hotspot plays: body, face, correctives and sound. |
 | [An environment](recipes/environment.md) | The place around the character: its lights, moving props and screens. |
 | [A sky](recipes/sky.md) | The panorama that lights the scene and shows behind it. |
 | [A sun that matches the sky](recipes/sun.md) | A Sun light whose shadows follow the sky as it turns. |
 | [Fog and light shafts](recipes/fog.md) | Fog boxes, patchy noise, and which lights show in them. |
-| [A camera](recipes/camera.md) | Your own cameras, their animation and depth of field. |
-| [Sounds](recipes/sounds.md) | Sounds on animations, music and background sound. |
+| [A camera](recipes/camera.md) | Your own cameras, their movement and depth of field. |
+| [Sounds](recipes/sounds.md) | Sounds on clips, music and background sound. |
 | [A color grade (LUT)](recipes/lut.md) | `.cube` files for the picture. |
 | [The picture the viewer sees first](recipes/first-picture.md) | Exposure, view transform and the rest of the look you ship. |
 

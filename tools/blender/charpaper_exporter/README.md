@@ -1,7 +1,9 @@
 # CharPaper Exporter
 
-A Blender add-on (4.2 and newer) that exports a whole CharPaper character suite from one
-`.blend`: the model, skins, animations, environments, cameras, and `suite.toml`.
+A Blender add-on (4.2 to 5.2) that exports a whole CharPaper character suite from one
+`.blend`: the model, skins, clips, expressions, environments, cameras, hotspots, and
+`suite.toml`. The step-by-step guide for artists is
+[Making a character](../../../docs/making-a-character.md); this page is the fine print.
 
 ## Install
 
@@ -21,22 +23,49 @@ saved in the `.blend`.
 | Entry       | Holds                                                   | Written to                   |
 |-------------|---------------------------------------------------------|------------------------------|
 | Model file  | the armature alone                                      | `<model>.glb` next to suite.toml |
-| Skin        | the armature + every mesh in its collection, plus ticked expressions | `skins/<name>.glb` |
-| Animation   | the armature + ticked clips, plus copies of the skins' meshes whose shape keys the clips key, without materials or textures | `animations/<name>.glb` |
-| Environment | everything in its collection except cameras, with active actions; its World as a panorama | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/`, the panorama in `environment/<name>/` |
-| Camera      | the camera, the empties it hangs from, its focus object, and one action | `cameras/<name>.glb` |
+| Skin        | the armature + every mesh in its collection, its sliders as they stand | `skins/<name>.glb`, its drivers in `skins/<name>.drivers.json` |
+| Character clip | one action on the armature: the bones it keys, and the shape keys of every slot | `clips/<name>.glb` (bones) and `clips/<name>.json` (timing, shape keys, sounds) |
+| Expression  | one shape key action                                    | `expressions/<name>.json` |
+| Environment | everything in its collection except cameras, without animation; its World as a panorama | `environment/<name>.glb`, its GIFs in `environment/<name>/animated/`, the panorama in `environment/<name>/` |
+| Prop clip   | one action of an environment's object, its shape keys or its light | `environment/<name>/clips/<object>/<clip>.glb` and `.json` |
+| Camera      | the camera, the empties it hangs from, its focus object, and its *Moves with* action | `cameras/<name>.glb`, its movement in `cameras/<name>.json` |
 | Sound       | an environment's music, in order, and its ambience, converted to Ogg Vorbis | `environment/<name>/music/01 - <title>.ogg`, `environment/<name>/ambience.ogg` |
+| Hotspots    | capsules around bones and the clips they play            | `[hotspots]` in suite.toml |
 
-- **Clips** and **expressions** are named after their Blender actions. *Shown as* renames a
-  clip in the app only.
+- **The timeline:** the scene's frame range and frame rate are written to suite.toml as
+  `[timeline]`, and everything plays on that one loop. A clip's **Plays** says how: *Timeline*
+  shows the timeline's frame, exported over the whole scene range (or its action's *Manual
+  Frame Range*); *Once* plays from its first key to its last (or over its Manual Frame
+  Range) and hands back; *Hold* is its first frame. Check warns about a Timeline clip whose
+  ends don't meet where the timeline loops, and about a clip looping on its own length
+  (Cycles or a Manual Frame Range) that doesn't fit the timeline a whole number of times,
+  with the end frame that would.
+- **Actors:** the character's armature, and in each environment every armature and every
+  object with an action on itself, its shape keys or its light. Each has its own clip list
+  in the Animation panel. A prop with an empty list plays its active actions on the timeline.
+- **Clips** and **expressions** are named after their Blender actions. *Shown as* renames
+  them in the app only. *Only for hotspots* plays a clip Once and keeps it out of the app's
+  list. The star marks the clip the character starts with.
+- **Slots (Blender 4.4 and newer):** a clip plays one slot for its object, and every slot of
+  its action for shape keys and lights. The object's slot is the one picked in the clip's
+  **Slot** field; else the action's only slot for that object type; else the one the object
+  is playing; else the one named after the object, with a warning. *Add* remembers the slot
+  the object plays. Check warns when the slot is a guess, when a Once clip's other slots are
+  keyed past its body's keys (they set its length), and when an action holds the slots of
+  another action it was copied from with *New*.
 - **Shape keys keyed in a clip** play with it, for what a driver can't do, like a cheek puff in
   frames 40–60 of one clip. In Blender 4.4 and newer, key them in the clip's own action:
   select the mesh, assign that action in the Shape Key Editor, let Blender give it a slot for
-  the shape keys, and key them there. Export finds them; the clip shows *Keyed in this clip*.
-  In older Blender, or to use a separate shape key action, pick it in the clip's *Shape keys*
-  field, which then wins over the clip's own. Export puts copies of the skins' meshes that
-  have those shape keys into the animation file to carry them. A shape key that also has a
-  driver follows the driver, as in Blender; validation points it out.
+  the shape keys, and key them there. In 4.2 and 4.3, put them in a second action and pick
+  it in the clip's *Also plays*. The clip's details count the shape keys it keys. A shape key
+  that also has a driver follows the driver, as in Blender; Check points it out.
+- **What plays at export:** a skin is exported as its sliders stand at the current frame,
+  and the app rests every shape key nothing keys at that value. So the add-on reads what
+  Blender actually plays on each mesh's shape keys there (the active action and its slot,
+  NLA tracks with solo, mute, influence, strip reach and extrapolation) and warns when an
+  action sets them, with **Stop it**: it unassigns the action (with a fake user if nothing
+  else uses it) and mutes the tracks that play. A skin mesh object's own action is reported
+  the same way, with **Unlink it**.
 - **Driven shape keys:** a skin's shape keys driven by bones, like correctives a pose reader
   drives, are written next to the skin as `skins/<name>.drivers.json`, and the app runs the
   drivers itself every frame. So they follow every clip, blends between clips and gaze, with no
@@ -49,8 +78,8 @@ saved in the `.blend`.
   leaves out, such as an `MCH-reader` bone, as long as nothing between it and the nearest
   exported bone above it is animated or constrained; such a bone reads as still in local
   space. Transform space and a bone's Single Property read the bone's own channels, which
-  Blender reads before its constraints and the app after them, so validation flags them on a
-  constrained bone. Validation names every driver the app can't run, and the app's log says
+  Blender reads before its constraints and the app after them, so Check flags them on a
+  constrained bone. Check names every driver the app can't run, and the app's log says
   whether its drivers match Blender in the rest pose.
 - **Depth of field** comes from the camera's own *Depth of Field* panel: F-Stop, and either
   Focus Distance or a Focus Object. A focus object goes into the camera's file with the
@@ -59,16 +88,15 @@ saved in the `.blend`.
   character's armature with a bone picked, or on an object of one of its skins, follows that
   bone or object instead. Animated Focus Distance or F-Stop doesn't carry over; animate a
   focus empty instead.
-- **Environment animation:** each object's active action, and the active action of its
-  shape keys, becomes a clip of its own, as long as the action's frame range, and the app
-  loops each clip on its own. A 25-frame loop and a 420-frame one both keep their length.
-  Objects playing the same action share its clip and stay in step. To leave a pause at the
-  end of a loop, give the action a *Manual Frame Range* past its last key. An armature's
-  bones move by its own action, so a rigged prop works the same way with the armature and its
-  meshes in the collection. NLA tracks of environment objects aren't exported, nor is
-  animation of light, material or camera settings. Motion that only comes from constraints
-  or drivers, with no action at all, needs baking into one (*Object > Animation > Bake
-  Action*).
+- **Prop animation:** each actor's clips are exported on their own, into its folder under
+  `environment/<name>/clips/`. In the app a prop plays its first Timeline clip (else its
+  first Hold clip), and its Once clips only when a hotspot plays them. A lamp's keyed
+  *Strength* and *Color* come over; a lamp that both moves and flickers has its light's
+  action in its clip's *Also plays*. An armature's bones move by its own clips, so a rigged
+  prop works with the armature and its meshes in the collection. NLA tracks of environment
+  objects aren't exported, nor is animation of other light, material or camera settings.
+  Motion that only comes from constraints or drivers, with no action at all, needs baking
+  into one (*Object > Animation > Bake Action*).
 - **Sky:** with *Sky* ticked, an environment's World, or the scene's while the field is
   empty, becomes the panorama its sky and reflections are baked from. A World that is one
   Environment Texture into a Background, optionally through a Mapping node turned only
@@ -138,7 +166,7 @@ saved in the `.blend`.
     the neck, with the clip's own turn counted in. The eyes' limits are measured from the
     head. A cursor further round than the character can turn, it lets go of.
   - Gaze sets the eye bones outright while the character follows, so the eyes can't leave their
-    sockets and a clip's own keys on them don't show; validation notes such clips. Untick
+    sockets and a clip's own keys on them don't show; Check notes such clips. Untick
     the clip's *Gaze* to see them.
   - Eye bones are optional. A head alone follows, and so do eyes moved by the four shape
     keys alone, which also move in proportion.
@@ -155,6 +183,16 @@ saved in the `.blend`.
     Changing a field updates the pose, and named shape keys are set too. The character's
     own pose and shape key values are put back when it is turned off, on a frame change, before a save and at
     export.
+- **Hotspots** are capsules around bones of the character's armature or of an exported
+  environment's armature, from the bone's head to its tail, grown by a radius. *Add
+  hotspot* and *Add selected bones* take the bones selected in Pose Mode, several
+  armatures at once; the radius starts at 30% of the bone's length. The panel's eye icon
+  draws them in the viewport in each hotspot's color tag, in the current pose. Each plays
+  clips that are clips of their actors (one at random per actor, never the same twice in a
+  row), and may set an expression, layer over other reactions, and cool down. A hotspot
+  whose bones or clips weren't exported this time is left out of suite.toml, and the report
+  says so. The add-on owns `[hotspots]` once one is made in it; *Load suite.toml* reads them
+  back.
 - Your scene is never changed. Each file is exported from temporary copies in a throwaway
   scene, so your NLA tracks, active actions and selection stay as they were. Only the gaze
   preview poses the character, and it puts the pose back.
@@ -163,25 +201,35 @@ saved in the `.blend`.
 
 Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.bak`:
 
-- It writes the name, the model file, the *Starts with* defaults, every exported clip (file,
-  action, mode, gaze, cues), and `[gaze]` when Gaze is set to *Write*. In `[gaze]`, `eyes`
-  is written only when there are eye bones, `eye_kind` only for Drawn eyes, and `front` only
-  when it was set by hand.
+- It writes `schema = 2`, the name, `[timeline]`, the model file, the *Starts with*
+  defaults, the clip tables of every actor it exported (only what differs from the
+  defaults: mode, label, gaze, reaction_only, cues), the expressions' labels, `[hotspots]`
+  once the add-on has hotspots, and `[gaze]` when Gaze is set to *Write*. In `[gaze]`,
+  `eyes` is written only when there are eye bones, `eye_kind` only for Drawn eyes, and
+  `front` only when it was set by hand.
 - A clip's cues come from its pose markers. An action without any keeps the cues already
   in suite.toml, so cues typed by hand survive an export.
 - An empty field leaves the matching key in the file alone.
 - Each exported camera's `[cameras.<name>]` is rewritten from its Depth of Field panel, and
   removed when depth of field is off.
 - Each exported environment's fog, `no_volume_scatter` and `no_shadows` are rewritten from
-  the scene. With a World, its `sky_strength` and `sky_rotation_deg` are too, and an older
-  `brightness` is dropped. Its shadows, exposure and background settings are kept, and so
-  are strength and rotation without a World.
-- Clips of files that weren't exported this time, `[post]`, environments that weren't
-  exported, and the orbit camera settings are kept as they are.
+  the scene. With a World, its `sky_strength` and `sky_rotation_deg` are too. Its shadows,
+  exposure and background settings are kept, and so are strength and rotation without a
+  World.
+- Actors that weren't exported this time, `[post]`, environments that weren't exported, and
+  the orbit camera settings are kept as they are.
 
-*Load suite.toml* fills the panel from an existing file.
+*Load suite.toml* fills the panel from an existing file. Opening a .blend saved with an
+older add-on moves its settings to the current ones by itself.
 
-## Validation
+## Check
 
-Validation runs before every export and shows warnings in the *Validation* section. It never
-stops an export. Click the arrow next to a warning to select what it is about.
+**Check** runs before every export and lists what it finds in the *Warnings* panel, worst
+first, and next to what each is about (a clip, a hotspot, a skin). It never stops an export.
+The arrow next to a warning selects what it's about, and some warnings have a button that
+fixes them: **Stop it**, **Unlink it**.
+
+Colors are Blender's collection color tags, so they follow the theme: red for errors (an
+export step failed or wrote something wrong), yellow for warnings (it will most likely look
+wrong in the app), blue for tips. A clip's tag is its mode: blue Timeline, orange Once,
+violet Hold. A row turns red when something it needs is missing.

@@ -14,7 +14,8 @@ for a few seconds, and lets go of a pointer it can't turn to, such as one behind
 
 ## Setting it up
 
-1. Open **Gaze** in the add-on and set it to **Write**.
+1. Open **Character → Gaze** in the add-on and set it to **Write**. (*Leave as is* keeps
+   whatever suite.toml already says about gaze; *Remove* turns following off for good.)
 2. Click **Detect bones**. It fills in the eye, head and neck bones, and whether the eyes
    are eyeballs. Check what it found, and fix by hand what it got wrong.
 3. Turn on **Preview** and drag the two sliders. The character is posed the way the app
@@ -54,10 +55,14 @@ for a few seconds, and lets go of a pointer it can't turn to, such as one behind
   frame, save or export.
 - Detect bones reads bone names, so it can miss a bone with an unusual name. On Rigify's
   deform bones it finds no neck; pick it by hand.
-- The viewer can switch following off, or change its **Strength**, in the Scene tab.
+- **During a reaction**, gaze lets go if the reaction's clip has **Gaze** unticked, and
+  comes back when it ends. A reaction that turns the head towards something should have
+  it unticked, or gaze pulls the head back to the cursor. See [A reaction](reaction.md).
+- The viewer can switch following off, or change its **Strength**, under **Cursor** in the
+  app's Scene tab.
 - Without a gaze section the character never follows the cursor, and the app hides
   those rows.
 
 ---
 
-← [Shape keys that follow the body](correctives.md) · [All recipes](../making-a-character.md#recipes) · [An environment](environment.md) →
+← [Shape keys that follow the body](correctives.md) · [All recipes](../making-a-character.md#recipes) · [Hotspots](hotspots.md) →

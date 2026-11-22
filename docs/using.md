@@ -39,13 +39,14 @@ point at its spot on the edge.
 
 | Tab | What's there |
 |-----|--------------|
-| **Scene** | Which character, its outfit and the outfit's parts, animation, expression, whether it follows the cursor and how strongly, camera, environment and shadows. |
+| **Scene** | Which character, its outfit and the outfit's parts, animation, expression, the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks), camera, environment and shadows. |
 | **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog (density, quality, jitter, resolution), depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start with Windows, updates, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size, side and auto-hiding button. |
 
 A row only shows when it has something to offer. No camera row means the character has no
-extra cameras; no Gaze section means its author didn't set gaze up. In **Graphics**, Fog
+extra cameras; no **Follow cursor** row means its author didn't set gaze up, and no
+**Reactions** row means the character has no hotspots. In **Graphics**, Fog
 shows only in an environment with fog, Depth of field only through a camera that asks for
 it, and Ambient occlusion only with a sky and anti-aliasing other than 4x, which it can't
 run with. A setting's finer rows hide while it's off.
@@ -71,8 +72,15 @@ With the **Orbit** camera chosen (it's the one every character has):
 **Lock orbit** in the Scene tab switches all three off, so you can't nudge the view by
 accident. Cameras made by the character's author can't be moved.
 
+**Touching the character.** Some characters react when you click them, or rest the
+pointer on them: a giggle when poked, a wave when you hover over a hand. Their author
+decides where and how. A click counts only if you press and let go without dragging, so
+turning the view never sets one off. **Reactions** in the Scene tab's **Cursor** section
+switches them off.
+
 Your desktop icons work as always. CharPaper only listens to the mouse over the desktop
-and never takes a click away from anything.
+and never takes a click away from anything. Clicking an icon that happens to sit over a
+spot that reacts makes the character react too.
 
 ## Several monitors
 

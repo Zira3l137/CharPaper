@@ -2,8 +2,18 @@
 
 # A camera
 
-Add the camera object under **Cameras**. If it's animated, pick its **Action**; the app
-loops it.
+1. Select the camera object and press **+** under **Cameras**. It takes the camera and its
+   name, which is what the app's Scene tab shows.
+2. If it moves, pick its action in **Moves with**. A camera selected when you press **+**
+   gets its current action filled in.
+3. Export it with its own button, or with *Export all*. A camera is written to
+   `cameras/<name>.glb`, and its movement next to it as `<name>.json`.
+
+**A moving camera plays on the timeline,** like everything else: a dolly keyed over the
+scene's frame range moves in step with the character's idle, and starts over with it.
+
+- Don't name a camera `orbit`: that's the app's built-in camera, and the name is taken.
+- The **Starts with → Camera** setting in the Suite panel can be one of yours or `orbit`.
 
 - A camera may hang from empties (a rig). They are exported with it.
 - The app keeps the camera's **vertical** field of view and fits the width to the

@@ -77,6 +77,7 @@ Windows says it protected your PC.
 | Add outfits, animations or expressions | [Recipes](docs/making-a-character.md#recipes) |
 | Build a place for the character, with lights | [An environment](docs/recipes/environment.md) · [A sky](docs/recipes/sky.md) · [A sun that matches the sky](docs/recipes/sun.md) · [Fog](docs/recipes/fog.md) |
 | Make the character look at the cursor | [Following the cursor (gaze)](docs/recipes/gaze.md) |
+| Make the character react to clicks | [Hotspots](docs/recipes/hotspots.md) · [A reaction](docs/recipes/reaction.md) |
 | Add cameras, sounds or a color grade | [A camera](docs/recipes/camera.md) · [Sounds](docs/recipes/sounds.md) · [A color grade](docs/recipes/lut.md) |
 | Edit a character's settings by hand | [suite.toml](docs/suite-toml.md) |
 | Fix a character that looks or loads wrong | [Troubleshooting for artists](docs/troubleshooting.md) |

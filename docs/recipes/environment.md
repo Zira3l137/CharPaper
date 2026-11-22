@@ -2,10 +2,22 @@
 
 # An environment
 
-**On this page:** [Lights](#lights) · [Moving props](#moving-props) · [Props that move with the character](#props-that-move-with-the-character) · [A screen that plays a GIF](#a-screen-that-plays-a-gif) · [Sky and fog](#sky-and-fog)
+**On this page:** [Adding one](#adding-one) · [Lights](#lights) · [Props that move](#props-that-move) · [A screen that plays a GIF](#a-screen-that-plays-a-gif) · [Sky and fog](#sky-and-fog)
 
-An environment is a collection: the place, its props, and **its lights**. Cameras in the
-collection are left out; they go under Cameras.
+An environment is a collection: the place, its props, and **its lights**. It's the only
+light the character gets, so an environment without lights shows a black character.
+Cameras in the collection are left out; they go under [Cameras](camera.md).
+
+## Adding one
+
+1. Put the place, its props and its lights in one collection. Collections inside it count.
+2. Click the collection in the Outliner, then press **+** under **Environments**. It takes
+   the collection and its name.
+3. Pick its **Sky**: a World. Empty: the scene's World. See [A sky](sky.md).
+4. Its music and background sound go under **Sound**, inside it. See [Sounds](sounds.md).
+
+Like skins, each environment has a checkbox (untick it to leave it out of *Export all*) and
+its own export button. The viewer switches environments in the app's Scene tab.
 
 ## Lights
 
@@ -14,14 +26,13 @@ spots or points.
 
 - A point or spot light's *Radius* comes over as the size of its bulb: its reflections
   on shiny surfaces widen and soften as in Blender. Its shadows stay sharp.
-- A light's keyed *Strength* and *Color* come over and loop: a flickering candle, a TV's
-  glow. Key them on the light itself (*Object Data Properties*), not through its nodes.
-  F-Curve modifiers count, so a *Noise* modifier on *Strength* makes a flicker. The loop
-  runs from the action's first key to its last, or over the scene's frame range when the
-  keys don't span a frame, as with one key and a Noise modifier: there, set the scene's
-  range, or the action's *Manual Frame Range*, to the loop you want. Like a prop's clip, a
-  loop exactly as long as the character's playing clip stays in step with it. The light
-  reaches as far as its brightest moment.
+- A light's keyed *Strength* and *Color* come over: a flickering candle, a TV's glow. Key
+  them on the light itself (*Object Data Properties*), not through its nodes. F-Curve
+  modifiers count, so a *Noise* modifier on *Strength* makes a flicker. The lamp then shows
+  up in the Animation panel like any moving prop, and plays on the timeline (below). The
+  light reaches as far as its brightest moment.
+- A lamp that both moves and flickers has two actions: one on the object, one on its light
+  data. Add the object's as the clip, and pick the light's in the clip's **Also plays**.
 - A point or spot light reaches as far as it does in EEVEE: its *Custom Distance* when
   ticked, otherwise where it fades below *Render Properties → Sampling → Advanced → Light
   Threshold*.
@@ -34,33 +45,48 @@ spots or points.
 - An object casts shadows unless its *Object → Visibility → Ray Visibility → Shadow* is
   unticked. Untick it on small clutter.
 
-## Moving props
+## Props that move
 
-Each object's *active* action becomes a clip that loops on its own, as
-long as its own keys. A 25-frame fan and a 420-frame curtain both keep their length.
+Anything in the environment that moves (a fan, a door, a curtain with shape keys, a rigged
+cat, a flickering lamp) is an **actor**, like the character. The add-on finds them by
+itself: every armature, and every object with an action on it, its shape keys or its light.
+They're listed in the **Animation** panel under the environment's name.
 
-## Props that move with the character
+**Without doing anything,** a prop plays its active action **on the timeline**: in step with
+the character and everything else, looping with the scene's frame range. The panel says
+"Plays its active action … on the timeline". For most props, that's all.
 
-Props like a chair it rocks or a door it opens play in step with it on one condition: the
-prop's action is exactly as long as the character's clip. Then the app keeps the two at
-the same frame, the way Blender's timeline does, and starts the prop over whenever that
-clip starts over. Props of any other length loop on their own, so a fan never jumps when
-the animation changes.
+**For more than that,** press **Edit as a list** (or **Add**). The prop then gets a list of
+clips like the character's, each with its **Plays** setting:
 
-- **Length is counted from an action's own first key to its own last key**, not from the
-  scene's frame range. Give the prop's action and the character's action keys on the same
-  first and last frame, even if the prop holds still there. A prop keyed from frame 30 would
-  otherwise come out 29 frames short and start early.
-- Only the clip the character plays right now counts. While another clip plays, the prop
-  loops on its own until the matching one comes back.
+| Plays | On a prop |
+|---|---|
+| **Timeline** | The prop plays it all the time, in step with the timeline. If it has several, the first one in the list plays. |
+| **Once** | Doesn't play by itself. It waits for a [hotspot](hotspots.md): a door that opens when clicked, a lamp that flickers when the character is poked. When it ends, the prop goes back to its Timeline clip. |
+| **Hold** | A still pose, if it has no Timeline clip. |
 
-- NLA tracks of environment objects aren't exported; only the active action is.
-- Animation of material or camera *settings*, and of a light's settings other than its
-  *Strength* and *Color*, isn't exported. Only objects, bones, shape keys and those two
-  light settings move.
+The viewer can't pick a prop's clips in the app; only the timeline and hotspots play them.
+Each prop's clips are exported into `environment/<name>/clips/<prop>/`, and its export
+button in the Animation panel exports just those.
+
+**In step with the character:** a door the character pushes open, keyed over frames 80–120
+of the same timeline as the character's idle, opens exactly when the hand reaches it.
+Both play the same frame of the same loop, as in Blender.
+
+- **A short loop on a long timeline** (a fan keyed over 24 frames, in a 240-frame scene)
+  stops at its last key unless it repeats. Give its curves a **Cycles** modifier, or set
+  the action's **Manual Frame Range** to its 24 frames. Either way its length must fit the
+  timeline a whole number of times (24 in 240 does, 25 doesn't), or it jumps where the
+  timeline starts over. Check says when it doesn't fit.
+- NLA tracks of environment objects aren't exported; only actions are.
+- Only objects, bones, shape keys and a light's *Strength* and *Color* move. Animation of
+  material or camera settings, and of other light settings, isn't exported.
 - Motion that comes only from constraints or drivers needs baking into an action
   (*Object → Animation → Bake Action*).
-- A rigged prop works: put its armature and meshes in the collection.
+- A rigged prop works: put its armature and meshes in the collection. Its armature can also
+  hold hotspots.
+- Give each prop a unique name: the clip folder is named after it, and two props whose
+  names make the same folder name overwrite each other (Check warns).
 - For repeated props use linked duplicates (*Alt+D*). Objects sharing a mesh share it in
   the file, and the app keeps it in memory once.
 
@@ -83,4 +109,4 @@ An environment's sky and its fog have pages of their own: [A sky](sky.md) and
 
 ---
 
-← [Following the cursor (gaze)](gaze.md) · [All recipes](../making-a-character.md#recipes) · [A sky](sky.md) →
+← [A reaction](reaction.md) · [All recipes](../making-a-character.md#recipes) · [A sky](sky.md) →

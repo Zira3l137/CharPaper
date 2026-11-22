@@ -31,7 +31,7 @@ empty to use the scene's.
 ## When the sky isn't exported
 
 Only in these cases. The export reports the last four,
-and **Validate** warns about a missing image or World beforehand:
+and **Check** warns about a missing image or World beforehand:
 
 | Case | What happens |
 |---|---|

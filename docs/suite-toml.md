@@ -8,7 +8,7 @@
 can edit it in any text editor. Only one line is required:
 
 ```toml
-schema = 1
+schema = 2
 ```
 
 Everything else is optional, because the folders already say most of it.
@@ -29,32 +29,63 @@ which line.
 
 | Section | What it's for |
 |---------|---------------|
-| top of the file | `schema = 1`, and `name`, shown in the app. Without a name, the folder's name is used. |
-| `[character]` | `default_skin`, `default_animation`, and `model` when more than one `.glb` sits next to suite.toml. |
-| `[animations.<name>]` | Names a clip and says how it plays: `file`, `clip` (the action's name), `mode` (`loop`, `once`, `pose`), `gaze`, and `cues` for sounds. |
+| top of the file | `schema = 2`, and `name`, shown in the app. Without a name, the folder's name is used. |
+| `[timeline]` | The loop everything plays on: `start` and `end` frame, and `fps`. Defaults: 1, 250 and 24. The add-on copies it from Blender's *Output Properties*. |
+| `[character]` | `default_skin`, `default_clip`, and `model` when more than one `.glb` sits next to suite.toml. |
+| `[character.clips.<name>]` | How one of the character's clips plays. `<name>` is a file name in `clips/` without its extension. `mode` (`timeline`, the default, `once` or `hold`), `label` (shown in the app), `gaze` (false to stop following the cursor during it), `reaction_only` (true keeps it out of the app's list, for clips only hotspots play), and `cues` for sounds: `[{ at = 0.4, sound = "giggle" }]`, `at` in seconds from the clip's start. |
+| `[character.expressions.<name>]` | An expression's `label`. `<name>` is a file name in `expressions/`. |
 | `[environment]` | `default`: the environment shown first. |
-| `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `sun_follows_sky`, `exposure`, fog boxes, the lights and objects left out of fog and shadows, and `lights`: each light's `radius` and keyed `animation`. |
+| `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `sun_follows_sky`, `exposure`, `[…fog.<object>]` fog boxes, and `no_volume_scatter` and `no_shadows`, the lights and objects left out of fog and shadows. |
+| `[environments.<name>.actors.<object>.clips.<clip>]` | How a prop's clip plays: `mode` and `cues`, as for the character. The clips are the files in `environment/<name>/clips/<object>/`. |
+| `[hotspots.<name>]` | A place that reacts to the cursor: `trigger` (`click` or `hover`), `areas`, `clips`, `layer`, `expression` and `cooldown`. See below. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
 | `[gaze]` | Which bones and shape keys follow the cursor, how far they turn, and how head, neck and eyes share a look. The add-on fills it in. |
 
+### A hotspot
+
+```toml
+[hotspots.Belly]
+trigger = "click"
+expression = "happy"
+cooldown = 2.0
+areas = [{ bone = "spine.002", length = 0.15, radius = 0.12 }]
+clips = [{ clip = "giggle" }, { clip = "giggle_2" }, { actor = "Door", clip = "slam" }]
+```
+
+- `areas`: each a capsule around a bone: `bone`, its `length` (from the bone's head along
+  the bone) and `radius`, in meters. Add `actor = "<armature object>"` for a bone of an
+  environment's armature; without it, the bone is the character's.
+- `clips`: what plays. Without `actor` it's a clip of the character; with it, a clip of
+  that prop in the environment shown. Several clips of one actor: one of them at random.
+- `layer = true` plays over other reactions instead of replacing them.
+- `expression` must name one of the character's expressions, and each clip of the
+  character must exist, or the character doesn't load. A prop's clips and bones are
+  looked up when its environment shows; one that isn't there is skipped.
+
 ## Things worth knowing
 
 - **Without a default**, the first skin and the first environment in name order are
   shown, the orbit camera is used, and no animation plays.
-- **Animation files not mentioned** in suite.toml are used whole, every clip under its
-  action's name, looping. Once a file is mentioned, only the clips listed for it are used.
+- **Every clip in `clips/` is used**, whether suite.toml mentions it or not. One that isn't
+  mentioned plays on the timeline, under its file's name. The same goes for
+  `expressions/`.
+- **Older files don't load.** A suite.toml with `schema = 1` (with `[animations.…]`
+  sections) is from an older add-on: the log says so, and exporting again with the
+  current add-on fixes it. Open the .blend with the new add-on installed first: it moves
+  your old settings over by itself.
 - **The orbit camera's `focus` is in the app's axes, where Y is up.** A point at Blender's
   (x, y, z) is written `[x, z, -y]`. One meter above the origin is `[0.0, 1.0, 0.0]`.
 - **The model file is optional.** Without one, the armature is taken from the default
   skin, since every skin carries a copy of it.
 - **Grading needs tonemapping.** With `tonemapping = "none"` the `[post.grading]` section
   does nothing.
-- **What the add-on rewrites on every export:** the name, the *Starts with* defaults,
-  every exported clip, each exported camera's depth of field, and each exported
-  environment's fog and shadow lists and `lights`, and with a World its `sky_strength` and
-  `sky_rotation_deg`. **What it leaves alone:** `[post]`, each environment's `shadows`, `sun_follows_sky`,
+- **What the add-on rewrites on every export:** the name, `[timeline]`, the *Starts with*
+  defaults, the clips tables of every actor it exported, the expressions' labels, the
+  hotspots (once you've made one in the add-on), each exported camera's depth of field, and
+  each exported environment's fog and shadow lists, and with a World its `sky_strength` and
+  `sky_rotation_deg`. Before writing, it saves the old file as `suite.toml.bak`. **What it leaves alone:** `[post]`, each environment's `shadows`, `sun_follows_sky`,
   `exposure`, `background` and `background_blur`, the orbit camera, and anything
   about files you didn't export this time. An empty field in the add-on means "don't
   touch that key".
