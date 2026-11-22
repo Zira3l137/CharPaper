@@ -66,8 +66,6 @@ class Clip:
     def __init__(self, action, extra=None, mode="TIMELINE", label="", gaze=True, stored=None, obj=None):
         self.action = action
         self.reaction_only = bool(stored is not None and stored.reaction_only)
-        # Only hotspots play it, and they play it once: over its own keys, not the timeline.
-        mode = "ONCE" if self.reaction_only else mode
         # Which of the action's slots moves the object: an action can hold several, like an
         # idle copied with New and a reaction keyed beside it.
         self.slot, self.slots_unclear = resolve_slot(obj, action, stored.slot if stored else "") if obj else (None, [])

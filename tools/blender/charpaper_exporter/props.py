@@ -444,6 +444,12 @@ CLIP_MODES = (
 )
 
 
+def _once_for_hotspots(clip, _context):
+    # Most clips only hotspots play are played once; a loop for While is set to Timeline after.
+    if clip.reaction_only and clip.mode == "TIMELINE":
+        clip.mode = "ONCE"
+
+
 class CHARPAPER_PG_actor_clip(PropertyGroup):
     action: PointerProperty(type=bpy.types.Action, name="Action")
     extra: PointerProperty(
@@ -473,7 +479,11 @@ class CHARPAPER_PG_actor_clip(PropertyGroup):
     )
     reaction_only: BoolProperty(
         name="Only for hotspots",
-        description="Keep it out of the app's list of animations: a flinch only a hotspot should play",
+        description=(
+            "Keep it out of the app's list of animations: a flinch, or a loop for while a hotspot is "
+            "held, only a hotspot should play"
+        ),
+        update=_once_for_hotspots,
     )
 
 
@@ -520,20 +530,72 @@ class CHARPAPER_PG_hotspot_area(PropertyGroup):
 class CHARPAPER_PG_hotspot_clip(PropertyGroup):
     actor: PointerProperty(type=bpy.types.Object, name="Actor")
     action: PointerProperty(type=bpy.types.Action, name="Clip")
+    from_time: IntProperty(
+        name="From the time in a row",
+        description=(
+            "Play it only from this time in a row on, instead of the clips with a lower number: 3 for a "
+            "reaction to the third poke. In a row: going off again within 3 seconds of being able to, "
+            "or for Mouse keeps still, without the mouse moving"
+        ),
+        default=1,
+        min=1,
+        soft_max=10,
+    )
 
 
-class CHARPAPER_PG_hotspot_during(PropertyGroup):
+class CHARPAPER_PG_hotspot_entry(PropertyGroup):
+    """An animation an actor plays on and on, in a hotspot's While, Then or Only during. No actor:
+    the character's."""
+
+    actor: PointerProperty(type=bpy.types.Object, name="Actor")
     action: PointerProperty(type=bpy.types.Action, name="Animation")
 
 
 TRIGGERS = (
-    ("CLICK", "Click", "A left click on it, pressed and let go without dragging"),
-    ("HOVER", "Hover", "The cursor resting on it for a moment. It goes off again once the cursor has left"),
+    ("CLICK", "Click", "A left click on its bones, pressed and let go without dragging", "MOUSE_LMB", 0),
+    (
+        "HOVER",
+        "Hover",
+        "The cursor resting on its bones for a moment. It goes off again once the cursor has left",
+        "MOUSE_MOVE",
+        1,
+    ),
+    (
+        "IDLE",
+        "Mouse keeps still",
+        "The mouse keeping still for a while, and again after as long while it stays still",
+        "TIME",
+        2,
+    ),
+    (
+        "WELCOME",
+        "Mouse comes back",
+        "The mouse moving on the desktop after keeping still, or being in other windows, for a while",
+        "HAND",
+        3,
+    ),
 )
+# What After starts at for each, as the app has it when it's left out.
+AFTER_DEFAULTS = {"IDLE": 60.0, "WELCOME": 300.0}
+
+
+def _trigger_changed(spot, _context):
+    defaults = AFTER_DEFAULTS.get(spot.trigger)
+    if defaults is not None and spot.after in AFTER_DEFAULTS.values():
+        spot.after = defaults
+    _redraw(spot, _context)
 
 
 class CHARPAPER_PG_hotspot(PropertyGroup):
-    trigger: EnumProperty(name="Trigger", items=TRIGGERS, default="CLICK")
+    trigger: EnumProperty(name="When", items=TRIGGERS, default="CLICK", update=_trigger_changed)
+    after: FloatProperty(
+        name="After, seconds",
+        description="How many seconds the mouse keeps still, or stays away, first",
+        default=60.0,
+        min=1.0,
+        soft_max=1800.0,
+        precision=0,
+    )
     layer: BoolProperty(
         name="Layer",
         description=(
@@ -557,8 +619,13 @@ class CHARPAPER_PG_hotspot(PropertyGroup):
     area_index: IntProperty(update=_redraw)
     clips: CollectionProperty(type=CHARPAPER_PG_hotspot_clip)
     clip_index: IntProperty()
-    # The character's animations it can go off during. Empty: any.
-    during: CollectionProperty(type=CHARPAPER_PG_hotspot_during)
+    # What actors play on and on while it's held, and after it lets go; and what they must be
+    # playing for it to go off. Empty During: any.
+    meanwhile: CollectionProperty(type=CHARPAPER_PG_hotspot_entry)
+    meanwhile_index: IntProperty()
+    then: CollectionProperty(type=CHARPAPER_PG_hotspot_entry)
+    then_index: IntProperty()
+    during: CollectionProperty(type=CHARPAPER_PG_hotspot_entry)
     during_index: IntProperty()
 
 
@@ -673,7 +740,7 @@ classes = (
     CHARPAPER_PG_character_expression,
     CHARPAPER_PG_hotspot_area,
     CHARPAPER_PG_hotspot_clip,
-    CHARPAPER_PG_hotspot_during,
+    CHARPAPER_PG_hotspot_entry,
     CHARPAPER_PG_hotspot,
     CHARPAPER_PG_suite,
 )

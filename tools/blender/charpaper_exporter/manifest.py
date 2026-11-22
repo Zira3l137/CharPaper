@@ -280,9 +280,10 @@ def _load_clips(obj, tables, character):
         if clip is None:
             clip = obj.charpaper.clips.add()
             clip.action = action
-        clip.mode = MODES_BACK.get(table.get("mode", "timeline"), "TIMELINE")
-        clip.label = table.get("label", "")
         if character:
             clip.gaze = table.get("gaze", True)
             clip.reaction_only = table.get("reaction_only", False)
+        # After Only for hotspots, which turns a Timeline clip into a Once one as it's ticked.
+        clip.mode = MODES_BACK.get(table.get("mode", "timeline"), "TIMELINE")
+        clip.label = table.get("label", "")
     return unmatched

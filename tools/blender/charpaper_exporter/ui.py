@@ -27,8 +27,8 @@ MODE_TAGS = hotspot_spots.MODE_TAGS
 MODE_NAMES = {"TIMELINE": "Timeline", "ONCE": "Once", "HOLD": "Hold"}
 SEVERITY_TAGS = {"ERROR": "COLLECTION_COLOR_01", "WARNING": "COLLECTION_COLOR_03", "INFO": "COLLECTION_COLOR_05"}
 SEVERITY_ICONS = {"ERROR": "CANCEL", "WARNING": "ERROR", "INFO": "INFO"}
-TRIGGER_NAMES = {"CLICK": "Click", "HOVER": "Hover"}
-TRIGGER_ICONS = {"CLICK": "MOUSE_LMB", "HOVER": "MOUSE_MOVE"}
+TRIGGER_NAMES = {"CLICK": "Click", "HOVER": "Hover", "IDLE": "Still", "WELCOME": "Back"}
+TRIGGER_ICONS = {"CLICK": "MOUSE_LMB", "HOVER": "MOUSE_MOVE", "IDLE": "TIME", "WELCOME": "HAND"}
 OBJECT_ICONS = {
     "ARMATURE": "OUTLINER_OB_ARMATURE",
     "LIGHT": "OUTLINER_OB_LIGHT",
@@ -207,8 +207,7 @@ class CHARPAPER_UL_clips(UIList):
             row.label(text="", icon="HAND")
         if data == getattr(suite.armature, "charpaper", None) and not item.gaze:
             row.label(text="", icon="HIDE_ON")
-        mode = "ONCE" if item.reaction_only else item.mode
-        row.label(text=MODE_NAMES[mode], icon=MODE_TAGS[mode])
+        row.label(text=MODE_NAMES[item.mode], icon=MODE_TAGS[item.mode])
 
 
 class CHARPAPER_MT_add_clip(Menu):
@@ -468,16 +467,19 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
         box = _split(layout.box())
         box.prop(clip, "action")
         box.prop(clip, "label")
-        modes = box.row()
-        modes.enabled = not clip.reaction_only
-        modes.prop(clip, "mode", expand=True)
+        box.row().prop(clip, "mode", expand=True)
         if actor.is_character:
             box.prop(clip, "gaze")
             box.prop(clip, "reaction_only")
             if clip.reaction_only:
-                hint = box.row()
+                hint = box.column()
                 hint.active = False
-                hint.label(text="Plays once, over its own keys: hotspots play it", icon="INFO")
+                text = (
+                    "Plays once, over its own keys: for what a hotspot plays once"
+                    if clip.mode == "ONCE"
+                    else "Plays on and on: for what a hotspot plays while it's held"
+                )
+                _wrapped(hint, text, context, icon="INFO")
         if clip.extra or actor.obj.type == "LIGHT" or not LAYERED:
             box.prop(clip, "extra")
         if clip.action is None:
@@ -685,22 +687,27 @@ class CHARPAPER_UL_hotspot_clips(UIList):
         row.label(text=clip.action.name, icon=MODE_TAGS[clip.mode])
         owner = row.row()
         owner.active = False
+        if item.from_time > 1:
+            owner.label(text=f"from ×{item.from_time}")
         owner.label(text="Character" if actor.is_character else actor.name)
 
 
-class CHARPAPER_UL_hotspot_during(UIList):
+class CHARPAPER_UL_hotspot_entries(UIList):
+    """A hotspot's While, Then or Only during animations: the list's name says which."""
+
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
-        clip, _ = hotspot_spots.resolve_during(suite_of(context), item)
-        if clip is None or not hotspot_spots.can_be_during(clip):
+        found, _ = hotspot_spots.resolve_entry(suite_of(context), item)
+        field = active_propname.removesuffix("_index")
+        if found is None or not hotspot_spots.fits(*found, field):
             row.alert = True
             row.label(text=item.action.name if item.action else "nothing picked", icon="ERROR")
             return
+        actor, clip = found
         row.label(text=clip.action.name, icon=MODE_TAGS[clip.mode])
-        if clip.label:
-            shown = row.row()
-            shown.active = False
-            shown.label(text=clip.label)
+        owner = row.row()
+        owner.active = False
+        owner.label(text="Character" if actor.is_character else actor.name)
 
 
 class CHARPAPER_PT_hotspots(_Sidebar, Panel):
@@ -720,48 +727,69 @@ class CHARPAPER_PT_hotspots(_Sidebar, Panel):
         row = layout.row()
         row.template_list("CHARPAPER_UL_hotspots", "", suite, "hotspots", suite, "hotspot_index", rows=3)
         side = row.column(align=True)
-        side.operator("charpaper.hotspot_add", text="", icon="ADD")
+        side.menu("CHARPAPER_MT_hotspot_add", text="", icon="ADD")
         side.operator("charpaper.hotspot_remove", text="", icon="REMOVE")
         spot = hotspot_spots.current(suite)
         if spot is None:
             hint = layout.column()
             hint.active = False
-            _wrapped(hint, "A hotspot plays clips when a bone is clicked or the cursor rests on it. "
-                     "Select bones in Pose Mode, then add one.", context)
+            _wrapped(hint, "A hotspot plays clips when the character or a prop is clicked or the cursor "
+                     "rests on it, or when the mouse keeps still or comes back. Press + to add one; for a "
+                     "click or hover, select its bones in Pose Mode first.", context)
             return
 
         box = _split(layout.box())
-        box.row().prop(spot, "trigger", expand=True)
-        box.prop(spot, "layer")
-        box.prop(spot, "expression", icon="SHAPEKEY_DATA")
-        box.prop(spot, "cooldown")
+        box.prop(spot, "trigger")
+        pointed = spot.trigger in hotspot_spots.POINTED
+        if not pointed:
+            box.prop(spot, "after")
 
-        layout.label(text="Where: capsules around bones", icon="BONE_DATA")
-        row = layout.row()
-        row.template_list("CHARPAPER_UL_hotspot_areas", "", spot, "areas", spot, "area_index", rows=2)
-        side = row.column(align=True)
-        side.operator("charpaper.hotspot_bones_add", text="", icon="ADD")
-        side.operator("charpaper.hotspot_area_remove", text="", icon="REMOVE")
-        layout.operator("charpaper.hotspot_bones_add", icon="ADD")
+        if pointed:
+            layout.label(text="Where: capsules around bones", icon="BONE_DATA")
+            row = layout.row()
+            row.template_list("CHARPAPER_UL_hotspot_areas", "", spot, "areas", spot, "area_index", rows=2)
+            side = row.column(align=True)
+            side.operator("charpaper.hotspot_bones_add", text="", icon="ADD")
+            side.operator("charpaper.hotspot_area_remove", text="", icon="REMOVE")
+            layout.operator("charpaper.hotspot_bones_add", icon="ADD")
 
-        layout.label(text="What plays: one at random per actor", icon="ACTION")
+        layout.label(text="Plays once: one at random per actor", icon="ACTION")
         row = layout.row()
         row.template_list("CHARPAPER_UL_hotspot_clips", "", spot, "clips", spot, "clip_index", rows=2)
         side = row.column(align=True)
         side.menu("CHARPAPER_MT_hotspot_clip", text="", icon="ADD")
         side.operator("charpaper.hotspot_clip_remove", text="", icon="REMOVE")
+        if 0 <= spot.clip_index < len(spot.clips):
+            _split(layout).prop(spot.clips[spot.clip_index], "from_time")
 
-        layout.label(text="Only during these animations", icon="ARMATURE_DATA")
-        row = layout.row()
-        row.template_list("CHARPAPER_UL_hotspot_during", "", spot, "during", spot, "during_index", rows=2)
-        side = row.column(align=True)
-        side.menu("CHARPAPER_MT_hotspot_during", text="", icon="ADD")
-        side.operator("charpaper.hotspot_during_remove", text="", icon="REMOVE")
-        if not len(spot.during):
-            hint = layout.column()
-            hint.active = False
-            _wrapped(hint, "Empty: it goes off during any animation. Add the ones it fits, so a reaction "
-                     "made for sitting doesn't play while lying down.", context)
+        held = hotspot_spots.HELD.get(spot.trigger)
+        lists = [
+            ("meanwhile", f"{held}: plays on and on", "LOOP_FORWARDS",
+             "Empty: nothing more while it's held. A loop or a pose here plays until it's let go, "
+             "and the clips above play once over it.") if held else None,
+            ("then", "Then: plays on and on after", "FORWARD",
+             "Empty: back to what played before. An animation here takes over once it lets go, or "
+             "once its clips end: from sitting to standing, a lamp switched off."),
+            ("during", "Only during these animations", "ARMATURE_DATA",
+             "Empty: it goes off during any animation. Add the ones it fits, so a reaction made for "
+             "sitting doesn't play while lying down."),
+        ]
+        for field, title, icon, empty in filter(None, lists):
+            layout.label(text=title, icon=icon)
+            row = layout.row()
+            row.template_list("CHARPAPER_UL_hotspot_entries", field, spot, field, spot, field + "_index", rows=1)
+            side = row.column(align=True)
+            side.menu(f"CHARPAPER_MT_hotspot_{field}", text="", icon="ADD")
+            side.operator("charpaper.hotspot_entry_remove", text="", icon="REMOVE").field = field
+            if not len(getattr(spot, field)):
+                hint = layout.column()
+                hint.active = False
+                _wrapped(hint, empty, context)
+
+        box = _split(layout.box())
+        box.prop(spot, "expression", icon="SHAPEKEY_DATA")
+        box.prop(spot, "cooldown")
+        box.prop(spot, "layer")
 
         for finding in suite.findings:
             if finding.hotspot == spot.name:
@@ -904,7 +932,7 @@ classes = (
     CHARPAPER_UL_hotspots,
     CHARPAPER_UL_hotspot_areas,
     CHARPAPER_UL_hotspot_clips,
-    CHARPAPER_UL_hotspot_during,
+    CHARPAPER_UL_hotspot_entries,
     CHARPAPER_MT_add_clip,
     CHARPAPER_PT_suite,
     CHARPAPER_PT_character,

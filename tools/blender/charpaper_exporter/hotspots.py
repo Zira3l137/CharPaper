@@ -1,8 +1,13 @@
-"""Hotspots: places on the character's or an environment armature's bones that play clips when
-clicked or when the cursor rests on them. Each area is a capsule around one bone, from its
-head to its tail and as wide as its radius, drawn in the viewport while the panel is open.
+"""Hotspots: things that play clips when the character or a prop is clicked or the cursor rests
+on it, or when the mouse keeps still or comes back. The first two sit on bones: each area is a
+capsule around one bone, from its head to its tail and as wide as its radius, drawn in the
+viewport while the panel is open.
 
-Only armatures carry hotspots: an object that should react gets an armature. In suite.toml an
+A hotspot plays its clips once; while it's held, its While animations on and on; and once it
+lets go, its actors switch to their Then animations. Only during says what its actors must be
+playing for it to go off. Those three lists name one animation an actor plays on and on.
+
+Only armatures carry areas: an object that should react gets an armature. In suite.toml an
 area names its armature by object name, which the app finds in the environment shown, and a
 clip names its actor by folder, as the clips folder does.
 """
@@ -12,6 +17,7 @@ import os
 
 import bpy
 import gpu
+from bpy.props import EnumProperty
 from bpy.props import IntProperty
 from bpy.props import StringProperty
 from bpy.types import Menu
@@ -21,11 +27,18 @@ from mathutils import Vector
 
 from . import actors
 from . import clips as clip_files
+from .props import TRIGGERS as TRIGGER_ITEMS
 from .props import file_stem
 from .props import redraw_views
 from .props import suite_of
 
-TRIGGERS = {"CLICK": "click", "HOVER": "hover"}
+TRIGGERS = {"CLICK": "click", "HOVER": "hover", "IDLE": "idle", "WELCOME": "welcome"}
+# Triggers that sit on bones; the others react to the mouse anywhere.
+POINTED = {"CLICK", "HOVER"}
+# What While means for each trigger that's held.
+HELD = {"CLICK": "While held down", "HOVER": "While hovered", "IDLE": "While the mouse keeps still"}
+# The lists of animations an actor plays on and on, as suite.toml names them.
+ENTRY_LISTS = {"meanwhile": "while", "then": "then", "during": "during"}
 # As the panel shows clip modes: blue, orange, violet.
 MODE_TAGS = {"TIMELINE": "COLLECTION_COLOR_05", "ONCE": "COLLECTION_COLOR_02", "HOLD": "COLLECTION_COLOR_06"}
 
@@ -86,23 +99,44 @@ def resolve_clip(suite, item):
     return (actor, clip), None
 
 
-def resolve_during(suite, item):
-    """The character's clip an Only during entry names, or None and why not."""
+def resolve_entry(suite, item):
+    """The actor and clip a While, Then or Only during entry names, or None and why not."""
     if item.action is None:
-        return None, "has an Only during entry with nothing picked"
-    character = actors.character(suite)
-    clip = next((c for c in actors.clips(character) if c.action == item.action), None) if character else None
+        return None, "has an animation with nothing picked"
+    if item.actor is None:
+        actor = actors.character(suite)
+    else:
+        actor = next((a for a in actors.all_actors(suite) if a.obj == item.actor), None)
+    who = "the character" if item.actor is None else item.actor.name
+    if actor is None:
+        return None, f"names an animation of {who}, which isn't the character or in an exported environment"
+    clip = next((c for c in actors.clips(actor) if c.action == item.action), None)
     if clip is None:
-        return None, (
-            f"goes off only during {item.action.name}, which isn't one of the character's clips. Add it "
-            "in Animation"
-        )
-    return clip, None
+        return None, f"names {item.action.name}, which isn't one of {who}'s clips. Add it in Animation"
+    return (actor, clip), None
 
 
-def can_be_during(clip):
-    """Whether the viewer can pick the clip to play on and on: what a hotspot can wait for."""
-    return clip.mode != "ONCE" and not clip.reaction_only
+def fits(actor, clip, field):
+    """Whether the clip can go in that list: one the actor plays on and on, and for the
+    character's Then and Only during, one the viewer can pick, since that's what plays there."""
+    if clip.mode == "ONCE":
+        return False
+    return field == "meanwhile" or not (actor.is_character and clip.reaction_only)
+
+
+def _entry_table(actor, clip):
+    table = {} if actor.is_character else {"actor": file_stem(actor.name)}
+    table["clip"] = clip.name
+    return table
+
+
+def own_clip(actor):
+    """The clip a prop plays by itself, as the app picks it: its first Timeline clip by name, else
+    its first Hold clip."""
+    found = sorted(actors.clips(actor), key=lambda c: c.name)
+    return next((c for c in found if c.mode == "TIMELINE"), None) or next(
+        (c for c in found if c.mode == "HOLD"), None
+    )
 
 
 def _clip_file(folder, actor, clip):
@@ -133,21 +167,38 @@ def tables(suite, folder):
             if not os.path.isfile(_clip_file(folder, actor, clip)):
                 left_out.append(f"hotspot {name!r}: {clip.name} of {actor.name} isn't exported yet")
                 continue
-            table = {} if actor.is_character else {"actor": file_stem(actor.name)}
-            table["clip"] = clip.name
+            table = _entry_table(actor, clip)
+            if item.from_time > 1:
+                table["from"] = item.from_time
             played.append(table)
-        if not areas or not played:
+        pointed = spot.trigger in POINTED
+        if (pointed and not areas) or not (played or len(spot.meanwhile) or len(spot.then)):
             left_out.append(f"hotspot {name!r}: left out, with no exported bone or clip")
             continue
-        during = []
-        for item in spot.during:
-            clip, _ = resolve_during(suite, item)
-            if clip is None or not can_be_during(clip):
+        lists, missing = {}, None
+        for field, key in ENTRY_LISTS.items():
+            if field == "meanwhile" and spot.trigger == "WELCOME":
                 continue
-            if os.path.isfile(_clip_file(folder, actors.character(suite), clip)):
-                during.append({"clip": clip.name})
-        # Leaving them all out would let it go off during any animation, which it mustn't.
-        if len(spot.during) and not during:
+            entries, owners = [], set()
+            for item in getattr(spot, field):
+                found, _ = resolve_entry(suite, item)
+                if found is None or not fits(*found, field):
+                    continue
+                # The app refuses two for one actor in While or Then; Check warns about it.
+                if field != "during" and found[0].obj in owners:
+                    continue
+                owners.add(found[0].obj)
+                if os.path.isfile(_clip_file(folder, *found)):
+                    entries.append(_entry_table(*found))
+                elif field != "during":
+                    missing = found[1].name
+            lists[key] = entries
+        # Without a While or Then animation it would play something else, and leaving out every
+        # Only during one would let it go off during any animation.
+        if missing:
+            left_out.append(f"hotspot {name!r}: left out, as {missing} isn't exported yet")
+            continue
+        if len(spot.during) and not lists["during"]:
             left_out.append(
                 f"hotspot {name!r}: left out, as none of its Only during animations is exported and can "
                 "be the one playing"
@@ -156,6 +207,8 @@ def tables(suite, folder):
         table = {}
         if spot.trigger != "CLICK":
             table["trigger"] = TRIGGERS[spot.trigger]
+        if not pointed:
+            table["after"] = round(spot.after, 3)
         if spot.layer:
             table["layer"] = True
         expression = file_stem(spot.expression) if spot.expression else ""
@@ -166,9 +219,11 @@ def tables(suite, folder):
                 left_out.append(f"hotspot {name!r}: its expression {expression!r} isn't exported")
         if spot.cooldown > 0:
             table["cooldown"] = round(spot.cooldown, 3)
-        if during:
-            table["during"] = during
-        table["areas"] = areas
+        for key in ENTRY_LISTS.values():
+            if lists.get(key):
+                table[key] = lists[key]
+        if pointed:
+            table["areas"] = areas
         table["clips"] = played
         out[name] = table
     return out, left_out
@@ -185,7 +240,10 @@ def load_into(suite, data):
     for name, table in found.items():
         spot = suite.hotspots.add()
         spot.name = name
-        spot.trigger = "HOVER" if table.get("trigger") == "hover" else "CLICK"
+        triggers = {value: key for key, value in TRIGGERS.items()}
+        spot.trigger = triggers.get(table.get("trigger", "click"), "CLICK")
+        if "after" in table:
+            spot.after = table["after"]
         spot.layer = table.get("layer", False)
         spot.expression = table.get("expression", "")
         spot.cooldown = table.get("cooldown", 0.0)
@@ -208,18 +266,18 @@ def load_into(suite, data):
                 continue
             item = spot.clips.add()
             item.actor, item.action = actor.obj, clip.action
-        character = actors.character(suite)
-        for wanted in table.get("during", []):
-            clip_name = wanted.get("clip", "")
-            # The panel waits on the character's animations alone, so far.
-            if "actor" in wanted:
-                unmatched.append(f"{name}: only during {wanted['actor']}'s {clip_name}")
-                continue
-            clip = next((c for c in actors.clips(character) if c.name == clip_name), None) if character else None
-            if clip is None:
-                unmatched.append(f"{name}: only during {clip_name}")
-                continue
-            spot.during.add().action = clip.action
+            item.from_time = clip_table.get("from", 1)
+        for field, key in ENTRY_LISTS.items():
+            for wanted in table.get(key, []):
+                owner = wanted.get("actor")
+                actor = _actor_named(suite, owner)
+                clip = next((c for c in actors.clips(actor) if c.name == wanted.get("clip")), None) if actor else None
+                if clip is None:
+                    unmatched.append(f"{name}: {key} {owner + '/' if owner else ''}{wanted.get('clip')}")
+                    continue
+                item = getattr(spot, field).add()
+                item.actor = None if actor.is_character else actor.obj
+                item.action = clip.action
     return unmatched
 
 
@@ -240,11 +298,14 @@ def check(suite, add, finding):
         def warn(message, severity="WARNING", obj=None):
             add(finding(f"hotspot {name!r} {message}", obj, severity=severity, hotspot=spot.name))
 
-        if not len(spot.areas):
+        pointed = spot.trigger in POINTED
+        if pointed and not len(spot.areas):
             warn("has no bones, so nothing sets it off. Select bones in Pose Mode and click Add selected bones")
-        if not len(spot.clips):
-            warn("plays nothing: add a clip")
-        for area in spot.areas:
+        if not pointed and len(spot.areas):
+            warn("has bones, but reacts to the mouse anywhere: they're left out", severity="INFO")
+        if not (len(spot.clips) or len(spot.meanwhile) or len(spot.then)):
+            warn("plays nothing: add a clip, or a While or Then animation")
+        for area in spot.areas if pointed else ():
             armature = area.armature
             if armature is None or not area.bone:
                 warn("has an area with no bone picked")
@@ -275,29 +336,66 @@ def check(suite, add, finding):
                 warn(
                     f"plays {clip.name}, a Timeline clip, which is exported over the whole timeline (frames "
                     f"{scene.frame_start}–{scene.frame_end}): as a reaction it lasts that long, holding its last "
-                    "key, and the hotspot can't go off again until it ends. Make it Once, or tick Only for "
-                    "hotspots",
+                    "key, and the hotspot can't go off again until it ends. Make it Once, or to loop it while "
+                    "the hotspot is held, move it to While",
                     obj=actor.obj,
                 )
             elif clip.mode == "HOLD":
                 warn(
-                    f"plays {clip.name}, a Hold clip, which is a single frame: the reaction is over as it "
-                    "starts. Make it Once",
+                    f"plays {clip.name} once, a Hold clip: its pose shows for a moment only. To hold it "
+                    f"while the hotspot is held, move it to {HELD.get(spot.trigger, 'While')}",
                     obj=actor.obj,
                 )
-        waits = []
-        for item in spot.during:
-            clip, problem = resolve_during(suite, item)
-            if clip is None:
-                warn(problem)
-            elif not can_be_during(clip):
-                kind = "only for hotspots" if clip.reaction_only else "a Once clip"
-                warn(
-                    f"goes off only during {clip.name}, which is {kind}: the viewer can't pick it to "
-                    "play on, so it never is the animation playing. Pick a Timeline or Hold clip",
-                )
-            else:
-                waits.append(clip)
+        firsts = {}
+        for item in spot.clips:
+            if item.actor is not None:
+                firsts[item.actor] = min(firsts.get(item.actor, item.from_time), item.from_time)
+        for obj, first in firsts.items():
+            if first > 1:
+                who = "the character" if obj == suite.armature else obj.name
+                times = "time" if first == 2 else f"{first - 1} times"
+                warn(f"plays nothing on {who} the first {times} in a row", severity="INFO", obj=obj)
+        if spot.trigger == "WELCOME" and len(spot.meanwhile):
+            warn("isn't held, as the mouse coming back is a moment: its While animations are left out")
+        switched = {
+            (found[0].obj, found[1].name)
+            for other in suite.hotspots
+            for found, _ in (resolve_entry(suite, item) for item in other.then)
+            if found is not None
+        }
+        waits = 0
+        for field, key in ENTRY_LISTS.items():
+            seen = set()
+            for item in getattr(spot, field):
+                found, problem = resolve_entry(suite, item)
+                if found is None:
+                    warn(problem, obj=item.actor)
+                    continue
+                actor, clip = found
+                if not fits(actor, clip, field):
+                    if clip.mode == "ONCE":
+                        why = "a Once clip: it has to be a Timeline or Hold clip, which plays on and on"
+                    else:
+                        why = (
+                            "only for hotspots: it has to be one the viewer can pick, since that's "
+                            "what the character plays on and on"
+                        )
+                    warn(f"names {clip.name} under {key}, which is {why}", obj=actor.obj)
+                    continue
+                if field != "during" and actor.obj in seen:
+                    warn(f"names two {key} animations for {actor.name}: only one can play", obj=actor.obj)
+                seen.add(actor.obj)
+                if field != "during":
+                    continue
+                own = own_clip(actor)
+                if actor.is_character or (actor.obj, clip.name) in switched or (own and own.name == clip.name):
+                    waits += 1
+                else:
+                    warn(
+                        f"waits for {actor.name} to play {clip.name}, which it only plays when a hotspot "
+                        "switches it there, and none does",
+                        obj=actor.obj,
+                    )
         if len(spot.during) and not waits:
             warn("can never go off: none of its Only during animations can be the one playing")
         if spot.expression and file_stem(spot.expression) not in {
@@ -411,16 +509,20 @@ def current(suite):
 class CHARPAPER_OT_hotspot_add(Operator):
     bl_idname = "charpaper.hotspot_add"
     bl_label = "Add hotspot"
-    bl_description = "Add a hotspot. Bones selected in Pose Mode become its areas"
+    bl_description = "Add a hotspot. For a click or hover, the bones selected in Pose Mode become its areas"
     bl_options = {"REGISTER", "UNDO"}
+
+    trigger: EnumProperty(items=TRIGGER_ITEMS, default="CLICK")
 
     def execute(self, context):
         suite = suite_of(context)
         spot = suite.hotspots.add()
         spot.name = f"Hotspot {len(suite.hotspots)}"
+        spot.trigger = self.trigger
         suite.hotspot_index = len(suite.hotspots) - 1
         suite.hotspots_owned = True
-        _add_bones(context, spot)
+        if self.trigger in POINTED:
+            _add_bones(context, spot)
         return {"FINISHED"}
 
 
@@ -565,57 +667,105 @@ class CHARPAPER_OT_hotspot_area_select(Operator):
         return {"FINISHED"}
 
 
-class CHARPAPER_OT_hotspot_during_add(Operator):
-    bl_idname = "charpaper.hotspot_during_add"
+FIELDS = [(field, field, "") for field in ENTRY_LISTS]
+
+
+class CHARPAPER_OT_hotspot_entry_add(Operator):
+    bl_idname = "charpaper.hotspot_entry_add"
     bl_label = "Add animation"
-    bl_description = "Let the hotspot go off while the character plays this animation"
+    bl_description = "Add this animation. In While and Then, it takes the place of the actor's other one"
     bl_options = {"REGISTER", "UNDO"}
 
+    field: EnumProperty(items=FIELDS)
+    actor: StringProperty()
     action: StringProperty()
 
     def execute(self, context):
-        spot = current(suite_of(context))
-        action = bpy.data.actions.get(self.action)
-        if spot is None or action is None:
+        suite = suite_of(context)
+        spot = current(suite)
+        obj, action = bpy.data.objects.get(self.actor), bpy.data.actions.get(self.action)
+        if spot is None or obj is None or action is None:
             return {"CANCELLED"}
-        if not any(item.action == action for item in spot.during):
-            spot.during.add().action = action
-            spot.during_index = len(spot.during) - 1
+        owner = None if obj == suite.armature else obj
+        entries = getattr(spot, self.field)
+        if any(item.actor == owner and item.action == action for item in entries):
+            return {"CANCELLED"}
+        # An actor plays one animation on and on at a time.
+        if self.field != "during":
+            for at in reversed(range(len(entries))):
+                if entries[at].actor == owner:
+                    entries.remove(at)
+        item = entries.add()
+        item.actor, item.action = owner, action
+        setattr(spot, self.field + "_index", len(entries) - 1)
         return {"FINISHED"}
 
 
-class CHARPAPER_OT_hotspot_during_remove(Operator):
-    bl_idname = "charpaper.hotspot_during_remove"
+class CHARPAPER_OT_hotspot_entry_remove(Operator):
+    bl_idname = "charpaper.hotspot_entry_remove"
     bl_label = "Remove animation"
-    bl_description = "Remove this animation from the list. With none left, it goes off during any"
+    bl_description = "Remove this animation from the list"
     bl_options = {"REGISTER", "UNDO"}
+
+    field: EnumProperty(items=FIELDS)
 
     @classmethod
     def poll(cls, context):
-        spot = current(suite_of(context))
-        return spot is not None and 0 <= spot.during_index < len(spot.during)
+        return current(suite_of(context)) is not None
 
     def execute(self, context):
         spot = current(suite_of(context))
-        spot.during.remove(spot.during_index)
-        spot.during_index = max(0, spot.during_index - 1)
+        entries, index = getattr(spot, self.field), getattr(spot, self.field + "_index")
+        if not 0 <= index < len(entries):
+            return {"CANCELLED"}
+        entries.remove(index)
+        setattr(spot, self.field + "_index", max(0, index - 1))
         return {"FINISHED"}
 
 
-class CHARPAPER_MT_hotspot_during(Menu):
-    bl_label = "Only during"
-    bl_description = "The character's animations the viewer can pick to play on and on"
+class _EntryMenu:
+    """The animations each actor plays on and on that fit the list, the character's first."""
+
+    field = ""
+    empty = "No actor has Timeline or Hold clips yet: add them in Animation"
 
     def draw(self, context):
         suite = suite_of(context)
         layout = self.layout
-        character = actors.character(suite)
-        offered = [c for c in actors.clips(character) if can_be_during(c)] if character else []
-        if not offered:
-            layout.label(text="The character has no Timeline or Hold clips yet: add them in Animation")
-        for clip in sorted(offered, key=lambda c: c.name):
-            op = layout.operator("charpaper.hotspot_during_add", text=clip.action.name, icon=MODE_TAGS[clip.mode])
-            op.action = clip.action.name
+        found = [(a, [c for c in actors.clips(a) if fits(a, c, self.field)]) for a in actors.all_actors(suite)]
+        found = [(a, c) for a, c in found if c]
+        if not found:
+            layout.label(text=self.empty)
+        for actor, clips in found:
+            layout.label(text="Character" if actor.is_character else actor.name, icon="OUTLINER_OB_ARMATURE" if actor.obj.type == "ARMATURE" else "OBJECT_DATA")
+            for clip in sorted(clips, key=lambda c: c.name):
+                op = layout.operator("charpaper.hotspot_entry_add", text=clip.action.name, icon=MODE_TAGS[clip.mode])
+                op.field, op.actor, op.action = self.field, actor.obj.name, clip.action.name
+
+
+class CHARPAPER_MT_hotspot_meanwhile(_EntryMenu, Menu):
+    bl_label = "Plays while held"
+    field = "meanwhile"
+
+
+class CHARPAPER_MT_hotspot_then(_EntryMenu, Menu):
+    bl_label = "Plays afterwards"
+    field = "then"
+
+
+class CHARPAPER_MT_hotspot_during(_EntryMenu, Menu):
+    bl_label = "Only during"
+    field = "during"
+
+
+class CHARPAPER_MT_hotspot_add(Menu):
+    bl_label = "Add hotspot"
+
+    def draw(self, context):
+        layout = self.layout
+        for key, label, _, icon, _ in TRIGGER_ITEMS:
+            text = f"{label} on the selected bones" if key in POINTED else f"When the {label[0].lower()}{label[1:]}"
+            layout.operator("charpaper.hotspot_add", text=text, icon=icon).trigger = key
 
 
 class CHARPAPER_MT_hotspot_clip(Menu):
@@ -646,10 +796,13 @@ classes = (
     CHARPAPER_OT_hotspot_area_select,
     CHARPAPER_OT_hotspot_clip_add,
     CHARPAPER_OT_hotspot_clip_remove,
-    CHARPAPER_OT_hotspot_during_add,
-    CHARPAPER_OT_hotspot_during_remove,
+    CHARPAPER_OT_hotspot_entry_add,
+    CHARPAPER_OT_hotspot_entry_remove,
     CHARPAPER_MT_hotspot_clip,
+    CHARPAPER_MT_hotspot_meanwhile,
+    CHARPAPER_MT_hotspot_then,
     CHARPAPER_MT_hotspot_during,
+    CHARPAPER_MT_hotspot_add,
 )
 
 

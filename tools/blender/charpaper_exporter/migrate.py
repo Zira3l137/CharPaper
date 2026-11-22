@@ -81,7 +81,17 @@ def settle_folder(suite):
         suite.custom_folder = os.path.isfile(manifest.path(bpy.path.abspath(suite.folder)))
 
 
+def _hotspot_clip_modes():
+    """Clips only hotspots played were played once whatever their mode said; now their mode says
+    how they play, so those still marked Timeline are marked Once."""
+    for obj in bpy.data.objects:
+        for clip in obj.charpaper.clips:
+            if clip.reaction_only and clip.mode == "TIMELINE":
+                clip.mode = "ONCE"
+
+
 def migrate_all():
+    _hotspot_clip_modes()
     for scene in bpy.data.scenes:
         settle_folder(scene.charpaper)
         moved = migrate(scene.charpaper)
