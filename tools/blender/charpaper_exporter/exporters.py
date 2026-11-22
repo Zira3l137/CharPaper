@@ -76,25 +76,28 @@ def model(context, suite, folder):
 
 
 class Alert:
-    def __init__(self, message, object_name=""):
+    def __init__(self, message, object_name="", fix=""):
         self.message = message
         self.object_name = object_name
+        self.fix = fix
 
 
-def playing_on_shape_keys(obj):
-    """The action, or NLA strip's action, playing on a mesh's shape keys."""
-    key = obj.data.shape_keys if obj.type == "MESH" else None
-    data = key.animation_data if key else None
-    if data is None:
+# Marks a warning that the Stop it button fixes.
+STOP_SHAPE_KEYS = "SHAPE_KEYS"
+
+
+def shape_keys_playing(obj, frame):
+    """What plays on the mesh's shape keys at `frame`, said so the artist finds it, or None."""
+    found = anim.playing_on_shape_keys(obj, frame)
+    if found is None:
         return None
-    if data.action is not None:
-        return data.action
-    for track in data.nla_tracks:
-        if not track.mute:
-            for strip in track.strips:
-                if not strip.mute and strip.action is not None:
-                    return strip.action
-    return None
+    action, track = found
+    if track is None:
+        return f"the action {action.name} is assigned to its shape keys", "Unassign it in the Shape Key Editor"
+    return (
+        f"its shape keys' NLA track {track!r} plays {action.name}",
+        f"Mute that track in the NLA Editor, where it shows under {obj.name}'s Key",
+    )
 
 
 # A skin is exported as its sliders stand, and the app rests every shape key no clip keys at
@@ -108,15 +111,16 @@ def skin(context, suite, entry, folder):
         meshes = []
         for obj in entry.collection.all_objects:
             if obj.type in {"MESH", "EMPTY"}:
-                action = playing_on_shape_keys(obj)
-                if action is not None and obj.data not in meshes:
+                playing = shape_keys_playing(obj, context.scene.frame_current)
+                if playing is not None and obj.data not in meshes:
+                    what, where = playing
                     alerts.append(
                         Alert(
-                            f"Skin {entry.name}: the mesh {obj.name} had the action {action.name} "
-                            f"playing on its shape keys, so its sliders were saved with "
-                            f"{action.name}'s values and the character rests on them in the app. "
-                            f"Unassign the action in the Shape Key Editor, then export the skin again.",
+                            f"Skin {entry.name}: on the mesh {obj.name}, {what}, so its sliders were "
+                            f"saved as that animation set them and the character rests on them in "
+                            f"the app. {where}, or press Stop it, then export the skin again.",
                             obj.name,
+                            STOP_SHAPE_KEYS,
                         )
                     )
                 copy = iso.add(obj, own_mesh=_shape_keyed(obj))

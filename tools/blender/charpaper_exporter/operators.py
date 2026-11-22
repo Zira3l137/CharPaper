@@ -12,6 +12,7 @@ from bpy.props import StringProperty
 from bpy.types import Operator
 
 from . import actors
+from . import anim
 from . import clips
 from . import cues
 from . import env_settings
@@ -50,6 +51,7 @@ def _store(suite, findings):
         item.clip = getattr(finding, "clip", "")
         item.sound = getattr(finding, "sound", "")
         item.hotspot = getattr(finding, "hotspot", "")
+        item.fix = getattr(finding, "fix", "")
     suite.validated = True
 
 
@@ -507,11 +509,11 @@ class CHARPAPER_OT_export(Operator):
             for alert in alerts:
                 finding = suite.findings.add()
                 finding.name, finding.severity = alert.message, "WARNING"
-                finding.object_name = alert.object_name
+                finding.object_name, finding.fix = alert.object_name, alert.fix
             suite.alerts.clear()
             for alert in alerts:
                 item = suite.alerts.add()
-                item.name, item.object_name = alert.message, alert.object_name
+                item.name, item.object_name, item.fix = alert.message, alert.object_name, alert.fix
             if context.window is not None:
                 bpy.ops.charpaper.export_alerts("INVOKE_DEFAULT")
         return {"FINISHED"} if done else {"CANCELLED"}
@@ -559,6 +561,52 @@ class CHARPAPER_OT_export(Operator):
         return left_out if suite.hotspots_owned else []
 
 
+class CHARPAPER_OT_stop_shape_keys(Operator):
+    bl_idname = "charpaper.stop_shape_keys"
+    bl_label = "Stop it"
+    bl_description = (
+        "Stop what plays on this mesh's shape keys: unassign the action, keeping it in the file, "
+        "and mute the NLA tracks that play. The sliders it moved go back to 0"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    name: StringProperty()
+
+    def execute(self, context):
+        obj = bpy.data.objects.get(self.name)
+        if obj is None or obj.type != "MESH" or obj.data.shape_keys is None:
+            return {"CANCELLED"}
+        key = obj.data.shape_keys
+        data = key.animation_data
+        frame = context.scene.frame_current
+        stopped = []
+        # Each pass stops what plays first; a strip under it may play once it is gone.
+        for _ in range(len(data.nla_tracks) + 1 if data else 0):
+            found = anim.playing_on_shape_keys(obj, frame)
+            if found is None:
+                break
+            action, track = found
+            if track is None:
+                # Unassigned, an action nothing else uses would be gone once the file is saved.
+                if action.users <= 1:
+                    action.use_fake_user = True
+                data.action = None
+            else:
+                data.nla_tracks[track].mute = True
+            stopped.append(action)
+        for action in stopped:
+            for name in anim.key_names(action):
+                block = key.key_blocks.get(name)
+                if block is not None:
+                    block.value = 0.0
+        if not stopped:
+            self.report({"INFO"}, f"Nothing plays on {obj.name}'s shape keys")
+            return {"CANCELLED"}
+        names = ", ".join(sorted({a.name for a in stopped}))
+        self.report({"INFO"}, f"Stopped {names} on {obj.name}; its sliders are back at 0. Check again")
+        return {"FINISHED"}
+
+
 class CHARPAPER_OT_export_alerts(Operator):
     bl_idname = "charpaper.export_alerts"
     bl_label = "Exported, but the result will look wrong"
@@ -577,9 +625,12 @@ class CHARPAPER_OT_export_alerts(Operator):
             col.label(text=lines[0], icon="ERROR")
             for line in lines[1:]:
                 col.label(text=line, icon="BLANK1")
+            row = box.row()
             if alert.object_name:
-                op = box.operator("charpaper.select_object", text="Show it", icon="RESTRICT_SELECT_OFF")
+                op = row.operator("charpaper.select_object", text="Show it", icon="RESTRICT_SELECT_OFF")
                 op.name = alert.object_name
+            if alert.fix == exporters.STOP_SHAPE_KEYS:
+                row.operator("charpaper.stop_shape_keys", icon="PAUSE").name = alert.object_name
 
     def execute(self, context):
         return {"FINISHED"}
@@ -689,6 +740,7 @@ classes = (
     CHARPAPER_OT_eye_remove,
     CHARPAPER_OT_validate,
     CHARPAPER_OT_export,
+    CHARPAPER_OT_stop_shape_keys,
     CHARPAPER_OT_export_alerts,
     CHARPAPER_OT_select_object,
     CHARPAPER_OT_load_manifest,

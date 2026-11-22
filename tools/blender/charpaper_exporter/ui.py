@@ -14,6 +14,7 @@ from . import drivers
 from . import env_settings
 from . import hotspots as hotspot_spots
 from . import music
+from .exporters import STOP_SHAPE_KEYS
 from .operators import current_actor
 from .props import file_stem
 from .props import suite_of
@@ -270,7 +271,10 @@ class CHARPAPER_PT_skins(_Sidebar, Panel):
         _wrapped(hint, "Exported with its sliders as they are: no action may play on its shape keys.", context)
         for finding in warnings_about(suite):
             if any(finding.object_name == o.name for o in entry.collection.all_objects):
-                _wrapped(layout.box(), finding.name, context, icon="ERROR")
+                box = layout.box()
+                _wrapped(box, finding.name, context, icon="ERROR")
+                if finding.fix == STOP_SHAPE_KEYS:
+                    box.operator("charpaper.stop_shape_keys", icon="PAUSE").name = finding.object_name
 
 
 class CHARPAPER_PT_expressions(_Sidebar, Panel):
@@ -719,6 +723,8 @@ class CHARPAPER_PT_warnings(_Sidebar, Panel):
             _wrapped(col, finding.name, context, icon="ERROR" if finding.severity == "WARNING" else "INFO")
             if finding.object_name:
                 row.operator("charpaper.show_finding", text="", icon="RESTRICT_SELECT_OFF", emboss=False).index = i
+            if finding.fix == STOP_SHAPE_KEYS:
+                box.operator("charpaper.stop_shape_keys", icon="PAUSE").name = finding.object_name
 
 
 class CHARPAPER_PT_gltf(_Sidebar, Panel):

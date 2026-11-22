@@ -100,6 +100,47 @@ def users(action, obj):
     return any(strip.action == action for track in data.nla_tracks for strip in track.strips)
 
 
+def _moves_keys(action, slot):
+    """Whether the action, through the slot it plays with, moves shape key sliders. A layered
+    action plays nothing without a slot."""
+    if is_layered(action) and slot is None:
+        return False
+    return any(KEY_PATH.match(c.data_path) and not c.mute for c in fcurves(action, slot))
+
+
+def _reaches(strip, frame):
+    if strip.frame_start <= frame <= strip.frame_end:
+        return True
+    return strip.extrapolation == "HOLD" or (strip.extrapolation == "HOLD_FORWARD" and frame >= strip.frame_start)
+
+
+def playing_on_shape_keys(obj, frame):
+    """What sets the mesh's shape key sliders at `frame`, as (action, NLA track name or None
+    for the action assigned to them), or None. Only what Blender evaluates there counts: an
+    action without a slot, a muted track, a track other than the solo one and a strip that
+    doesn't reach the frame move nothing."""
+    key = obj.data.shape_keys if obj.type == "MESH" and obj.data else None
+    data = key.animation_data if key else None
+    if data is None:
+        return None
+    action = data.action
+    if action is not None and data.action_influence > 0:
+        if _moves_keys(action, getattr(data, "action_slot", None)):
+            return action, None
+    if not data.use_nla:
+        return None
+    tracks = [t for t in data.nla_tracks if not t.mute]
+    for track in [t for t in tracks if t.is_solo] or tracks:
+        for strip in track.strips:
+            if strip.mute or strip.action is None or not _reaches(strip, frame):
+                continue
+            if strip.use_animated_influence and strip.influence <= 0:
+                continue
+            if _moves_keys(strip.action, getattr(strip, "action_slot", None)):
+                return strip.action, track.name
+    return None
+
+
 def pick_slot(action, id_type, wanted, identifier):
     # The slot named after the target wins; otherwise the first slot that animates
     # anything the target has. Legacy actions have no slots at all.

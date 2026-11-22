@@ -14,7 +14,8 @@ from . import cues
 from . import drivers
 from .actors import TRANSFORM_PATH
 from .actors import shape_keys_of
-from .exporters import playing_on_shape_keys
+from .exporters import STOP_SHAPE_KEYS
+from .exporters import shape_keys_playing
 from .props import file_stem
 
 # What a clip can carry; any other keyed property stays as the file has it.
@@ -27,7 +28,7 @@ LIGHT_KEPT = {"energy", "color"}
 
 
 class Finding:
-    def __init__(self, message, obj=None, bone="", severity="WARNING", clip="", sound="", hotspot=""):
+    def __init__(self, message, obj=None, bone="", severity="WARNING", clip="", sound="", hotspot="", fix=""):
         self.message = message
         self.object_name = obj.name if obj is not None else ""
         self.bone_name = bone
@@ -36,6 +37,8 @@ class Finding:
         # The environment whose music or ambience it is about.
         self.sound = sound
         self.hotspot = hotspot
+        # What one button can do about it.
+        self.fix = fix
 
 
 def _examples(names, limit=3):
@@ -70,7 +73,7 @@ def check(context, suite, add):
     _check_names(found, add)
     _check_default(suite, add)
     _check_expressions(suite, add)
-    _check_skin_sliders(suite, add)
+    _check_skin_sliders(suite, scene.frame_current, add)
 
 
 def _check_names(found, add):
@@ -431,7 +434,7 @@ def _check_expressions(suite, add):
                     ))
 
 
-def _check_skin_sliders(suite, add):
+def _check_skin_sliders(suite, frame, add):
     """The app rests a shape key no clip keys at its slider; a slider left up shows."""
     used = set()
     character = actors.character(suite)
@@ -447,13 +450,15 @@ def _check_skin_sliders(suite, add):
             key = shape_keys_of(obj)
             if key is None:
                 continue
-            action = playing_on_shape_keys(obj)
-            if action is not None:
+            playing = shape_keys_playing(obj, frame)
+            if playing is not None:
+                what, where = playing
                 add(Finding(
-                    f"skin {skin.name!r}: the mesh {obj.name} has the action {action.name} playing on its shape keys, "
-                    f"so its sliders would export as {action.name}'s values and the character rests on them in the "
-                    "app. Unassign the action in the Shape Key Editor before exporting",
+                    f"skin {skin.name!r}: on the mesh {obj.name}, {what}, so its sliders would export as "
+                    f"that animation sets them, and the character rests on them in the app. {where}, "
+                    "or press Stop it",
                     obj,
+                    fix=STOP_SHAPE_KEYS,
                 ))
                 continue
             if not key.use_relative:

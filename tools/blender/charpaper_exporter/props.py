@@ -428,6 +428,7 @@ class CHARPAPER_PG_finding(PropertyGroup):
     clip: StringProperty()
     sound: StringProperty()
     hotspot: StringProperty()
+    fix: StringProperty()
 
 
 CLIP_MODES = (
