@@ -400,21 +400,17 @@ fn clip_files(
     Ok(clips)
 }
 
-// Names that point at nothing are refused, as for settings: the add-on writes them, so one
-// that doesn't match is a suite out of date. An actor only has to be in one environment.
+// Clips and expressions that aren't there are refused, as for settings: the add-on writes
+// them, so one that doesn't match is a suite out of date. An actor only has to be in one
+// environment. An area's armature isn't checked: any armature of an environment can carry
+// one, clips or not, and only its file knows which it has.
 fn check_hotspot(
     hotspot: &Hotspot,
     clips: &[ClipFile],
     expressions: &[ExpressionFile],
     environments: &[Environment],
 ) -> Result<(), String> {
-    let actor = |name: &str| environments.iter().flat_map(|e| &e.actors).find(|a| a.name == name);
     for area in &hotspot.areas {
-        if let Some(name) = &area.actor
-            && actor(name).is_none()
-        {
-            return Err(format!("no environment has the actor {name:?}"));
-        }
         let finite = area.length.is_finite() && area.radius.is_finite();
         if !finite || area.length < 0.0 || area.radius <= 0.0 {
             return Err(format!(

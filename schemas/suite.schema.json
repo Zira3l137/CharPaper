@@ -940,7 +940,7 @@
       "type": "object",
       "properties": {
         "actor": {
-          "description": "The armature the bone is in: the name of one of an environment's\nactors. Leave it out for the character's. An actor that isn't in the\nenvironment shown has no hotspot there.",
+          "description": "The armature the bone is in: the name of an armature object in an\nenvironment, which needs no clips of its own. Leave it out for the\ncharacter's. While an environment without it shows, the area isn't\nthere.",
           "type": [
             "string",
             "null"

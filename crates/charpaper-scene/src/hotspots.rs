@@ -1,7 +1,7 @@
 // The suite's hotspots: capsules around bones that play clips when clicked, or when the cursor
-// rests on them. A hotspot finds its bones by name, on the character or on one of the shown
-// environment's actors, so it follows every move and is back after every switch of skin or
-// environment.
+// rests on them. A hotspot finds its bones by name, on the character or on an armature of the
+// shown environment, so it follows every move and is back after every switch of skin or
+// environment. The armature needs no clips of its own.
 //
 // Reactions are Once clips in slots above everything else the actor plays, so what played
 // before shows again as they fade. One that replaces plays in the actor's reaction slot and
@@ -27,6 +27,7 @@ use crate::camera::SceneCamera;
 use crate::character::CharacterActor;
 use crate::character::CharacterClips;
 use crate::character::REACTIONS as CHARACTER_REACTIONS;
+use crate::environment::EnvironmentReady;
 use crate::props::PropActor;
 use crate::props::REACTIONS as PROP_REACTIONS;
 use crate::render::ScreenParts;
@@ -76,6 +77,8 @@ pub(crate) struct Hotspots {
     face: Option<usize>,
     // The click hotspot pressed on, and where.
     pressed: Option<(usize, Vec2)>,
+    // The environment the bones of environments' armatures were looked for in.
+    environment: Option<Entity>,
     // While a reaction that lets the cursor go plays on the character, gaze does.
     pub(crate) gaze_off: bool,
     seed: u64,
@@ -83,8 +86,9 @@ pub(crate) struct Hotspots {
 
 struct Spot {
     hotspot: Hotspot,
-    // Each area's bone, once found.
+    // Each area's bone, once found, and whether the shown environment was searched for it.
     bones: Vec<Option<Entity>>,
+    searched: Vec<bool>,
     // The clips of each actor it plays, with the one picked last.
     picks: Vec<Pick>,
     playing: Vec<Played>,
@@ -132,6 +136,7 @@ fn list_hotspots(
             }
             Spot {
                 bones: vec![None; hotspot.areas.len()],
+                searched: vec![false; hotspot.areas.len()],
                 hotspot: hotspot.clone(),
                 picks,
                 playing: Vec::new(),
@@ -144,12 +149,16 @@ fn list_hotspots(
     }
 }
 
-// The actors hotspots find bones on and play clips on, each on its stage.
+// The actors hotspots find bones on and play clips on, each on its stage, and the shown
+// environment, for armatures that aren't actors.
 #[derive(SystemParam)]
 struct Actors<'w, 's> {
     characters: Query<'w, 's, (Entity, &'static mut CharacterActor)>,
     props: Query<'w, 's, (Entity, &'static mut PropActor)>,
     stage_of: StageOf<'w, 's>,
+    environments: Query<'w, 's, (Entity, &'static ChildOf), With<EnvironmentReady>>,
+    children: Query<'w, 's, &'static Children>,
+    names: Query<'w, 's, &'static Name>,
 }
 
 impl Actors<'_, '_> {
@@ -165,11 +174,25 @@ impl Actors<'_, '_> {
         props.find(|(entity, prop)| prop.name() == name && stage_of.get(*entity) == Some(stage))
     }
 
+    // The stage's environment, once its scene has spawned.
+    fn environment(&self, stage: Entity) -> Option<Entity> {
+        let mut roots = self.environments.iter();
+        roots.find(|(_, parent)| parent.parent() == stage).map(|(root, _)| root)
+    }
+
     fn bone(&mut self, stage: Entity, actor: Option<&str>, bone: &str) -> Option<Entity> {
-        match actor {
-            None => self.character(stage)?.1.node(bone),
-            Some(name) => self.prop(stage, name)?.1.node(bone),
+        let Some(name) = actor else {
+            return self.character(stage)?.1.node(bone);
+        };
+        if let Some(found) = self.prop(stage, name).and_then(|(_, prop)| prop.node(bone)) {
+            return Some(found);
         }
+        let named = |entity: Entity, wanted: &str| {
+            self.names.get(entity).is_ok_and(|own| own.as_str() == wanted)
+        };
+        let root = self.environment(stage)?;
+        let armature = self.children.iter_descendants(root).find(|&e| named(e, name))?;
+        self.children.iter_descendants(armature).find(|&e| named(e, bone))
     }
 
     fn still_playing(&self, played: &Played) -> bool {
@@ -230,6 +253,11 @@ fn react(
             continue;
         }
         let seen = sight.filter(|(on, ..)| *on == stage);
+        let environment = actors.environment(stage);
+        if hotspots.environment != environment {
+            hotspots.environment = environment;
+            hotspots.spots.iter_mut().for_each(|spot| spot.searched.fill(false));
+        }
         for spot in &mut hotspots.spots {
             find_bones(stage, spot, &globals, &mut actors);
         }
@@ -299,17 +327,24 @@ fn end_finished(stage: Entity, hotspots: &mut Hotspots, actors: &mut Actors) {
 }
 
 // A bone found earlier stays found until its entity goes: the skin or environment it was in
-// switched.
+// switched. An environment is searched once for the bones it lacks, not every frame.
 fn find_bones(
     stage: Entity,
     spot: &mut Spot,
     globals: &Query<&GlobalTransform>,
     actors: &mut Actors,
 ) {
-    for (bone, area) in spot.bones.iter_mut().zip(&spot.hotspot.areas) {
-        if !bone.is_some_and(|entity| globals.contains(entity)) {
-            *bone = actors.bone(stage, area.actor.as_deref(), &area.bone);
+    let areas = spot.bones.iter_mut().zip(&mut spot.searched).zip(&spot.hotspot.areas);
+    for ((bone, searched), area) in areas {
+        if bone.is_some_and(|entity| globals.contains(entity)) {
+            continue;
         }
+        *bone = None;
+        if area.actor.is_some() && *searched {
+            continue;
+        }
+        *bone = actors.bone(stage, area.actor.as_deref(), &area.bone);
+        *searched = area.actor.is_some() && actors.environment(stage).is_some();
     }
 }
 

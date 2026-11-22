@@ -659,9 +659,7 @@ expression = "sad""#,
     let flat = "schema = 2\n[hotspots.Hand]\nareas = [{ bone = \"Hand\", length = 0.1, radius = 0.0 }]\nclips = []";
     fixture.write("suite.toml", flat);
     assert!(fixture.load().unwrap_err().to_string().contains("radius above 0"));
-    let stray = "schema = 2\n[hotspots.Hand]\nareas = [{ actor = \"Lamp\", bone = \"B\", length = 0.1, radius = 0.1 }]\nclips = []";
-    fixture.write("suite.toml", stray);
-    assert!(
-        fixture.load().unwrap_err().to_string().contains("no environment has the actor \"Lamp\"")
-    );
+    let unclipped = "schema = 2\n[hotspots.Hand]\nareas = [{ actor = \"Lamp\", bone = \"B\", length = 0.1, radius = 0.1 }]\nclips = []";
+    fixture.write("suite.toml", unclipped);
+    assert!(fixture.load().is_ok(), "an armature needs no clips to carry a hotspot");
 }

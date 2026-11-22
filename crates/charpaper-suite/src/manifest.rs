@@ -354,9 +354,10 @@ pub enum Trigger {
 #[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct HotspotArea {
-    /// The armature the bone is in: the name of one of an environment's
-    /// actors. Leave it out for the character's. An actor that isn't in the
-    /// environment shown has no hotspot there.
+    /// The armature the bone is in: the name of an armature object in an
+    /// environment, which needs no clips of its own. Leave it out for the
+    /// character's. While an environment without it shows, the area isn't
+    /// there.
     pub actor: Option<String>,
     pub bone: String,
     /// The bone's length, from head to tail, in the armature's units.
