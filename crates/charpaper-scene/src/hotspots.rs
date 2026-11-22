@@ -233,9 +233,15 @@ fn react(
     if left.read().last().is_some() {
         pointer.0 = None;
     }
-    // Over the panel, nothing under it reacts. Picking finds UI and the window under it alone.
+    // Over the panel, nothing under it reacts. Picking finds UI and the window under it alone,
+    // and the scene image is UI too: it has to be pickable, since the orbit camera is steered
+    // by drags and scrolls on it.
     let hits = hover.as_ref().and_then(|map| map.get(&PointerId::Mouse));
-    let on_panel = hits.is_some_and(|hits| hits.keys().any(|&hit| !windows.contains(hit)));
+    let on_panel = hits.is_some_and(|hits| {
+        hits.keys().any(|&hit| {
+            !windows.contains(hit) && !screens.iter().any(|(_, parts)| parts.image_node == hit)
+        })
+    });
     let sight = pointer.0.filter(|_| !on_panel).and_then(|(window, position)| {
         let (_, parts) = screens.iter().find(|(screen, _)| screen.window == window)?;
         let (camera, camera_global) = cameras.get(parts.camera).ok()?;

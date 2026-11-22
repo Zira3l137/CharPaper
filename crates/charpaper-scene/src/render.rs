@@ -134,8 +134,6 @@ pub(crate) fn screen_parts(
             MaterialNode(material.clone()),
             GlobalZIndex(i32::MIN),
             UiTargetCamera(display),
-            // So what is hovered is the panel or nothing: the scene's hotspots go by that.
-            Pickable::IGNORE,
         ))
         .id();
 
