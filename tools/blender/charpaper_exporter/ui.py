@@ -451,8 +451,16 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
             box.prop(clip, "extra")
         if clip.action is None:
             return
-        view = actors.Clip(clip.action, clip.extra, clip.mode)
-        nodes = clips.keyed_nodes(actor, clip.action, suite)
+        view = actors.Clip(clip.action, clip.extra, clip.mode, stored=clip, obj=actor.obj)
+        if len(actors.object_slots(clip.action)) > 1:
+            row = box.row()
+            row.alert = bool(view.slots_unclear)
+            row.prop(clip, "slot", icon="ERROR" if view.slots_unclear else "ACTION")
+            if view.slots_unclear:
+                hint = box.row()
+                hint.active = False
+                hint.label(text=f"Not picked: exports {view.slot.identifier}")
+        nodes = clips.keyed_nodes(actor, view, suite)
         keys = clips.shape_key_curves(view)
         start, end = clips.span(context.scene, view)
         sounds = cues.within(clip.action, start, end, clips.fps(context.scene))

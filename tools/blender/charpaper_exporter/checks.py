@@ -53,14 +53,14 @@ def _are(names):
     return f"{_examples(names)} {'is' if len(names) == 1 else 'are'}"
 
 
-def _keyed_range(action):
-    """The first and last frame any of its unmuted curves keys."""
-    frames = [k.co.x for c in anim.fcurves(action) if not c.mute for k in c.keyframe_points]
+def _keyed_range(clip):
+    """The first and last frame any curve the clip plays keys."""
+    frames = [k.co.x for c in clip.curves() for k in c.keyframe_points]
     return (round(min(frames)), round(max(frames))) if frames else None
 
 
-def _cycles(action):
-    curves = [c for c in anim.fcurves(action) if not c.mute and c.keyframe_points]
+def _cycles(clip):
+    curves = [c for c in clip.curves() if c.keyframe_points]
     cycling = [c for c in curves if any(m.type == "CYCLES" and not m.mute for m in c.modifiers)]
     return len(cycling) == len(curves) and bool(curves), bool(cycling)
 
@@ -171,9 +171,17 @@ def _check_clip(scene, suite, actor, clip, add):
         if not _check_paths(actor, clip, add):
             add(Finding(f"clip {name!r} keys nothing {obj.name} has, so it plays as the rest pose", obj, clip=name))
         return
-    nodes = clip_files.keyed_nodes(actor, action, suite)
+    if clip.slots_unclear:
+        add(Finding(
+            f"clip {name!r}: its action has {len(clip.slots_unclear)} slots for objects "
+            f"({_examples(clip.slots_unclear)}), so which one it plays isn't certain; it exports "
+            f"{clip.slot.identifier}. Pick the clip's Slot in Animation",
+            obj,
+            clip=name,
+        ))
+    nodes = clip_files.keyed_nodes(actor, clip, suite)
     if obj.type == "ARMATURE":
-        keyed = anim.bone_names(action)
+        keyed = clip.bone_names()
         missing = keyed - set(obj.data.bones.keys())
         if missing:
             add(Finding(
@@ -206,7 +214,7 @@ def _check_clip(scene, suite, actor, clip, add):
     _check_shape_keys(suite, actor, clip, add)
     if actor.is_character and clip.gaze and suite.gaze.mode == "WRITE":
         eyes = {e.bone for e in suite.gaze.eyes if e.bone}
-        moved = anim.bone_names(action) & eyes
+        moved = clip.bone_names() & eyes
         if moved:
             add(Finding(
                 f"clip {name!r} keys {_examples(moved)}, which gaze sets itself while the character follows "
@@ -220,14 +228,13 @@ def _check_clip(scene, suite, actor, clip, add):
 def _check_paths(actor, clip, add):
     """Keyed properties a clip can't carry: materials, visibility, modifiers, camera settings."""
     lost = set()
-    for action in (clip.action, clip.extra):
-        for curve in anim.fcurves(action) if action else ():
-            path = curve.data_path
-            if curve.mute or TRANSFORM_PATH.match(path) or BONE_TRANSFORM.match(path) or BONE_OTHER.match(path):
-                continue
-            if KEY_VALUE.match(path) or (actor.obj.type == "LIGHT" and path in LIGHT_KEPT):
-                continue
-            lost.add(path)
+    for curve in clip.curves():
+        path = curve.data_path
+        if TRANSFORM_PATH.match(path) or BONE_TRANSFORM.match(path) or BONE_OTHER.match(path):
+            continue
+        if KEY_VALUE.match(path) or (actor.obj.type == "LIGHT" and path in LIGHT_KEPT):
+            continue
+        lost.add(path)
     if not lost:
         return False
     if lost:
@@ -242,11 +249,11 @@ def _check_paths(actor, clip, add):
 
 def _check_span(scene, actor, clip, add):
     action, name, obj = clip.action, clip.name, actor.obj
-    keyed = _keyed_range(action)
+    keyed = _keyed_range(clip)
     if keyed is None:
         return
     first, last = keyed
-    all_cycle, some_cycle = _cycles(action)
+    all_cycle, some_cycle = _cycles(clip)
     start, end = scene.frame_start, scene.frame_end
     if clip.mode == "ONCE":
         if some_cycle:
@@ -275,7 +282,7 @@ def _check_span(scene, actor, clip, add):
         return
     # Keying the frame after the end as the first frame is how a loop is closed in Blender.
     closing = last == end + 1 and all(
-        abs(c.evaluate(end + 1) - c.evaluate(start)) < 1e-4 for c in anim.fcurves(action) if not c.mute
+        abs(c.evaluate(end + 1) - c.evaluate(start)) < 1e-4 for c in clip.curves()
     )
     if last > end and not closing:
         add(Finding(
@@ -329,12 +336,12 @@ def _check_seam(scene, actor, clip, add):
     if clip.mode != "TIMELINE" or not actor.is_character or clip.action.use_frame_range:
         return
     start, end = scene.frame_start, scene.frame_end
-    keyed = _keyed_range(clip.action)
+    keyed = _keyed_range(clip)
     if keyed is None or keyed[1] < end:
         return
     popping = set()
-    for curve in anim.fcurves(clip.action):
-        if curve.mute or any(m.type == "CYCLES" for m in curve.modifiers):
+    for curve in clip.curves():
+        if any(m.type == "CYCLES" for m in curve.modifiers):
             continue
         step = abs(curve.evaluate(end) - curve.evaluate(end - 1)) if end > start else 0.0
         jump = abs(curve.evaluate(start) - curve.evaluate(end))

@@ -114,14 +114,26 @@ def current_actor(suite):
     return picked or (found[0] if found else None)
 
 
+def _add_clip(stored, obj, action, extra=None):
+    """A new clip of `action`, with its slot remembered when it's clear which: the action's
+    only one for objects, or the one assigned to the object as it plays the action now."""
+    item = stored.add()
+    item.action, item.extra = action, extra
+    slot, unclear = actors.resolve_slot(obj, action)
+    data = obj.animation_data
+    playing = data is not None and data.action == action and getattr(data, "action_slot", None) == slot
+    if slot is not None and (not unclear or playing):
+        item.slot = slot.identifier
+    return item
+
+
 def _listed(actor):
     """The actor's own list, which first takes on the clip its active action implies, so that
     editing the list never drops what played until then."""
     stored = actor.obj.charpaper.clips
     if len(stored) == 0:
         for clip in actors.clips(actor):
-            item = stored.add()
-            item.action, item.extra = clip.action, clip.extra
+            _add_clip(stored, actor.obj, clip.action, clip.extra)
     return stored
 
 
@@ -153,7 +165,7 @@ class CHARPAPER_OT_clip_add(Operator):
             return {"CANCELLED"}
         stored = _listed(actor)
         if not any(c.action == action for c in stored):
-            stored.add().action = action
+            _add_clip(stored, actor.obj, action)
         actor.obj.charpaper.clip_index = next(i for i, c in enumerate(stored) if c.action == action)
         return {"FINISHED"}
 
@@ -173,7 +185,7 @@ class CHARPAPER_OT_clip_add_all(Operator):
         added = 0
         for action in actors.fitting_actions(actor, suite):
             if not any(c.action == action for c in stored):
-                stored.add().action = action
+                _add_clip(stored, actor.obj, action)
                 added += 1
         self.report({"INFO"}, f"{added} clip(s) added")
         return {"FINISHED"}

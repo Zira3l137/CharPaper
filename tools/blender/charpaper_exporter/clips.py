@@ -53,9 +53,14 @@ def fps(scene):
 
 
 def span(scene, clip):
-    """The frames a clip covers, first and last included."""
+    """The frames a clip covers, first and last included: its Manual Frame Range, else the keys
+    of what it plays, its slot's and no other's."""
     action = clip.action
-    first, last = (round(f) for f in action.frame_range)
+    if action.use_frame_range:
+        first, last = (round(f) for f in action.frame_range)
+    else:
+        keyed = [k.co.x for c in clip.curves() for k in c.keyframe_points]
+        first, last = (round(min(keyed)), round(max(keyed))) if keyed else (round(f) for f in action.frame_range)
     if clip.mode == "HOLD":
         return first, first
     if clip.mode == "TIMELINE" and not action.use_frame_range:
@@ -70,8 +75,8 @@ def clip_folder(actor):
     return os.path.join(ENVIRONMENT_DIR, environment, CLIPS_DIR, file_stem(actor.name))
 
 
-def keyed_nodes(actor, action, suite):
-    """The nodes an action moves on the actor: its bones the file has, and the actor itself when
+def keyed_nodes(actor, clip, suite):
+    """The nodes a clip moves on the actor: its bones the file has, and the actor itself when
     it keys the object's own transform. A bone moves when it is keyed, driven, or held by a
     constraint whose target moves, as a deform bone following a keyed control does in a rig."""
     obj = actor.obj
@@ -79,8 +84,8 @@ def keyed_nodes(actor, action, suite):
     if obj.type == "ARMATURE":
         bones = obj.data.bones
         exported = {b.name for b in bones if b.use_deform or not suite.gltf.deform_bones_only}
-        nodes.extend(sorted(moved_bones(obj, anim.bone_names(action)) & exported))
-    if any(TRANSFORM_PATH.match(c.data_path) for c in anim.fcurves(action) if not c.mute):
+        nodes.extend(sorted(moved_bones(obj, clip.bone_names()) & exported))
+    if any(TRANSFORM_PATH.match(c.data_path) for c in clip.curves()):
         nodes.append(obj.name)
     return nodes
 
@@ -211,7 +216,7 @@ def clip_json(actor, clip, suite, scene, base=None):
     start, end = span(scene, clip)
     frames = range(start, end + 1)
     data = {"format": FORMAT, "fps": round(fps(scene), 6), "frames": len(frames)}
-    nodes = keyed_nodes(actor, clip.action, suite)
+    nodes = keyed_nodes(actor, clip, suite)
     if nodes:
         data["nodes"] = nodes
     keys = shape_key_curves(clip)
@@ -251,7 +256,7 @@ def _export_nodes(context, suite, actor, clip, path):
     options.update(NODES_ONLY)
     with isolated(context) as iso:
         copy = iso.stand_in_with_ancestors(actor.obj)
-        anim.object_track(copy, clip.name, clip.action, span(context.scene, clip))
+        anim.object_track(copy, clip.name, clip.action, span(context.scene, clip), clip.slot)
         iso.finish()
         with showing(context, iso.scene):
             return gltf.export(path, options)

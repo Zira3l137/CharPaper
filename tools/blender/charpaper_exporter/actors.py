@@ -33,12 +33,42 @@ class Actor:
         return self.obj.name
 
 
+def object_slots(action):
+    """The action's slots that animate an object, keys and all. Legacy actions have none."""
+    return [
+        s
+        for s in anim.slots(action)
+        if getattr(s, "target_id_type", "UNSPECIFIED") in ("OBJECT", "UNSPECIFIED") and anim.fcurves(action, s)
+    ]
+
+
+def resolve_slot(obj, action, picked=""):
+    """The slot of `action` that plays on the object, and when that isn't certain, the slots it
+    could be. Certain: the one picked, or the action's only one. Otherwise the one assigned to
+    the object if it plays the action, else the one named after the object, else the first."""
+    found = object_slots(action) if action is not None else []
+    if not found:
+        return None, []
+    by_id = {s.identifier: s for s in found}
+    if picked in by_id:
+        return by_id[picked], []
+    if len(found) == 1:
+        return found[0], []
+    data = obj.animation_data
+    playing = getattr(data, "action_slot", None) if data is not None and data.action == action else None
+    guess = playing if playing in found else by_id.get("OB" + obj.name, found[0])
+    return guess, [s.identifier for s in found]
+
+
 class Clip:
     """A clip as export sees it, stored on the object or implied by its active action."""
 
-    def __init__(self, action, extra=None, mode="TIMELINE", label="", gaze=True, stored=None):
+    def __init__(self, action, extra=None, mode="TIMELINE", label="", gaze=True, stored=None, obj=None):
         self.action = action
         self.reaction_only = bool(stored is not None and stored.reaction_only)
+        # Which of the action's slots moves the object: an action can hold several, like an
+        # idle copied with New and a reaction keyed beside it.
+        self.slot, self.slots_unclear = resolve_slot(obj, action, stored.slot if stored else "") if obj else (None, [])
         # A second action played with it: a mesh's shape keys or a lamp's light.
         self.extra = extra
         self.mode = mode
@@ -51,6 +81,29 @@ class Clip:
     def name(self):
         """The clip's name in the app and its files' name."""
         return file_stem(self.action.name)
+
+    def curves(self):
+        """Its unmuted curves: the action's object curves through its slot, the curves of its
+        other slots (shape keys, a light), and its second action's."""
+        found = []
+        object_slots_ = {s.handle for s in object_slots(self.action)}
+        if anim.is_layered(self.action):
+            for slot in anim.slots(self.action):
+                if slot.handle in object_slots_ and slot != self.slot:
+                    continue
+                found.extend(anim.fcurves(self.action, slot))
+        else:
+            found.extend(anim.fcurves(self.action))
+        if self.extra is not None:
+            found.extend(anim.fcurves(self.extra))
+        return [c for c in found if not c.mute]
+
+    def bone_names(self):
+        return {
+            m.group(1).replace('\\"', '"').replace("\\\\", "\\")
+            for m in (anim.BONE_PATH.match(c.data_path) for c in self.curves())
+            if m
+        }
 
 
 def own_actions(obj):
@@ -95,7 +148,7 @@ def clips(actor):
     stored = actor.obj.charpaper.clips
     if len(stored) > 0:
         return [
-            Clip(c.action, c.extra, c.mode, c.label, c.gaze, stored=c)
+            Clip(c.action, c.extra, c.mode, c.label, c.gaze, stored=c, obj=actor.obj)
             for c in stored
             if c.action is not None
         ]
@@ -104,7 +157,7 @@ def clips(actor):
     actions = own_actions(actor.obj)
     if not actions:
         return []
-    return [Clip(actions[0], actions[1] if len(actions) > 1 else None)]
+    return [Clip(actions[0], actions[1] if len(actions) > 1 else None, obj=actor.obj)]
 
 
 def shape_key_names(actor, suite):

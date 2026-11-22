@@ -102,6 +102,12 @@ def _bone_search(self, context, edit_text):
     return [name for name in armature.data.bones.keys() if text in name.lower()]
 
 
+def _object_slots(action):
+    from .actors import object_slots
+
+    return object_slots(action) if action is not None else []
+
+
 def _is_armature(self, obj):
     return obj.type == "ARMATURE"
 
@@ -454,6 +460,16 @@ class CHARPAPER_PG_actor_clip(PropertyGroup):
         name="Gaze",
         default=True,
         description="Let the character follow the cursor during this clip. Turn off for dances or lying poses",
+    )
+    slot: StringProperty(
+        name="Slot",
+        search=lambda self, context, text: [
+            s.identifier for s in _object_slots(self.action) if text.lower() in s.identifier.lower()
+        ],
+        description=(
+            "Which of the action's slots this clip plays, for an action holding several for "
+            "objects. Empty: its only one"
+        ),
     )
     reaction_only: BoolProperty(
         name="Only for hotspots",

@@ -208,9 +208,8 @@ def add_track(anim_data, name, action, slot=None, frame_range=None):
     return track
 
 
-def object_track(obj, name, action, frame_range=None):
-    slot = pick_slot(
-        action, "OBJECT", lambda s: bool(fcurves(action, s)), "OB" + obj.name
-    )
+def object_track(obj, name, action, frame_range=None, slot=None):
+    if slot is None:
+        slot = pick_slot(action, "OBJECT", lambda s: bool(fcurves(action, s)), "OB" + obj.name)
     data = obj.animation_data or obj.animation_data_create()
     return add_track(data, name, action, slot, frame_range)
