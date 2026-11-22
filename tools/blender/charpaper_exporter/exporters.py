@@ -82,8 +82,9 @@ class Alert:
         self.fix = fix
 
 
-# Marks a warning that the Stop it button fixes.
+# Marks a warning one button fixes: Stop it, Unlink it.
 STOP_SHAPE_KEYS = "SHAPE_KEYS"
+UNLINK_ACTION = "OBJECT_ACTION"
 
 
 def shape_keys_playing(obj, frame):

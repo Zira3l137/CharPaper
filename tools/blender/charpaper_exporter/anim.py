@@ -100,12 +100,12 @@ def users(action, obj):
     return any(strip.action == action for track in data.nla_tracks for strip in track.strips)
 
 
-def _moves_keys(action, slot):
-    """Whether the action, through the slot it plays with, moves shape key sliders. A layered
-    action plays nothing without a slot."""
+def _played_curves(action, slot, wanted):
+    """The unmuted curves the action plays through `slot` whose paths `wanted` accepts. A
+    layered action plays nothing without a slot."""
     if is_layered(action) and slot is None:
-        return False
-    return any(KEY_PATH.match(c.data_path) and not c.mute for c in fcurves(action, slot))
+        return []
+    return [c for c in fcurves(action, slot) if not c.mute and wanted(c.data_path)]
 
 
 def _reaches(strip, frame):
@@ -114,19 +114,19 @@ def _reaches(strip, frame):
     return strip.extrapolation == "HOLD" or (strip.extrapolation == "HOLD_FORWARD" and frame >= strip.frame_start)
 
 
-def playing_on_shape_keys(obj, frame):
-    """What sets the mesh's shape key sliders at `frame`, as (action, NLA track name or None
-    for the action assigned to them), or None. Only what Blender evaluates there counts: an
-    action without a slot, a muted track, a track other than the solo one and a strip that
-    doesn't reach the frame move nothing."""
-    key = obj.data.shape_keys if obj.type == "MESH" and obj.data else None
-    data = key.animation_data if key else None
+def playing(holder, frame, wanted=lambda path: True):
+    """What animates `holder`, an object or other ID, at `frame`, as (action, NLA track name or
+    None for its assigned action, the curves that play), or None. Only what Blender evaluates
+    there counts: an action without a slot, a muted track, a track other than the solo one and
+    a strip that doesn't reach the frame play nothing."""
+    data = getattr(holder, "animation_data", None)
     if data is None:
         return None
     action = data.action
     if action is not None and data.action_influence > 0:
-        if _moves_keys(action, getattr(data, "action_slot", None)):
-            return action, None
+        curves = _played_curves(action, getattr(data, "action_slot", None), wanted)
+        if curves:
+            return action, None, curves
     if not data.use_nla:
         return None
     tracks = [t for t in data.nla_tracks if not t.mute]
@@ -136,9 +136,45 @@ def playing_on_shape_keys(obj, frame):
                 continue
             if strip.use_animated_influence and strip.influence <= 0:
                 continue
-            if _moves_keys(strip.action, getattr(strip, "action_slot", None)):
-                return strip.action, track.name
+            curves = _played_curves(strip.action, getattr(strip, "action_slot", None), wanted)
+            if curves:
+                return strip.action, track.name, curves
     return None
+
+
+def changes(curve):
+    """Whether the curve ever moves: keys at more than one value, or a modifier making it."""
+    values = {round(k.co.y, 6) for k in curve.keyframe_points}
+    return len(values) > 1 or any(not m.mute for m in curve.modifiers)
+
+
+def playing_on_shape_keys(obj, frame):
+    """What sets the mesh's shape key sliders at `frame`, as (action, NLA track name or None),
+    or None."""
+    key = obj.data.shape_keys if obj.type == "MESH" and obj.data else None
+    found = playing(key, frame, KEY_PATH.match) if key is not None else None
+    return found[:2] if found else None
+
+
+def stop(holder, frame, wanted=lambda path: True):
+    """Stops what plays on `holder`: unassigns its action, keeping it with a fake user if
+    nothing else uses it, and mutes the NLA tracks that play. Returns the actions stopped."""
+    data = holder.animation_data
+    stopped = []
+    for _ in range(len(data.nla_tracks) + 1 if data else 0):
+        found = playing(holder, frame, wanted)
+        if found is None:
+            break
+        action, track, _ = found
+        if track is None:
+            # Unassigned, an action nothing else uses would be gone once the file is saved.
+            if action.users <= 1:
+                action.use_fake_user = True
+            data.action = None
+        else:
+            data.nla_tracks[track].mute = True
+        stopped.append(action)
+    return stopped
 
 
 def pick_slot(action, id_type, wanted, identifier):

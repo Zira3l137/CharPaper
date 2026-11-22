@@ -583,23 +583,7 @@ class CHARPAPER_OT_stop_shape_keys(Operator):
         if obj is None or obj.type != "MESH" or obj.data.shape_keys is None:
             return {"CANCELLED"}
         key = obj.data.shape_keys
-        data = key.animation_data
-        frame = context.scene.frame_current
-        stopped = []
-        # Each pass stops what plays first; a strip under it may play once it is gone.
-        for _ in range(len(data.nla_tracks) + 1 if data else 0):
-            found = anim.playing_on_shape_keys(obj, frame)
-            if found is None:
-                break
-            action, track = found
-            if track is None:
-                # Unassigned, an action nothing else uses would be gone once the file is saved.
-                if action.users <= 1:
-                    action.use_fake_user = True
-                data.action = None
-            else:
-                data.nla_tracks[track].mute = True
-            stopped.append(action)
+        stopped = anim.stop(key, context.scene.frame_current, anim.KEY_PATH.match)
         for action in stopped:
             for name in anim.key_names(action):
                 block = key.key_blocks.get(name)
@@ -610,6 +594,30 @@ class CHARPAPER_OT_stop_shape_keys(Operator):
             return {"CANCELLED"}
         names = ", ".join(sorted({a.name for a in stopped}))
         self.report({"INFO"}, f"Stopped {names} on {obj.name}; its sliders are back at 0. Check again")
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_unlink_object_action(Operator):
+    bl_idname = "charpaper.unlink_object_action"
+    bl_label = "Unlink it"
+    bl_description = (
+        "Take the object's own action off it, keeping the action in the file, and mute the NLA "
+        "tracks that play on it. The object stays where it is now"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    name: StringProperty()
+
+    def execute(self, context):
+        obj = bpy.data.objects.get(self.name)
+        if obj is None:
+            return {"CANCELLED"}
+        stopped = anim.stop(obj, context.scene.frame_current)
+        if not stopped:
+            self.report({"INFO"}, f"Nothing plays on {obj.name}")
+            return {"CANCELLED"}
+        names = ", ".join(sorted({a.name for a in stopped}))
+        self.report({"INFO"}, f"Unlinked {names} from {obj.name}. Check again")
         return {"FINISHED"}
 
 
@@ -748,6 +756,7 @@ classes = (
     CHARPAPER_OT_validate,
     CHARPAPER_OT_export,
     CHARPAPER_OT_stop_shape_keys,
+    CHARPAPER_OT_unlink_object_action,
     CHARPAPER_OT_export_alerts,
     CHARPAPER_OT_select_object,
     CHARPAPER_OT_load_manifest,

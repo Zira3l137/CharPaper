@@ -15,6 +15,7 @@ from . import env_settings
 from . import hotspots as hotspot_spots
 from . import music
 from .exporters import STOP_SHAPE_KEYS
+from .exporters import UNLINK_ACTION
 from .operators import current_actor
 from .props import file_stem
 from .props import suite_of
@@ -75,6 +76,8 @@ def finding_box(layout, finding, context, show=None):
         row.operator("charpaper.show_finding", text="", icon="RESTRICT_SELECT_OFF", emboss=False).index = show
     if finding.fix == STOP_SHAPE_KEYS:
         box.operator("charpaper.stop_shape_keys", icon="PAUSE").name = finding.object_name
+    elif finding.fix == UNLINK_ACTION:
+        box.operator("charpaper.unlink_object_action", icon="UNLINKED").name = finding.object_name
     return box
 
 

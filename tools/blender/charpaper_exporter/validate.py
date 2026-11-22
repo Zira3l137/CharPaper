@@ -15,10 +15,12 @@ from . import gltf
 from . import hotspots
 from . import lens
 from . import music
+from .actors import TRANSFORM_PATH
 from .checks import Finding
 from .exporters import CAMERAS_DIR
 from .exporters import ENVIRONMENT_DIR
 from .exporters import SKINS_DIR
+from .exporters import UNLINK_ACTION
 from .props import ORBIT
 from .props import file_stem
 
@@ -282,14 +284,47 @@ def _check_skin(suite, entry, armature, add):
         for problem in problems:
             add(Finding(f"skin {entry.name!r}: {problem.message}", problem.obj, problem.bone))
 
-    # A skin is drawn on the armature and moves only with it.
-    moving = [o.name for o in entry.collection.all_objects if o.animation_data and o.animation_data.action]
-    if moving:
+    frame = bpy.context.scene.frame_current
+    for obj in entry.collection.all_objects:
+        _check_skin_object_action(entry, obj, frame, add)
+
+
+# A skin is exported as it stands and moves only with the armature: what an object's own
+# action does to it is frozen at this frame.
+def _check_skin_object_action(entry, obj, frame, add):
+    found = anim.playing(obj, frame)
+    if found is None:
+        return
+    action, track, curves = found
+    where = f"the action {action.name}" if track is None else f"its NLA track {track!r}, playing {action.name},"
+    if not any(anim.changes(c) for c in curves):
         add(Finding(
-            f"skin {entry.name!r}: {_examples(moving)} {'has an action of its own' if len(moving) == 1 else 'have actions of their own'}, which a skin never plays; "
-            "parent them to a bone, or key the bone instead",
-            bpy.data.objects.get(moving[0]),
+            f"skin {entry.name!r}: {obj.name} has {where} of its own, which keys nothing that changes, so it "
+            "does no harm. Importers often leave these; Unlink it to tidy up",
+            obj,
+            severity="INFO",
+            fix=UNLINK_ACTION,
         ))
+        return
+    moved = [c for c in curves if anim.changes(c) and TRANSFORM_PATH.match(c.data_path)]
+    if moved:
+        add(Finding(
+            f"skin {entry.name!r}: {where} moves {obj.name}, but a skin is exported still and moves only "
+            "with the armature, so in the app it stays where it is at this frame. To move it with the "
+            "character, parent it to a bone or weight it to the armature and key the bones; then Unlink "
+            "it",
+            obj,
+            fix=UNLINK_ACTION,
+        ))
+        return
+    paths = sorted({c.data_path for c in curves if anim.changes(c)})
+    kept = "it as it is" if len(paths) == 1 else "them as they are"
+    add(Finding(
+        f"skin {entry.name!r}: on {obj.name}, {where} keys {_examples(paths)}, which a skin doesn't carry: "
+        f"the app keeps {kept} at this frame. Unlink it if that's not what you want",
+        obj,
+        fix=UNLINK_ACTION,
+    ))
 
 
 def _check_world(name, world, add):
