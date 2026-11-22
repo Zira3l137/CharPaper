@@ -437,6 +437,9 @@ fn check_hotspot(
     {
         return Err(format!("the character has no expression {name:?}"));
     }
+    if let Some(name) = hotspot.during.iter().find(|&name| !clips.iter().any(|c| &c.name == name)) {
+        return Err(format!("`during` names {name:?}, which isn't one of the character's clips"));
+    }
     if hotspot.cooldown.is_some_and(|c| !(c.is_finite() && c >= 0.0)) {
         return Err("`cooldown` must be 0 or more seconds".into());
     }

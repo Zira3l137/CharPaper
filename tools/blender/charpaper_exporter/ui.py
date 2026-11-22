@@ -688,6 +688,21 @@ class CHARPAPER_UL_hotspot_clips(UIList):
         owner.label(text="Character" if actor.is_character else actor.name)
 
 
+class CHARPAPER_UL_hotspot_during(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        clip, _ = hotspot_spots.resolve_during(suite_of(context), item)
+        if clip is None or not hotspot_spots.can_be_during(clip):
+            row.alert = True
+            row.label(text=item.action.name if item.action else "nothing picked", icon="ERROR")
+            return
+        row.label(text=clip.action.name, icon=MODE_TAGS[clip.mode])
+        if clip.label:
+            shown = row.row()
+            shown.active = False
+            shown.label(text=clip.label)
+
+
 class CHARPAPER_PT_hotspots(_Sidebar, Panel):
     bl_label = "Hotspots"
     bl_options = {"DEFAULT_CLOSED"}
@@ -735,6 +750,18 @@ class CHARPAPER_PT_hotspots(_Sidebar, Panel):
         side = row.column(align=True)
         side.menu("CHARPAPER_MT_hotspot_clip", text="", icon="ADD")
         side.operator("charpaper.hotspot_clip_remove", text="", icon="REMOVE")
+
+        layout.label(text="Only during these animations", icon="ARMATURE_DATA")
+        row = layout.row()
+        row.template_list("CHARPAPER_UL_hotspot_during", "", spot, "during", spot, "during_index", rows=2)
+        side = row.column(align=True)
+        side.menu("CHARPAPER_MT_hotspot_during", text="", icon="ADD")
+        side.operator("charpaper.hotspot_during_remove", text="", icon="REMOVE")
+        if not len(spot.during):
+            hint = layout.column()
+            hint.active = False
+            _wrapped(hint, "Empty: it goes off during any animation. Add the ones it fits, so a reaction "
+                     "made for sitting doesn't play while lying down.", context)
 
         for finding in suite.findings:
             if finding.hotspot == spot.name:
@@ -877,6 +904,7 @@ classes = (
     CHARPAPER_UL_hotspots,
     CHARPAPER_UL_hotspot_areas,
     CHARPAPER_UL_hotspot_clips,
+    CHARPAPER_UL_hotspot_during,
     CHARPAPER_MT_add_clip,
     CHARPAPER_PT_suite,
     CHARPAPER_PT_character,

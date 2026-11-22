@@ -18,7 +18,8 @@ A hotspot is made of:
   a hotspot on the hand stays on the hand while it waves.
 - **What plays:** clips, of the character and of props. Each one is a clip you already
   added in the Animation panel.
-- **When:** on a click or on hover, and how soon it may go off again.
+- **When:** on a click or on hover, how soon it may go off again, and during which of the
+  character's animations.
 
 Making the clips themselves is the next recipe, [A reaction](reaction.md). Make at least one
 first, or the hotspot has nothing to play.
@@ -43,7 +44,10 @@ first, or the hotspot has nothing to play.
 7. **What plays:** press **+** under the clip list. The menu lists each actor (the
    character, then the props) with its clips. Pick one. Add several for variety (below).
 8. Set the **Trigger**, and the rest of the settings if you need them.
-9. **Check**, then **Export all**. The hotspot is written into suite.toml.
+9. **Only during these animations:** if the reaction only fits some poses, press **+**
+   under that list and pick them. A giggle made for sitting shouldn't play while the
+   character lies down. Leave the list empty for a hotspot that fits every animation.
+10. **Check**, then **Export all**. The hotspot is written into suite.toml.
 
 The capsules are drawn in the pose of the current frame, through the mesh. Scrub the
 timeline to see them follow the bones. They're sized in the armature's units, so on a
@@ -57,6 +61,18 @@ correctly scaled character a radius of 0.05 is 5 cm.
 | **Layer** | Off (the default): it **stops** reactions other hotspots set off on the same actor and takes their place. On: it plays **over** them, moving only what its clips key. Use it for small things that go with anything: a blush, an ear twitch. |
 | **Expression** | One of the character's [expressions](expression.md), shown while its clips play. Empty: the face stays as it is, apart from what the clips key. |
 | **Cooldown** | Seconds after it goes off before it can go off again. 0: as soon as its clips end. |
+
+**Only during these animations:** the character's animations during which the hotspot
+works. The **+** menu offers the clips the viewer can pick to play on and on: *Timeline*
+and *Hold* ones. A *Once* clip the viewer picks plays over the animation they picked before
+it, and counts as that one. Empty: any animation.
+
+- While another animation plays, the hotspot isn't there at all: a click goes through to
+  a hotspot behind it, if one fits.
+- When the viewer switches to an animation the hotspot doesn't list, its reaction still
+  playing fades out right away.
+- Two hotspots can share bones, each listing different animations: a knee poke for
+  sitting and another for lying down, each with a reaction made for that pose.
 
 **Several clips for one actor:** each time the hotspot goes off, each actor plays **one** of
 its clips in the list, picked at random, and never the same one twice in a row. Three
@@ -112,13 +128,18 @@ Each warning shows in the hotspot's own box and in Warnings, tagged with the hot
   reaction it would last the whole loop and block the hotspot until then. Make it *Once*,
   or tick *Only for hotspots*.
 - **Plays a Hold clip:** a single frame, so the reaction is over as it starts.
+- **Goes off only during a Once clip, or one only for hotspots:** those are never the
+  animation playing. If that's all its list holds, it **can never go off**, and it's left
+  out of suite.toml.
 - **Shows an expression that isn't one of the character's.**
 - **Sets an expression but plays nothing on the character** (a tip): the face changes only
   while the props' clips play.
 - **Two hotspots with the same name:** only the last one is exported.
 
 When you export only part of the character, a hotspot whose bones or clips aren't exported
-yet is left out of suite.toml, and the export report says so. *Export all* writes them all.
+yet is left out of suite.toml, and the export report says so. So is one none of whose
+*Only during* animations is exported yet: written without them, it would go off during
+any animation. *Export all* writes them all.
 
 ## Good to know
 

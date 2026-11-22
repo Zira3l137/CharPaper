@@ -335,6 +335,13 @@ pub struct Hotspot {
     /// Seconds after it is set off before it can be again. Defaults to 0.
     #[schemars(range(min = 0.0))]
     pub cooldown: Option<f32>,
+    /// The character's animations during which it can be set off: names
+    /// from `character.clips`, of those the viewer picks to play on and on
+    /// (`timeline` or `hold`). A clip played once over one of them counts as
+    /// that one. Leave it out for any animation. When the animation changes
+    /// to one not listed, the hotspot's clips stop.
+    #[serde(default)]
+    pub during: Vec<String>,
 }
 
 /// What sets a hotspot off.

@@ -94,6 +94,8 @@ struct Spot {
     playing: Vec<Played>,
     fired: Option<f64>,
     hovered: Hovered,
+    // Whether the character's animation is one it may go off during.
+    open: bool,
 }
 
 struct Pick {
@@ -142,6 +144,7 @@ fn list_hotspots(
                 playing: Vec::new(),
                 fired: None,
                 hovered: Hovered::Off,
+                open: true,
             }
         });
         let seed = stage.to_bits() | 1;
@@ -267,10 +270,21 @@ fn react(
         for spot in &mut hotspots.spots {
             find_bones(stage, spot, &globals, &mut actors);
         }
+        let base = actors.character(stage).and_then(|(_, c)| c.base().map(str::to_owned));
+        for spot in &mut hotspots.spots {
+            spot.open = spot.hotspot.during.is_empty()
+                || base.as_ref().is_some_and(|base| spot.hotspot.during.contains(base));
+            if !spot.open {
+                stop(spot, &mut actors);
+            }
+        }
         let front = |trigger: Trigger| {
             let (_, ray, _) = seen?;
-            let hits =
-                hotspots.spots.iter().enumerate().filter(|(_, s)| s.hotspot.trigger == trigger);
+            let hits = hotspots
+                .spots
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.open && s.hotspot.trigger == trigger);
             hits.filter_map(|(at, spot)| Some((at, distance(spot, ray, &globals)?)))
                 .min_by(|(_, a), (_, b)| a.total_cmp(b))
                 .map(|(at, _)| at)
@@ -308,6 +322,22 @@ fn react(
         }
         for at in due {
             fire(stage, at, now, hotspots, clips, &mut actors);
+        }
+    }
+}
+
+// A reaction meant for another animation would look wrong over this one: it fades out.
+fn stop(spot: &mut Spot, actors: &mut Actors) {
+    for played in spot.playing.drain(..) {
+        let mixer = match actors.characters.get_mut(played.actor) {
+            Ok((_, character)) => character.into_inner().mixer_mut(),
+            Err(_) => match actors.props.get_mut(played.actor) {
+                Ok((_, prop)) => prop.into_inner().mixer_mut(),
+                Err(_) => continue,
+            },
+        };
+        if mixer.playing(played.slot) == Some((played.clip, Mode::Once)) {
+            mixer.stop(played.slot);
         }
     }
 }

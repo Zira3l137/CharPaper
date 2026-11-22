@@ -608,6 +608,7 @@ reaction_only = true
 [hotspots.Head]
 expression = "startled"
 cooldown = 1.5
+during = ["idle"]
 areas = [
     { bone = "Head", length = 0.2, radius = 0.12 },
     { actor = "Door", bone = "Hinge", length = 1.0, radius = 0.1 },
@@ -630,6 +631,8 @@ clips = [{ clip = "idle" }]
     assert_eq!((head.trigger, head.layer, head.cooldown), (Trigger::Click, false, Some(1.5)));
     assert_eq!(head.areas[1].actor.as_deref(), Some("Door"));
     assert_eq!(head.clips[1].clip, "slam");
+    assert_eq!(head.during, ["idle"]);
+    assert!(suite.hotspots["Belly"].during.is_empty());
     assert_eq!(
         (suite.hotspots["Belly"].trigger, suite.hotspots["Belly"].layer),
         (Trigger::Hover, true)
@@ -646,6 +649,11 @@ clips = [{ clip = "idle" }]
             r#"clips = []
 expression = "sad""#,
             "no expression \"sad\"",
+        ),
+        (
+            r#"clips = []
+during = ["lying"]"#,
+            "`during` names \"lying\"",
         ),
     ];
     for (clips, problem) in broken {

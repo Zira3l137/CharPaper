@@ -86,6 +86,25 @@ def resolve_clip(suite, item):
     return (actor, clip), None
 
 
+def resolve_during(suite, item):
+    """The character's clip an Only during entry names, or None and why not."""
+    if item.action is None:
+        return None, "has an Only during entry with nothing picked"
+    character = actors.character(suite)
+    clip = next((c for c in actors.clips(character) if c.action == item.action), None) if character else None
+    if clip is None:
+        return None, (
+            f"goes off only during {item.action.name}, which isn't one of the character's clips. Add it "
+            "in Animation"
+        )
+    return clip, None
+
+
+def can_be_during(clip):
+    """Whether the viewer can pick the clip to play on and on: what a hotspot can wait for."""
+    return clip.mode != "ONCE" and not clip.reaction_only
+
+
 def _clip_file(folder, actor, clip):
     return os.path.join(folder, clip_files.clip_folder(actor), clip.name + ".json")
 
@@ -120,6 +139,20 @@ def tables(suite, folder):
         if not areas or not played:
             left_out.append(f"hotspot {name!r}: left out, with no exported bone or clip")
             continue
+        during = []
+        for item in spot.during:
+            clip, _ = resolve_during(suite, item)
+            if clip is None or not can_be_during(clip):
+                continue
+            if os.path.isfile(_clip_file(folder, actors.character(suite), clip)):
+                during.append(clip.name)
+        # Leaving them all out would let it go off during any animation, which it mustn't.
+        if len(spot.during) and not during:
+            left_out.append(
+                f"hotspot {name!r}: left out, as none of its Only during animations is exported and can "
+                "be the one playing"
+            )
+            continue
         table = {}
         if spot.trigger != "CLICK":
             table["trigger"] = TRIGGERS[spot.trigger]
@@ -133,6 +166,8 @@ def tables(suite, folder):
                 left_out.append(f"hotspot {name!r}: its expression {expression!r} isn't exported")
         if spot.cooldown > 0:
             table["cooldown"] = round(spot.cooldown, 3)
+        if during:
+            table["during"] = during
         table["areas"] = areas
         table["clips"] = played
         out[name] = table
@@ -173,6 +208,13 @@ def load_into(suite, data):
                 continue
             item = spot.clips.add()
             item.actor, item.action = actor.obj, clip.action
+        character = actors.character(suite)
+        for clip_name in table.get("during", []):
+            clip = next((c for c in actors.clips(character) if c.name == clip_name), None) if character else None
+            if clip is None:
+                unmatched.append(f"{name}: only during {clip_name}")
+                continue
+            spot.during.add().action = clip.action
     return unmatched
 
 
@@ -238,6 +280,21 @@ def check(suite, add, finding):
                     "starts. Make it Once",
                     obj=actor.obj,
                 )
+        waits = []
+        for item in spot.during:
+            clip, problem = resolve_during(suite, item)
+            if clip is None:
+                warn(problem)
+            elif not can_be_during(clip):
+                kind = "only for hotspots" if clip.reaction_only else "a Once clip"
+                warn(
+                    f"goes off only during {clip.name}, which is {kind}: the viewer can't pick it to "
+                    "play on, so it never is the animation playing. Pick a Timeline or Hold clip",
+                )
+            else:
+                waits.append(clip)
+        if len(spot.during) and not waits:
+            warn("can never go off: none of its Only during animations can be the one playing")
         if spot.expression and file_stem(spot.expression) not in {
             file_stem(e.action.name) for e in suite.expressions if e.action is not None
         }:
@@ -503,6 +560,59 @@ class CHARPAPER_OT_hotspot_area_select(Operator):
         return {"FINISHED"}
 
 
+class CHARPAPER_OT_hotspot_during_add(Operator):
+    bl_idname = "charpaper.hotspot_during_add"
+    bl_label = "Add animation"
+    bl_description = "Let the hotspot go off while the character plays this animation"
+    bl_options = {"REGISTER", "UNDO"}
+
+    action: StringProperty()
+
+    def execute(self, context):
+        spot = current(suite_of(context))
+        action = bpy.data.actions.get(self.action)
+        if spot is None or action is None:
+            return {"CANCELLED"}
+        if not any(item.action == action for item in spot.during):
+            spot.during.add().action = action
+            spot.during_index = len(spot.during) - 1
+        return {"FINISHED"}
+
+
+class CHARPAPER_OT_hotspot_during_remove(Operator):
+    bl_idname = "charpaper.hotspot_during_remove"
+    bl_label = "Remove animation"
+    bl_description = "Remove this animation from the list. With none left, it goes off during any"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        spot = current(suite_of(context))
+        return spot is not None and 0 <= spot.during_index < len(spot.during)
+
+    def execute(self, context):
+        spot = current(suite_of(context))
+        spot.during.remove(spot.during_index)
+        spot.during_index = max(0, spot.during_index - 1)
+        return {"FINISHED"}
+
+
+class CHARPAPER_MT_hotspot_during(Menu):
+    bl_label = "Only during"
+    bl_description = "The character's animations the viewer can pick to play on and on"
+
+    def draw(self, context):
+        suite = suite_of(context)
+        layout = self.layout
+        character = actors.character(suite)
+        offered = [c for c in actors.clips(character) if can_be_during(c)] if character else []
+        if not offered:
+            layout.label(text="The character has no Timeline or Hold clips yet: add them in Animation")
+        for clip in sorted(offered, key=lambda c: c.name):
+            op = layout.operator("charpaper.hotspot_during_add", text=clip.action.name, icon=MODE_TAGS[clip.mode])
+            op.action = clip.action.name
+
+
 class CHARPAPER_MT_hotspot_clip(Menu):
     bl_label = "Play a clip"
     bl_description = "The clips of the character and of every exported environment's actors"
@@ -531,7 +641,10 @@ classes = (
     CHARPAPER_OT_hotspot_area_select,
     CHARPAPER_OT_hotspot_clip_add,
     CHARPAPER_OT_hotspot_clip_remove,
+    CHARPAPER_OT_hotspot_during_add,
+    CHARPAPER_OT_hotspot_during_remove,
     CHARPAPER_MT_hotspot_clip,
+    CHARPAPER_MT_hotspot_during,
 )
 
 

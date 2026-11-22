@@ -205,7 +205,10 @@ every .blend on the computer.
   armatures at once; the radius starts at 30% of the bone's length. The panel's eye icon
   draws them in the viewport in each hotspot's color tag, in the current pose. Each plays
   clips that are clips of their actors (one at random per actor, never the same twice in a
-  row), and may set an expression, layer over other reactions, and cool down. A hotspot
+  row), and may set an expression, layer over other reactions, cool down, and wait for some
+  of the character's Timeline or Hold clips (*Only during*; empty: any). A hotspot whose
+  *Only during* clips are none of them exported is left out, since without them it would
+  go off during any animation. A hotspot
   whose bones or clips weren't exported this time is left out of suite.toml, and the report
   says so. The add-on owns `[hotspots]` once one is made in it; *Load suite.toml* reads them
   back.

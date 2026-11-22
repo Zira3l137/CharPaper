@@ -522,6 +522,10 @@ class CHARPAPER_PG_hotspot_clip(PropertyGroup):
     action: PointerProperty(type=bpy.types.Action, name="Clip")
 
 
+class CHARPAPER_PG_hotspot_during(PropertyGroup):
+    action: PointerProperty(type=bpy.types.Action, name="Animation")
+
+
 TRIGGERS = (
     ("CLICK", "Click", "A left click on it, pressed and let go without dragging"),
     ("HOVER", "Hover", "The cursor resting on it for a moment. It goes off again once the cursor has left"),
@@ -553,6 +557,9 @@ class CHARPAPER_PG_hotspot(PropertyGroup):
     area_index: IntProperty(update=_redraw)
     clips: CollectionProperty(type=CHARPAPER_PG_hotspot_clip)
     clip_index: IntProperty()
+    # The character's animations it can go off during. Empty: any.
+    during: CollectionProperty(type=CHARPAPER_PG_hotspot_during)
+    during_index: IntProperty()
 
 
 def character_clip_names(suite):
@@ -666,6 +673,7 @@ classes = (
     CHARPAPER_PG_character_expression,
     CHARPAPER_PG_hotspot_area,
     CHARPAPER_PG_hotspot_clip,
+    CHARPAPER_PG_hotspot_during,
     CHARPAPER_PG_hotspot,
     CHARPAPER_PG_suite,
 )

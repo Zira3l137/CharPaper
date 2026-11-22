@@ -913,6 +913,14 @@
           "format": "float",
           "minimum": 0.0
         },
+        "during": {
+          "description": "The character's animations during which it can be set off: names\nfrom `character.clips`, of those the viewer picks to play on and on\n(`timeline` or `hold`). A clip played once over one of them counts as\nthat one. Leave it out for any animation. When the animation changes\nto one not listed, the hotspot's clips stop.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
         "expression": {
           "description": "The character's expression while the hotspot's clips play: a name\nfrom `character.expressions`. Then the chosen one comes back.",
           "type": [

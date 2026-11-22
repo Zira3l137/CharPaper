@@ -109,6 +109,12 @@ impl CharacterActor {
         self.ids.get(name).copied()
     }
 
+    // The animation the viewer picked to play on and on, also while a clip picked to play once
+    // plays over it.
+    pub(crate) fn base(&self) -> Option<&str> {
+        self.under.as_deref()
+    }
+
     // A hotspot's expression, over the chosen one, or none.
     pub(crate) fn reaction_face(&mut self, expression: Option<&str>) {
         match expression.and_then(|name| self.expressions.get(name)) {

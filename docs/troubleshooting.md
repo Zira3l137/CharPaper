@@ -47,7 +47,7 @@ See also: [Hotspots](recipes/hotspots.md) · [A reaction](recipes/reaction.md)
 
 | What you see | Why, and what to do |
 |---|---|
-| Clicking does nothing | The viewer turned **Reactions** off in the Scene tab; the hotspot isn't in suite.toml (export all); the click was on the settings panel; or the hotspot's capsule is smaller than it looks. Check for the hotspot's warnings. |
+| Clicking does nothing | The hotspot works only during other animations (its **Only during** list); the viewer turned **Reactions** off in the Scene tab; the hotspot isn't in suite.toml (export all); the click was on the settings panel; or the hotspot's capsule is smaller than it looks. Check for the hotspot's warnings. |
 | A reaction lasts much longer than its keys, and can't be set off again meanwhile | It plays *Timeline*, a face or corrective slot is keyed past the body, or the action's *Manual Frame Range* is on. See [How long it lasts](recipes/reaction.md#how-long-it-lasts). |
 | The reaction plays the idle, or the idle's face | The action was made with **New** while the idle was assigned, so it's a copy. Make a fresh empty action. |
 | A reaction freezes the rest of the body | It keys bones it doesn't move. Delete those keys. |

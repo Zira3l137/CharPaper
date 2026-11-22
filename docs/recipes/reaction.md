@@ -69,8 +69,9 @@ See [Sounds](sounds.md#sounds-an-animation-makes).
    [When it looks wrong](#when-it-looks-wrong).
 
 **6. Give it a hotspot.** In the **Hotspots** panel, select the belly bone in Pose Mode,
-press **+**, fit the capsule, and add `Giggle` under **What plays**. See
-[Hotspots](hotspots.md).
+press **+**, fit the capsule, and add `Giggle` under **What plays**. If the giggle only
+fits some of the character's animations (it was made sitting, say), add those under
+**Only during these animations**. See [Hotspots](hotspots.md).
 
 **7. Put the idle back on the armature** (optional, for your own sake). Pick it again in
 the Action Editor, so the viewport shows the idle while you work. The add-on exports each

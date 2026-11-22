@@ -37,7 +37,7 @@ which line.
 | `[environment]` | `default`: the environment shown first. |
 | `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `sun_follows_sky`, `exposure`, `[…fog.<object>]` fog boxes, and `no_volume_scatter` and `no_shadows`, the lights and objects left out of fog and shadows. |
 | `[environments.<name>.actors.<object>.clips.<clip>]` | How a prop's clip plays: `mode` and `cues`, as for the character. The clips are the files in `environment/<name>/clips/<object>/`. |
-| `[hotspots.<name>]` | A place that reacts to the cursor: `trigger` (`click` or `hover`), `areas`, `clips`, `layer`, `expression` and `cooldown`. See below. |
+| `[hotspots.<name>]` | A place that reacts to the cursor: `trigger` (`click` or `hover`), `areas`, `clips`, `layer`, `expression`, `cooldown` and `during`. See below. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
@@ -50,6 +50,7 @@ which line.
 trigger = "click"
 expression = "happy"
 cooldown = 2.0
+during = ["sit_idle", "sit_reading"]
 areas = [{ bone = "spine.002", length = 0.15, radius = 0.12 }]
 clips = [{ clip = "giggle" }, { clip = "giggle_2" }, { actor = "Door", clip = "slam" }]
 ```
@@ -60,8 +61,11 @@ clips = [{ clip = "giggle" }, { clip = "giggle_2" }, { actor = "Door", clip = "s
 - `clips`: what plays. Without `actor` it's a clip of the character; with it, a clip of
   that prop in the environment shown. Several clips of one actor: one of them at random.
 - `layer = true` plays over other reactions instead of replacing them.
+- `during`: the character's clips during which it can go off, of those the viewer picks to
+  play on and on (`timeline` or `hold`). A `once` clip picked over one of them counts as
+  that one. Left out: any. When the animation changes to one not listed, its clips stop.
 - `expression` must name one of the character's expressions, and each clip of the
-  character must exist, or the character doesn't load. A prop's clips and bones are
+  character, in `clips` and in `during`, must exist, or the character doesn't load. A prop's clips and bones are
   looked up when its environment shows; one that isn't there is skipped.
 
 ## Things worth knowing
