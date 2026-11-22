@@ -206,7 +206,8 @@ class CHARPAPER_UL_clips(UIList):
             row.label(text="", icon="HAND")
         if data == getattr(suite.armature, "charpaper", None) and not item.gaze:
             row.label(text="", icon="HIDE_ON")
-        row.label(text=MODE_NAMES[item.mode], icon=MODE_TAGS[item.mode])
+        mode = "ONCE" if item.reaction_only else item.mode
+        row.label(text=MODE_NAMES[mode], icon=MODE_TAGS[mode])
 
 
 class CHARPAPER_MT_add_clip(Menu):
@@ -443,10 +444,16 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
         box = _split(layout.box())
         box.prop(clip, "action")
         box.prop(clip, "label")
-        box.row().prop(clip, "mode", expand=True)
+        modes = box.row()
+        modes.enabled = not clip.reaction_only
+        modes.prop(clip, "mode", expand=True)
         if actor.is_character:
             box.prop(clip, "gaze")
             box.prop(clip, "reaction_only")
+            if clip.reaction_only:
+                hint = box.row()
+                hint.active = False
+                hint.label(text="Plays once, over its own keys: hotspots play it", icon="INFO")
         if clip.extra or actor.obj.type == "LIGHT" or not LAYERED:
             box.prop(clip, "extra")
         if clip.action is None:

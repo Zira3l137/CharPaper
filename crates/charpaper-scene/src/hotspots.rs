@@ -92,7 +92,8 @@ struct Spot {
     // The clips of each actor it plays, with the one picked last.
     picks: Vec<Pick>,
     playing: Vec<Played>,
-    fired: Option<f64>,
+    // When its clips last stopped playing, which its cooldown counts from.
+    ended: Option<f64>,
     hovered: Hovered,
 }
 
@@ -140,7 +141,7 @@ fn list_hotspots(
                 hotspot: hotspot.clone(),
                 picks,
                 playing: Vec::new(),
-                fired: None,
+                ended: None,
                 hovered: Hovered::Off,
             }
         });
@@ -248,7 +249,7 @@ fn react(
 
     for (stage, settings, mut hotspots, clips) in &mut stages {
         let hotspots = &mut *hotspots;
-        end_finished(stage, hotspots, &mut actors);
+        end_finished(stage, now, hotspots, &mut actors);
         if hotspots.spots.is_empty() {
             continue;
         }
@@ -308,9 +309,13 @@ fn react(
 
 // Drops what has stopped playing: run out, or taken over by another reaction. A hotspot's
 // expression goes once all its clips have.
-fn end_finished(stage: Entity, hotspots: &mut Hotspots, actors: &mut Actors) {
+fn end_finished(stage: Entity, now: f64, hotspots: &mut Hotspots, actors: &mut Actors) {
     for spot in &mut hotspots.spots {
+        let was_playing = !spot.playing.is_empty();
         spot.playing.retain(|played| actors.still_playing(played));
+        if was_playing && spot.playing.is_empty() {
+            spot.ended = Some(now);
+        }
     }
     if let Some(owner) = hotspots.face
         && hotspots.spots[owner].playing.is_empty()
@@ -389,7 +394,7 @@ fn fire(
 ) {
     let spot = &hotspots.spots[at];
     let cooldown = f64::from(spot.hotspot.cooldown.unwrap_or(0.0));
-    if spot.fired.is_some_and(|fired| now - fired < cooldown) || !spot.playing.is_empty() {
+    if spot.ended.is_some_and(|ended| now - ended < cooldown) || !spot.playing.is_empty() {
         return;
     }
     let layer = spot.hotspot.layer;
@@ -422,7 +427,6 @@ fn fire(
     }
     let spot = &mut hotspots.spots[at];
     spot.playing = played;
-    spot.fired = Some(now);
     if let Some(expression) = &spot.hotspot.expression
         && let Some((_, mut character)) = actors.character(stage)
     {

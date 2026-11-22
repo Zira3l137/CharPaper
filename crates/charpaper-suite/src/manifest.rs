@@ -332,7 +332,8 @@ pub struct Hotspot {
     /// The character's expression while the hotspot's clips play: a name
     /// from `character.expressions`. Then the chosen one comes back.
     pub expression: Option<String>,
-    /// Seconds after it is set off before it can be again. Defaults to 0.
+    /// Seconds after its clips end before it can be set off again. Defaults
+    /// to 0: as soon as they end.
     #[schemars(range(min = 0.0))]
     pub cooldown: Option<f32>,
 }

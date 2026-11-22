@@ -223,11 +223,19 @@ def check(suite, add, finding):
                 continue
             actor, clip = resolved
             used.add((actor.obj, clip.name))
-            if clip.mode != "ONCE":
+            if clip.mode == "TIMELINE" and not clip.action.use_frame_range:
+                scene = bpy.context.scene
                 warn(
-                    f"plays {clip.name}, a {clip.mode.title()} clip. Reactions play through once whatever "
-                    "the mode, so set it to Once to see it as the app does",
-                    severity="INFO",
+                    f"plays {clip.name}, a Timeline clip, which is exported over the whole timeline (frames "
+                    f"{scene.frame_start}–{scene.frame_end}): as a reaction it lasts that long, holding its last "
+                    "key, and the hotspot can't go off again until it ends. Make it Once, or tick Only for "
+                    "hotspots",
+                    obj=actor.obj,
+                )
+            elif clip.mode == "HOLD":
+                warn(
+                    f"plays {clip.name}, a Hold clip, which is a single frame: the reaction is over as it "
+                    "starts. Make it Once",
                     obj=actor.obj,
                 )
         if spot.expression and file_stem(spot.expression) not in {

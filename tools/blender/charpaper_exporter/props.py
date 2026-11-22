@@ -544,7 +544,7 @@ class CHARPAPER_PG_hotspot(PropertyGroup):
     )
     cooldown: FloatProperty(
         name="Cooldown",
-        description="Seconds after it goes off before it can again",
+        description="Seconds after its clips end before it can go off again",
         min=0.0,
         soft_max=10.0,
         precision=1,

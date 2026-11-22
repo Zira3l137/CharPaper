@@ -94,7 +94,7 @@ def _check_default(suite, add):
     clip = next((c for c in actors.clips(actors.character(suite)) if c.name == suite.default_clip), None)
     if clip is None:
         add(Finding(f"the character starts with {suite.default_clip!r}, which is none of its clips; star one", armature))
-    elif clip.mode == "ONCE":
+    elif clip.mode == "ONCE" and not clip.reaction_only:
         add(Finding(
             f"the character starts with {clip.name!r}, a Once clip, which would play once and leave nothing under "
             "it; the app starts in the rest pose instead. Star a Timeline or Hold clip",
@@ -258,6 +258,17 @@ def _check_span(scene, actor, clip, add):
     if clip.mode == "ONCE":
         if some_cycle:
             add(Finding(f"clip {name!r} plays Once, so its Cycles modifier repeats nothing", obj, severity="INFO", clip=name))
+        if action.use_frame_range:
+            own_start, own_end = (round(f) for f in action.frame_range)
+            if own_end > last + 1:
+                add(Finding(
+                    f"clip {name!r} plays once over its Manual Frame Range, frames {own_start}–{own_end}, but its "
+                    f"keys end at frame {last}, so it holds still for {own_end - last} frames before handing back, "
+                    "and a hotspot playing it can't go off again until then. Turn Manual Frame Range off in the "
+                    "action's properties, or end it at the last key",
+                    obj,
+                    clip=name,
+                ))
         return
     if clip.mode == "HOLD":
         if last > first:
