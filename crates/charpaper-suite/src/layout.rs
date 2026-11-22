@@ -26,6 +26,7 @@ use crate::manifest::NO_LUT;
 use crate::manifest::Post;
 use crate::manifest::SCHEMA_VERSION;
 use crate::manifest::Timeline;
+use crate::manifest::Trigger;
 
 const CLIPS_DIR: &str = "clips";
 const EXPRESSIONS_DIR: &str = "expressions";
@@ -419,26 +420,62 @@ fn check_hotspot(
             ));
         }
     }
-    for wanted in &hotspot.clips {
-        let found = match &wanted.actor {
-            None => clips.iter().any(|c| c.name == wanted.clip),
+    let find = |actor: &Option<String>, clip: &str| -> Result<&ClipFile, String> {
+        let found = match actor {
+            None => clips.iter().find(|c| c.name == clip),
             Some(name) => {
                 let named = environments.iter().flat_map(|e| &e.actors).filter(|a| &a.name == name);
-                named.flat_map(|a| &a.clips).any(|c| c.name == wanted.clip)
+                named.flat_map(|a| &a.clips).find(|c| c.name == clip)
             }
         };
-        if !found {
-            let owner = wanted.actor.as_deref().unwrap_or("the character");
-            return Err(format!("{owner} has no clip {:?}", wanted.clip));
+        let owner = actor.as_deref().unwrap_or("the character");
+        found.ok_or_else(|| format!("{owner} has no clip {clip:?}"))
+    };
+    let pointed = matches!(hotspot.trigger, Trigger::Click | Trigger::Hover);
+    if !pointed && !hotspot.areas.is_empty() {
+        return Err("only `click` and `hover` hotspots have `areas`".into());
+    }
+    if pointed && hotspot.after.is_some() {
+        return Err("only `idle` and `welcome` hotspots have `after`".into());
+    }
+    if hotspot.after.is_some_and(|after| !(after.is_finite() && after > 0.0)) {
+        return Err("`after` must be more than 0 seconds".into());
+    }
+    for wanted in &hotspot.clips {
+        find(&wanted.actor, &wanted.clip)?;
+        if wanted.from == Some(0) {
+            return Err(format!("clip {:?}: `from` counts from 1", wanted.clip));
+        }
+    }
+    for wanted in &hotspot.during {
+        find(&wanted.actor, &wanted.clip)?;
+    }
+    if hotspot.trigger == Trigger::Welcome && !hotspot.meanwhile.is_empty() {
+        return Err("a `welcome` hotspot isn't held, so it has no `while`".into());
+    }
+    for (field, list) in [("while", &hotspot.meanwhile), ("then", &hotspot.then)] {
+        for (at, wanted) in list.iter().enumerate() {
+            let clip = find(&wanted.actor, &wanted.clip)?;
+            // What the character plays on and on after is the viewer's pick, so it must be one.
+            let hidden = field == "then" && wanted.actor.is_none() && clip.reaction_only;
+            if clip.mode == ClipMode::Once || hidden {
+                return Err(format!(
+                    "`{field}` names {:?}, which doesn't play on and on: it has to be a timeline \
+                     or hold clip{}",
+                    wanted.clip,
+                    if field == "then" { ", and not only for hotspots" } else { "" }
+                ));
+            }
+            if list[..at].iter().any(|other| other.actor == wanted.actor) {
+                let owner = wanted.actor.as_deref().unwrap_or("the character");
+                return Err(format!("`{field}` names two clips for {owner}"));
+            }
         }
     }
     if let Some(name) = &hotspot.expression
         && !expressions.iter().any(|e| &e.name == name)
     {
         return Err(format!("the character has no expression {name:?}"));
-    }
-    if let Some(name) = hotspot.during.iter().find(|&name| !clips.iter().any(|c| &c.name == name)) {
-        return Err(format!("`during` names {name:?}, which isn't one of the character's clips"));
     }
     if hotspot.cooldown.is_some_and(|c| !(c.is_finite() && c >= 0.0)) {
         return Err("`cooldown` must be 0 or more seconds".into());

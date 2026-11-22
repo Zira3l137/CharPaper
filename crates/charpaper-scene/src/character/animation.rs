@@ -109,6 +109,24 @@ impl CharacterActor {
         self.ids.get(name).copied()
     }
 
+    // Switches to a timeline or hold clip at once, as if the viewer had picked it: for a switch
+    // a reaction fading out above hides. False until the clip has loaded.
+    pub(crate) fn cut_to(&mut self, name: &str, clips: &CharacterClips) -> bool {
+        let (Some(&id), Some(clip)) = (self.ids.get(name), clips.get(name)) else {
+            return false;
+        };
+        let mode = match clip.mode {
+            ClipMode::Timeline => Mode::Timeline,
+            ClipMode::Hold => Mode::Hold,
+            ClipMode::Once => return false,
+        };
+        self.actor.cut(BODY, id, mode);
+        self.actor.stop(BODY_ONCE);
+        self.under = Some(name.to_string());
+        self.chosen = Some(name.to_string());
+        true
+    }
+
     // The animation the viewer picked to play on and on, also while a clip picked to play once
     // plays over it.
     pub(crate) fn base(&self) -> Option<&str> {

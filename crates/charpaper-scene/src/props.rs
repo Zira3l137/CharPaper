@@ -54,6 +54,7 @@ pub(crate) struct PropActor {
     sounds: BTreeMap<PathBuf, Handle<AudioSource>>,
     light: Option<LitBy>,
     started: bool,
+    base: Option<String>,
     events: Vec<Event>,
 }
 
@@ -149,6 +150,7 @@ impl PropActor {
             sounds,
             light,
             started: false,
+            base: None,
             events: Vec::new(),
         }
     }
@@ -176,6 +178,30 @@ impl PropActor {
     pub(crate) fn clip_id(&self, name: &str) -> Option<ClipId> {
         self.clips.iter().find(|clip| clip.name == name)?.id
     }
+
+    pub(crate) fn clip_mode(&self, name: &str) -> Option<ClipMode> {
+        Some(self.clips.iter().find(|clip| clip.name == name)?.mode)
+    }
+
+    // The clip it plays on and on: its own, or the one a hotspot switched it to.
+    pub(crate) fn base(&self) -> Option<&str> {
+        self.base.as_deref()
+    }
+
+    // Plays a timeline or hold clip on and on from now, at once: a reaction fading out above
+    // hides the switch. False until it has loaded.
+    pub(crate) fn switch(&mut self, name: &str) -> bool {
+        let Some(clip) = self.clips.iter().find(|clip| clip.name == name) else {
+            return false;
+        };
+        let (Some(id), Some(mode)) = (clip.id, base_mode(clip.mode)) else {
+            return false;
+        };
+        self.actor.cut(BASE, id, mode);
+        self.base = Some(name.to_string());
+        self.started = true;
+        true
+    }
 }
 
 // The strength and color a light spawned with, on the node itself or the child glTF puts it on.
@@ -191,6 +217,14 @@ pub(crate) fn light_of(
         (_, _, Some(sun)) => Some((entity, sun.illuminance, sun.color)),
         (None, None, None) => None,
     })
+}
+
+pub(crate) fn base_mode(mode: ClipMode) -> Option<Mode> {
+    match mode {
+        ClipMode::Timeline => Some(Mode::Timeline),
+        ClipMode::Hold => Some(Mode::Hold),
+        ClipMode::Once => None,
+    }
 }
 
 // A prop plays its first timeline clip from the moment that clip has loaded, or holds its
@@ -216,6 +250,7 @@ fn add_loaded_clips(mut props: Query<&mut PropActor>, files: Res<Assets<ClipAsse
         };
         let mode = if own.mode == ClipMode::Hold { Mode::Hold } else { Mode::Timeline };
         prop.actor.play(BASE, id, mode);
+        prop.base = Some(own.name.clone());
         prop.started = true;
         debug!("prop {:?} plays its clip", prop.name);
     }

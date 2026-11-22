@@ -71,6 +71,26 @@
     "schema"
   ],
   "$defs": {
+    "ActorClip": {
+      "description": "An actor's clip: the character's, or an environment actor's.",
+      "type": "object",
+      "properties": {
+        "actor": {
+          "description": "The name of one of an environment's actors. Leave it out for the\ncharacter.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clip": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clip"
+      ]
+    },
     "ActorEntry": {
       "description": "One animated object or armature of an environment.",
       "type": "object",
@@ -887,11 +907,20 @@
       "additionalProperties": false
     },
     "Hotspot": {
-      "description": "A place that reacts to the mouse: capsules around bones. When it is set\noff, every actor it lists clips for plays one of them, picked at random\nbut never the one it played last time; the character's and a door's clips\nplayed together stay in step. A clip plays through once whatever its mode,\nthen what played before shows again. While its clips play, setting the\nhotspot off again does nothing.",
+      "description": "Something that reacts: to the mouse on capsules around bones, or to the\nmouse keeping still or coming back. When it is set off, every actor it\nlists clips for plays one of them through once, picked at random but never\nthe one it played last time; the character's and a door's clips played\ntogether stay in step. Its `while` clips play on and on for as long as it\nis held: pressed, hovered, or the mouse kept still. When it lets go, or\nits clips end, actors switch to their `then` clips, or what played before\nshows again. While its clips play, setting it off again does nothing.",
       "type": "object",
       "properties": {
+        "after": {
+          "description": "For `idle` and `welcome`: how many seconds the mouse keeps still, or\nstays away from the desktop, first. Defaults to 60 for `idle` and 300\nfor `welcome`.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float",
+          "minimum": 0.0
+        },
         "areas": {
-          "description": "Where the hotspot is: any number of capsules, each around one bone.",
+          "description": "Where the hotspot is: any number of capsules, each around one bone.\nOnly `click` and `hover` hotspots have any.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HotspotArea"
@@ -914,11 +943,10 @@
           "minimum": 0.0
         },
         "during": {
-          "description": "The character's animations during which it can be set off: names\nfrom `character.clips`, of those the viewer picks to play on and on\n(`timeline` or `hold`). A clip played once over one of them counts as\nthat one. Leave it out for any animation. When the animation changes\nto one not listed, the hotspot's clips stop.",
+          "description": "The animations during which it can be set off: for each actor listed,\nwhat it plays on and on must be one of its clips here. The character's\nis the one the viewer picked, `timeline` or `hold`; a clip played once\nover it counts as that one. A prop's is the clip it plays by itself, or\nlast switched to by `then`. Leave it out for any. When an animation\nchanges to one not listed, the hotspot's clips stop.",
           "type": "array",
-          "default": [],
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/ActorClip"
           }
         },
         "expression": {
@@ -933,13 +961,26 @@
           "type": "boolean",
           "default": false
         },
+        "then": {
+          "description": "What each actor listed plays on and on once the hotspot lets go, or\nonce its clips end if it has no `while`: a `timeline` or `hold` clip,\nat most one per actor. The character's becomes the viewer's pick, as if\npicked in the panel. Until it switches, no other hotspot goes off.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActorClip"
+          }
+        },
         "trigger": {
           "$ref": "#/$defs/Trigger"
+        },
+        "while": {
+          "description": "What each actor listed plays for as long as the hotspot is held: the\nbutton pressed on a `click` one, the cursor on a `hover` one, the mouse\nstill for an `idle` one. A `timeline` or `hold` clip, at most one per\nactor, and none for `welcome`. A `click` hotspot with any goes off as\nit's pressed. Its `clips` play once over them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActorClip"
+          }
         }
       },
       "additionalProperties": false,
       "required": [
-        "areas",
         "clips"
       ]
     },
@@ -991,6 +1032,15 @@
         "clip": {
           "description": "The clip's name, as in `character.clips` or the actor's `clips`.",
           "type": "string"
+        },
+        "from": {
+          "description": "Plays only from this time in a row on, and then instead of those\nwith a lower `from`: going off again within a few seconds of being\nable to, or for `idle`, while the mouse stays still. Defaults to 1.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1
         }
       },
       "additionalProperties": false,
@@ -1156,6 +1206,16 @@
           "description": "The cursor resting on it for a moment. It goes off again only after the\ncursor has left it.",
           "type": "string",
           "const": "hover"
+        },
+        {
+          "description": "The mouse keeping still for `after` seconds, and again every `after`\nseconds while it stays still. A held pose holds until it moves.",
+          "type": "string",
+          "const": "idle"
+        },
+        {
+          "description": "The mouse moving on the desktop after keeping still, or being away\nfrom the desktop, for `after` seconds.",
+          "type": "string",
+          "const": "welcome"
         }
       ]
     },

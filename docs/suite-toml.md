@@ -37,7 +37,7 @@ which line.
 | `[environment]` | `default`: the environment shown first. |
 | `[environments.<name>]` | Per environment: `sky_strength`, `sky_rotation_deg`, `background` and `background_blur`, `shadows` on or off, `sun_follows_sky`, `exposure`, `[…fog.<object>]` fog boxes, and `no_volume_scatter` and `no_shadows`, the lights and objects left out of fog and shadows. |
 | `[environments.<name>.actors.<object>.clips.<clip>]` | How a prop's clip plays: `mode` and `cues`, as for the character. The clips are the files in `environment/<name>/clips/<object>/`. |
-| `[hotspots.<name>]` | A place that reacts to the cursor: `trigger` (`click` or `hover`), `areas`, `clips`, `layer`, `expression`, `cooldown` and `during`. See below. |
+| `[hotspots.<name>]` | Something that reacts: to a click or the cursor resting on a place, or to the mouse keeping still or coming back. `trigger`, `after`, `areas`, `clips`, `while`, `then`, `during`, `layer`, `expression` and `cooldown`. See below. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
@@ -50,23 +50,62 @@ which line.
 trigger = "click"
 expression = "happy"
 cooldown = 2.0
-during = ["sit_idle", "sit_reading"]
+during = [{ clip = "sit_idle" }, { clip = "sit_reading" }]
 areas = [{ bone = "spine.002", length = 0.15, radius = 0.12 }]
-clips = [{ clip = "giggle" }, { clip = "giggle_2" }, { actor = "Door", clip = "slam" }]
+clips = [
+    { clip = "giggle" },
+    { clip = "giggle_2" },
+    { clip = "annoyed", from = 5 },
+    { actor = "Door", clip = "slam" },
+]
+
+[hotspots.Pet]
+trigger = "hover"
+areas = [{ bone = "head", length = 0.2, radius = 0.1 }]
+clips = [{ clip = "lean_in" }]
+while = [{ clip = "purr" }]
+then = [{ clip = "content_idle" }]
+
+[hotspots.Nap]
+trigger = "idle"
+after = 120
+clips = [{ clip = "lie_down" }]
+while = [{ clip = "sleeping" }, { actor = "Lamp", clip = "off" }]
 ```
 
+- `trigger`: `click`, `hover`, `idle` (the mouse keeps still for `after` seconds, 60 if
+  left out, and again every `after` seconds while it does) or `welcome` (the mouse moves
+  on the desktop after keeping still, or being elsewhere, for `after` seconds, 300 if left
+  out). Only `click` and `hover` have `areas`; only `idle` and `welcome` have `after`.
 - `areas`: each a capsule around a bone: `bone`, its `length` (from the bone's head along
   the bone) and `radius`, in meters. Add `actor = "<armature object>"` for a bone of an
   environment's armature; without it, the bone is the character's.
 - `clips`: what plays. Without `actor` it's a clip of the character; with it, a clip of
   that prop in the environment shown. Several clips of one actor: one of them at random.
+  `from = 5` plays that clip only from the 5th time in a row on, instead of those with a
+  lower `from`. In a row means going off again within 3 seconds of being able to, or for
+  `idle`, without the mouse moving in between.
 - `layer = true` plays over other reactions instead of replacing them.
-- `during`: the character's clips during which it can go off, of those the viewer picks to
-  play on and on (`timeline` or `hold`). A `once` clip picked over one of them counts as
-  that one. Left out: any. When the animation changes to one not listed, its clips stop.
-- `expression` must name one of the character's expressions, and each clip of the
-  character, in `clips` and in `during`, must exist, or the character doesn't load. A prop's clips and bones are
-  looked up when its environment shows; one that isn't there is skipped.
+- `while`: what each actor named plays on and on for as long as the hotspot is held: its
+  button down for `click`, the cursor on it for `hover`, the mouse still for `idle`. A
+  `timeline` or `hold` clip, at most one per actor, and none for `welcome`. `clips` play
+  once over them, fading into them as they end. A `click` hotspot with `while` goes off as
+  the button is pressed, rather than when it's let go.
+- `during`: animations it waits for. For each actor named in it, what that actor plays on
+  and on must be one of its clips listed: the character's animation the viewer picked
+  (a `once` clip picked over it counts as that one), or a prop's own clip, or the one
+  `then` switched it to. Left out: any. When an animation changes to one not listed, the
+  hotspot's clips stop.
+- `then`: what each actor named plays on and on afterwards: once the hotspot lets go, or
+  if it has no `while`, once its `clips` end. At most one per actor, a `timeline` or `hold`
+  clip, and for the character, not one only for hotspots. It switches at once under the
+  reaction fading out, so the reaction's last pose fades straight into it. The character's
+  becomes the viewer's pick, as if picked in the panel, and is remembered. A prop's goes
+  back to its own when its environment is shown again. Until a hotspot has switched, no
+  other goes off.
+- Every clip named, in `clips`, `while`, `during` and `then`, and `expression`, must exist, or the
+  character doesn't load. Bones are looked up when they're shown; one that isn't there is
+  skipped.
 
 ## Things worth knowing
 

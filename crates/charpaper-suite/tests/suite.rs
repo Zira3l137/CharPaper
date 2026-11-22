@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use charpaper_suite::ActorClip;
 use charpaper_suite::ClipMode;
 use charpaper_suite::EyeKind;
 use charpaper_suite::Suite;
@@ -608,7 +609,7 @@ reaction_only = true
 [hotspots.Head]
 expression = "startled"
 cooldown = 1.5
-during = ["idle"]
+during = [{ clip = "idle" }]
 areas = [
     { bone = "Head", length = 0.2, radius = 0.12 },
     { actor = "Door", bone = "Hinge", length = 1.0, radius = 0.1 },
@@ -631,7 +632,7 @@ clips = [{ clip = "idle" }]
     assert_eq!((head.trigger, head.layer, head.cooldown), (Trigger::Click, false, Some(1.5)));
     assert_eq!(head.areas[1].actor.as_deref(), Some("Door"));
     assert_eq!(head.clips[1].clip, "slam");
-    assert_eq!(head.during, ["idle"]);
+    assert_eq!(head.during, [ActorClip { actor: None, clip: "idle".into() }]);
     assert!(suite.hotspots["Belly"].during.is_empty());
     assert_eq!(
         (suite.hotspots["Belly"].trigger, suite.hotspots["Belly"].layer),
@@ -652,8 +653,14 @@ expression = "sad""#,
         ),
         (
             r#"clips = []
-during = ["lying"]"#,
-            "`during` names \"lying\"",
+during = [{ clip = "lying" }]"#,
+            "the character has no clip \"lying\"",
+        ),
+        (r#"clips = [{ clip = "flinch", from = 0 }]"#, "`from` counts from 1"),
+        (
+            r#"clips = []
+after = 30"#,
+            "only `idle` and `welcome` hotspots have `after`",
         ),
     ];
     for (clips, problem) in broken {
@@ -670,4 +677,80 @@ during = ["lying"]"#,
     let unclipped = "schema = 2\n[hotspots.Hand]\nareas = [{ actor = \"Lamp\", bone = \"B\", length = 0.1, radius = 0.1 }]\nclips = []";
     fixture.write("suite.toml", unclipped);
     assert!(fixture.load().is_ok(), "an armature needs no clips to carry a hotspot");
+}
+
+#[test]
+fn idle_and_welcome_hotspots_streaks_and_then() {
+    let manifest = r#"schema = 2
+[character.clips.flinch]
+mode = "once"
+reaction_only = true
+
+[character.clips.lie]
+mode = "hold"
+
+[environments.stage.actors.Lamp.clips.off]
+mode = "hold"
+
+[hotspots.Bored]
+trigger = "idle"
+clips = [{ clip = "flinch" }, { clip = "flinch", from = 3 }]
+while = [{ clip = "lie" }]
+then = [{ clip = "lie" }, { actor = "Lamp", clip = "off" }]
+
+[hotspots.Hello]
+trigger = "welcome"
+after = 20
+clips = [{ clip = "flinch" }]
+during = [{ clip = "lie" }, { actor = "Lamp", clip = "off" }]
+"#;
+    let fixture = Fixture::new("idle-hotspots", manifest);
+    fixture.write("clips/flinch.json", "{}");
+    fixture.write("clips/lie.json", "{}");
+    fixture.write("environment/stage/clips/Lamp/off.json", "{}");
+    let suite = fixture.load().unwrap();
+
+    let bored = &suite.hotspots["Bored"];
+    assert_eq!((bored.trigger, bored.after_secs()), (Trigger::Idle, 60.0));
+    assert_eq!(bored.clips[1].from, Some(3));
+    assert_eq!(bored.then[1], ActorClip { actor: Some("Lamp".into()), clip: "off".into() });
+    assert_eq!(bored.meanwhile, [ActorClip { actor: None, clip: "lie".into() }]);
+    let hello = &suite.hotspots["Hello"];
+    assert_eq!(
+        (hello.trigger, hello.after_secs(), hello.during.len()),
+        (Trigger::Welcome, 20.0, 2)
+    );
+
+    let broken = [
+        (
+            r#"then = [{ clip = "flinch" }]"#,
+            "`then` names \"flinch\", which doesn't play on and on",
+        ),
+        (
+            r#"then = [{ clip = "idle" }, { clip = "lie" }]"#,
+            "`then` names two clips for the character",
+        ),
+        (r#"then = [{ actor = "Lamp", clip = "on" }]"#, "Lamp has no clip \"on\""),
+        (
+            r#"while = [{ clip = "flinch" }]"#,
+            "`while` names \"flinch\", which doesn't play on and on",
+        ),
+        ("after = 0", "`after` must be more than 0 seconds"),
+        (
+            r#"areas = [{ bone = "Hand", length = 0.1, radius = 0.05 }]"#,
+            "only `click` and `hover` hotspots have `areas`",
+        ),
+    ];
+    for (extra, problem) in broken {
+        let text = format!("{manifest}\n[hotspots.Nap]\ntrigger = \"idle\"\nclips = []\n{extra}\n");
+        fixture.write("suite.toml", &text);
+        let err = fixture.load().unwrap_err().to_string();
+        assert!(err.contains("hotspot \"Nap\"") && err.contains(problem), "{err}");
+    }
+    let text = format!(
+        "{manifest}\n[hotspots.Hi]\ntrigger = \"welcome\"\nclips = []\nwhile = [{{ clip = \"lie\" }}]\n"
+    );
+    fixture.write("suite.toml", &text);
+    let err = fixture.load().unwrap_err().to_string();
+    assert!(err.contains("a `welcome` hotspot isn't held"), "{err}");
 }

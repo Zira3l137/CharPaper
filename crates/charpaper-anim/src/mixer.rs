@@ -213,6 +213,25 @@ impl Actor {
         slot.entries.push(Entry { clip, mode, time: 0.0, weight, fresh: true, leaving: false });
     }
 
+    /// Starts `clip` in `slot` at once, dropping what played there without a fade: for a switch
+    /// a slot above hides while it fades out itself.
+    pub fn cut(&mut self, slot: usize, clip: ClipId, mode: Mode) {
+        let slot = &mut self.slots[slot];
+        let same = slot.current().is_some_and(|e| e.clip == clip && e.mode == mode);
+        if same && mode != Mode::Once {
+            return;
+        }
+        slot.entries.clear();
+        slot.entries.push(Entry {
+            clip,
+            mode,
+            time: 0.0,
+            weight: 1.0,
+            fresh: true,
+            leaving: false,
+        });
+    }
+
     /// Fades out what plays in `slot`.
     pub fn stop(&mut self, slot: usize) {
         self.slots[slot].leave();

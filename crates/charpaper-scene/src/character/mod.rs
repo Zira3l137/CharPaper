@@ -11,6 +11,7 @@ use bevy::transform::TransformSystems;
 pub(crate) use animation::CharacterActor;
 pub use animation::CharacterClips;
 pub(crate) use animation::REACTIONS;
+pub(crate) use animation::play_selected;
 pub use expression::Expressions;
 pub(crate) use skin::ShownSkin;
 pub use skin::SkinObjects;

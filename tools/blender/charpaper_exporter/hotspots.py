@@ -145,7 +145,7 @@ def tables(suite, folder):
             if clip is None or not can_be_during(clip):
                 continue
             if os.path.isfile(_clip_file(folder, actors.character(suite), clip)):
-                during.append(clip.name)
+                during.append({"clip": clip.name})
         # Leaving them all out would let it go off during any animation, which it mustn't.
         if len(spot.during) and not during:
             left_out.append(
@@ -209,7 +209,12 @@ def load_into(suite, data):
             item = spot.clips.add()
             item.actor, item.action = actor.obj, clip.action
         character = actors.character(suite)
-        for clip_name in table.get("during", []):
+        for wanted in table.get("during", []):
+            clip_name = wanted.get("clip", "")
+            # The panel waits on the character's animations alone, so far.
+            if "actor" in wanted:
+                unmatched.append(f"{name}: only during {wanted['actor']}'s {clip_name}")
+                continue
             clip = next((c for c in actors.clips(character) if c.name == clip_name), None) if character else None
             if clip is None:
                 unmatched.append(f"{name}: only during {clip_name}")

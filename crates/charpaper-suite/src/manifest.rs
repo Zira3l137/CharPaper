@@ -308,18 +308,27 @@ impl GazeShapeKeys {
     }
 }
 
-/// A place that reacts to the mouse: capsules around bones. When it is set
-/// off, every actor it lists clips for plays one of them, picked at random
-/// but never the one it played last time; the character's and a door's clips
-/// played together stay in step. A clip plays through once whatever its mode,
-/// then what played before shows again. While its clips play, setting the
-/// hotspot off again does nothing.
+/// Something that reacts: to the mouse on capsules around bones, or to the
+/// mouse keeping still or coming back. When it is set off, every actor it
+/// lists clips for plays one of them through once, picked at random but never
+/// the one it played last time; the character's and a door's clips played
+/// together stay in step. Its `while` clips play on and on for as long as it
+/// is held: pressed, hovered, or the mouse kept still. When it lets go, or
+/// its clips end, actors switch to their `then` clips, or what played before
+/// shows again. While its clips play, setting it off again does nothing.
 #[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Hotspot {
     #[serde(default)]
     pub trigger: Trigger,
+    /// For `idle` and `welcome`: how many seconds the mouse keeps still, or
+    /// stays away from the desktop, first. Defaults to 60 for `idle` and 300
+    /// for `welcome`.
+    #[schemars(range(min = 0.0))]
+    pub after: Option<f32>,
     /// Where the hotspot is: any number of capsules, each around one bone.
+    /// Only `click` and `hover` hotspots have any.
+    #[serde(default)]
     pub areas: Vec<HotspotArea>,
     /// What plays when it is set off.
     pub clips: Vec<HotspotClip>,
@@ -335,13 +344,47 @@ pub struct Hotspot {
     /// Seconds after it is set off before it can be again. Defaults to 0.
     #[schemars(range(min = 0.0))]
     pub cooldown: Option<f32>,
-    /// The character's animations during which it can be set off: names
-    /// from `character.clips`, of those the viewer picks to play on and on
-    /// (`timeline` or `hold`). A clip played once over one of them counts as
-    /// that one. Leave it out for any animation. When the animation changes
-    /// to one not listed, the hotspot's clips stop.
+    /// The animations during which it can be set off: for each actor listed,
+    /// what it plays on and on must be one of its clips here. The character's
+    /// is the one the viewer picked, `timeline` or `hold`; a clip played once
+    /// over it counts as that one. A prop's is the clip it plays by itself, or
+    /// last switched to by `then`. Leave it out for any. When an animation
+    /// changes to one not listed, the hotspot's clips stop.
     #[serde(default)]
-    pub during: Vec<String>,
+    pub during: Vec<ActorClip>,
+    /// What each actor listed plays for as long as the hotspot is held: the
+    /// button pressed on a `click` one, the cursor on a `hover` one, the mouse
+    /// still for an `idle` one. A `timeline` or `hold` clip, at most one per
+    /// actor, and none for `welcome`. A `click` hotspot with any goes off as
+    /// it's pressed. Its `clips` play once over them.
+    #[serde(default, rename = "while")]
+    pub meanwhile: Vec<ActorClip>,
+    /// What each actor listed plays on and on once the hotspot lets go, or
+    /// once its clips end if it has no `while`: a `timeline` or `hold` clip,
+    /// at most one per actor. The character's becomes the viewer's pick, as if
+    /// picked in the panel. Until it switches, no other hotspot goes off.
+    #[serde(default)]
+    pub then: Vec<ActorClip>,
+}
+
+impl Hotspot {
+    /// The seconds an `idle` or `welcome` hotspot waits, with the default.
+    pub fn after_secs(&self) -> f32 {
+        match self.trigger {
+            Trigger::Welcome => self.after.unwrap_or(300.0),
+            _ => self.after.unwrap_or(60.0),
+        }
+    }
+}
+
+/// An actor's clip: the character's, or an environment actor's.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ActorClip {
+    /// The name of one of an environment's actors. Leave it out for the
+    /// character.
+    pub actor: Option<String>,
+    pub clip: String,
 }
 
 /// What sets a hotspot off.
@@ -354,6 +397,12 @@ pub enum Trigger {
     /// The cursor resting on it for a moment. It goes off again only after the
     /// cursor has left it.
     Hover,
+    /// The mouse keeping still for `after` seconds, and again every `after`
+    /// seconds while it stays still. A held pose holds until it moves.
+    Idle,
+    /// The mouse moving on the desktop after keeping still, or being away
+    /// from the desktop, for `after` seconds.
+    Welcome,
 }
 
 /// A capsule around a bone: the line from its head to its tail, grown by
@@ -384,6 +433,11 @@ pub struct HotspotClip {
     pub actor: Option<String>,
     /// The clip's name, as in `character.clips` or the actor's `clips`.
     pub clip: String,
+    /// Plays only from this time in a row on, and then instead of those
+    /// with a lower `from`: going off again within a few seconds of being
+    /// able to, or for `idle`, while the mouse stays still. Defaults to 1.
+    #[schemars(range(min = 1))]
+    pub from: Option<u32>,
 }
 
 /// How a clip plays. Defaults to `timeline`.

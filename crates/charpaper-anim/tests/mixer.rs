@@ -239,3 +239,21 @@ fn a_layer_takes_the_slot_of_one_moving_the_same_parts_or_a_free_one() {
     let other = actor.add_clip(clip(1.0, &[], &[("frown", 1.0)]));
     assert_eq!(actor.slot_for(layers, other), 1, "none free: the first");
 }
+
+#[test]
+fn a_cut_under_a_fading_slot_crossfades_from_the_slot_to_the_new_clip() {
+    let mut actor = Actor::new(rig(), 2, 1.0);
+    let sitting = actor.add_clip(clip(1.0, &[], &[("Smile", 1.0)]));
+    let standing = actor.add_clip(clip(1.0, &[], &[("Smile", 0.0)]));
+    let reaction = actor.add_clip(clip(1.0, &[], &[("Smile", 0.5)]));
+    actor.play(0, sitting, Mode::Hold);
+    actor.play(1, reaction, Mode::Hold);
+    settle(&mut actor, 0.0);
+
+    actor.cut(0, standing, Mode::Hold);
+    actor.stop(1);
+    assert_eq!(actor.playing(0), Some((standing, Mode::Hold)));
+    actor.update(0.0, 0.5, &mut Vec::new());
+    // Half the reaction over all of standing: nothing of sitting shows.
+    assert!((actor.pose().shape_keys[0] - 0.25).abs() < 1e-5);
+}
