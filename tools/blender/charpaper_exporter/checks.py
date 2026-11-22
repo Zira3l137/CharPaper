@@ -266,22 +266,12 @@ def _check_span(scene, actor, clip, add):
         own = round(action.frame_range[1]) - round(action.frame_range[0])
         own = own + 1 if own > 0 else 1
         if length % own:
-            add(Finding(
-                f"clip {name!r} loops on its Manual Frame Range of {own} frames, which doesn't divide the "
-                f"{length}-frame timeline, so it jumps when the timeline starts over",
-                obj,
-                clip=name,
-            ))
+            _out_of_step(add, actor, name, f"loops on its Manual Frame Range of {own} frames", own, start, end)
         return
     if all_cycle:
         period = last - first
         if period > 0 and length % period:
-            add(Finding(
-                f"clip {name!r} repeats every {period} frames by its Cycles modifier, which doesn't divide the "
-                f"{length}-frame timeline, so it jumps when the timeline starts over",
-                obj,
-                clip=name,
-            ))
+            _out_of_step(add, actor, name, f"repeats every {period} frames by its Cycles modifier", period, start, end)
         return
     # Keying the frame after the end as the first frame is how a loop is closed in Blender.
     closing = last == end + 1 and all(
@@ -308,6 +298,30 @@ def _check_span(scene, actor, clip, add):
             severity="WARNING" if actor.is_character else "INFO",
             clip=name,
         ))
+
+
+def _out_of_step(add, actor, name, loops, period, start, end):
+    """A loop that doesn't fit the timeline a whole number of times restarts early when the
+    timeline does. One frame over only shows the loop's first frame twice; more, and it jumps."""
+    length = end - start + 1
+    over = length % period
+    shorter, longer = length - over, length + period - over
+    lengths = [n for n in (shorter, longer) if n > 0]
+    ends = " or ".join(str(start + n - 1) for n in lengths)
+    if start != 1:
+        ends += f" ({' or '.join(str(n) for n in lengths)} frames)"
+    if over == 1:
+        effect = "so its first frame shows twice in a row when the timeline starts over, a hiccup few will see"
+    else:
+        effect = f"so when the timeline starts over it jumps from {over} frames into a repeat back to its start"
+    add(Finding(
+        f"clip {name!r} {loops}, but the timeline is {length} frames ({start}–{end}): {length // period} "
+        f"repeats and {over} frame{'s' if over != 1 else ''} over, {effect}. Set the scene's End to "
+        f"{ends}, or loop on a length that divides {length}",
+        actor.obj,
+        severity="INFO" if over == 1 else "WARNING",
+        clip=name,
+    ))
 
 
 def _check_seam(scene, actor, clip, add):
