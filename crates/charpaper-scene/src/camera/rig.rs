@@ -197,7 +197,7 @@ pub(crate) fn on_rig_ready(
     let prop = PropActor::new(
         &rig.name,
         rig_of(ready.entity, &HashSet::new(), &children, &nodes),
-        std::slice::from_ref(clip),
+        (std::slice::from_ref(clip), None),
         (&suite.0, &assets),
         None,
     );

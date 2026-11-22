@@ -490,6 +490,9 @@ class CHARPAPER_PG_actor_clip(PropertyGroup):
 class CHARPAPER_PG_actor(PropertyGroup):
     clips: CollectionProperty(type=CHARPAPER_PG_actor_clip)
     clip_index: IntProperty()
+    # A prop's starred clip, by clip name: the one it plays by itself. The character's is the
+    # suite's default_clip.
+    start_clip: StringProperty()
 
 
 class CHARPAPER_PG_character_expression(PropertyGroup):

@@ -364,7 +364,7 @@ fn bind_actors(
             let prop = PropActor::new(
                 &actor.name,
                 rig_of(entity, &actors, &children, &nodes),
-                &actor.clips,
+                (&actor.clips, actor.default_clip.as_deref()),
                 (&suite.0, &assets),
                 light_of(entity, &children, &lights),
             );

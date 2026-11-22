@@ -101,6 +101,13 @@
           "additionalProperties": {
             "$ref": "#/$defs/ClipEntry"
           }
+        },
+        "default_clip": {
+          "description": "The clip it plays by itself: one of its `timeline` or `hold` clips.\nDefaults to its first `timeline` clip by name, else its first `hold`\none.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

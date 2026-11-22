@@ -97,6 +97,8 @@ pub struct ExpressionFile {
 pub struct Actor {
     pub name: String,
     pub clips: Vec<ClipFile>,
+    /// The clip it plays by itself, if suite.toml picks one.
+    pub default_clip: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -517,10 +519,22 @@ fn actors(root: &Path, environment: &mut Environment) -> Result<Vec<Actor>, Suit
     let mut actors = Vec::new();
     for folder in read_dir(&root.join(&dir))?.into_iter().filter(|p| p.is_dir()) {
         let name = folder.file_name().unwrap_or_default().to_string_lossy().into_owned();
-        let clips = settings.get(&name).map(|actor| &actor.clips);
+        let entry = settings.get(&name);
         let owner = format!("{}/{name}/", environment.name);
-        let clips = clip_files(root, &dir.join(&name), clips.unwrap_or(&BTreeMap::new()), &owner)?;
-        actors.push(Actor { name, clips });
+        let empty = BTreeMap::new();
+        let clips = entry.map_or(&empty, |actor| &actor.clips);
+        let clips = clip_files(root, &dir.join(&name), clips, &owner)?;
+        let default_clip = entry.and_then(|actor| actor.default_clip.clone());
+        if let Some(wanted) = &default_clip {
+            let clip = clips.iter().find(|clip| &clip.name == wanted);
+            if clip.is_none_or(|clip| clip.mode == ClipMode::Once) {
+                return Err(SuiteError::UnknownDefault {
+                    kind: "timeline or hold clip",
+                    name: format!("{owner}{wanted}"),
+                });
+            }
+        }
+        actors.push(Actor { name, clips, default_clip });
     }
     actors.sort_by(|a, b| a.name.cmp(&b.name));
     if let Some(name) = settings.keys().find(|name| !actors.iter().any(|a| &a.name == *name)) {

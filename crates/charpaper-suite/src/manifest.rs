@@ -168,6 +168,10 @@ pub struct ExpressionEntry {
 #[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ActorEntry {
+    /// The clip it plays by itself: one of its `timeline` or `hold` clips.
+    /// Defaults to its first `timeline` clip by name, else its first `hold`
+    /// one.
+    pub default_clip: Option<String>,
     /// Settings for its clips, keyed by clip name: a file name in its
     /// `clips/<actor>/` folder without its extension.
     #[serde(default)]

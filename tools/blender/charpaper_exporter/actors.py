@@ -216,3 +216,11 @@ def _moves_objects_only(action):
 def find(suite, name):
     """The actor whose object has this name."""
     return next((a for a in all_actors(suite) if a.name == name), None)
+
+
+def start_clip(actor, found=None):
+    """The clip a prop plays by itself: its starred one, if it plays on and on, else its first
+    Timeline clip in the list, else its first Hold one. `found`: its clips, if already known."""
+    looping = [c for c in (clips(actor) if found is None else found) if c.mode != "ONCE"]
+    starred = next((c for c in looping if c.name == actor.obj.charpaper.start_clip), None)
+    return starred or next((c for c in looping if c.mode == "TIMELINE"), None) or next(iter(looping), None)

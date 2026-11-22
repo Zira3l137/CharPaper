@@ -9,6 +9,7 @@ from . import env_settings
 from . import front
 from . import gaze as gaze_bones
 from . import toml_io
+from .actors import start_clip
 from .props import file_stem
 
 FILE = "suite.toml"
@@ -141,7 +142,7 @@ def update(data, suite, scene, extension, model_exported, lenses, environments, 
         for light in table.get("lights", {}).values():
             light.pop("animation", None)
         tables[name] = table
-    for (environment, actor), (_, clips, cue_tables) in exported.items():
+    for (environment, actor), (entry, clips, cue_tables) in exported.items():
         if environment is None:
             continue
         # As the app finds them: by their folders' names.
@@ -151,8 +152,12 @@ def update(data, suite, scene, extension, model_exported, lenses, environments, 
         previous = actors.get(actor, {}).get("clips", {})
         clips_of = clips_tables(clips, cue_tables, previous, character=False)
         actors.pop(actor, None)
+        own = start_clip(entry, clips)
+        actor_table = {"default_clip": own.name} if own is not None else {}
         if clips_of:
-            actors[actor] = {"clips": clips_of}
+            actor_table["clips"] = clips_of
+        if actor_table:
+            actors[actor] = actor_table
         table.pop("actors", None)
         if actors:
             table["actors"] = actors
@@ -225,6 +230,7 @@ def load_into(suite, data):
                 unmatched += [f"{env_name}/{actor}/{c}" for c in actor_table.get("clips", {})]
                 continue
             unmatched += _load_clips(obj, actor_table.get("clips", {}), character=False)
+            obj.charpaper.start_clip = actor_table.get("default_clip", "")
     for name, table in character.get("expressions", {}).items():
         expression = next((e for e in suite.expressions if e.action and file_stem(e.action.name) == name), None)
         if expression is None:

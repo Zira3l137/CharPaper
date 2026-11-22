@@ -130,13 +130,7 @@ def _entry_table(actor, clip):
     return table
 
 
-def own_clip(actor):
-    """The clip a prop plays by itself, as the app picks it: its first Timeline clip by name, else
-    its first Hold clip."""
-    found = sorted(actors.clips(actor), key=lambda c: c.name)
-    return next((c for c in found if c.mode == "TIMELINE"), None) or next(
-        (c for c in found if c.mode == "HOLD"), None
-    )
+
 
 
 def _clip_file(folder, actor, clip):
@@ -387,7 +381,7 @@ def check(suite, add, finding):
                 seen.add(actor.obj)
                 if field != "during":
                     continue
-                own = own_clip(actor)
+                own = actors.start_clip(actor)
                 if actor.is_character or (actor.obj, clip.name) in switched or (own and own.name == clip.name):
                     waits += 1
                 else:

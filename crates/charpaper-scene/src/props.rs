@@ -54,6 +54,8 @@ pub(crate) struct PropActor {
     sounds: BTreeMap<PathBuf, Handle<AudioSource>>,
     light: Option<LitBy>,
     started: bool,
+    // The clip it plays by itself, as suite.toml picks it.
+    own: Option<String>,
     base: Option<String>,
     events: Vec<Event>,
 }
@@ -116,7 +118,7 @@ impl PropActor {
     pub(crate) fn new(
         name: &str,
         (rig, nodes): (Rig, Vec<Entity>),
-        clips: &[ClipFile],
+        (clips, own): (&[ClipFile], Option<&str>),
         (suite, assets): (&Suite, &AssetServer),
         light: Option<(Entity, f32, Color)>,
     ) -> Self {
@@ -150,6 +152,7 @@ impl PropActor {
             sounds,
             light,
             started: false,
+            own: own.map(str::to_owned),
             base: None,
             events: Vec::new(),
         }
@@ -241,7 +244,11 @@ fn add_loaded_clips(mut props: Query<&mut PropActor>, files: Res<Assets<ClipAsse
             continue;
         }
         let first = |mode: ClipMode| prop.clips.iter().find(|clip| clip.mode == mode);
-        let Some(own) = first(ClipMode::Timeline).or_else(|| first(ClipMode::Hold)) else {
+        let picked = prop.own.as_ref().and_then(|own| prop.clips.iter().find(|c| &c.name == own));
+        let picked = picked.filter(|clip| clip.mode != ClipMode::Once);
+        let Some(own) =
+            picked.or_else(|| first(ClipMode::Timeline)).or_else(|| first(ClipMode::Hold))
+        else {
             prop.started = true;
             continue;
         };

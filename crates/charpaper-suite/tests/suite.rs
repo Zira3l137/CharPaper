@@ -431,6 +431,16 @@ mode = "once"
     fixture.write("suite.toml", "schema = 2\n[environments.stage.actors.Door.clips.open]");
     let err = fixture.load().unwrap_err();
     assert!(err.to_string().contains("clip \"stage/Door/open\""), "{err}");
+
+    fixture.write("environment/stage/clips/Door/closed.json", "{}");
+    let picked = format!("{manifest}[environments.stage.actors.Door]\ndefault_clip = \"closed\"\n");
+    fixture.write("suite.toml", &picked);
+    let suite = fixture.load().unwrap();
+    assert_eq!(suite.environments[0].actors[0].default_clip.as_deref(), Some("closed"));
+    let once = format!("{manifest}[environments.stage.actors.Door]\ndefault_clip = \"slam\"\n");
+    fixture.write("suite.toml", &once);
+    let err = fixture.load().unwrap_err();
+    assert!(err.to_string().contains("default timeline or hold clip \"stage/Door/slam\""), "{err}");
 }
 
 #[test]

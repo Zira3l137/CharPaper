@@ -226,18 +226,29 @@ class CHARPAPER_OT_clip_edit(Operator):
 class CHARPAPER_OT_clip_star(Operator):
     bl_idname = "charpaper.clip_star"
     bl_label = "Starts with"
-    bl_description = "The clip the character starts with. Click again to start in the rest pose"
+    bl_description = (
+        "The clip the character starts with; click again to start in the rest pose. On a prop: the "
+        "clip it plays by itself; with none starred, its first Timeline clip"
+    )
     bl_options = {"REGISTER", "UNDO"}
 
     index: IntProperty()
+    # A prop's name; empty for the character.
+    owner: StringProperty()
 
     def execute(self, context):
         suite = suite_of(context)
-        clip = suite.armature.charpaper.clips[self.index] if suite.armature else None
+        obj = bpy.data.objects.get(self.owner) if self.owner else suite.armature
+        clip = obj.charpaper.clips[self.index] if obj and 0 <= self.index < len(obj.charpaper.clips) else None
         if clip is None or clip.action is None:
             return {"CANCELLED"}
         name = file_stem(clip.action.name)
-        suite.default_clip = "" if suite.default_clip == name else name
+        if not self.owner:
+            suite.default_clip = "" if suite.default_clip == name else name
+        elif clip.mode == "ONCE":
+            return {"CANCELLED"}
+        else:
+            obj.charpaper.start_clip = "" if obj.charpaper.start_clip == name else name
         return {"FINISHED"}
 
 

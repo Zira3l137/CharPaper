@@ -185,13 +185,26 @@ class CHARPAPER_UL_clips(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         suite = suite_of(context)
         row = layout.row(align=True)
+        name = file_stem(item.action.name) if item.action else ""
         if data == getattr(suite.armature, "charpaper", None):
-            name = file_stem(item.action.name) if item.action else ""
             starred = bool(name) and suite.default_clip == name
             star = row.operator(
                 "charpaper.clip_star", text="", icon="SOLO_ON" if starred else "SOLO_OFF", emboss=False
             )
             star.index = index
+        elif item.mode == "ONCE":
+            row.label(text="", icon="BLANK1")
+        else:
+            # A prop's: the one it plays by itself, starred or, if none is, the first that can be.
+            owner = data.id_data
+            looping = [file_stem(c.action.name) for c in data.clips if c.action and c.mode != "ONCE"]
+            timelines = [file_stem(c.action.name) for c in data.clips if c.action and c.mode == "TIMELINE"]
+            own = data.start_clip if data.start_clip in looping else next(iter(timelines or looping), None)
+            starred = own == name
+            star = row.operator(
+                "charpaper.clip_star", text="", icon="SOLO_ON" if starred else "SOLO_OFF", emboss=False
+            )
+            star.index, star.owner = index, owner.name
         if item.action is None:
             row.alert = True
             row.label(text="Pick an action", icon="ERROR")
