@@ -42,6 +42,7 @@ pub use stage::GazeSettings;
 pub use stage::MusicOrder;
 pub use stage::MusicSettings;
 pub use stage::OrbitPose;
+pub use stage::PhysicsSettings;
 pub use stage::Picks;
 pub use stage::StageSeed;
 pub use stage::StageSeeds;

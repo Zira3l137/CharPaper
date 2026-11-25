@@ -61,7 +61,10 @@ impl Plugin for CharacterPlugin {
                     )
                         .chain(),
                     (skin::switch_skin, expression::spawn_skin_scenes).chain(),
-                    physics::bind_springs.after(animation::build_actor).after(binding::bind_skins),
+                    (physics::bind_springs, physics::read_body)
+                        .chain()
+                        .after(animation::build_actor)
+                        .after(binding::bind_skins),
                 )
                     .in_set(SceneSet::Run),
             );

@@ -23,6 +23,7 @@ use charpaper_settings::GazeSettings;
 use charpaper_settings::Graphics;
 use charpaper_settings::Monitors;
 use charpaper_settings::MusicSettings;
+use charpaper_settings::PhysicsSettings;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ScreenSettings;
 use charpaper_settings::StartAtLogin;
@@ -52,6 +53,7 @@ type StageSources = (
     Changed<GazeSettings>,
     Changed<ViewSettings>,
     Changed<MusicSettings>,
+    Changed<PhysicsSettings>,
     Changed<Soundscape>,
     Changed<Expressions>,
     Changed<CharacterClips>,

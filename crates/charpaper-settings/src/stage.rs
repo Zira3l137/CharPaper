@@ -18,6 +18,7 @@ pub struct StageSeed {
     pub gaze: GazeSettings,
     pub view: ViewSettings,
     pub music: MusicSettings,
+    pub physics: PhysicsSettings,
     // The picks per suite, by the suite's folder.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub suites: BTreeMap<String, Picks>,
@@ -49,6 +50,22 @@ impl GazeSettings {
     // Clamped, in case state.toml was edited by hand.
     pub fn strength(&self) -> f32 {
         self.strength.clamp(Self::WEAKEST, Self::STRONGEST)
+    }
+}
+
+// How the suite's spring chains move: hair, clothes and tails swinging on their own.
+#[derive(Component, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PhysicsSettings {
+    pub enabled: bool,
+    // Chains keep off the body's own mesh, read from the worn skin's file, instead of off the
+    // capsules around its bones.
+    pub high_quality: bool,
+}
+
+impl Default for PhysicsSettings {
+    fn default() -> Self {
+        Self { enabled: true, high_quality: false }
     }
 }
 

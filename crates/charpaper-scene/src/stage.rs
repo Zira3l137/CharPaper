@@ -13,6 +13,7 @@ use charpaper_audio::Fader;
 use charpaper_settings::GazeSettings;
 use charpaper_settings::Graphics;
 use charpaper_settings::MusicSettings;
+use charpaper_settings::PhysicsSettings;
 use charpaper_settings::StageId;
 use charpaper_settings::StageSeed;
 use charpaper_settings::StageSeeds;
@@ -57,6 +58,7 @@ use crate::suite::starting_suite;
     GazeSettings,
     ViewSettings,
     MusicSettings,
+    PhysicsSettings,
     Remembered,
     LoadedSuite,
     LookEdited,
@@ -145,6 +147,7 @@ pub(crate) fn sync_stages(
                 EditedLooks(seed.looks),
                 seed.graphics,
                 seed.music,
+                seed.physics,
                 seed.view,
                 // Every stage stands at the origin, overlapping the others, and only its render
                 // layer keeps it apart. Placed far away instead, its positions would lose the
@@ -177,6 +180,7 @@ type StageMemory = (
     &'static GazeSettings,
     &'static ViewSettings,
     &'static MusicSettings,
+    &'static PhysicsSettings,
     &'static ShownOrbit,
     &'static Remembered,
     &'static EditedLooks,
@@ -185,12 +189,13 @@ type StageMemory = (
 );
 
 fn seed_of(
-    (_, state, gaze, view, music, orbit, remembered, edited, graphics, shown): (
+    (_, state, gaze, view, music, physics, orbit, remembered, edited, graphics, shown): (
         &StageKey,
         &CharacterState,
         &GazeSettings,
         &ViewSettings,
         &MusicSettings,
+        &PhysicsSettings,
         &ShownOrbit,
         &Remembered,
         &EditedLooks,
@@ -209,6 +214,7 @@ fn seed_of(
         gaze: gaze.clone(),
         view: view.clone(),
         music: music.clone(),
+        physics: physics.clone(),
         suites,
         looks: looks.0,
         graphics: graphics.clone(),
@@ -244,6 +250,7 @@ pub fn stage_memory_changed(
                 Changed<GazeSettings>,
                 Changed<ViewSettings>,
                 Changed<MusicSettings>,
+                Changed<PhysicsSettings>,
                 Changed<ShownOrbit>,
                 Added<ActiveSuite>,
                 Changed<ActiveLook>,

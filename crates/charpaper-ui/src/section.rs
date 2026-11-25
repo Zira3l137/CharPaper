@@ -32,6 +32,7 @@ pub(crate) enum Section {
     Animation,
     Expression,
     Gaze,
+    Physics,
     Camera,
     Environment,
     // Image, color and film together.
@@ -63,6 +64,7 @@ impl Section {
             Section::Animation => "animation",
             Section::Expression => "expression",
             Section::Gaze => "gaze",
+            Section::Physics => "physics",
             Section::Camera => "camera",
             Section::Environment => "environment",
             Section::PostProcessing => "post_processing",

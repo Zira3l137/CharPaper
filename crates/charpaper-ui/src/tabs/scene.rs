@@ -5,6 +5,7 @@ use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
 use charpaper_settings::GazeSettings;
+use charpaper_settings::PhysicsSettings;
 use charpaper_settings::ViewSettings;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
@@ -29,6 +30,7 @@ pub(crate) fn page() -> impl Bundle {
         animation(),
         expression(),
         gaze(),
+        physics(),
         camera(),
         environment()
     ]
@@ -150,6 +152,47 @@ fn gaze() -> impl Bundle {
                 },
                 change: |w, step| {
                     w.edit(|gaze: &mut GazeSettings| flip(&mut gaze.reactions, step));
+                },
+            }
+            .segments()
+        ],
+    )
+}
+
+fn physics() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-physics"),
+        Section::Physics,
+        children![
+            // Only for a suite with chains.
+            Setting {
+                label: |l| fl!(l, "label-physics"),
+                help: |l| fl!(l, "help-physics"),
+                show: |w, l| {
+                    let physics = w.focused::<PhysicsSettings>()?;
+                    let swings =
+                        w.focused::<ActiveSuite>().is_some_and(|s| !s.physics.chains.is_empty());
+                    Some(switch(l, physics.enabled).when(swings))
+                },
+                change: |w, step| {
+                    w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.enabled, step));
+                },
+            }
+            .segments(),
+            // Only with colliders to make finer, and while the chains swing.
+            Setting {
+                label: |l| fl!(l, "label-physics-quality"),
+                help: |l| fl!(l, "help-physics-quality"),
+                show: |w, l| {
+                    let physics = w.focused::<PhysicsSettings>()?;
+                    let suite = w.focused::<ActiveSuite>();
+                    let kept_off = suite.is_some_and(|s| {
+                        !s.physics.chains.is_empty() && !s.physics.colliders.is_empty()
+                    });
+                    Some(switch(l, physics.high_quality).when(kept_off && physics.enabled))
+                },
+                change: |w, step| {
+                    w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.high_quality, step));
                 },
             }
             .segments()
