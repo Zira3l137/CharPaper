@@ -764,3 +764,49 @@ during = [{ clip = "lie" }, { actor = "Lamp", clip = "off" }]
     let err = fixture.load().unwrap_err().to_string();
     assert!(err.contains("a `welcome` hotspot isn't held"), "{err}");
 }
+
+#[test]
+fn physics_chains_and_colliders_are_read_with_their_defaults() {
+    let manifest = r#"schema = 2
+
+[physics.chains.Ponytail]
+bones = ["Ponytail"]
+length = 0.3
+radius = 0.02
+stiffness = 0.05
+
+[physics.colliders.Head]
+bone = "Head"
+length = 0.2
+radius = 0.1
+"#;
+    let suite = Fixture::new("physics", manifest).load().unwrap();
+    let chain = &suite.physics.chains["Ponytail"];
+    assert_eq!(chain.bones, ["Ponytail"]);
+    assert_eq!((chain.stiffness, chain.drag, chain.gravity), (Some(0.05), None, None));
+    let head = &suite.physics.colliders["Head"];
+    assert_eq!((head.bone.as_str(), head.length, head.radius), ("Head", 0.2, 0.1));
+    assert!(Fixture::new("no-physics", "schema = 2").load().unwrap().physics.chains.is_empty());
+}
+
+#[test]
+fn physics_that_cannot_work_is_refused() {
+    let broken = [
+        ("[physics.chains.Hair]\nbones = []\nlength = 0.1", "has no bones"),
+        (
+            "[physics.chains.Hair]\nbones = [\"Ponytail\"]\nlength = 0.1\n\
+             [physics.chains.Tail]\nbones = [\"Ponytail\"]\nlength = 0.1",
+            "shares the bone \"Ponytail\" with \"Hair\"",
+        ),
+        ("[physics.chains.Hair]\nbones = [\"Ponytail\"]\nlength = 0.1\ndrag = 2", "go from 0 to 1"),
+        ("[physics.chains.Hair]\nbones = [\"Ponytail\"]\nlength = -1", "can't be negative"),
+        ("[physics.colliders.Head]\nbone = \"Head\"\nlength = 0.1\nradius = 0", "above 0"),
+        ("[physics.chains.Hair]\nbones = [\"Ponytail\"]", "not a valid suite manifest"),
+    ];
+    let fixture = Fixture::new("bad-physics", "schema = 2");
+    for (physics, problem) in broken {
+        fixture.write("suite.toml", format!("schema = 2\n{physics}\n"));
+        let err = fixture.load().unwrap_err().to_string();
+        assert!(err.contains(problem), "{physics}: {err}");
+    }
+}

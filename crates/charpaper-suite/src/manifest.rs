@@ -59,6 +59,62 @@ pub struct Manifest {
     /// to the mouse, keyed by name. Each plays clips when clicked or hovered.
     #[serde(default)]
     pub hotspots: BTreeMap<String, Hotspot>,
+    /// Bones of the character that swing on their own: hair, ribbons,
+    /// skirts, tails, and the body they keep off.
+    #[serde(default)]
+    pub physics: Physics,
+}
+
+/// Bone chains the app moves with springs, following the animation, and the
+/// capsules around the body's bones they stay out of.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Physics {
+    /// Keyed by name.
+    #[serde(default)]
+    pub chains: BTreeMap<String, PhysicsChain>,
+    /// Keyed by name. Every chain stays out of every collider.
+    #[serde(default)]
+    pub colliders: BTreeMap<String, PhysicsCollider>,
+}
+
+/// Bones that swing together, from the root down.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PhysicsChain {
+    /// The bones' names, each the child of the one before. The first one's
+    /// parent stays where the animation puts it.
+    pub bones: Vec<String>,
+    /// The last bone's length, from its head to its tail, in meters.
+    #[schemars(range(min = 0.0))]
+    pub length: f32,
+    /// How far the bones' tails keep from colliders, in meters. Defaults to 0.
+    #[schemars(range(min = 0.0))]
+    pub radius: Option<f32>,
+    /// How much of the way back to the animated pose a tail goes in each of
+    /// the 60 steps a second: 0 hangs loose, 1 follows the animation exactly.
+    /// Defaults to 0.2.
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub stiffness: Option<f32>,
+    /// How much of its speed a tail loses each step: 0 swings on, 1 stops
+    /// dead. Defaults to 0.1.
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub drag: Option<f32>,
+    /// Gravity, as a multiple of Earth's. Defaults to 1.
+    #[schemars(range(min = 0.0))]
+    pub gravity: Option<f32>,
+}
+
+/// A capsule around one of the character's bones: from its head along the
+/// bone, grown by `radius`, both in meters.
+#[derive(Deserialize, JsonSchema, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PhysicsCollider {
+    pub bone: String,
+    #[schemars(range(min = 0.0))]
+    pub length: f32,
+    #[schemars(range(min = 0.0))]
+    pub radius: f32,
 }
 
 /// The character itself.

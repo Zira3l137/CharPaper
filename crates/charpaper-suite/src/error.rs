@@ -67,4 +67,7 @@ pub enum SuiteError {
 
     #[error("hotspot {hotspot:?}: {problem}")]
     Hotspot { hotspot: String, problem: String },
+
+    #[error("physics {name:?}: {problem}")]
+    Physics { name: String, problem: String },
 }

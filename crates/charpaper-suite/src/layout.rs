@@ -23,6 +23,7 @@ use crate::manifest::Hotspot;
 use crate::manifest::MANIFEST_FILE;
 use crate::manifest::Manifest;
 use crate::manifest::NO_LUT;
+use crate::manifest::Physics;
 use crate::manifest::Post;
 use crate::manifest::SCHEMA_VERSION;
 use crate::manifest::Timeline;
@@ -69,6 +70,7 @@ pub struct Suite {
     pub camera: Camera,
     pub gaze: Option<Gaze>,
     pub hotspots: BTreeMap<String, Hotspot>,
+    pub physics: Physics,
 }
 
 // A clip is its .json, which every clip has, and the .glb beside it when it keys bones or
@@ -329,6 +331,7 @@ impl Suite {
             check_hotspot(hotspot, &clips, &expressions, &environments)
                 .map_err(|problem| SuiteError::Hotspot { hotspot: name.clone(), problem })?;
         }
+        check_physics(&manifest.physics)?;
 
         Ok(Self {
             root: root.to_path_buf(),
@@ -350,6 +353,7 @@ impl Suite {
             camera,
             gaze: manifest.gaze,
             hotspots: manifest.hotspots,
+            physics: manifest.physics,
         })
     }
 
@@ -401,6 +405,40 @@ fn clip_files(
         return Err(SuiteError::UnknownEntry { kind: "clip", name: format!("{owner}{name}") });
     }
     Ok(clips)
+}
+
+// Bones are looked up on the armature as it loads; what's checked here is what no armature
+// could make right.
+fn check_physics(physics: &Physics) -> Result<(), SuiteError> {
+    let mut taken = BTreeMap::new();
+    for (name, chain) in &physics.chains {
+        let fail = |problem: String| SuiteError::Physics { name: name.clone(), problem };
+        if chain.bones.is_empty() {
+            return Err(fail("has no bones".into()));
+        }
+        // Two chains on one bone would each turn it their own way.
+        for bone in &chain.bones {
+            if let Some(other) = taken.insert(bone, name) {
+                return Err(fail(format!("shares the bone {bone:?} with {other:?}")));
+            }
+        }
+        let fraction = |value: Option<f32>| value.is_some_and(|v| !(0.0..=1.0).contains(&v));
+        if fraction(chain.stiffness) || fraction(chain.drag) {
+            return Err(fail("`stiffness` and `drag` go from 0 to 1".into()));
+        }
+        let negative = |value: f32| !(value.is_finite() && value >= 0.0);
+        let sizes = [Some(chain.length), chain.radius, chain.gravity];
+        if sizes.into_iter().flatten().any(negative) {
+            return Err(fail("`length`, `radius` and `gravity` can't be negative".into()));
+        }
+    }
+    for (name, collider) in &physics.colliders {
+        if !(collider.length >= 0.0 && collider.radius > 0.0 && collider.length.is_finite()) {
+            let problem = "needs a `radius` above 0, and a `length` of 0 or more".into();
+            return Err(SuiteError::Physics { name: name.clone(), problem });
+        }
+    }
+    Ok(())
 }
 
 // Clips and expressions that aren't there are refused, as for settings: the add-on writes
