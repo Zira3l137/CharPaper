@@ -18,6 +18,9 @@ render.
   bigger one is read again on every loop instead. Keep screens small and loops short.
 - **Textures:** 2K is plenty for a character seen on a desktop.
 - **Ship the baked `.ktx2` sky files** so first launch isn't spent making them.
+- **Physics costs very little.** Two dozen chains of five bones take a fraction of a
+  millisecond a frame. Physics **High quality** costs more, most when many tails rest
+  against the body, and reads the outfit's file each time it's put on.
 - `charpaper.exe --benchmark` measures what each graphics setting costs with your
   character and writes `benchmark.txt`.
 

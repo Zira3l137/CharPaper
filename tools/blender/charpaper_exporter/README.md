@@ -52,6 +52,8 @@ every .blend on the computer.
 | Camera      | the camera, the empties it hangs from, its focus object, and its *Moves with* action | `cameras/<name>.glb`, its movement in `cameras/<name>.json` |
 | Sound       | an environment's music, in order, and its ambience, converted to Ogg Vorbis | `environment/<name>/music/01 - <title>.ogg`, `environment/<name>/ambience.ogg` |
 | Hotspots    | capsules around bones and the clips they play            | `[hotspots]` in suite.toml |
+| Physics     | bone chains the app swings, and capsules they keep out of | `[physics]` in suite.toml |
+| Wind        | an environment's first Wind force field                  | `wind` in its `[environments.<name>]` |
 
 - **The timeline:** the scene's frame range and frame rate are written to suite.toml as
   `[timeline]`, and everything plays on that one loop. A clip's **Plays** says how: *Timeline*
@@ -218,6 +220,22 @@ every .blend on the computer.
   weren't exported this time is left out of suite.toml, as is one none of whose *Only
   during* clips is, and the report says so. The add-on owns `[hotspots]` once one is made
   in it; *Load suite.toml* reads them back.
+- **Physics**: *+* under Chains makes a chain from each bone selected in Pose Mode whose
+  parent isn't selected. With only its first bone selected, it runs down through only
+  children to the end; with more of it selected, it takes exactly those. A chain is named
+  after its first bone and takes its kind's values (Hair, Cloth, Soft or Tail: stiffness,
+  drag, gravity, radius); changing one sets the preset to Custom. *+* under Colliders puts a
+  capsule on each selected bone not in a chain, from its head to its tail, its radius the
+  median distance from the bone of the vertices weighted at least half to it, in the
+  thinnest mesh the armature deforms, or 30% of its length without one; *Fit to the mesh*
+  measures it again. The eye icon draws chains blue and colliders orange in the current
+  pose. A chain with a bone that isn't exported, is in an earlier chain, or isn't the child
+  of the one before is left out of suite.toml, and so is a collider whose bone isn't
+  exported; the report says so. The add-on owns `[physics]` once a chain or collider is
+  made in it; *Load suite.toml* reads it back.
+- **Wind** is an environment's first Wind force field by name: it blows along the field's Z
+  axis, written in the app's axes, as hard as its Strength (in m/s², negative blowing
+  backwards), with its Noise up to 1 as `gusts`.
 - **A prop's ★** is the clip it plays by itself, written as its `default_clip`; with none
   starred, its first Timeline clip in the list, else its first Hold one. *Only for hotspots*
   no longer fixes a clip's mode: ticking it sets Once, and Timeline or Hold make loops and
@@ -233,7 +251,7 @@ Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.
 - It writes `schema = 2`, the name, `[timeline]`, the model file, the *Starts with*
   defaults, the clip tables of every actor it exported (only what differs from the
   defaults: mode, label, gaze, reaction_only, cues), the expressions' labels, `[hotspots]`
-  once the add-on has hotspots, and `[gaze]` when Gaze is set to *Write*. In `[gaze]`,
+  once the add-on has hotspots, `[physics]` once it has chains or colliders, and `[gaze]` when Gaze is set to *Write*. In `[gaze]`,
   `eyes` is written only when there are eye bones, `eye_kind` only for Drawn eyes, and
   `front` only when it was set by hand.
 - A clip's cues come from its pose markers. An action without any keeps the cues already
@@ -241,8 +259,8 @@ Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.
 - An empty field leaves the matching key in the file alone.
 - Each exported camera's `[cameras.<name>]` is rewritten from its Depth of Field panel, and
   removed when depth of field is off.
-- Each exported environment's fog, `no_volume_scatter` and `no_shadows` are rewritten from
-  the scene. With a World, its `sky_strength` and `sky_rotation_deg` are too. Its shadows,
+- Each exported environment's fog, `no_volume_scatter`, `no_shadows` and `wind` are
+  rewritten from the scene. With a World, its `sky_strength` and `sky_rotation_deg` are too. Its shadows,
   exposure and background settings are kept, and so are strength and rotation without a
   World.
 - Actors that weren't exported this time, `[post]`, environments that weren't exported, and

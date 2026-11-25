@@ -117,6 +117,11 @@ base color at the speed saved in the GIF.
 An environment's sky and its fog have pages of their own: [A sky](sky.md) and
 [Fog and light shafts](fog.md).
 
+## Wind
+
+A Wind force field in the environment's collection blows the character's hair and clothes
+while the environment is shown. See [Wind](physics.md#wind).
+
 ---
 
-← [Hotspot ideas](hotspot-ideas.md) · [All recipes](../making-a-character.md#recipes) · [A sky](sky.md) →
+← [Hair, clothes and tails that swing](physics.md) · [All recipes](../making-a-character.md#recipes) · [A sky](sky.md) →

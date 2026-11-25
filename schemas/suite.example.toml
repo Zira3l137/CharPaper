@@ -42,6 +42,12 @@ background_blur = 0.3
 no_volume_scatter = ["Desk lamp"]
 no_shadows = ["Desk lamp"]
 
+# A breeze through the window: the way it blows in the app's axes, Y up.
+[environments.room.wind]
+direction = [1.0, 0.0, 0.0]
+strength = 2.0
+gusts = 0.5
+
 [environments.room.actors.Door.clips.slam]
 mode = "once"
 cues = [{ at = 0.1, sound = "slam" }]
@@ -116,3 +122,22 @@ areas = [
     { bone = "Hair.01", length = 0.15, radius = 0.06 },
 ]
 clips = [{ clip = "wave" }, { actor = "Door", clip = "slam" }]
+
+# The ponytail swings by itself, and keeps out of the head and neck.
+[physics.chains."Hair.01"]
+bones = ["Hair.01", "Hair.02", "Hair.03"]
+length = 0.12
+radius = 0.02
+stiffness = 0.1
+drag = 0.15
+gravity = 1.0
+
+[physics.colliders.Head]
+bone = "Head"
+length = 0.2
+radius = 0.09
+
+[physics.colliders.Neck]
+bone = "Neck"
+length = 0.1
+radius = 0.05

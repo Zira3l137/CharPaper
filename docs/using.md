@@ -39,14 +39,15 @@ point at its spot on the edge.
 
 | Tab | What's there |
 |-----|--------------|
-| **Scene** | Which character, its outfit and the outfit's parts, animation, expression, the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks), camera, environment and shadows. |
+| **Scene** | Which character, its outfit and the outfit's parts, animation, expression, the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks), the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them), camera, environment and shadows. |
 | **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog (density, quality, jitter, resolution), depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start with Windows, updates, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size, side and auto-hiding button. |
 
 A row only shows when it has something to offer. No camera row means the character has no
 extra cameras; no **Follow cursor** row means its author didn't set gaze up, and no
-**Reactions** row means the character has no hotspots. In **Graphics**, Fog
+**Reactions** row means the character has no hotspots. The **Physics** section shows only
+for a character whose hair or clothes swing, and **Wind** only in an environment with wind. In **Graphics**, Fog
 shows only in an environment with fog, Depth of field only through a camera that asks for
 it, and Ambient occlusion only with a sky and anti-aliasing other than 4x, which it can't
 run with. A setting's finer rows hide while it's off.
@@ -56,7 +57,7 @@ character's author set it.
 
 If your computer struggles, lower **Render scale**, set **Shadow quality** to Low, turn
 on fog **Jitter** and lower fog **Quality** (or turn **Fog** off), lower depth of field
-**Quality** or **Max size**, and lower the **FPS limit**. The **Performance overlay** shows what each
+**Quality** or **Max size**, turn physics **High quality** off, and lower the **FPS limit**. The **Performance overlay** shows what each
 frame costs.
 
 ## The mouse on the desktop
@@ -82,6 +83,11 @@ A reaction can also change what the character does from then on: a click that ma
 sit down, and another that makes it stand up. The animation it switches to shows in the
 Scene tab as if you had picked it, and you can pick another any time. **Reactions** in the
 Scene tab's **Cursor** section switches all of this off.
+
+**Brushing hair and clothes.** With **Cursor pushes** on in the Scene tab's **Physics**
+section, moving the pointer over the character's hair or clothes pushes them aside, as a
+hand would. It lets go a moment after you stop, and dragging to turn the view doesn't push
+anything.
 
 Your desktop icons work as always. CharPaper only listens to the mouse over the desktop
 and never takes a click away from anything. Clicking an icon that happens to sit over a

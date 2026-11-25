@@ -29,4 +29,6 @@ fn example_manifest_parses() {
     let manifest: charpaper_suite::Manifest = toml::from_str(&text).unwrap();
     assert_eq!(manifest.character.clips.len(), 2);
     assert_eq!(manifest.environments["room"].actors["Door"].clips.len(), 1);
+    assert!(manifest.environments["room"].wind.is_some());
+    assert_eq!(manifest.physics.chains["Hair.01"].bones.len(), 3);
 }

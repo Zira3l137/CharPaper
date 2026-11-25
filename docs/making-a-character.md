@@ -173,6 +173,7 @@ The tab has these panels, top to bottom:
 | **Environments** | The places, their sky, and under each, **Sound**: its music and ambience. |
 | **Cameras** | Your own cameras, and the action each moves with. |
 | **Hotspots** | What reacts to the viewer: clicks and the cursor on the character or a prop, the mouse keeping still or coming back. |
+| **Physics** | Bones the app swings by itself, like hair, skirts and tails, and the body they keep off. |
 | **Warnings** | What Check found, worst first. |
 | **Export settings** | The glTF options. Leave them alone unless you know why you're changing one. |
 
@@ -261,6 +262,7 @@ the app makes of it.
 | [Hotspots](recipes/hotspots.md) | Reactions to clicks, the cursor resting on a spot, the mouse keeping still or coming back: clips played once, loops while held, and switching what plays after. |
 | [A reaction](recipes/reaction.md) | Making the clip a hotspot plays: body, face, correctives and sound. |
 | [Hotspot ideas](recipes/hotspot-ideas.md) | Step by step: escalating pokes, stroking, sitting and standing, dozing off, a lamp, a door. |
+| [Hair, clothes and tails that swing (physics)](recipes/physics.md) | Bone chains the app swings by itself, the body they keep off, and wind. |
 | [An environment](recipes/environment.md) | The place around the character: its lights, moving props and screens. |
 | [A sky](recipes/sky.md) | The panorama that lights the scene and shows behind it. |
 | [A sun that matches the sky](recipes/sun.md) | A Sun light whose shadows follow the sky as it turns. |

@@ -6,7 +6,7 @@ Problems running the app itself are under
 [When something goes wrong](using.md#when-something-goes-wrong). In every case, `charpaper.log`, next to
 `charpaper.exe`, usually says what happened.
 
-**On this page:** [Loading](#loading) · [Outfits, animations and expressions](#outfits-animations-and-expressions) · [Reactions and hotspots](#reactions-and-hotspots) · [Gaze](#gaze) · [Lights and exposure](#lights-and-exposure) · [The sky and the sun](#the-sky-and-the-sun) · [Fog](#fog) · [Camera](#camera) · [Sound and GIFs](#sound-and-gifs)
+**On this page:** [Loading](#loading) · [Outfits, animations and expressions](#outfits-animations-and-expressions) · [Reactions and hotspots](#reactions-and-hotspots) · [Physics](#physics) · [Gaze](#gaze) · [Lights and exposure](#lights-and-exposure) · [The sky and the sun](#the-sky-and-the-sun) · [Fog](#fog) · [Camera](#camera) · [Sound and GIFs](#sound-and-gifs)
 
 ## Loading
 
@@ -65,6 +65,23 @@ See also: [Hotspots](recipes/hotspots.md) · [A reaction](recipes/reaction.md) �
 | A *Mouse keeps still* hotspot goes off while I'm working | In wallpaper mode, the mouse in another app's window counts as still. Make **After** longer, or use **Only during** to limit it. |
 | A *Mouse comes back* hotspot doesn't go off | The mouse wasn't away for **After** seconds, or its **Only during** doesn't match what plays. |
 | The 5th poke still plays the first clip | *In a row* means going off again within 3 seconds of when it could. Waiting longer than that between pokes starts over at 1. |
+
+## Physics
+
+See also: [Hair, clothes and tails that swing (physics)](recipes/physics.md)
+
+| What you see | Why, and what to do |
+|---|---|
+| Nothing swings | The viewer turned **Physics** off in the Scene tab; the chain isn't in suite.toml (export all); or its bones aren't on the outfit worn. Check for the chain's warnings, and look in `charpaper.log` for lines starting with `physics`. |
+| A chain swings with one outfit and not another | Its bones are only in one outfit. That's expected: it's skipped while the other is worn. |
+| Hair sinks into the body | No collider there, or the capsule is too thin, or the chain's **Radius** is too small. Add colliders on the bones it reaches, and look at their capsules from every side. |
+| Hair floats off the body, or jumps when the character loads | A capsule is too fat, or the chain's Radius too big. Check warns when a chain *starts inside a collider*. |
+| It swings too much, or never settles | Raise **Drag** to settle sooner, **Stiffness** to swing less. |
+| It's stiff, or lags behind the head like jelly | Lower **Stiffness** for more swing; raise it if a long chain trails too far behind. |
+| A ponytail pokes through the back of the head | The head's capsule ends short of the back of the skull. Raise its radius, or add one on the neck. With **High quality** on, the mesh itself is used. |
+| A chain fights the cursor or shakes | One of its bones is one gaze turns. Keep chains off gaze's bones. |
+| No wind in the app | **Wind** is off in the Scene tab; the force field isn't in the environment's collection, isn't a Wind field, or has a Strength of 0; or the environment wasn't exported again. |
+| High quality looks the same as without | It reads the outfit's file after it's put on, so give it a moment. Bones that no mesh is weighted to keep their capsule, and so do colliders the chains never touch. |
 
 ## Gaze
 

@@ -188,4 +188,4 @@ agree on the lamp's state through Only during.
 
 ---
 
-← [A reaction](reaction.md) · [All recipes](../making-a-character.md#recipes) · [An environment](environment.md) →
+← [A reaction](reaction.md) · [All recipes](../making-a-character.md#recipes) · [Hair, clothes and tails that swing](physics.md) →

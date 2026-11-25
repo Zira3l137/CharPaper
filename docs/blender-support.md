@@ -25,6 +25,8 @@ together (slots); in 4.2 and 4.3, a clip's shape keys go in a second action, its
 | Sounds on pose markers | A World's Light Path tricks (use **Background**) |
 | Actions of each environment object, as clips on the timeline or for hotspots | NLA tracks; constraint-only motion (bake it); a moving armature object |
 | Bones as hotspot areas | Meshes as hotspot areas |
+| Bone chains the app swings by itself, kept off capsules around bones or the body's mesh | Cloth, soft body, rigid body and hair particle simulations (bake them into an action, or use physics chains) |
+| A Wind force field, as the environment's wind on those chains | Other force fields; wind on cloth or particles |
 
 ---
 

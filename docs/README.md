@@ -29,6 +29,7 @@ For 3D artists working in Blender.
 - [Hotspots](recipes/hotspots.md): reactions to clicks, the cursor, the mouse keeping still or coming back: clips played once, loops while held, and switching what plays after.
 - [A reaction](recipes/reaction.md): making the clip a hotspot plays: body, face, correctives and sound, and the pitfalls.
 - [Hotspot ideas](recipes/hotspot-ideas.md): step by step: escalating pokes, stroking, sitting and standing, dozing off, saying hello, a lamp, a door.
+- [Hair, clothes and tails that swing (physics)](recipes/physics.md): bone chains the app swings by itself, the body they keep off, and wind.
 - [An environment](recipes/environment.md): the place around the character: its lights, moving props and screens.
 - [A sky](recipes/sky.md): the panorama that lights the scene and shows behind it.
 - [A sun that matches the sky](recipes/sun.md): a Sun light whose shadows follow the sky as it turns.
@@ -41,11 +42,11 @@ For 3D artists working in Blender.
 ## Reference
 
 - **[suite.toml](suite-toml.md)**: the settings file next to the character, section by section.
-  <br><sub>[The file is strict](suite-toml.md#the-file-is-strict) · [Sections](suite-toml.md#sections) · [A hotspot](suite-toml.md#a-hotspot) · [Things worth knowing](suite-toml.md#things-worth-knowing)</sub>
+  <br><sub>[The file is strict](suite-toml.md#the-file-is-strict) · [Sections](suite-toml.md#sections) · [A hotspot](suite-toml.md#a-hotspot) · [Physics](suite-toml.md#physics) · [Things worth knowing](suite-toml.md#things-worth-knowing)</sub>
 - **[What comes over from Blender, and what doesn't](blender-support.md)**: one table, at a glance.
 - **[Keeping it fast](performance.md)**: what costs the most in a scene, and how to measure it.
 - **[Troubleshooting for artists](troubleshooting.md)**: what you see, why, and what to do, by topic.
-  <br><sub>[Loading](troubleshooting.md#loading) · [Outfits, animations and expressions](troubleshooting.md#outfits-animations-and-expressions) · [Reactions and hotspots](troubleshooting.md#reactions-and-hotspots) · [Gaze](troubleshooting.md#gaze) · [Lights and exposure](troubleshooting.md#lights-and-exposure) · [The sky and the sun](troubleshooting.md#the-sky-and-the-sun) · [Fog](troubleshooting.md#fog) · [Camera](troubleshooting.md#camera) · [Sound and GIFs](troubleshooting.md#sound-and-gifs)</sub>
+  <br><sub>[Loading](troubleshooting.md#loading) · [Outfits, animations and expressions](troubleshooting.md#outfits-animations-and-expressions) · [Reactions and hotspots](troubleshooting.md#reactions-and-hotspots) · [Physics](troubleshooting.md#physics) · [Gaze](troubleshooting.md#gaze) · [Lights and exposure](troubleshooting.md#lights-and-exposure) · [The sky and the sun](troubleshooting.md#the-sky-and-the-sun) · [Fog](troubleshooting.md#fog) · [Camera](troubleshooting.md#camera) · [Sound and GIFs](troubleshooting.md#sound-and-gifs)</sub>
 
 ## For developers
 
