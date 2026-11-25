@@ -15,9 +15,11 @@ from . import env_settings
 from . import hotspots as hotspot_spots
 from . import music
 from . import paths
+from . import physics
 from .exporters import STOP_SHAPE_KEYS
 from .exporters import UNLINK_ACTION
 from .operators import current_actor
+from .props import PRESET_ITEMS
 from .props import file_stem
 from .props import suite_of
 
@@ -27,6 +29,7 @@ MODE_TAGS = hotspot_spots.MODE_TAGS
 MODE_NAMES = {"TIMELINE": "Timeline", "ONCE": "Once", "HOLD": "Hold"}
 SEVERITY_TAGS = {"ERROR": "COLLECTION_COLOR_01", "WARNING": "COLLECTION_COLOR_03", "INFO": "COLLECTION_COLOR_05"}
 SEVERITY_ICONS = {"ERROR": "CANCEL", "WARNING": "ERROR", "INFO": "INFO"}
+PRESET_NAMES = {key: name for key, name, _ in PRESET_ITEMS}
 TRIGGER_NAMES = {"CLICK": "Click", "HOVER": "Hover", "IDLE": "Still", "WELCOME": "Back"}
 TRIGGER_ICONS = {"CLICK": "MOUSE_LMB", "HOVER": "MOUSE_MOVE", "IDLE": "TIME", "WELCOME": "HAND"}
 OBJECT_ICONS = {
@@ -809,6 +812,105 @@ class CHARPAPER_PT_hotspots(_Sidebar, Panel):
                 finding_box(layout, finding, context)
 
 
+def _physics_flags(suite, key):
+    return [f for f in warnings_about(suite) if f.physics == key]
+
+
+class CHARPAPER_UL_physics_chains(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        suite = suite_of(context)
+        row = layout.row(align=True)
+        op = row.operator("charpaper.physics_select", text="", icon="BONE_DATA", emboss=False)
+        op.kind, op.index = "CHAIN", index
+        names = [b.bone for b in item.bones]
+        label = f"{names[0]} → {names[-1]}" if len(names) > 1 else (names[0] if names else "no bones")
+        row.label(text=label)
+        _flag(row, _physics_flags(suite, f"chain:{physics.chain_name(item)}"))
+        info = row.row()
+        info.active = False
+        info.label(text=f"{len(names)} · {PRESET_NAMES[item.preset]}")
+
+
+class CHARPAPER_UL_physics_colliders(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        suite = suite_of(context)
+        row = layout.row(align=True)
+        op = row.operator("charpaper.physics_select", text="", icon="BONE_DATA", emboss=False)
+        op.kind, op.index = "COLLIDER", index
+        found = suite.armature is not None and suite.armature.data.bones.get(item.bone) is not None
+        name = row.row(align=True)
+        name.alert = not found
+        name.label(text=item.bone or "no bone", icon="NONE" if found else "ERROR")
+        _flag(row, _physics_flags(suite, f"collider:{item.bone}"))
+        row.prop(item, "radius", text="")
+
+
+class CHARPAPER_PT_physics(_Sidebar, Panel):
+    bl_label = "Physics"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw_header_preset(self, context):
+        suite = suite_of(context)
+        row = self.layout.row(align=True)
+        if len(suite.physics_chains):
+            row.label(text=str(len(suite.physics_chains)))
+        row.prop(suite, "show_physics", text="", icon="HIDE_OFF" if suite.show_physics else "HIDE_ON", emboss=False)
+
+    def draw(self, context):
+        suite = suite_of(context)
+        layout = self.layout
+        if suite.armature is None:
+            layout.label(text="Pick the character's armature first", icon="INFO")
+            return
+
+        layout.label(text="Chains: swing on their own", icon="FORCE_WIND")
+        row = layout.row()
+        row.template_list(
+            "CHARPAPER_UL_physics_chains", "", suite, "physics_chains", suite, "physics_chain_index", rows=3
+        )
+        side = row.column(align=True)
+        side.operator_menu_enum("charpaper.physics_chain_add", "preset", text="", icon="ADD")
+        side.operator("charpaper.physics_chain_remove", text="", icon="REMOVE")
+        chain = physics.current_chain(suite)
+        if chain is None:
+            hint = layout.column()
+            hint.active = False
+            _wrapped(hint, "Hair, skirts and tails the app moves for you. Select the first bone of each in "
+                     "Pose Mode and press +: the chain runs down to the end. Select more of it to stop it "
+                     "earlier.", context)
+        else:
+            box = _split(layout.box())
+            box.prop(chain, "preset")
+            col = box.column(align=True)
+            col.prop(chain, "stiffness", slider=True)
+            col.prop(chain, "drag", slider=True)
+            box.prop(chain, "gravity")
+            box.prop(chain, "radius")
+            for finding in suite.findings:
+                if finding.physics == f"chain:{physics.chain_name(chain)}":
+                    finding_box(layout, finding, context)
+
+        layout.label(text="Colliders: the body chains keep out of", icon="MESH_CAPSULE")
+        row = layout.row()
+        row.template_list(
+            "CHARPAPER_UL_physics_colliders", "", suite, "physics_colliders", suite, "physics_collider_index", rows=3
+        )
+        side = row.column(align=True)
+        side.operator("charpaper.physics_collider_add", text="", icon="ADD")
+        side.operator("charpaper.physics_collider_remove", text="", icon="REMOVE")
+        collider = physics.current_collider(suite)
+        if collider is None:
+            hint = layout.column()
+            hint.active = False
+            _wrapped(hint, "Select body bones in Pose Mode, like the head, chest and legs, and press +. "
+                     "Each gets a capsule as thick as the mesh around it.", context)
+        else:
+            layout.operator("charpaper.physics_collider_fit", icon="MOD_SHRINKWRAP")
+            for finding in suite.findings:
+                if finding.physics == f"collider:{collider.bone}":
+                    finding_box(layout, finding, context)
+
+
 class CHARPAPER_PT_gaze(_Sidebar, Panel):
     bl_label = "Gaze"
     bl_parent_id = "CHARPAPER_PT_character"
@@ -946,6 +1048,8 @@ classes = (
     CHARPAPER_UL_hotspot_areas,
     CHARPAPER_UL_hotspot_clips,
     CHARPAPER_UL_hotspot_entries,
+    CHARPAPER_UL_physics_chains,
+    CHARPAPER_UL_physics_colliders,
     CHARPAPER_MT_add_clip,
     CHARPAPER_PT_suite,
     CHARPAPER_PT_character,
@@ -957,6 +1061,7 @@ classes = (
     CHARPAPER_PT_sound,
     CHARPAPER_PT_cameras,
     CHARPAPER_PT_hotspots,
+    CHARPAPER_PT_physics,
     CHARPAPER_PT_warnings,
     CHARPAPER_PT_gltf,
 )

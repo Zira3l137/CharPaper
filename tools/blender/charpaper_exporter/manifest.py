@@ -93,7 +93,7 @@ def clips_tables(clips, cue_tables, previous, character):
     return tables
 
 
-def update(data, suite, scene, extension, model_exported, lenses, environments, exported, hotspots=None):
+def update(data, suite, scene, extension, model_exported, lenses, environments, exported, hotspots=None, physics=None):
     """`exported` maps (environment name or None, actor name) to the actor's exported clips
     and their cue tables; None is the character. What the add-on exports it owns: an exported
     actor's clips table is rewritten whole."""
@@ -189,6 +189,10 @@ def update(data, suite, scene, extension, model_exported, lenses, environments, 
         data.pop("hotspots", None)
         if hotspots:
             data["hotspots"] = hotspots
+    if suite.physics_owned:
+        data.pop("physics", None)
+        if physics:
+            data["physics"] = physics
     return data
 
 

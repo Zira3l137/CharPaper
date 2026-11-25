@@ -14,6 +14,7 @@ from . import sky
 from . import gaze as gaze_bones
 from . import gltf
 from . import hotspots
+from . import physics
 from . import lens
 from . import music
 from .actors import TRANSFORM_PATH
@@ -76,6 +77,7 @@ def check(context, suite):
             _check_environment(context.scene, entry, armature, add)
     music.check(suite, add, Finding)
     hotspots.check(suite, add, Finding)
+    physics.check(suite, add, Finding)
     for entry in suite.cameras:
         if entry.enabled:
             _check_camera(suite, entry, add)

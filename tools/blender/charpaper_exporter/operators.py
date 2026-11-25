@@ -20,6 +20,7 @@ from . import exporters
 from . import gaze
 from . import gltf
 from . import hotspots
+from . import physics
 from . import lens
 from . import manifest
 from . import music
@@ -52,6 +53,7 @@ def _store(suite, findings):
         item.clip = getattr(finding, "clip", "")
         item.sound = getattr(finding, "sound", "")
         item.hotspot = getattr(finding, "hotspot", "")
+        item.physics = getattr(finding, "physics", "")
         item.fix = getattr(finding, "fix", "")
     suite.validated = True
 
@@ -577,10 +579,11 @@ class CHARPAPER_OT_export(Operator):
 
     @staticmethod
     def _write_manifest(scene, suite, folder, model_exported, lenses, environments, exported):
-        """Writes suite.toml. Returns what of the hotspots it left out."""
+        """Writes suite.toml. Returns what of the hotspots and physics it left out."""
         path = manifest.path(folder)
         existing = toml_io.load(path) if os.path.isfile(path) else {}
         spots, left_out = hotspots.tables(suite, folder)
+        swinging, physics_left_out = physics.tables(suite)
         data = manifest.update(
             existing,
             suite,
@@ -591,9 +594,10 @@ class CHARPAPER_OT_export(Operator):
             environments,
             exported,
             hotspots=spots,
+            physics=swinging,
         )
         manifest.write(folder, data)
-        return left_out if suite.hotspots_owned else []
+        return (left_out if suite.hotspots_owned else []) + (physics_left_out if suite.physics_owned else [])
 
 
 class CHARPAPER_OT_stop_shape_keys(Operator):
@@ -704,7 +708,7 @@ class CHARPAPER_OT_select_object(Operator):
 class CHARPAPER_OT_load_manifest(Operator):
     bl_idname = "charpaper.load_manifest"
     bl_label = "Load suite.toml"
-    bl_description = "Fill the panel from the suite.toml in the folder: name, defaults, clip settings, gaze and hotspots"
+    bl_description = "Fill the panel from the suite.toml in the folder: name, defaults, clip settings, gaze, hotspots and physics"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -724,6 +728,7 @@ class CHARPAPER_OT_load_manifest(Operator):
             return {"CANCELLED"}
         unmatched = manifest.load_into(suite, data)
         unmatched += hotspots.load_into(suite, data)
+        unmatched += physics.load_into(suite, data)
         if unmatched:
             self.report(
                 {"WARNING"},

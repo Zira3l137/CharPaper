@@ -434,6 +434,8 @@ class CHARPAPER_PG_finding(PropertyGroup):
     clip: StringProperty()
     sound: StringProperty()
     hotspot: StringProperty()
+    # The chain or collider it is about, as "chain:Name" or "collider:Bone".
+    physics: StringProperty()
     fix: StringProperty()
 
 
@@ -632,6 +634,81 @@ class CHARPAPER_PG_hotspot(PropertyGroup):
     during_index: IntProperty()
 
 
+# Starting points for a chain, as (stiffness, drag, gravity, radius).
+PHYSICS_PRESETS = {
+    "HAIR": (0.1, 0.15, 1.0, 0.02),
+    "CLOTH": (0.05, 0.2, 1.0, 0.03),
+    "SOFT": (0.4, 0.3, 0.2, 0.0),
+    "TAIL": (0.2, 0.1, 0.5, 0.03),
+}
+PRESET_ITEMS = (
+    ("HAIR", "Hair", "Light and loose: ponytails, bangs, braids"),
+    ("CLOTH", "Cloth", "Hangs and trails behind: skirts, capes, ribbons"),
+    ("SOFT", "Soft", "Springs back to its pose: bouncy accessories, ears"),
+    ("TAIL", "Tail", "Holds its shape but swings: tails, long earrings"),
+    ("CUSTOM", "Custom", "Your own values"),
+)
+# Set while a preset writes its values, so they don't turn it into Custom.
+_presetting = False
+
+
+def _preset_picked(chain, _context):
+    global _presetting
+    values = PHYSICS_PRESETS.get(chain.preset)
+    if values is None:
+        return
+    _presetting = True
+    try:
+        chain.stiffness, chain.drag, chain.gravity, chain.radius = values
+    finally:
+        _presetting = False
+    redraw_views()
+
+
+def _physics_tuned(chain, _context):
+    if not _presetting and chain.preset != "CUSTOM":
+        chain.preset = "CUSTOM"
+    redraw_views()
+
+
+class CHARPAPER_PG_physics_chain(PropertyGroup):
+    """Bones of the character's armature that swing together, root first."""
+
+    bones: CollectionProperty(type=CHARPAPER_PG_bone)
+    preset: EnumProperty(name="Preset", items=PRESET_ITEMS, default="HAIR", update=_preset_picked)
+    stiffness: FloatProperty(
+        name="Stiffness",
+        description="How strongly it springs back to the animated pose: 0 hangs loose, 1 follows the animation exactly",
+        default=0.1, min=0.0, max=1.0, update=_physics_tuned,
+    )
+    drag: FloatProperty(
+        name="Drag",
+        description="How quickly it settles: 0 swings on and on, 1 stops dead",
+        default=0.15, min=0.0, max=1.0, update=_physics_tuned,
+    )
+    gravity: FloatProperty(
+        name="Gravity",
+        description="How heavy it is, as a multiple of Earth's gravity",
+        default=1.0, min=0.0, soft_max=2.0, update=_physics_tuned,
+    )
+    radius: FloatProperty(
+        name="Radius",
+        description="How far the bones' tails keep from the colliders, in the armature's units",
+        default=0.02, min=0.0, soft_max=0.2, precision=3, step=0.5, update=_physics_tuned,
+    )
+
+
+class CHARPAPER_PG_physics_collider(PropertyGroup):
+    """A capsule around one bone of the character, from its head to its tail."""
+
+    bone: StringProperty(name="Bone", search=_bone_search, update=_redraw)
+    radius: FloatProperty(
+        name="Radius",
+        description="How far the capsule reaches from the bone on every side, in the armature's units",
+        default=0.05, min=0.001, soft_max=0.5, precision=3, step=0.5, update=_redraw,
+    )
+
+
 def character_clip_names(suite):
     armature = suite.armature
     if armature is None:
@@ -719,6 +796,19 @@ class CHARPAPER_PG_suite(PropertyGroup):
     # read them from suite.toml. Until then hotspots written there by hand are kept.
     hotspots_owned: BoolProperty()
 
+    physics_chains: CollectionProperty(type=CHARPAPER_PG_physics_chain)
+    physics_chain_index: IntProperty(update=_redraw)
+    physics_colliders: CollectionProperty(type=CHARPAPER_PG_physics_collider)
+    physics_collider_index: IntProperty(update=_redraw)
+    show_physics: BoolProperty(
+        name="Show physics",
+        default=True,
+        update=_redraw,
+        description="Draw the chains and the colliders' capsules in the viewport",
+    )
+    # As hotspots_owned, for [physics].
+    physics_owned: BoolProperty()
+
     findings: CollectionProperty(type=CHARPAPER_PG_finding)
     # What the last export did that changes how the result looks, for its popup.
     alerts: CollectionProperty(type=CHARPAPER_PG_finding)
@@ -745,6 +835,8 @@ classes = (
     CHARPAPER_PG_hotspot_clip,
     CHARPAPER_PG_hotspot_entry,
     CHARPAPER_PG_hotspot,
+    CHARPAPER_PG_physics_chain,
+    CHARPAPER_PG_physics_collider,
     CHARPAPER_PG_suite,
 )
 
