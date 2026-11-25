@@ -15,9 +15,9 @@ use crate::screens::in_picture;
 use crate::stage::StageOf;
 
 #[derive(Resource, Default)]
-pub(super) struct Mouse {
+pub(crate) struct Mouse {
     // The stage pointed into, the ray into its scene, and where in the window.
-    pub(super) sight: Option<(Entity, Ray3d, Vec2)>,
+    pub(crate) sight: Option<(Entity, Ray3d, Vec2)>,
     pub(super) real_now: f64,
     // When it last moved or a button was pressed, in real time.
     last_active: Option<f64>,
@@ -27,7 +27,7 @@ pub(super) struct Mouse {
 
 impl Mouse {
     // How long it has kept still, in real time.
-    pub(super) fn still(&self) -> f64 {
+    pub(crate) fn still(&self) -> f64 {
         self.real_now - self.last_active.unwrap_or(self.real_now)
     }
 }

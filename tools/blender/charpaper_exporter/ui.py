@@ -573,6 +573,11 @@ class CHARPAPER_PT_environments(_Sidebar, Panel):
         fog = env_settings.fog_objects(objects)
         if fog:
             box.label(text=f"{len(fog)} fog boxes: " + ", ".join(o.name for o in fog), icon="MOD_FLUID")
+        wind = env_settings.wind_table(objects)
+        if wind:
+            gusts = f", gusts {round(wind.get('gusts', 0) * 100)}%"
+            name = env_settings.wind_fields(objects)[0].name
+            box.label(text=f"Wind from {name}: {wind['strength']:g} m/s²{gusts}", icon="FORCE_WIND")
 
 
 class CHARPAPER_PT_sound(_Sidebar, Panel):

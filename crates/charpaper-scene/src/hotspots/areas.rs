@@ -44,7 +44,7 @@ pub(super) fn distance(spot: &Spot, ray: Ray3d, globals: &Query<&GlobalTransform
 // How far along the ray (origin, unit direction) it enters the capsule around a→b, or None
 // if it misses or the capsule is behind it. Found from where the ray passes closest to the
 // bone: exact for a sphere and near enough for a capsule to tell what is in front.
-fn reach(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, radius: f32) -> Option<f32> {
+pub(crate) fn reach(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, radius: f32) -> Option<f32> {
     let ab = b - a;
     let r = origin - a;
     let (e, f, c, along) = (ab.dot(ab), ab.dot(r), direction.dot(r), direction.dot(ab));

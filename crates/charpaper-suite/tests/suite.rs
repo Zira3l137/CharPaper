@@ -810,3 +810,21 @@ fn physics_that_cannot_work_is_refused() {
         assert!(err.contains(problem), "{physics}: {err}");
     }
 }
+
+#[test]
+fn an_environment_can_have_wind_that_can_blow() {
+    let manifest = "schema = 2\n[environments.stage.wind]\ndirection = [1, 0, 0]\nstrength = 3\n";
+    let fixture = Fixture::new("wind", manifest);
+    let wind = fixture.load().unwrap().environments[0].settings.wind.unwrap();
+    assert_eq!((wind.direction, wind.strength, wind.gusts), ([1.0, 0.0, 0.0], 3.0, None));
+    let broken = [
+        ("direction = [0, 0, 0]\nstrength = 3", "points somewhere"),
+        ("direction = [1, 0, 0]\nstrength = -1", "negative `strength`"),
+        ("direction = [1, 0, 0]\nstrength = 1\ngusts = 2", "go from 0 to 1"),
+    ];
+    for (wind, problem) in broken {
+        fixture.write("suite.toml", format!("schema = 2\n[environments.stage.wind]\n{wind}\n"));
+        let err = fixture.load().unwrap_err().to_string();
+        assert!(err.contains("environment \"stage\": its wind") && err.contains(problem), "{err}");
+    }
+}

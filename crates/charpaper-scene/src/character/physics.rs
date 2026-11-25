@@ -25,6 +25,7 @@ use charpaper_anim::springs::Collider as Pushes;
 use charpaper_anim::springs::Forces;
 use charpaper_anim::springs::Joint;
 use charpaper_anim::springs::Settings;
+use charpaper_anim::springs::Wind;
 use charpaper_anim::surface;
 use charpaper_anim::surface::Part;
 use charpaper_settings::PhysicsSettings;
@@ -35,6 +36,8 @@ use crate::character::CharacterActor;
 use crate::character::ShownSkin;
 use crate::character::binding::Bound;
 use crate::character::binding::SkinPart;
+use crate::hotspots::Mouse;
+use crate::hotspots::reach;
 use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::suite::ActiveSuite;
@@ -42,6 +45,13 @@ use crate::suite::ActiveSuite;
 const GRAVITY: f32 = 9.81;
 const STIFFNESS: f32 = 0.2;
 const DRAG: f32 = 0.1;
+// The cursor is a capsule along its ray, as wide as this share of how far away the body under
+// it is, so it looks the same size at any zoom.
+const CURSOR_SIZE: f32 = 0.025;
+const CURSOR_WIDEST: f32 = 0.12;
+const CURSOR_FARTHEST: f32 = 1000.0;
+// After the mouse stops, the cursor lets go over this many seconds, from the first on.
+const CURSOR_LETS_GO: (f32, f32) = (0.15, 0.4);
 
 // Its Body is kept when the chains are bound again, which a skin's coming binds them.
 #[derive(Component, Default)]
@@ -259,18 +269,21 @@ pub(crate) fn read_body(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn swing(
     time: Res<Time>,
+    mouse: Res<Mouse>,
+    buttons: Res<ButtonInput<MouseButton>>,
     mut armatures: Query<(Entity, &CharacterActor, &mut Springs, &Body)>,
     stage_of: StageOf,
-    settings: Query<&PhysicsSettings>,
+    stages: Query<(&PhysicsSettings, &CharacterState, &ActiveSuite)>,
     parents: Query<&ChildOf>,
     mut transforms: Query<&mut Transform>,
 ) {
-    let forces = Forces { gravity: Vec3::NEG_Y * GRAVITY };
     let dt = time.delta_secs();
     for (armature, actor, mut springs, body) in &mut armatures {
-        let on = stage_of.get(armature).and_then(|stage| settings.get(stage).ok());
+        let stage = stage_of.get(armature);
+        let on = stage.and_then(|stage| stages.get(stage).ok());
         let Springs { chains, colliders } = &mut *springs;
         let pose = &actor.mixer().pose().nodes;
 
@@ -282,8 +295,11 @@ pub(crate) fn swing(
                 };
             }
         }
+        let (Some(stage), Some((settings, state, suite))) = (stage, on) else {
+            continue;
+        };
         // Off, the bones go back to the animation: the mixer only writes the ones it animates.
-        if !on.is_some_and(|settings| settings.enabled) {
+        if !settings.enabled {
             for swinging in chains.iter_mut() {
                 swinging.chain.reset();
                 write(swinging, &mut transforms);
@@ -292,23 +308,71 @@ pub(crate) fn swing(
         }
 
         let readonly = transforms.as_readonly();
-        let pushes: Vec<Pushes> = colliders
+        let placed: Vec<(Affine3A, Capsule)> = colliders
             .iter()
             .map(|collider| {
                 let bone = world(collider.bone, &parents, &readonly);
-                match body.around.get(&collider.name) {
-                    Some(&at) => Pushes::surface(&body.parts[at].surface, bone),
-                    None => Capsule::around(bone, collider.length, collider.radius).into(),
-                }
+                (bone, Capsule::around(bone, collider.length, collider.radius))
             })
             .collect();
+        let mut pushes: Vec<Pushes> = colliders
+            .iter()
+            .zip(&placed)
+            .map(|(collider, &(bone, capsule))| match body.around.get(&collider.name) {
+                Some(&at) => Pushes::surface(&body.parts[at].surface, bone),
+                None => capsule.into(),
+            })
+            .collect();
+        // Dragging steers the orbit camera, so only a moving pointer brushes the chains.
+        if settings.cursor && buttons.get_pressed().next().is_none() {
+            let near = world(armature, &parents, &readonly).translation.into();
+            let capsules: Vec<Capsule> = placed.iter().map(|(_, capsule)| *capsule).collect();
+            pushes.extend(cursor(&mouse, stage, &capsules, near).map(Pushes::from));
+        }
 
+        let wind = settings.wind.then(|| shown_wind(suite, state)).flatten();
+        let elapsed = time.elapsed_secs_f64();
         for swinging in chains.iter_mut() {
             let parent = world(swinging.parent, &parents, &transforms.as_readonly());
+            let at = parent.translation.into();
+            let wind = wind.map_or(Vec3::ZERO, |wind| wind.at(at, elapsed));
+            let forces = Forces { gravity: Vec3::NEG_Y * GRAVITY, wind };
             swinging.chain.update(parent, &mut swinging.locals, &pushes, forces, dt);
             write(swinging, &mut transforms);
         }
     }
+}
+
+fn shown_wind(suite: &ActiveSuite, state: &CharacterState) -> Option<Wind> {
+    let shown = state.environment.as_deref()?;
+    let wind = suite.environments.iter().find(|e| e.name == shown)?.settings.wind?;
+    let gusts = wind.gusts.unwrap_or(0.0);
+    Some(Wind { direction: Vec3::from(wind.direction), strength: wind.strength, gusts })
+}
+
+// A capsule along the pointer's ray into the stage, from the camera to a little way into the
+// body under it, so hair behind the head stays out of its reach. Missing the body, it reaches
+// through the whole scene. It fades out once the mouse keeps still.
+fn cursor(mouse: &Mouse, stage: Entity, body: &[Capsule], near: Vec3) -> Option<Capsule> {
+    let (pointed, ray, _) = mouse.sight?;
+    if pointed != stage {
+        return None;
+    }
+    let (from, to) = CURSOR_LETS_GO;
+    let still = ((mouse.still() as f32 - from) / (to - from)).clamp(0.0, 1.0);
+    let held = 1.0 - still * still * (3.0 - 2.0 * still);
+    if held <= 0.0 {
+        return None;
+    }
+    let (origin, direction) = (ray.origin, *ray.direction);
+    let hit = body
+        .iter()
+        .filter_map(|capsule| reach(origin, direction, capsule.a, capsule.b, capsule.radius))
+        .min_by(f32::total_cmp);
+    let depth = hit.unwrap_or_else(|| (near - origin).dot(direction).max(0.0));
+    let radius = (depth * CURSOR_SIZE).min(CURSOR_WIDEST) * held;
+    let end = hit.map_or(CURSOR_FARTHEST, |hit| hit + radius);
+    Some(Capsule { a: origin, b: origin + direction * end, radius })
 }
 
 fn write(swinging: &Swinging, transforms: &mut Query<&mut Transform>) {

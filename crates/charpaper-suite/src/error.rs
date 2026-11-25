@@ -68,6 +68,8 @@ pub enum SuiteError {
     #[error("hotspot {hotspot:?}: {problem}")]
     Hotspot { hotspot: String, problem: String },
 
+    #[error("environment {environment:?}: its wind {problem}")]
+    Wind { environment: String, problem: String },
     #[error("physics {name:?}: {problem}")]
     Physics { name: String, problem: String },
 }

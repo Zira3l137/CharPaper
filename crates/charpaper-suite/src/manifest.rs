@@ -590,6 +590,27 @@ pub struct EnvironmentEntry {
     /// `clips/<name>/` folder.
     #[serde(default)]
     pub actors: BTreeMap<String, ActorEntry>,
+    /// Wind that blows the character's physics chains while this
+    /// environment shows, as a Wind force field in Blender would.
+    pub wind: Option<Wind>,
+}
+
+/// Wind on the character's physics chains. Gusts roll along with it, so
+/// what's close together sways together.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Wind {
+    /// The way it blows, in the app's space, glTF's, with +Y up. Its length
+    /// doesn't matter.
+    pub direction: [f32; 3],
+    /// How hard it pushes, as an acceleration in m/s², as gravity pulls at
+    /// 9.81: about 2 stirs hair, 10 blows it out sideways.
+    #[schemars(range(min = 0.0))]
+    pub strength: f32,
+    /// How much it comes and goes: 0 blows steadily, 1 drops to calm and
+    /// rises to twice as strong. Defaults to 0.
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub gusts: Option<f32>,
 }
 
 /// A light's settings beyond glTF's.

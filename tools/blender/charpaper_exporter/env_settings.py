@@ -1,6 +1,7 @@
 # What an environment's [environments.<name>] table takes from Blender that glTF can't
 # carry: fog boxes, read from their Principled Volume, the lights that skip the fog, the
-# lights and objects that cast no shadows, and lights' Radius and keyed Strength and Color.
+# lights and objects that cast no shadows, lights' Radius and keyed Strength and Color, and
+# the wind, from a Wind force field.
 # Export owns these keys; the look's keys are left alone.
 #
 # A fog's Density may come from a Noise Texture, through nodes that turn its value into
@@ -15,7 +16,7 @@ import mathutils
 
 from . import anim
 
-KEYS = ("fog", "no_volume_scatter", "no_shadows", "lights")
+KEYS = ("fog", "no_volume_scatter", "no_shadows", "lights", "wind")
 
 NOISE_POINTS = 32
 MAX_NOISE_DETAIL = 3.0
@@ -379,7 +380,33 @@ def table(collection):
         "no_volume_scatter": sorted(o.name for o in lights if o.data.volume_factor <= 0.0),
         "no_shadows": sorted(o.name for o in unshadowed),
         "lights": {o.name: light for o in sorted(lights, key=lambda o: o.name) if (light := light_table(o))},
+        "wind": wind_table(objects),
     }
+
+
+def wind_fields(objects):
+    return sorted((o for o in objects if o.field is not None and o.field.type == "WIND"), key=lambda o: o.name)
+
+
+def wind_table(objects):
+    """The first Wind force field's: it blows along the object's Z arrow, as hard as its
+    Strength, in m/s², and its Noise up to 1 sets the gusts."""
+    fields = wind_fields(objects)
+    if not fields:
+        return None
+    field = fields[0].field
+    blows = fields[0].matrix_world.to_3x3() @ mathutils.Vector((0.0, 0.0, 1.0))
+    if blows.length < 1e-6 or field.strength == 0.0:
+        return None
+    blows = blows.normalized() * (1.0 if field.strength > 0 else -1.0)
+    table = {
+        "direction": [round(v, 4) for v in (blows.x, blows.z, -blows.y)],
+        "strength": round(abs(field.strength), 4),
+    }
+    gusts = min(max(field.noise, 0.0), 1.0)
+    if gusts > 0.0:
+        table["gusts"] = round(gusts, 4)
+    return table
 
 
 def light_table(obj):

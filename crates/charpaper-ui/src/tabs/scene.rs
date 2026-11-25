@@ -195,6 +195,40 @@ fn physics() -> impl Bundle {
                     w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.high_quality, step));
                 },
             }
+            .segments(),
+            // Only where the environment shown has wind.
+            Setting {
+                label: |l| fl!(l, "label-wind"),
+                help: |l| fl!(l, "help-wind"),
+                show: |w, l| {
+                    let physics = w.focused::<PhysicsSettings>()?;
+                    let shown = w.focused::<CharacterState>()?.environment.clone();
+                    let windy = w.focused::<ActiveSuite>().is_some_and(|s| {
+                        !s.physics.chains.is_empty()
+                            && s.environments.iter().any(|e| {
+                                Some(&e.name) == shown.as_ref() && e.settings.wind.is_some()
+                            })
+                    });
+                    Some(switch(l, physics.wind).when(windy && physics.enabled))
+                },
+                change: |w, step| {
+                    w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.wind, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-physics-cursor"),
+                help: |l| fl!(l, "help-physics-cursor"),
+                show: |w, l| {
+                    let physics = w.focused::<PhysicsSettings>()?;
+                    let swings =
+                        w.focused::<ActiveSuite>().is_some_and(|s| !s.physics.chains.is_empty());
+                    Some(switch(l, physics.cursor).when(swings && physics.enabled))
+                },
+                change: |w, step| {
+                    w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.cursor, step));
+                },
+            }
             .segments()
         ],
     )

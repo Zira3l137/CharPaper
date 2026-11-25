@@ -76,6 +76,7 @@ pub use manifest::Timeline;
 pub use manifest::Tonemapping;
 pub use manifest::Trigger;
 pub use manifest::Vignette;
+pub use manifest::Wind;
 pub use shape_keys::MeshShapeKeys;
 pub use shape_keys::mesh_shape_keys;
 

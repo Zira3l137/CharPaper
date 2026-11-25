@@ -61,11 +61,15 @@ pub struct PhysicsSettings {
     // Chains keep off the body's own mesh, read from the worn skin's file, instead of off the
     // capsules around its bones.
     pub high_quality: bool,
+    // The environment's wind blows them.
+    pub wind: bool,
+    // The pointer moving over them pushes them aside.
+    pub cursor: bool,
 }
 
 impl Default for PhysicsSettings {
     fn default() -> Self {
-        Self { enabled: true, high_quality: false }
+        Self { enabled: true, high_quality: false, wind: true, cursor: true }
     }
 }
 

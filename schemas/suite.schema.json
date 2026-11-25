@@ -442,6 +442,17 @@
             "boolean",
             "null"
           ]
+        },
+        "wind": {
+          "description": "Wind that blows the character's physics chains while this\nenvironment shows, as a Wind force field in Blender would.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Wind"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1389,6 +1400,43 @@
         }
       },
       "additionalProperties": false
+    },
+    "Wind": {
+      "description": "Wind on the character's physics chains. Gusts roll along with it, so\nwhat's close together sways together.",
+      "type": "object",
+      "properties": {
+        "direction": {
+          "description": "The way it blows, in the app's space, glTF's, with +Y up. Its length\ndoesn't matter.",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        },
+        "gusts": {
+          "description": "How much it comes and goes: 0 blows steadily, 1 drops to calm and\nrises to twice as strong. Defaults to 0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float",
+          "maximum": 1.0,
+          "minimum": 0.0
+        },
+        "strength": {
+          "description": "How hard it pushes, as an acceleration in m/s², as gravity pulls at\n9.81: about 2 stirs hair, 10 blows it out sideways.",
+          "type": "number",
+          "format": "float",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "direction",
+        "strength"
+      ]
     }
   }
 }

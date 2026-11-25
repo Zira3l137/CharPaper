@@ -371,6 +371,7 @@ def _check_environment(scene, entry, armature, add):
     if cameras:
         add(Finding(f"environment {entry.name!r}: cameras are left out, use Cameras: {_examples(cameras)}", severity="INFO"))
     _check_fog(entry.name, objects, world is not None, add)
+    _check_wind(entry.name, objects, add)
     _check_shadows(entry.name, objects, add)
     _check_animated(objects, add)
     # The environment's file has no armature, so what hangs from the character stays put.
@@ -410,6 +411,23 @@ def _check_animated(objects, add):
         source = animated.source_path(gifs[0])
         if not os.path.isfile(source):
             add(Finding(f"GIF {gifs[0].name!r}: its file {source} is missing"))
+
+
+def _check_wind(name, objects, add):
+    fields = env_settings.wind_fields(objects)
+    if len(fields) > 1:
+        add(Finding(
+            f"environment {name!r}: only the wind of {fields[0].name} blows, the first by name; "
+            f"{_examples(f.name for f in fields[1:])} {'is' if len(fields) == 2 else 'are'} left out",
+            fields[1], severity="INFO",
+        ))
+    if fields and fields[0].field.strength == 0.0:
+        add(Finding(f"environment {name!r}: the wind {fields[0].name} has a Strength of 0, so it doesn't blow", fields[0]))
+    elif fields and fields[0].field.noise > 1.0:
+        add(Finding(
+            f"environment {name!r}: the wind {fields[0].name}'s Noise is {fields[0].field.noise:g}; the "
+            "gusts are strongest at 1, so more does nothing more", fields[0], severity="INFO",
+        ))
 
 
 def _check_fog(name, objects, has_sky, add):

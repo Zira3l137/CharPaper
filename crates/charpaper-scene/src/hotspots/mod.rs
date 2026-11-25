@@ -34,8 +34,10 @@ use charpaper_suite::Hotspot;
 use crate::SceneSet;
 use crate::character::play_selected;
 use crate::suite::ActiveSuite;
+pub(crate) use areas::reach;
+pub(crate) use mouse::Mouse;
+
 use actors::Played;
-use mouse::Mouse;
 
 pub(crate) struct HotspotsPlugin;
 

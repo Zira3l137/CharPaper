@@ -28,6 +28,7 @@ use crate::manifest::Post;
 use crate::manifest::SCHEMA_VERSION;
 use crate::manifest::Timeline;
 use crate::manifest::Trigger;
+use crate::manifest::Wind;
 
 const CLIPS_DIR: &str = "clips";
 const EXPRESSIONS_DIR: &str = "expressions";
@@ -711,6 +712,10 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
         let Some(environment) = found.get_mut(name) else {
             return Err(SuiteError::UnknownEntry { kind: "environment", name: name.clone() });
         };
+        if let Some(wind) = &settings.wind {
+            check_wind(wind)
+                .map_err(|problem| SuiteError::Wind { environment: name.clone(), problem })?;
+        }
         environment.settings = settings.clone();
     }
     for environment in found.values_mut() {
@@ -718,6 +723,20 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
     }
 
     Ok(found.into_values().collect())
+}
+
+fn check_wind(wind: &Wind) -> Result<(), String> {
+    let direction = wind.direction;
+    if !direction.iter().all(|v| v.is_finite()) || direction.iter().all(|v| *v == 0.0) {
+        return Err("needs a `direction` that points somewhere".into());
+    }
+    if !(wind.strength.is_finite() && wind.strength >= 0.0) {
+        return Err("can't have a negative `strength`".into());
+    }
+    if wind.gusts.is_some_and(|gusts| !(0.0..=1.0).contains(&gusts)) {
+        return Err("`gusts` go from 0 to 1".into());
+    }
+    Ok(())
 }
 
 fn named_files(
