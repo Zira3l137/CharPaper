@@ -2,6 +2,7 @@ mod animation;
 mod binding;
 mod drivers;
 mod expression;
+mod physics;
 mod skin;
 mod skin_keys;
 
@@ -34,6 +35,10 @@ impl Plugin for CharacterPlugin {
             .add_systems(PostUpdate, drivers::drive_shape_keys.after(TransformSystems::Propagate))
             .add_systems(
                 PostUpdate,
+                physics::swing.after(crate::gaze::aim).before(TransformSystems::Propagate),
+            )
+            .add_systems(
+                PostUpdate,
                 (animation::mix_character, skin_keys::write_skin_keys).chain().in_set(Mixing::Pose),
             )
             .add_systems(Update, (spawn_character, animation::list_clips).in_set(SceneSet::Fill))
@@ -56,6 +61,7 @@ impl Plugin for CharacterPlugin {
                     )
                         .chain(),
                     (skin::switch_skin, expression::spawn_skin_scenes).chain(),
+                    physics::bind_springs.after(animation::build_actor).after(binding::bind_skins),
                 )
                     .in_set(SceneSet::Run),
             );

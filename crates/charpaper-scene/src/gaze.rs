@@ -305,14 +305,14 @@ fn find_stage_shape_keys(
 
 // The bones the gaze reads and turns, and the shape keys it sets.
 #[derive(SystemParam)]
-struct Bones<'w, 's> {
+pub(crate) struct Bones<'w, 's> {
     globals: Query<'w, 's, &'static GlobalTransform>,
     parents: Query<'w, 's, &'static ChildOf>,
     transforms: Query<'w, 's, &'static mut Transform>,
     morphs: Query<'w, 's, &'static mut MorphWeights>,
 }
 
-fn aim(
+pub(crate) fn aim(
     time: Res<Time>,
     cursor: Res<CursorPosition>,
     mut stages: Query<(

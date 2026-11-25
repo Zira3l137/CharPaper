@@ -104,6 +104,10 @@ impl CharacterActor {
         self.nodes.get(at).copied()
     }
 
+    pub(crate) fn node_index(&self, entity: Entity) -> Option<usize> {
+        self.nodes.iter().position(|&node| node == entity)
+    }
+
     // None while it is still loading.
     pub(crate) fn clip_id(&self, name: &str) -> Option<ClipId> {
         self.ids.get(name).copied()
