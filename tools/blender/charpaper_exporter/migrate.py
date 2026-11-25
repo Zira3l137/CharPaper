@@ -83,10 +83,25 @@ def settle_folder(suite):
 
 def _hotspot_clip_modes():
     """Clips only hotspots played were played once whatever their mode said; now their mode says
-    how they play, so those still marked Timeline are marked Once."""
+    how they play, so those still marked Timeline are marked Once. Once per file: after that, a
+    Timeline one is a loop for While, set so on purpose. Files saved before the mark was kept
+    went through it on every open, so a clip a hotspot names in While, Then or Only during is
+    left as it is: it has to loop."""
+    scenes = list(bpy.data.scenes)
+    if not scenes or any(scene.charpaper.clip_modes_settled for scene in scenes):
+        return
+    for scene in scenes:
+        scene.charpaper.clip_modes_settled = True
+    looped = {
+        item.action
+        for scene in scenes
+        for spot in scene.charpaper.hotspots
+        for field in ("meanwhile", "then", "during")
+        for item in getattr(spot, field)
+    }
     for obj in bpy.data.objects:
         for clip in obj.charpaper.clips:
-            if clip.reaction_only and clip.mode == "TIMELINE":
+            if clip.reaction_only and clip.mode == "TIMELINE" and clip.action not in looped:
                 clip.mode = "ONCE"
 
 

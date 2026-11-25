@@ -780,6 +780,8 @@ class CHARPAPER_PG_suite(PropertyGroup):
     actor: StringProperty()
     # Set once this suite's settings from before clips lived on objects have been moved there.
     migrated: BoolProperty()
+    # Set on every scene once the file's hotspot-only clips have been given their modes.
+    clip_modes_settled: BoolProperty()
     last_export: StringProperty()
     gaze: PointerProperty(type=CHARPAPER_PG_gaze)
     gltf: PointerProperty(type=CHARPAPER_PG_gltf)
