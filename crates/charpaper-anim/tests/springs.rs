@@ -5,12 +5,13 @@ use charpaper_anim::springs::Collider;
 use charpaper_anim::springs::Forces;
 use charpaper_anim::springs::Joint;
 use charpaper_anim::springs::Settings;
+use charpaper_anim::springs::Wind;
 use charpaper_anim::surface::Surface;
 use glam::Affine3A;
 use glam::Quat;
 use glam::Vec3;
 
-const DOWN: Forces = Forces { gravity: Vec3::new(0.0, -9.81, 0.0) };
+const DOWN: Forces = Forces { gravity: Vec3::new(0.0, -9.81, 0.0), wind: Vec3::ZERO };
 
 // Three bones of length 1 from the origin along +X: the first turned from +Y, the way bones
 // point, to +X; the others straight on from it.
@@ -179,4 +180,38 @@ fn a_surface_holds_the_chain_off_it_where_its_bone_is() {
     }
     // It did fall onto it.
     assert!(points[3].y < -0.3, "{points:?}");
+}
+
+#[test]
+fn wind_blows_a_loose_chain_its_way() {
+    let animated = sideways();
+    let mut loose = chain(Settings { stiffness: 0.02, drag: 0.2, gravity: 1.0 });
+    let mut locals = animated.clone();
+    let forces = Forces { wind: Vec3::new(0.0, 0.0, 9.81), ..DOWN };
+    for _ in 0..300 {
+        locals = animated.clone();
+        loose.update(Affine3A::IDENTITY, &mut locals, &[], forces, 1.0 / 60.0);
+    }
+    // As strong as gravity, it takes the chain as far its way as gravity takes it down.
+    let tip = points(&locals)[3];
+    assert!(tip.z > 0.5 && (tip.z + tip.y).abs() < 1e-3, "{tip}");
+}
+
+#[test]
+fn gusts_come_and_go_and_roll_along_the_wind() {
+    let wind = Wind { direction: Vec3::new(2.0, 0.0, 0.0), strength: 4.0, gusts: 1.0 };
+    let strengths: Vec<f32> =
+        (0..400).map(|i| wind.at(Vec3::ZERO, i as f64 * 0.05).length()).collect();
+    let (calmest, strongest) =
+        strengths.iter().fold((f32::MAX, 0.0f32), |(lo, hi), s| (lo.min(*s), hi.max(*s)));
+    assert!(calmest < 1.5 && strongest > 6.5 && strongest <= 8.0 + 1e-4, "{calmest} {strongest}");
+    // A point 1.5 m downwind feels what the origin felt a second before.
+    let later = wind.at(Vec3::new(1.5, 0.0, 0.0), 11.0);
+    assert!((later - wind.at(Vec3::ZERO, 10.0)).length() < 1e-4, "{later}");
+    let steady = Wind { gusts: 0.0, ..wind };
+    assert!((steady.at(Vec3::ONE, 123.4) - Vec3::new(4.0, 0.0, 0.0)).length() < 1e-5);
+    // Still precise after days of running.
+    let days = 3.0 * 86_400.0;
+    let step = (wind.at(Vec3::ZERO, days + 0.01) - wind.at(Vec3::ZERO, days)).length();
+    assert!(step < 0.2, "{step}");
 }

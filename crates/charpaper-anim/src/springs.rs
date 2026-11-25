@@ -121,11 +121,49 @@ impl From<Capsule> for Collider<'_> {
     }
 }
 
-/// What pushes on every chain besides its springs, in world space.
+/// What pushes on a chain besides its springs, in world space.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Forces {
     /// Earth's gravity, down. Each chain scales it by its own `gravity`.
     pub gravity: Vec3,
+    /// The wind where the chain is, as an acceleration: the same for every chain, light or
+    /// heavy, as its stiffness is what holds it against it.
+    pub wind: Vec3,
+}
+
+/// Wind that comes and goes. Its gusts roll along the way it blows, so chains close together
+/// along it sway together and far ones apart.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Wind {
+    /// Which way it blows. Need not be of length 1.
+    pub direction: Vec3,
+    /// As an acceleration, in m/s².
+    pub strength: f32,
+    /// 0 blows steadily, 1 drops to calm and rises to twice as strong.
+    pub gusts: f32,
+}
+
+// How fast gusts travel along the wind, in m/s.
+const GUST_SPEED: f64 = 1.5;
+
+impl Wind {
+    /// The wind at `point` at `time` seconds. The time is f64 so the gusts stay smooth after
+    /// days of running.
+    pub fn at(&self, point: Vec3, time: f64) -> Vec3 {
+        let Some(along) = self.direction.try_normalize() else {
+            return Vec3::ZERO;
+        };
+        let phase = time - f64::from(point.dot(along)) / GUST_SPEED;
+        // Sines whose periods never line up, so the pattern doesn't repeat.
+        let wave = |speed: f64, offset: f64| {
+            ((phase * speed + offset) % std::f64::consts::TAU).sin() as f32
+        };
+        let gust = 0.5 * wave(0.7, 0.0) + 0.3 * wave(1.9, 1.3) + 0.2 * wave(4.3, 4.1);
+        let sideways = along.cross(Vec3::Y).try_normalize().unwrap_or(Vec3::X);
+        let sway = 0.3 * self.gusts * wave(1.1, 2.0);
+        let gusts = self.gusts.clamp(0.0, 1.0);
+        (along + sideways * sway).normalize() * self.strength * (1.0 + gusts * gust).max(0.0)
+    }
 }
 
 /// One chain of joints, from a root to a leaf, each the child of the one before.
@@ -177,7 +215,7 @@ impl Chain {
             let tails = targets(parent, locals, &self.joints);
             State { before: tails.clone(), tails, spare: 0.0 }
         });
-        let pull = forces.gravity * self.settings.gravity * STEP * STEP;
+        let pull = (forces.gravity * self.settings.gravity + forces.wind) * STEP * STEP;
         state.spare += dt.clamp(0.0, MOST_BEHIND);
         while state.spare >= STEP {
             state.spare -= STEP;
