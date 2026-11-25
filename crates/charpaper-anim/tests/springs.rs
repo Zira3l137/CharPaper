@@ -1,9 +1,11 @@
 use charpaper_anim::Transform;
 use charpaper_anim::springs::Capsule;
 use charpaper_anim::springs::Chain;
+use charpaper_anim::springs::Collider;
 use charpaper_anim::springs::Forces;
 use charpaper_anim::springs::Joint;
 use charpaper_anim::springs::Settings;
+use charpaper_anim::surface::Surface;
 use glam::Affine3A;
 use glam::Quat;
 use glam::Vec3;
@@ -42,7 +44,7 @@ fn points(locals: &[Transform]) -> Vec<Vec3> {
 fn run(
     chain: &mut Chain,
     animated: &[Transform],
-    colliders: &[Capsule],
+    colliders: &[Collider],
     secs: f32,
     dt: f32,
 ) -> Vec<Transform> {
@@ -92,7 +94,7 @@ fn a_collider_holds_the_chain_off_it() {
     // A log under the chain, across it.
     let log = Capsule { a: Vec3::new(1.5, -0.6, -2.0), b: Vec3::new(1.5, -0.6, 2.0), radius: 0.4 };
     let mut loose = chain(Settings { stiffness: 0.0, drag: 0.2, gravity: 1.0 });
-    let points = points(&run(&mut loose, &animated, &[log], 3.0, 1.0 / 60.0));
+    let points = points(&run(&mut loose, &animated, &[log.into()], 3.0, 1.0 / 60.0));
     for tail in &points[1..] {
         let off_axis = Vec3::new(tail.x - 1.5, tail.y + 0.6, 0.0).length();
         // A hair's breadth in is fine: a pushed tail is pulled back to its length after.
@@ -152,4 +154,29 @@ fn a_capsule_around_a_bone_follows_its_scale() {
     let capsule = Capsule::around(bone, 0.5, 0.1);
     assert_eq!((capsule.a, capsule.b), (Vec3::X, Vec3::new(1.0, 1.0, 0.0)));
     assert!((capsule.radius - 0.2).abs() < 1e-6);
+}
+
+// Two triangles making a floor at y = -0.6 under the chain, facing up, in a bone's space with
+// the bone moved down by 0.6.
+fn floor() -> Surface {
+    let corner = |x: f32, z: f32| Vec3::new(x, 0.0, z);
+    Surface::new([
+        [corner(-5.0, -5.0), corner(-5.0, 5.0), corner(5.0, 5.0)],
+        [corner(-5.0, -5.0), corner(5.0, 5.0), corner(5.0, -5.0)],
+    ])
+}
+
+#[test]
+fn a_surface_holds_the_chain_off_it_where_its_bone_is() {
+    let animated = sideways();
+    let floor = floor();
+    let bone = Affine3A::from_translation(Vec3::new(0.0, -0.6, 0.0));
+    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.2, gravity: 1.0 });
+    let points =
+        points(&run(&mut loose, &animated, &[Collider::surface(&floor, bone)], 3.0, 1.0 / 60.0));
+    for tail in &points[1..] {
+        assert!(tail.y >= -0.5 - 2e-3, "tail {tail} under the floor");
+    }
+    // It did fall onto it.
+    assert!(points[3].y < -0.3, "{points:?}");
 }

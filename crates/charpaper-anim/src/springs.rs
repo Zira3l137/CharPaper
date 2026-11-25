@@ -15,6 +15,7 @@ use glam::Quat;
 use glam::Vec3;
 
 use crate::mixer::Transform;
+use crate::surface::Surface;
 
 /// The rate the springs step at, in steps a second.
 pub const RATE: f32 = 60.0;
@@ -79,6 +80,47 @@ impl Capsule {
     }
 }
 
+/// Something a chain stays out of.
+#[derive(Debug, Clone, Copy)]
+pub enum Collider<'a> {
+    Capsule(Capsule),
+    Surface(Placed<'a>),
+}
+
+/// A bone's surface where the bone is now.
+#[derive(Debug, Clone, Copy)]
+pub struct Placed<'a> {
+    surface: &'a Surface,
+    to_world: Affine3A,
+    to_local: Affine3A,
+    scale: f32,
+}
+
+impl<'a> Collider<'a> {
+    /// The surface around a bone whose world transform is `bone`.
+    pub fn surface(surface: &'a Surface, bone: Affine3A) -> Self {
+        let scale = bone.matrix3.x_axis.length().max(f32::EPSILON);
+        Self::Surface(Placed { surface, to_world: bone, to_local: bone.inverse(), scale })
+    }
+
+    fn push(&self, point: Vec3, margin: f32) -> Vec3 {
+        match self {
+            Collider::Capsule(capsule) => capsule.push(point, margin),
+            Collider::Surface(placed) => {
+                let local = placed.to_local.transform_point3(point);
+                let pushed = placed.surface.push(local, margin / placed.scale);
+                if pushed == local { point } else { placed.to_world.transform_point3(pushed) }
+            }
+        }
+    }
+}
+
+impl From<Capsule> for Collider<'_> {
+    fn from(capsule: Capsule) -> Self {
+        Collider::Capsule(capsule)
+    }
+}
+
 /// What pushes on every chain besides its springs, in world space.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Forces {
@@ -126,7 +168,7 @@ impl Chain {
         &mut self,
         parent: Affine3A,
         locals: &mut [Transform],
-        colliders: &[Capsule],
+        colliders: &[Collider],
         forces: Forces,
         dt: f32,
     ) {
@@ -171,7 +213,7 @@ fn step(
     settings: Settings,
     (tails, previous): (&mut [Vec3], &[Vec3]),
     pull: Vec3,
-    colliders: &[Capsule],
+    colliders: &[Collider],
 ) {
     let mut parent = parent;
     for at in 0..joints.len() {
