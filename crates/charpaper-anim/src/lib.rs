@@ -9,6 +9,7 @@
 mod clip;
 mod file;
 mod mixer;
+pub mod springs;
 mod track;
 
 pub use clip::Clip;
