@@ -60,7 +60,7 @@ fn run(
 #[test]
 fn a_stiff_chain_follows_the_animation() {
     let animated = sideways();
-    let mut stiff = chain(Settings { stiffness: 1.0, drag: 1.0, gravity: 0.0 });
+    let mut stiff = chain(Settings { stiffness: 1.0, drag: 1.0, gravity: 0.0, carried: false });
     let locals = run(&mut stiff, &animated, &[], 1.0, 1.0 / 60.0);
     for (got, want) in locals.iter().zip(&animated) {
         assert!(got.rotation.angle_between(want.rotation) < 1e-3);
@@ -70,7 +70,7 @@ fn a_stiff_chain_follows_the_animation() {
 #[test]
 fn a_loose_chain_hangs_down_and_keeps_its_length() {
     let animated = sideways();
-    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.1, gravity: 1.0 });
+    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.1, gravity: 1.0, carried: false });
     let points = points(&run(&mut loose, &animated, &[], 5.0, 1.0 / 60.0));
     assert!(points[3].y < -2.8, "tail at {}", points[3]);
     for pair in points.windows(2) {
@@ -82,7 +82,7 @@ fn a_loose_chain_hangs_down_and_keeps_its_length() {
 fn stiffness_holds_against_gravity() {
     let animated = sideways();
     let sag = |stiffness| {
-        let mut springy = chain(Settings { stiffness, drag: 0.2, gravity: 1.0 });
+        let mut springy = chain(Settings { stiffness, drag: 0.2, gravity: 1.0, carried: false });
         points(&run(&mut springy, &animated, &[], 3.0, 1.0 / 60.0))[3].y
     };
     let (loose, firm, stiff) = (sag(0.0), sag(0.05), sag(0.5));
@@ -94,7 +94,7 @@ fn a_collider_holds_the_chain_off_it() {
     let animated = sideways();
     // A log under the chain, across it.
     let log = Capsule { a: Vec3::new(1.5, -0.6, -2.0), b: Vec3::new(1.5, -0.6, 2.0), radius: 0.4 };
-    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.2, gravity: 1.0 });
+    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.2, gravity: 1.0, carried: false });
     let points = points(&run(&mut loose, &animated, &[log.into()], 3.0, 1.0 / 60.0));
     for tail in &points[1..] {
         let off_axis = Vec3::new(tail.x - 1.5, tail.y + 0.6, 0.0).length();
@@ -106,7 +106,7 @@ fn a_collider_holds_the_chain_off_it() {
 #[test]
 fn it_moves_the_same_at_any_frame_rate() {
     let animated = sideways();
-    let settings = Settings { stiffness: 0.05, drag: 0.1, gravity: 1.0 };
+    let settings = Settings { stiffness: 0.05, drag: 0.1, gravity: 1.0, carried: false };
     let slow = run(&mut chain(settings), &animated, &[], 1.0, 1.0 / 30.0);
     let fast = run(&mut chain(settings), &animated, &[], 1.0, 1.0 / 120.0);
     for (slow, fast) in points(&slow).iter().zip(points(&fast)) {
@@ -117,7 +117,7 @@ fn it_moves_the_same_at_any_frame_rate() {
 #[test]
 fn it_lags_behind_a_quick_move() {
     let animated = sideways();
-    let mut springy = chain(Settings { stiffness: 0.1, drag: 0.1, gravity: 0.0 });
+    let mut springy = chain(Settings { stiffness: 0.1, drag: 0.1, gravity: 0.0, carried: false });
     run(&mut springy, &animated, &[], 1.0, 1.0 / 60.0);
     let mut locals = animated.clone();
     let moved = Affine3A::from_translation(Vec3::new(0.0, 0.0, 0.5));
@@ -129,7 +129,7 @@ fn it_lags_behind_a_quick_move() {
 #[test]
 fn a_long_pause_is_let_go_of_not_caught_up_with() {
     let animated = sideways();
-    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.0, gravity: 1.0 });
+    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.0, gravity: 1.0, carried: false });
     let locals = run(&mut loose, &animated, &[], 10.0, 10.0);
     // A quarter of a second of falling at most: barely under where it started.
     let tail = points(&locals)[3];
@@ -139,7 +139,7 @@ fn a_long_pause_is_let_go_of_not_caught_up_with() {
 #[test]
 fn reset_starts_again_from_the_animation() {
     let animated = sideways();
-    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.1, gravity: 1.0 });
+    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.1, gravity: 1.0, carried: false });
     run(&mut loose, &animated, &[], 2.0, 1.0 / 60.0);
     loose.reset();
     let mut locals = animated.clone();
@@ -172,7 +172,7 @@ fn a_surface_holds_the_chain_off_it_where_its_bone_is() {
     let animated = sideways();
     let floor = floor();
     let bone = Affine3A::from_translation(Vec3::new(0.0, -0.6, 0.0));
-    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.2, gravity: 1.0 });
+    let mut loose = chain(Settings { stiffness: 0.0, drag: 0.2, gravity: 1.0, carried: false });
     let points =
         points(&run(&mut loose, &animated, &[Collider::surface(&floor, bone)], 3.0, 1.0 / 60.0));
     for tail in &points[1..] {
@@ -185,7 +185,7 @@ fn a_surface_holds_the_chain_off_it_where_its_bone_is() {
 #[test]
 fn wind_blows_a_loose_chain_its_way() {
     let animated = sideways();
-    let mut loose = chain(Settings { stiffness: 0.02, drag: 0.2, gravity: 1.0 });
+    let mut loose = chain(Settings { stiffness: 0.02, drag: 0.2, gravity: 1.0, carried: false });
     let mut locals = animated.clone();
     let forces = Forces { wind: Vec3::new(0.0, 0.0, 9.81), ..DOWN };
     for _ in 0..300 {
@@ -214,4 +214,39 @@ fn gusts_come_and_go_and_roll_along_the_wind() {
     let days = 3.0 * 86_400.0;
     let step = (wind.at(Vec3::ZERO, days + 0.01) - wind.at(Vec3::ZERO, days)).length();
     assert!(step < 0.2, "{step}");
+}
+
+#[test]
+fn a_carried_chain_follows_the_animation_exactly_however_it_moves() {
+    let animated = sideways();
+    let settings = Settings { stiffness: 0.05, drag: 0.1, gravity: 1.0, carried: true };
+    let mut carried = chain(settings);
+    let blown = Forces { wind: Vec3::new(0.0, 0.0, 20.0), ..DOWN };
+    for frame in 0..240 {
+        let t = frame as f32;
+        let parent = Affine3A::from_rotation_translation(
+            Quat::from_rotation_y(t * 0.2),
+            Vec3::new(t * 0.3, (t * 0.5).sin(), 0.0),
+        );
+        let mut locals = animated.clone();
+        carried.update(parent, &mut locals, &[], blown, 1.0 / (40.0 + (frame % 3) as f32 * 40.0));
+        for (posed, wanted) in locals.iter().zip(&animated) {
+            let off = posed.rotation.angle_between(wanted.rotation);
+            assert!(off < 1e-3, "frame {frame}: {off} off the animation");
+        }
+    }
+}
+
+#[test]
+fn a_carried_chain_moves_when_pushed_and_springs_back() {
+    let animated = sideways();
+    let settings = Settings { stiffness: 0.1, drag: 0.1, gravity: 1.0, carried: true };
+    let mut carried = chain(settings);
+    let finger =
+        Capsule { a: Vec3::new(3.0, -1.0, -0.05), b: Vec3::new(3.0, 1.0, -0.05), radius: 0.3 };
+    let pushed = points(&run(&mut carried, &animated, &[finger.into()], 0.5, 1.0 / 60.0));
+    assert!(pushed[3].z > 0.3, "the tip wasn't pushed: {}", pushed[3]);
+    let back = points(&run(&mut carried, &animated, &[], 3.0, 1.0 / 60.0));
+    let rest = points(&animated);
+    assert!((back[3] - rest[3]).length() < 1e-2, "{} isn't back at {}", back[3], rest[3]);
 }

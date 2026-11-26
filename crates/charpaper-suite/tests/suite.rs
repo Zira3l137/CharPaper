@@ -3,6 +3,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use charpaper_suite::ActorClip;
+use charpaper_suite::ChainCursor;
 use charpaper_suite::ClipMode;
 use charpaper_suite::EyeKind;
 use charpaper_suite::Suite;
@@ -775,6 +776,11 @@ length = 0.3
 radius = 0.02
 stiffness = 0.05
 
+[physics.chains.Bangs]
+bones = ["Bangs"]
+length = 0.1
+cursor = "only"
+
 [physics.colliders.Head]
 bone = "Head"
 length = 0.2
@@ -783,6 +789,8 @@ radius = 0.1
     let suite = Fixture::new("physics", manifest).load().unwrap();
     let chain = &suite.physics.chains["Ponytail"];
     assert_eq!(chain.bones, ["Ponytail"]);
+    assert_eq!(chain.cursor, ChainCursor::Pushes);
+    assert_eq!(suite.physics.chains["Bangs"].cursor, ChainCursor::Only);
     assert_eq!((chain.stiffness, chain.drag, chain.gravity), (Some(0.05), None, None));
     let head = &suite.physics.colliders["Head"];
     assert_eq!((head.bone.as_str(), head.length, head.radius), ("Head", 0.2, 0.1));

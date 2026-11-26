@@ -103,6 +103,24 @@ pub struct PhysicsChain {
     /// Gravity, as a multiple of Earth's. Defaults to 1.
     #[schemars(range(min = 0.0))]
     pub gravity: Option<f32>,
+    /// What the cursor does to it. Defaults to `pushes`.
+    #[serde(default)]
+    pub cursor: ChainCursor,
+}
+
+/// What the cursor moving over a chain does to it.
+#[derive(Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ChainCursor {
+    /// It swings on its own, and the cursor pushes it aside too.
+    #[default]
+    Pushes,
+    /// It swings on its own, and the cursor goes through it.
+    Ignores,
+    /// It moves only when the cursor pushes it, and springs back. The
+    /// animation carries it along without swinging it; gravity, wind and
+    /// colliders leave it be.
+    Only,
 }
 
 /// A capsule around one of the character's bones: from its head along the

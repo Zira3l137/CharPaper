@@ -2,7 +2,7 @@
 
 # Hair, clothes and tails that swing (physics)
 
-**On this page:** [What it does](#what-it-does) · [Your first chain](#your-first-chain) · [Chains](#chains) · [The four settings](#the-four-settings) · [Colliders](#colliders) · [Wind](#wind) · [What the viewer can change](#what-the-viewer-can-change) · [What Check warns about](#what-check-warns-about) · [Good to know](#good-to-know)
+**On this page:** [What it does](#what-it-does) · [Your first chain](#your-first-chain) · [Chains](#chains) · [The four settings](#the-four-settings) · [The cursor](#the-cursor) · [Colliders](#colliders) · [Wind](#wind) · [What the viewer can change](#what-the-viewer-can-change) · [What Check warns about](#what-check-warns-about) · [Good to know](#good-to-know)
 
 ## What it does
 
@@ -96,9 +96,31 @@ back.
 Stiffness and drag are steps of the app's own clock, 60 a second, so a chain swings the
 same at 30 and at 144 frames a second.
 
+## The cursor
+
+In the app, the pointer moving over a chain can push it aside (if the viewer leaves
+**Cursor pushes** on). Each chain's **Cursor** setting says what it does to that chain:
+
+| Cursor | The chain |
+|---|---|
+| **Pushes it** (the default) | Swings on its own, and the pointer pushes it aside too. |
+| **Ignores it** | Swings on its own, and the pointer goes through it. For things too heavy to brush aside, or parts that look wrong when pushed. |
+| **Only the cursor moves it** | Follows the animation exactly, as if it had no physics, until the pointer pushes it; then it springs back. Gravity, wind and colliders leave it alone. |
+
+**Only the cursor moves it** is for things that should stay put but react to a touch:
+grass or flowers in the character's hair, fur, a fringe of beads, a curtain on its
+costume. The animation carries the chain along without any swing, so it doesn't sway when
+the character moves. Only the pointer puts it out of place, and **Stiffness** and **Drag**
+then decide how it springs back: high Stiffness snaps back, low Stiffness drifts back
+slowly; high Drag settles at once, low Drag wobbles. **Gravity** does nothing for it, and is
+greyed out. **Radius** is how far the pointer keeps its tails away.
+
+The list marks chains that aren't the default (*no cursor*, *cursor only*), and the viewport
+draws cursor-only chains green instead of blue.
+
 ## Colliders
 
-**Making them.** Select bones of the body in Pose Mode and press **+** under Colliders.
+**Making them. Select bones of the body in Pose Mode and press **+** under Colliders.
 Each gets a capsule from the bone's head to its tail, and its radius is **fitted to the
 mesh**. The add-on looks at every mesh the armature deforms and takes the vertices weighted
 mostly to that bone. It uses the thinnest such mesh, so the body counts and a coat over it
@@ -146,7 +168,7 @@ monitor's scene:
 | **Physics** | On by default. Off, the chains move only as the animation moves them. | The character has chains. |
 | **High quality** | Off by default. Chains keep off the character's actual mesh instead of the capsules. | It also has colliders. |
 | **Wind** | On by default. The environment's wind blows the chains. | The environment shown has wind. |
-| **Cursor pushes** | On by default. Moving the pointer over hair and clothes pushes them aside, like a hand brushing through them. | The character has chains. |
+| **Cursor pushes** | On by default. Moving the pointer over hair and clothes pushes them aside, like a hand brushing through them, except chains set to ignore it. Off, chains only the cursor moves just follow the animation. | The character has chains. |
 
 **High quality** reads the worn outfit from its file each time it's put on, in the
 background, so the capsules hold for a moment after a switch. Around each collider's bone,
@@ -172,14 +194,15 @@ Warnings show under the chain or collider they're about, and the list marks its 
 - *Has bones that aren't each the child of the one before*: it's left out.
 - *Starts inside a collider*: at rest, one of its tails is closer to a capsule than the
   chain's radius, so it jumps out the moment the character loads. Make the capsule or the
-  chain's radius smaller.
+  chain's radius smaller. Not for chains only the cursor moves, which keep out of nothing
+  else.
 
 **Colliders:**
 - *Names a bone the armature doesn't have*, or *a bone Deform bones only leaves out*: it's
   left out.
 - *Is there twice* (a tip): only the first counts.
 - *No colliders* (a tip): with chains but no colliders, the chains swing straight through
-  the body.
+  the body. Chains only the cursor moves don't need any.
 
 **Wind**, in the environment's warnings:
 - *Only the first wind blows* (a tip), with several Wind fields in one collection.

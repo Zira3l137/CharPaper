@@ -218,6 +218,26 @@
       },
       "additionalProperties": false
     },
+    "ChainCursor": {
+      "description": "What the cursor moving over a chain does to it.",
+      "oneOf": [
+        {
+          "description": "It swings on its own, and the cursor pushes it aside too.",
+          "type": "string",
+          "const": "pushes"
+        },
+        {
+          "description": "It swings on its own, and the cursor goes through it.",
+          "type": "string",
+          "const": "ignores"
+        },
+        {
+          "description": "It moves only when the cursor pushes it, and springs back. The\nanimation carries it along without swinging it; gravity, wind and\ncolliders leave it be.",
+          "type": "string",
+          "const": "only"
+        }
+      ]
+    },
     "CharacterSection": {
       "description": "The character itself.",
       "type": "object",
@@ -1138,6 +1158,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "cursor": {
+          "description": "What the cursor does to it. Defaults to `pushes`.",
+          "$ref": "#/$defs/ChainCursor"
         },
         "drag": {
           "description": "How much of its speed a tail loses each step: 0 swings on, 1 stops\ndead. Defaults to 0.1.",

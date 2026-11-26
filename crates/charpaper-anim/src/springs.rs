@@ -34,6 +34,9 @@ pub struct Settings {
     pub drag: f32,
     /// Gravity, as a multiple of Earth's.
     pub gravity: f32,
+    /// Moves only when a collider pushes it. The animation carries it along without swinging
+    /// it, and gravity and wind leave it be; pushed out of its pose, it springs back.
+    pub carried: bool,
 }
 
 /// One bone of a chain.
@@ -180,6 +183,8 @@ pub struct Chain {
 struct State {
     tails: Vec<Vec3>,
     before: Vec<Vec3>,
+    // For a carried chain, where the animation put the tails at the last update.
+    animated: Vec<Vec3>,
     // Time not yet stepped through, under a step.
     spare: f32,
 }
@@ -213,9 +218,21 @@ impl Chain {
         assert_eq!(locals.len(), self.joints.len(), "a transform for every joint");
         let state = self.state.get_or_insert_with(|| {
             let tails = targets(parent, locals, &self.joints);
-            State { before: tails.clone(), tails, spare: 0.0 }
+            State { before: tails.clone(), animated: tails.clone(), tails, spare: 0.0 }
         });
-        let pull = (forces.gravity * self.settings.gravity + forces.wind) * STEP * STEP;
+        let mut pull = (forces.gravity * self.settings.gravity + forces.wind) * STEP * STEP;
+        // Moving every tail as far as the animation moved it leaves only how far it was pushed
+        // out of the pose to swing.
+        if self.settings.carried {
+            pull = Vec3::ZERO;
+            let animated = targets(parent, locals, &self.joints);
+            for (at, now) in animated.iter().enumerate() {
+                let moved = *now - state.animated[at];
+                state.tails[at] += moved;
+                state.before[at] += moved;
+            }
+            state.animated = animated;
+        }
         state.spare += dt.clamp(0.0, MOST_BEHIND);
         while state.spare >= STEP {
             state.spare -= STEP;

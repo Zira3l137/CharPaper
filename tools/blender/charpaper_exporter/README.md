@@ -224,7 +224,9 @@ every .blend on the computer.
   parent isn't selected. With only its first bone selected, it runs down through only
   children to the end; with more of it selected, it takes exactly those. A chain is named
   after its first bone and takes its kind's values (Hair, Cloth, Soft or Tail: stiffness,
-  drag, gravity, radius); changing one sets the preset to Custom. *+* under Colliders puts a
+  drag, gravity, radius); changing one sets the preset to Custom. Its *Cursor* is written as
+  `cursor` when not *Pushes it*: `"ignores"`, or `"only"` for a chain only the pointer moves,
+  drawn green, which Check doesn't warn about starting inside a collider. *+* under Colliders puts a
   capsule on each selected bone not in a chain, from its head to its tail, its radius the
   median distance from the bone of the vertices weighted at least half to it, in the
   thinnest mesh the armature deforms, or 30% of its length without one; *Fit to the mesh*

@@ -696,6 +696,19 @@ class CHARPAPER_PG_physics_chain(PropertyGroup):
         description="How far the bones' tails keep from the colliders, in the armature's units",
         default=0.02, min=0.0, soft_max=0.2, precision=3, step=0.5, update=_physics_tuned,
     )
+    cursor: EnumProperty(
+        name="Cursor",
+        description="What the pointer moving over it in the app does to it",
+        items=(
+            ("PUSHES", "Pushes it", "It swings on its own, and the pointer pushes it aside too"),
+            ("IGNORES", "Ignores it", "It swings on its own, and the pointer goes through it"),
+            ("ONLY", "Only the cursor moves it",
+             "It follows the animation exactly until the pointer pushes it, then springs back. "
+             "Gravity, wind and colliders leave it be: for grass, fur, beads, a curtain"),
+        ),
+        default="PUSHES",
+        update=_redraw,
+    )
 
 
 class CHARPAPER_PG_physics_collider(PropertyGroup):

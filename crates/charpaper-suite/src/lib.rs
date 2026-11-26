@@ -46,6 +46,7 @@ pub use manifest::ActorEntry;
 pub use manifest::BackgroundBlur;
 pub use manifest::Camera;
 pub use manifest::CameraEntry;
+pub use manifest::ChainCursor;
 pub use manifest::ClipEntry;
 pub use manifest::ClipMode;
 pub use manifest::Cue;

@@ -29,6 +29,7 @@ use charpaper_anim::springs::Wind;
 use charpaper_anim::surface;
 use charpaper_anim::surface::Part;
 use charpaper_settings::PhysicsSettings;
+use charpaper_suite::ChainCursor;
 use charpaper_suite::PhysicsChain;
 
 use crate::character::Armature;
@@ -78,6 +79,7 @@ struct Swinging {
     joints: Vec<(Entity, Source)>,
     locals: Vec<charpaper_anim::Transform>,
     chain: Chain,
+    cursor: ChainCursor,
 }
 
 struct Collider {
@@ -208,9 +210,11 @@ fn swinging(
         stiffness: chain.stiffness.unwrap_or(STIFFNESS),
         drag: chain.drag.unwrap_or(DRAG),
         gravity: chain.gravity.unwrap_or(1.0),
+        carried: chain.cursor == ChainCursor::Only,
     };
     Swinging {
         name: name.to_string(),
+        cursor: chain.cursor,
         parent,
         locals: vec![charpaper_anim::Transform::default(); joints.len()],
         chain: Chain::new(vec![joint; joints.len()], settings),
@@ -323,6 +327,9 @@ pub(crate) fn swing(
                 None => capsule.into(),
             })
             .collect();
+        // The body first, then the cursor if it's there, so each chain can take the part of
+        // them it keeps out of.
+        let body_ends = pushes.len();
         // Dragging steers the orbit camera, so only a moving pointer brushes the chains.
         if settings.cursor && buttons.get_pressed().next().is_none() {
             let near = world(armature, &parents, &readonly).translation.into();
@@ -337,7 +344,12 @@ pub(crate) fn swing(
             let at = parent.translation.into();
             let wind = wind.map_or(Vec3::ZERO, |wind| wind.at(at, elapsed));
             let forces = Forces { gravity: Vec3::NEG_Y * GRAVITY, wind };
-            swinging.chain.update(parent, &mut swinging.locals, &pushes, forces, dt);
+            let pushed_by = match swinging.cursor {
+                ChainCursor::Pushes => &pushes[..],
+                ChainCursor::Ignores => &pushes[..body_ends],
+                ChainCursor::Only => &pushes[body_ends..],
+            };
+            swinging.chain.update(parent, &mut swinging.locals, pushed_by, forces, dt);
             write(swinging, &mut transforms);
         }
     }

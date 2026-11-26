@@ -39,7 +39,7 @@ which line.
 | `[environments.<name>.actors.<object>]` | A prop's `default_clip`: the `timeline` or `hold` clip it plays by itself. Left out: its first `timeline` clip by name, else its first `hold` one. The add-on writes it from the ★. |
 | `[environments.<name>.actors.<object>.clips.<clip>]` | How a prop's clip plays: `mode` and `cues`, as for the character. The clips are the files in `environment/<name>/clips/<object>/`. |
 | `[hotspots.<name>]` | Something that reacts: to a click or the cursor resting on a place, or to the mouse keeping still or coming back. `trigger`, `after`, `areas`, `clips`, `while`, `then`, `during`, `layer`, `expression` and `cooldown`. See below. |
-| `[physics.chains.<name>]` | Bones that swing by themselves: `bones`, `length`, `radius`, `stiffness`, `drag` and `gravity`. See below. |
+| `[physics.chains.<name>]` | Bones that swing by themselves: `bones`, `length`, `radius`, `stiffness`, `drag`, `gravity` and `cursor`. See below. |
 | `[physics.colliders.<name>]` | A capsule around a bone that chains keep out of: `bone`, `length` and `radius`. |
 | `[post]` | The picture: `tonemapping`, `exposure`, `bloom`, `bloom_threshold`, `chromatic_aberration`, and under it `[post.vignette]`, `[post.grain]`, `[post.grading]`, `[post.lut]`. |
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
@@ -137,6 +137,9 @@ gusts = 0.4
   begins. `radius` is how far the bones' tails keep from colliders, 0 if left out.
 - `stiffness` (0.2 if left out) and `drag` (0.1) go from 0 to 1. `gravity` (1) is a share of
   Earth's. What they do is in [The four settings](recipes/physics.md#the-four-settings).
+- `cursor` is what the pointer does to the chain: `"pushes"` (if left out), `"ignores"`, or
+  `"only"`, for a chain that follows the animation exactly until the pointer pushes it,
+  which gravity, wind and colliders leave alone. See [The cursor](recipes/physics.md#the-cursor).
 - A bone can be in only one chain, and a chain needs at least one bone, or the character
   doesn't load. A chain whose bones aren't on the outfit worn is skipped; one with only some
   of them is skipped too, and the log says so.

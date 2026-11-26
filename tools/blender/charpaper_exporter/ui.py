@@ -833,7 +833,8 @@ class CHARPAPER_UL_physics_chains(UIList):
         _flag(row, _physics_flags(suite, f"chain:{physics.chain_name(item)}"))
         info = row.row()
         info.active = False
-        info.label(text=f"{len(names)} · {PRESET_NAMES[item.preset]}")
+        touch = {"IGNORES": " · no cursor", "ONLY": " · cursor only"}.get(item.cursor, "")
+        info.label(text=f"{len(names)} · {PRESET_NAMES[item.preset]}{touch}")
 
 
 class CHARPAPER_UL_physics_colliders(UIList):
@@ -889,8 +890,11 @@ class CHARPAPER_PT_physics(_Sidebar, Panel):
             col = box.column(align=True)
             col.prop(chain, "stiffness", slider=True)
             col.prop(chain, "drag", slider=True)
-            box.prop(chain, "gravity")
+            gravity = box.row()
+            gravity.active = chain.cursor != "ONLY"
+            gravity.prop(chain, "gravity")
             box.prop(chain, "radius")
+            box.prop(chain, "cursor")
             for finding in suite.findings:
                 if finding.physics == f"chain:{physics.chain_name(chain)}":
                     finding_box(layout, finding, context)

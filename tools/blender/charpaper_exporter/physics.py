@@ -34,6 +34,7 @@ from .props import suite_of
 FIT_VERTICES = 8
 FIT_WEIGHT = 0.5
 CHAIN_COLOR = (0.36, 0.71, 0.92)
+TOUCHED_COLOR = (0.55, 0.85, 0.45)
 COLLIDER_COLOR = (0.95, 0.64, 0.33)
 
 _handle = None
@@ -137,6 +138,8 @@ def tables(suite):
             "drag": round(chain.drag, 4),
             "gravity": round(chain.gravity, 4),
         }
+        if chain.cursor != "PUSHES":
+            chains[name]["cursor"] = chain.cursor.lower()
     for collider in suite.physics_colliders:
         bone = exported_bone(suite, armature, collider.bone)
         if bone is None:
@@ -183,6 +186,7 @@ def load_into(suite, data):
         chain.gravity = table.get("gravity", 1.0)
         chain.radius = table.get("radius", 0.0)
         chain.preset = _matching_preset(chain)
+        chain.cursor = {"ignores": "IGNORES", "only": "ONLY"}.get(table.get("cursor"), "PUSHES")
     for name, table in found.get("colliders", {}).items():
         if table.get("bone") not in bones:
             unmatched.append(f"collider {name}: {table.get('bone')}")
@@ -255,7 +259,8 @@ def check(suite, add, finding):
         chained = [bones[b.bone] for b in chain.bones]
         if any(b.parent != a for a, b in zip(chained, chained[1:])):
             warn("has bones that aren't each the child of the one before: it's left out")
-        inside = _first_inside(chain, chained, capsules)
+        # One only the cursor moves keeps out of nothing else.
+        inside = chain.cursor != "ONLY" and _first_inside(chain, chained, capsules)
         if inside:
             warn(f"starts with {inside[0]} inside the collider on {inside[1]}: it's pushed out the "
                  "moment it loads. Make the collider or the chain's radius smaller")
@@ -272,7 +277,7 @@ def check(suite, add, finding):
             add(finding(f"collider {collider.bone!r} is there twice: only the first is used", armature,
                         severity="INFO", physics=key))
         seen.add(collider.bone)
-    if len(suite.physics_chains) and not len(suite.physics_colliders):
+    if any(c.cursor != "ONLY" for c in suite.physics_chains) and not len(suite.physics_colliders):
         add(finding("physics: no colliders, so chains swing through the body. Select body bones in "
                     "Pose Mode and add colliders from them", armature, severity="INFO"))
 
@@ -295,7 +300,8 @@ def _draw():
         groups.setdefault(look, []).extend(_capsule(matrix, pose_bone.bone.length, collider.radius))
     for index, chain in enumerate(suite.physics_chains):
         picked = index == suite.physics_chain_index
-        look = ((*CHAIN_COLOR, 1.0 if picked else 0.45), 2.5 if picked else 1.0)
+        color = TOUCHED_COLOR if chain.cursor == "ONLY" else CHAIN_COLOR
+        look = ((*color, 1.0 if picked else 0.45), 2.5 if picked else 1.0)
         points = groups.setdefault(look, [])
         for item in chain.bones:
             pose_bone = armature.pose.bones.get(item.bone)

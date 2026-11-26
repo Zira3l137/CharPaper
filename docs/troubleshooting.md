@@ -79,6 +79,8 @@ See also: [Hair, clothes and tails that swing (physics)](recipes/physics.md)
 | It swings too much, or never settles | Raise **Drag** to settle sooner, **Stiffness** to swing less. |
 | It's stiff, or lags behind the head like jelly | Lower **Stiffness** for more swing; raise it if a long chain trails too far behind. |
 | A ponytail pokes through the back of the head | The head's capsule ends short of the back of the skull. Raise its radius, or add one on the neck. With **High quality** on, the mesh itself is used. |
+| The pointer goes through a chain | Its **Cursor** is *Ignores it*, the viewer turned **Cursor pushes** off, or a mouse button is held (dragging turns the camera). |
+| A chain set to *Only the cursor moves it* never moves | **Cursor pushes** is off in the Scene tab, or the pointer crosses its bones between their tails: only the tails are pushed. Give it more, shorter bones, or a bigger **Radius**. |
 | A chain fights the cursor or shakes | One of its bones is one gaze turns. Keep chains off gaze's bones. |
 | No wind in the app | **Wind** is off in the Scene tab; the force field isn't in the environment's collection, isn't a Wind field, or has a Strength of 0; or the environment wasn't exported again. |
 | High quality looks the same as without | It reads the outfit's file after it's put on, so give it a moment. Bones that no mesh is weighted to keep their capsule, and so do colliders the chains never touch. |
