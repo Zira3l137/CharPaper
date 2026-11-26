@@ -14,6 +14,9 @@ use std::collections::VecDeque;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
@@ -24,9 +27,13 @@ use bevy::camera::RenderTarget;
 use bevy::camera::primitives::Aabb;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
+use bevy::render::Render;
+use bevy::render::RenderApp;
+use bevy::render::RenderSystems;
 use bevy::render::gpu_readback::Readback;
 use bevy::render::gpu_readback::ReadbackComplete;
 use bevy::render::render_resource::Extent3d;
+use bevy::render::render_resource::PipelineCache;
 use bevy::render::render_resource::TextureDimension;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::render_resource::TextureUsages;
@@ -40,25 +47,43 @@ use crate::suite::ActiveSuite;
 const SIZE: u32 = 192;
 // Past the stages' layers, which count up from 1.
 const STUDIO_LAYER: usize = 63;
-// Shaders for the outfit's materials may still be compiling at first, which leaves them out of
-// the picture. A picture is taken once two frames in a row come out the same, and not sooner
-// than this after the camera is placed, nor later than the limit, when whatever there is is
-// taken.
+// Bevy compiles a pipeline for each new mix of material, vertex layout and camera in the
+// background, and leaves out of the picture every mesh whose pipeline isn't ready. A frame
+// missing them comes out the same as the next, so two frames alike aren't enough: a picture is
+// taken once nothing has been compiling for QUIET, two frames in a row come out the same, and
+// the camera has been in place for SETTLE. Past half of GIVE_UP, whatever there is is taken.
 const SETTLE: Duration = Duration::from_millis(500);
+const QUIET: Duration = Duration::from_millis(250);
 const GIVE_UP: Duration = Duration::from_secs(20);
 const FOLDER: &str = "thumbnails";
 // Part of the hash, so pictures taken by an older way of taking them are taken again.
-const VERSION: u8 = 1;
+const VERSION: u8 = 2;
 
 pub(crate) struct ThumbnailsPlugin;
 
 impl Plugin for ThumbnailsPlugin {
     fn build(&self, app: &mut App) {
+        let compiling = Compiling::default();
         app.init_resource::<SkinThumbnails>()
             .init_resource::<Studio>()
+            .insert_resource(compiling.clone())
             .add_observer(mark_ready)
             .add_systems(Update, (find_thumbnails, shoot).chain());
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            render_app
+                .insert_resource(compiling)
+                .add_systems(Render, note_compiling.in_set(RenderSystems::Cleanup));
+        }
     }
+}
+
+// Whether the renderer had pipelines still compiling on its last frame. The render world
+// writes it and the studio reads it, through the one flag both hold.
+#[derive(Resource, Clone, Default)]
+struct Compiling(Arc<AtomicBool>);
+
+fn note_compiling(cache: Res<PipelineCache>, compiling: Res<Compiling>) {
+    compiling.0.store(cache.waiting_pipelines().next().is_some(), Ordering::Relaxed);
 }
 
 // The picture of each outfit there is one of yet, by the suite's folder and the outfit's name.
@@ -96,6 +121,8 @@ struct Shoot {
     started: Duration,
     // When the camera was placed.
     framed: Duration,
+    // Since when no pipeline has been compiling, if none is now.
+    quiet: Option<Duration>,
     step: Step,
     last: Option<Vec<u8>>,
 }
@@ -175,6 +202,7 @@ fn shoot(
     gltfs: Res<Assets<Gltf>>,
     mut images: ResMut<Assets<Image>>,
     mut studio: ResMut<Studio>,
+    compiling: Res<Compiling>,
     outfits: Query<(Entity, Has<OutfitReady>), With<StudioOutfit>>,
     bounds: Query<(&Aabb, &GlobalTransform)>,
     children: Query<&Children>,
@@ -187,6 +215,11 @@ fn shoot(
         }
         return;
     };
+    if compiling.0.load(Ordering::Relaxed) {
+        shoot.quiet = None;
+    } else if shoot.quiet.is_none() {
+        shoot.quiet = Some(now);
+    }
     if now - shoot.started > GIVE_UP {
         give_up(&mut studio, &mut commands, "gave up, it took too long");
         return;
@@ -225,10 +258,10 @@ fn shoot(
             let Some((outfit, _)) = outfits.iter().next() else {
                 return;
             };
-            let Some((center, radius)) = bounds_of(outfit, &children, &bounds) else {
+            let Some(bounds) = bounds_of(outfit, &children, &bounds) else {
                 return;
             };
-            spawn_camera_and_lights(&mut commands, shoot, center, radius);
+            spawn_camera_and_lights(&mut commands, shoot, bounds);
             shoot.framed = now;
             shoot.step = Step::Taking;
         }
@@ -266,15 +299,25 @@ fn start(
         ))
         .id();
     info!("thumbnail of {:?}: taking it", job.skin);
-    Shoot { job, gltf, set, target, started: now, framed: now, step: Step::Loading, last: None }
+    Shoot {
+        job,
+        gltf,
+        set,
+        target,
+        started: now,
+        framed: now,
+        quiet: None,
+        step: Step::Loading,
+        last: None,
+    }
 }
 
-// A sphere around everything the outfit draws, from the bounds Bevy works out for its meshes.
+// A box around everything the outfit draws, from the bounds Bevy works out for its meshes.
 fn bounds_of(
     outfit: Entity,
     children: &Query<&Children>,
     bounds: &Query<(&Aabb, &GlobalTransform)>,
-) -> Option<(Vec3, f32)> {
+) -> Option<(Vec3, Vec3)> {
     let mut min = Vec3::splat(f32::MAX);
     let mut max = Vec3::splat(f32::MIN);
     for entity in children.iter_descendants(outfit) {
@@ -290,18 +333,37 @@ fn bounds_of(
             max = max.max(point);
         }
     }
-    (min.x <= max.x).then(|| ((min + max) / 2.0, ((max - min) / 2.0).length()))
+    (min.x <= max.x).then_some((min, max))
 }
 
 // A three-quarter view from a little above, turned from the character's front towards its
 // left, the way most figures are drawn. Lit by a key light from the front left, a dimmer fill
 // from the right and a rim light from behind, in Blender's units: a sun of 1 is 683 lux.
-fn spawn_camera_and_lights(commands: &mut Commands, shoot: &Shoot, center: Vec3, radius: f32) {
+fn spawn_camera_and_lights(commands: &mut Commands, shoot: &Shoot, (min, max): (Vec3, Vec3)) {
     const FOV_DEG: f32 = 30.0;
     let front = shoot.job.front;
     let turn = |degrees: f32| Quat::from_rotation_y(degrees.to_radians()) * front;
     let towards = (turn(35.0) + Vec3::Y * 0.2).normalize();
-    let distance = radius / (FOV_DEG.to_radians() / 2.0).sin() * 1.05;
+    let center = (min + max) / 2.0;
+    // Back far enough that every corner of the box is in view, with a little room around:
+    // arms out in a T-pose turn partly away from a three-quarter view, which a sphere around
+    // the box wouldn't know.
+    let look = Transform::from_translation(center + towards).looking_at(center, Vec3::Y);
+    let (right, up) = (look.right(), look.up());
+    let slope = (FOV_DEG.to_radians() / 2.0).tan();
+    let half = (max - min) / 2.0;
+    let distance = [-1.0, 1.0]
+        .into_iter()
+        .flat_map(|x| {
+            [-1.0, 1.0].into_iter().flat_map(move |y| [-1.0, 1.0].map(|z| Vec3::new(x, y, z)))
+        })
+        .map(|corner| {
+            let at = half * corner;
+            let reach = at.dot(*right).abs().max(at.dot(*up).abs());
+            at.dot(towards) + reach / slope
+        })
+        .fold(0.0_f32, f32::max)
+        * 1.06;
     let camera =
         Transform::from_translation(center + towards * distance).looking_at(center, Vec3::Y);
     let set = shoot.set;
@@ -347,7 +409,8 @@ fn take(
     };
     let pixels = read.data.clone();
     let drawn = pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0);
-    let settled = shoot.last.as_ref() == Some(&pixels) && now - shoot.framed > SETTLE;
+    let quiet = shoot.quiet.is_some_and(|since| now - since > QUIET);
+    let settled = quiet && shoot.last.as_ref() == Some(&pixels) && now - shoot.framed > SETTLE;
     let late = now - shoot.started > GIVE_UP / 2;
     if !(drawn && (settled || late)) {
         shoot.last = Some(pixels);
