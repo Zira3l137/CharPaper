@@ -47,6 +47,7 @@ impl Plugin for TabsPlugin {
             graphics::GraphicsPlugin,
             presets::PresetsPlugin,
             settings::SettingsPlugin,
+            sound::SoundPlugin,
         ));
     }
 }

@@ -157,13 +157,6 @@ label-ambience-volume = Ambience
 label-character-volume = Character
 section-music = MUSIC
 label-track = Track
-label-playback = Playback
-label-order = Order
-value-play = Play
-value-pause = Pause
-value-in-order = In order
-value-shuffle = Shuffle
-value-repeat-one = Repeat one
 
 ## Settings tab
 
@@ -303,7 +296,9 @@ value-off = Off
 ## the pointer. Kept short so it fits in two lines across the panel.
 help-track = The environment's music playing now. Pick a track to play it.
 help-playback = Pauses the music, and plays it on from where it stopped.
-help-order = Which track comes next: the following one, any other, or the same again.
+help-order = Which track comes next: the following one, any other, or the same again. Click to go from one to the next.
+help-previous = Plays the track before this one.
+help-next = Plays the next track.
 help-lock-orbit = Keeps the orbit camera where it is: dragging and scrolling over the scene no longer move it.
 help-parallax = The camera leans a little towards the pointer, so the scene shows its depth. It drifts back to the middle once the mouse keeps still.
 help-parallax-strength = How far the camera leans. Higher shows more depth, and more of the scene's edges.

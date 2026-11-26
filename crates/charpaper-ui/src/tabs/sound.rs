@@ -1,18 +1,58 @@
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
+use charpaper_scene::Focused;
 use charpaper_scene::FocusedStage;
 use charpaper_scene::PlayTrack;
 use charpaper_scene::Soundscape;
+use charpaper_scene::focused_changed;
 use charpaper_settings::MusicOrder;
 use charpaper_settings::MusicSettings;
 use charpaper_settings::Volumes;
 use i18n_embed_fl::fl;
 
+use crate::icons::Icon;
+use crate::locale::Tr;
+use crate::panel::Hint;
+use crate::panel::new_panel;
 use crate::row::percent;
 use crate::row::*;
+use crate::section::Content;
 use crate::section::Section;
 use crate::section::section;
+use crate::theme::*;
+use crate::widgets::*;
 
 const VOLUME: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
+
+// The music's buttons under the track: the order it plays in, the track before, play or
+// pause, and the track after. They act on the focused stage's music, as rows do.
+pub(crate) struct SoundPlugin;
+
+impl Plugin for SoundPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(on_click).add_systems(
+            Update,
+            show_controls.run_if(
+                focused_changed::<MusicSettings>
+                    .or_eager(focused_changed::<Soundscape>)
+                    .or_eager(new_panel),
+            ),
+        );
+    }
+}
+
+#[derive(Component)]
+#[require(Content)]
+struct Controls;
+
+#[derive(Component, Clone, Copy, PartialEq)]
+enum MusicButton {
+    // Goes on from in order to shuffle to repeating one, and round.
+    Order,
+    Previous,
+    PlayPause,
+    Next,
+}
 
 // How loud the app is. Every stage shares it.
 pub(crate) fn page() -> impl Bundle {
@@ -92,42 +132,133 @@ pub(crate) fn page() -> impl Bundle {
                     },
                 }
                 .picker(),
-                Setting {
-                    label: |l| fl!(l, "label-playback"),
-                    help: |l| fl!(l, "help-playback"),
-                    show: |w, l| {
-                        let has_music = !w.focused::<Soundscape>()?.tracks().is_empty();
-                        let paused = w.focused::<MusicSettings>()?.paused;
-                        let label = |&paused: &bool| match paused {
-                            false => fl!(l, "value-play"),
-                            true => fl!(l, "value-pause"),
-                        };
-                        Some(choice(&[false, true], &paused, label).when(has_music))
-                    },
-                    change: |w, step| w.edit(|m: &mut MusicSettings| flip(&mut m.paused, step)),
-                }
-                .segments(),
-                Setting {
-                    label: |l| fl!(l, "label-order"),
-                    help: |l| fl!(l, "help-order"),
-                    show: |w, l| {
-                        let has_music = !w.focused::<Soundscape>()?.tracks().is_empty();
-                        let order = w.focused::<MusicSettings>()?.order;
-                        let label = |order: &MusicOrder| match order {
-                            MusicOrder::InOrder => fl!(l, "value-in-order"),
-                            MusicOrder::Shuffle => fl!(l, "value-shuffle"),
-                            MusicOrder::RepeatOne => fl!(l, "value-repeat-one"),
-                        };
-                        Some(choice(&MusicOrder::ALL, &order, label).when(has_music))
-                    },
-                    change: |w, step| {
-                        w.edit(|m: &mut MusicSettings| pick(&MusicOrder::ALL, &mut m.order, step));
-                    },
-                }
-                .segments(),
+                controls(),
             ],
         ),
     ]
+}
+
+// Hidden while the environment has no music.
+fn controls() -> impl Bundle {
+    (
+        Node {
+            display: Display::None,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(12.0),
+            padding: UiRect::vertical(Val::Px(10.0)),
+            ..default()
+        },
+        Pickable::IGNORE,
+        Controls,
+        children![
+            button(MusicButton::Order, Icon::Repeat, |l| fl!(l, "help-order")),
+            button(MusicButton::Previous, Icon::Previous, |l| fl!(l, "help-previous")),
+            button(MusicButton::PlayPause, Icon::Pause, |l| fl!(l, "help-playback")),
+            button(MusicButton::Next, Icon::Next, |l| fl!(l, "help-next")),
+        ],
+    )
+}
+
+// Round. Play and pause is the big one, filled in the text's color so it stands out in any
+// theme.
+fn button(kind: MusicButton, icon: Icon, hint: Tr) -> impl Bundle {
+    let main = kind == MusicButton::PlayPause;
+    let size = Val::Px(if main { 44.0 } else { 36.0 });
+    (
+        ButtonBuilder::icon(icon)
+            .text_color(if main { CARD_BG } else { TEXT_LABEL })
+            .fill(if main { TEXT } else { CARD_BG })
+            .node(|n| {
+                n.width = size;
+                n.height = size;
+                n.justify_content = JustifyContent::Center;
+                n.align_items = AlignItems::Center;
+                n.border_radius = BorderRadius::MAX;
+            })
+            .build(kind),
+        Hint(hint),
+        Hovered::default(),
+    )
+}
+
+// Play shows while paused and pause while playing; the order button shows the order, in the
+// accent unless it's the usual one.
+fn show_controls(
+    music: Focused<MusicSettings>,
+    soundscape: Focused<Soundscape>,
+    mut rows: Query<&mut Node, With<Controls>>,
+    buttons: Query<(&MusicButton, &Children)>,
+    mut texts: Query<(&mut Text, &mut Ink)>,
+) {
+    let (Some(music), Some(soundscape)) = (music.get(), soundscape.get()) else {
+        return;
+    };
+    let shown = display(!soundscape.tracks().is_empty());
+    for mut node in &mut rows {
+        if node.display != shown {
+            node.display = shown;
+        }
+    }
+    for (button, children) in &buttons {
+        let (icon, ink) = match button {
+            MusicButton::PlayPause if music.paused => (Icon::Play, CARD_BG),
+            MusicButton::PlayPause => (Icon::Pause, CARD_BG),
+            MusicButton::Order => match music.order {
+                MusicOrder::InOrder => (Icon::Repeat, TEXT_LABEL),
+                MusicOrder::Shuffle => (Icon::Shuffle, ACCENT),
+                MusicOrder::RepeatOne => (Icon::RepeatOne, ACCENT),
+            },
+            MusicButton::Previous | MusicButton::Next => continue,
+        };
+        let glyph = icon.glyph().to_string();
+        for &child in &**children {
+            if let Ok((mut text, mut color)) = texts.get_mut(child) {
+                if text.0 != glyph {
+                    text.0.clone_from(&glyph);
+                }
+                color.set_if_neq(Ink(ink));
+            }
+        }
+    }
+}
+
+fn on_click(event: On<Pointer<Click>>, mut commands: Commands, buttons: Query<&MusicButton>) {
+    if let Ok(&button) = buttons.get(event.entity) {
+        commands.queue(move |world: &mut World| press(world, button));
+    }
+}
+
+fn press(world: &mut World, button: MusicButton) {
+    let by = match button {
+        MusicButton::Order => {
+            let step = Step { change: Change::By(1), continuous: false };
+            world.edit(|m: &mut MusicSettings| pick(&MusicOrder::ALL, &mut m.order, &step));
+            return;
+        }
+        MusicButton::PlayPause => {
+            world.edit(|m: &mut MusicSettings| m.paused = !m.paused);
+            return;
+        }
+        MusicButton::Previous => -1,
+        MusicButton::Next => 1,
+    };
+    let (Some(stage), Some(music)) =
+        (world.resource::<FocusedStage>().0, world.focused::<Soundscape>())
+    else {
+        return;
+    };
+    let count = music.tracks().len() as i64;
+    if count == 0 {
+        return;
+    }
+    // From nothing playing, the next track is the first and the one before it the last.
+    let index = match music.playing() {
+        Some(playing) => (playing as i64 + by).rem_euclid(count),
+        None if by > 0 => 0,
+        None => count - 1,
+    };
+    world.trigger(PlayTrack { entity: stage, index: index as usize });
 }
 
 fn volume(volume: f32) -> Shown {

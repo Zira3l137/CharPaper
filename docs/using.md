@@ -44,7 +44,7 @@ point at its spot on the edge.
 |-----|--------------|
 | **Character** | Which character, its outfit and the outfit's parts, **Pose & face** (animation and expression), **Place** (environment, camera, **Lock orbit**, and **Parallax**, the camera leaning towards the pointer), the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks) and the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them). |
 | **Look** | **Lighting** (sky strength and rotation, whether the sun follows the sky, the background and its blur, shadows), **Color** (view transform, exposure, white balance, saturation, contrast, LUT), then an effect to a section: bloom, depth of field, fog, ambient occlusion, ink strokes, and film (vignette, grain, aberration). |
-| **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
+| **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, with buttons under it for the playing order (in order, shuffle or repeat one), the track before, play and pause, and the next track. |
 | **Performance** | The quality preset, frame rate limit and render scale, when to pause, and in **Advanced** what the presets set one by one, with the performance overlay. |
 | **Settings** | Wallpaper or window, start with Windows, updates, monitors, and the panel's language, colors, size, side and auto-hiding button. |
 

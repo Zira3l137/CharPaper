@@ -95,9 +95,9 @@ struct StatusText;
 #[derive(Component)]
 struct HelpText;
 
-// What the help line says while the pointer is on a button that isn't a row.
+// What the help line says while the pointer is on a button that isn't a row. Needs Hovered.
 #[derive(Component)]
-struct Hint(Tr);
+pub(crate) struct Hint(pub Tr);
 
 // A tab's icon and title, and the color each takes while its tab is open.
 #[derive(Component)]
