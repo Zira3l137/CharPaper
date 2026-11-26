@@ -29,6 +29,7 @@ use widgets::Toggle;
 use widgets::Value;
 use widgets::list_item;
 use widgets::option_button;
+use widgets::tick;
 
 // A row of the panel is declared once, as a Setting, where the page lays it out. Its `show`
 // says what it shows, worked out again whenever what the tabs read from changes, and its
@@ -369,7 +370,11 @@ fn draw_rows(
             } else if lists.contains(part) {
                 commands.entity(part).despawn_children().with_children(|list| {
                     for (index, label) in labels.iter().enumerate() {
-                        list.spawn(list_item(label, index, current == Some(index)));
+                        let picked = current == Some(index);
+                        let mut item = list.spawn(list_item(label, index, picked));
+                        if picked {
+                            item.with_child(tick());
+                        }
                     }
                 });
             }

@@ -333,7 +333,8 @@ fn end_line(title: Tr, control: impl Bundle) -> impl Bundle {
     )
 }
 
-// One of the choices in a picker's list. The current one is tinted with the accent.
+// One of the choices in a picker's list. The current one is tinted with the accent, and
+// `tick` goes at its end.
 pub(crate) fn list_item(label: &str, index: usize, current: bool) -> impl Bundle {
     ButtonBuilder::new(label)
         .font_size(BODY_SIZE)
@@ -343,9 +344,14 @@ pub(crate) fn list_item(label: &str, index: usize, current: bool) -> impl Bundle
             n.height = Val::Px(32.0);
             n.padding = UiRect::horizontal(Val::Px(10.0));
             n.align_items = AlignItems::Center;
+            n.justify_content = JustifyContent::SpaceBetween;
             n.border_radius = BorderRadius::all(INNER_RADIUS);
         })
         .build(Choose(index))
+}
+
+pub(crate) fn tick() -> impl Bundle {
+    icon(Icon::Check, FontSize::Px(14.0), ACCENT)
 }
 
 // One of a row's segments. The current one is raised out of the groove.
