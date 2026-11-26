@@ -13,6 +13,7 @@ from . import cues
 from . import drivers
 from . import env_settings
 from . import hotspots as hotspot_spots
+from . import multi
 from . import music
 from . import paths
 from . import physics
@@ -212,7 +213,7 @@ class CHARPAPER_UL_clips(UIList):
             row.alert = True
             row.label(text="Pick an action", icon="ERROR")
             return
-        row.label(text=item.action.name)
+        multi.button(row, data, item, index, "clip_index", item.action.name)
         if item.label:
             row.label(text=item.label)
         _warn_icon(row, suite, clip=file_stem(item.action.name))
@@ -315,6 +316,7 @@ class CHARPAPER_PT_suite(_Sidebar, Panel):
         row = layout.row(align=True)
         row.scale_y = 1.4
         row.operator("charpaper.validate", text="Check", icon="VIEWZOOM")
+        row.operator("charpaper.sync", text="Sync", icon="FILE_REFRESH")
         row.operator("charpaper.export", text="Export all", icon="EXPORT").what = "ALL"
         if suite.last_export:
             row = layout.row()
@@ -480,6 +482,7 @@ class CHARPAPER_PT_animation(_Sidebar, Panel):
         if not 0 <= index < len(stored):
             return
         clip = stored[index]
+        multi.several_note(layout, stored, "clips")
         box = _split(layout.box())
         box.prop(clip, "action")
         box.prop(clip, "label")
@@ -665,7 +668,8 @@ class CHARPAPER_UL_hotspots(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
         row.label(text="", icon=hotspot_spots.tag(index))
-        row.prop(item, "name", text="", emboss=False)
+        multi.button(row, data, item, index, "hotspot_index", item.name)
+        row.separator()
         _flag(row, [f for f in warnings_about(suite_of(context)) if f.hotspot == item.name])
         if item.layer:
             row.label(text="", icon="RENDERLAYERS")
@@ -690,7 +694,7 @@ class CHARPAPER_UL_hotspot_areas(UIList):
         owner = "" if item.armature == suite.armature else f"{item.armature.name} · "
         name = row.row(align=True)
         name.alert = not found
-        name.label(text=owner + (item.bone or "no bone"), icon="NONE" if found else "ERROR")
+        multi.button(name, data, item, index, "area_index", owner + (item.bone or "no bone"), "NONE" if found else "ERROR")
         row.prop(item, "radius", text="")
 
 
@@ -705,7 +709,7 @@ class CHARPAPER_UL_hotspot_clips(UIList):
             row.label(text=name, icon="ERROR")
             return
         actor, clip = resolved
-        row.label(text=clip.action.name, icon=MODE_TAGS[clip.mode])
+        multi.button(row, data, item, index, "clip_index", clip.action.name, MODE_TAGS[clip.mode])
         owner = row.row()
         owner.active = False
         if item.from_time > 1:
@@ -759,7 +763,9 @@ class CHARPAPER_PT_hotspots(_Sidebar, Panel):
                      "click or hover, select its bones in Pose Mode first.", context)
             return
 
+        multi.several_note(layout, suite.hotspots, "hotspots")
         box = _split(layout.box())
+        box.prop(spot, "name")
         box.prop(spot, "trigger")
         pointed = spot.trigger in hotspot_spots.POINTED
         if not pointed:
@@ -781,6 +787,7 @@ class CHARPAPER_PT_hotspots(_Sidebar, Panel):
         side.menu("CHARPAPER_MT_hotspot_clip", text="", icon="ADD")
         side.operator("charpaper.hotspot_clip_remove", text="", icon="REMOVE")
         if 0 <= spot.clip_index < len(spot.clips):
+            multi.several_note(layout, spot.clips, "clips")
             _split(layout).prop(spot.clips[spot.clip_index], "from_time")
 
         held = hotspot_spots.HELD.get(spot.trigger)
@@ -829,7 +836,7 @@ class CHARPAPER_UL_physics_chains(UIList):
         op.kind, op.index = "CHAIN", index
         names = [b.bone for b in item.bones]
         label = f"{names[0]} → {names[-1]}" if len(names) > 1 else (names[0] if names else "no bones")
-        row.label(text=label)
+        multi.button(row, data, item, index, "physics_chain_index", label)
         _flag(row, _physics_flags(suite, f"chain:{physics.chain_name(item)}"))
         info = row.row()
         info.active = False
@@ -846,7 +853,7 @@ class CHARPAPER_UL_physics_colliders(UIList):
         found = suite.armature is not None and suite.armature.data.bones.get(item.bone) is not None
         name = row.row(align=True)
         name.alert = not found
-        name.label(text=item.bone or "no bone", icon="NONE" if found else "ERROR")
+        multi.button(name, data, item, index, "physics_collider_index", item.bone or "no bone", "NONE" if found else "ERROR")
         _flag(row, _physics_flags(suite, f"collider:{item.bone}"))
         row.prop(item, "radius", text="")
 
@@ -885,6 +892,7 @@ class CHARPAPER_PT_physics(_Sidebar, Panel):
                      "Pose Mode and press +: the chain runs down to the end. Select more of it to stop it "
                      "earlier.", context)
         else:
+            multi.several_note(layout, suite.physics_chains, "chains")
             box = _split(layout.box())
             box.prop(chain, "preset")
             col = box.column(align=True)
@@ -914,6 +922,7 @@ class CHARPAPER_PT_physics(_Sidebar, Panel):
             _wrapped(hint, "Select body bones in Pose Mode, like the head, chest and legs, and press +. "
                      "Each gets a capsule as thick as the mesh around it.", context)
         else:
+            multi.several_note(layout, suite.physics_colliders, "colliders")
             layout.operator("charpaper.physics_collider_fit", icon="MOD_SHRINKWRAP")
             for finding in suite.findings:
                 if finding.physics == f"collider:{collider.bone}":

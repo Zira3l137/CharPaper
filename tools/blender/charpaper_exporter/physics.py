@@ -22,6 +22,7 @@ from mathutils import Matrix
 from mathutils import Vector
 from mathutils.geometry import intersect_point_line
 
+from . import multi
 from .hotspots import _capsule
 from .hotspots import exported_bone
 from .hotspots import select
@@ -391,8 +392,7 @@ class CHARPAPER_OT_physics_chain_remove(Operator):
 
     def execute(self, context):
         suite = suite_of(context)
-        suite.physics_chains.remove(suite.physics_chain_index)
-        suite.physics_chain_index = max(0, suite.physics_chain_index - 1)
+        multi.remove_picked(suite, "physics_chains", "physics_chain_index")
         redraw_views()
         return {"FINISHED"}
 
@@ -456,14 +456,22 @@ class CHARPAPER_OT_physics_collider_fit(Operator):
 
     def execute(self, context):
         suite = suite_of(context)
-        collider = current_collider(suite)
-        bone = suite.armature.data.bones.get(collider.bone)
-        radius = fit_radius(suite, bone) if bone is not None else None
-        if radius is None:
-            self.report({"WARNING"}, f"No mesh has enough vertices weighted to {collider.bone}")
-            return {"CANCELLED"}
-        collider.radius = max(radius, 0.001)
-        return {"FINISHED"}
+        colliders = suite.physics_colliders
+        fitted, unfit = 0, []
+        for index in multi.picked(colliders, suite.physics_collider_index):
+            collider = colliders[index]
+            bone = suite.armature.data.bones.get(collider.bone)
+            radius = fit_radius(suite, bone) if bone is not None else None
+            if radius is None:
+                unfit.append(collider.bone)
+                continue
+            # Each to its own mesh, not one to all.
+            with multi.alone():
+                collider.radius = max(radius, 0.001)
+            fitted += 1
+        if unfit:
+            self.report({"WARNING"}, f"No mesh has enough vertices weighted to {', '.join(unfit)}")
+        return {"FINISHED"} if fitted else {"CANCELLED"}
 
 
 class CHARPAPER_OT_physics_collider_remove(Operator):
@@ -477,8 +485,7 @@ class CHARPAPER_OT_physics_collider_remove(Operator):
 
     def execute(self, context):
         suite = suite_of(context)
-        suite.physics_colliders.remove(suite.physics_collider_index)
-        suite.physics_collider_index = max(0, suite.physics_collider_index - 1)
+        multi.remove_picked(suite, "physics_colliders", "physics_collider_index")
         redraw_views()
         return {"FINISHED"}
 

@@ -46,7 +46,7 @@ A belly that giggles when clicked:
 3. Select the armature, enter **Pose Mode**, and select the belly bone (`spine.002`, say).
 4. In the Hotspots panel, press **+** and pick **Click on the selected bones**. A wire
    capsule appears around the bone, in the hotspot's color.
-5. Double-click the hotspot's name to call it `Belly`.
+5. Type `Belly` into its **Name**, at the top of its settings.
 6. **Fit the capsule.** In the **Where** list, drag the number next to the bone's name (its
    radius) until the capsule covers the belly. Not wider: it shouldn't catch an arm hanging
    beside it.

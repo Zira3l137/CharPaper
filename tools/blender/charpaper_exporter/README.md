@@ -271,6 +271,23 @@ Export updates `suite.toml` in place, and keeps the previous one as `suite.toml.
 *Load suite.toml* fills the panel from an existing file. Opening a .blend saved with an
 older add-on moves its settings to the current ones by itself.
 
+## Sync
+
+**Sync** writes suite.toml as an export would, without exporting a file: it takes the
+clips, environments and cameras already in the suite folder as exported. A clip whose
+**Plays** differs from suite.toml's keeps its old entry, the timeline keeps its old
+`[timeline]`, and cues naming sounds not yet in `sounds/` are left out, since each needs
+files exported again; the report names what to export. It runs Check first, writes even with
+*Write suite.toml* off, and needs a suite.toml there already.
+
+## Picking several
+
+The lists of clips, hotspots, a hotspot's areas and clips, chains and colliders pick several
+rows by Shift-clicking their names. A setting changed on a picked row is set on every picked
+row of the list, except what names a row (its action, bone, label or name); **−** removes all
+of them, and *Fit to the mesh* fits each picked collider to its own bone. Clicking a row, or
+its name without Shift, picks it alone.
+
 ## Check
 
 **Check** runs before every export and lists what it finds in the *Warnings* panel, worst

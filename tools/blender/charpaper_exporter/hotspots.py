@@ -27,6 +27,7 @@ from mathutils import Vector
 
 from . import actors
 from . import clips as clip_files
+from . import multi
 from .props import TRIGGERS as TRIGGER_ITEMS
 from .props import file_stem
 from .props import redraw_views
@@ -531,8 +532,7 @@ class CHARPAPER_OT_hotspot_remove(Operator):
 
     def execute(self, context):
         suite = suite_of(context)
-        suite.hotspots.remove(suite.hotspot_index)
-        suite.hotspot_index = max(0, suite.hotspot_index - 1)
+        multi.remove_picked(suite, "hotspots", "hotspot_index")
         redraw_views()
         return {"FINISHED"}
 
@@ -589,8 +589,7 @@ class CHARPAPER_OT_hotspot_area_remove(Operator):
 
     def execute(self, context):
         spot = current(suite_of(context))
-        spot.areas.remove(spot.area_index)
-        spot.area_index = max(0, spot.area_index - 1)
+        multi.remove_picked(spot, "areas", "area_index")
         redraw_views()
         return {"FINISHED"}
 
@@ -628,8 +627,7 @@ class CHARPAPER_OT_hotspot_clip_remove(Operator):
 
     def execute(self, context):
         spot = current(suite_of(context))
-        spot.clips.remove(spot.clip_index)
-        spot.clip_index = max(0, spot.clip_index - 1)
+        multi.remove_picked(spot, "clips", "clip_index")
         return {"FINISHED"}
 
 

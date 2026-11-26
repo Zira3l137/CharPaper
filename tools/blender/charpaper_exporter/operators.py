@@ -20,11 +20,12 @@ from . import exporters
 from . import gaze
 from . import gltf
 from . import hotspots
-from . import physics
 from . import lens
 from . import manifest
+from . import multi
 from . import music
 from . import paths
+from . import physics
 from . import sky
 from . import toml_io
 from . import validate
@@ -203,11 +204,8 @@ class CHARPAPER_OT_clip_remove(Operator):
         actor = current_actor(suite_of(context))
         if actor is None:
             return {"CANCELLED"}
-        stored = _listed(actor)
-        index = actor.obj.charpaper.clip_index
-        if 0 <= index < len(stored):
-            stored.remove(index)
-            actor.obj.charpaper.clip_index = max(0, index - 1)
+        _listed(actor)
+        multi.remove_picked(actor.obj.charpaper, "clips", "clip_index")
         return {"FINISHED"}
 
 
@@ -600,6 +598,112 @@ class CHARPAPER_OT_export(Operator):
         return (left_out if suite.hotspots_owned else []) + (physics_left_out if suite.physics_owned else [])
 
 
+def _on_disk(folder, subdir, name):
+    stem = os.path.join(folder, subdir, file_stem(name))
+    return any(os.path.isfile(stem + ext) for ext in gltf.EXTENSIONS.values())
+
+
+def _clip_tables_of(data, environment, actor):
+    """An actor's clips table in suite.toml, by the names the app finds it by."""
+    if environment is None:
+        return data.get("character", {}).get("clips", {})
+    tables = data.get("environments", {}).get(file_stem(environment), {})
+    return tables.get("actors", {}).get(file_stem(actor), {}).get("clips", {})
+
+
+class CHARPAPER_OT_sync(Operator):
+    bl_idname = "charpaper.sync"
+    bl_label = "Sync"
+    bl_description = (
+        "Write the panel's settings to suite.toml without exporting anything: defaults, clips' "
+        "labels, gaze and Only for hotspots, expressions' labels, a prop's star, hotspots, physics, "
+        "gaze, environments' fog, shadows, lights and wind, and cameras' depth of field. What needs "
+        "its files exported again (a clip's Plays, the timeline, a new sound) is kept and reported"
+    )
+
+    def execute(self, context):
+        suite = suite_of(context)
+        folder, why = paths.folder(suite)
+        if folder is None:
+            self.report({"ERROR"}, why)
+            return {"CANCELLED"}
+        path = manifest.path(folder)
+        if not os.path.isfile(path):
+            self.report({"ERROR"}, "Nothing is exported there yet: Export all first")
+            return {"CANCELLED"}
+        gaze.stop(context)
+        findings = validate.check(context, suite)
+        _store(suite, findings)
+        scene = context.scene
+        existing = toml_io.load(path)
+        notes = []
+
+        # Only what was exported before: suite.toml can't name files that aren't there.
+        exported, kept = {}, []
+        for actor in actors.all_actors(suite):
+            environment = actor.environment.name if actor.environment else None
+            directory = os.path.join(folder, clips.clip_folder(actor))
+            listed = [c for c in actors.clips(actor) if os.path.isfile(os.path.join(directory, c.name + ".json"))]
+            if not listed:
+                continue
+            previous = _clip_tables_of(existing, environment, actor.name)
+            cue_tables = {}
+            for clip in listed:
+                was = previous.get(clip.name, {}).get("mode", "timeline")
+                if manifest.MODES.get(clip.mode, "timeline") != was:
+                    # Its file covers the frames of the mode it was exported with.
+                    kept.append((environment, actor.name, clip.name, previous.get(clip.name)))
+                    notes.append(f"{actor.name}: {clip.name}'s Plays changed; export {actor.name} to apply it")
+                    continue
+                start, end = clips.span(scene, clip)
+                found = cues.within(clip.action, start, end, clips.fps(scene))
+                missing = sorted({sound for _, sound in found if not os.path.isfile(cues.path(folder, sound))})
+                if missing:
+                    notes.append(f"{actor.name}: {clip.name} has sounds not exported yet ({', '.join(missing)}); "
+                                 f"export {actor.name} to add them")
+                cue_tables[clip.name] = [(at, sound) for at, sound in found if sound not in missing]
+            exported[(environment, actor.name)] = (actor, listed, cue_tables)
+
+        environments = {
+            file_stem(entry.name): env_settings.table(entry.collection)
+            for entry in suite.environments
+            if entry.enabled and entry.collection and _on_disk(folder, exporters.ENVIRONMENT_DIR, entry.name)
+        }
+        lenses = {
+            file_stem(entry.name): lens.table(entry.camera, scene.render)
+            for entry in suite.cameras
+            if entry.enabled and entry.camera and _on_disk(folder, exporters.CAMERAS_DIR, entry.name)
+        }
+        spots, left_out = hotspots.tables(suite, folder)
+        swinging, physics_left_out = physics.tables(suite)
+        data = manifest.update(
+            existing, suite, scene, exporters.extension(suite), False, lenses, environments, exported,
+            hotspots=spots, physics=swinging,
+        )
+
+        # Timeline clips were exported over the timeline as it was.
+        if "timeline" in existing and existing["timeline"] != data["timeline"]:
+            data["timeline"] = existing["timeline"]
+            notes.append("The timeline (frame range or frame rate) changed; Export all to apply it")
+        for environment, actor, clip, table in kept:
+            if environment is None:
+                tables = data.setdefault("character", {}).setdefault("clips", {})
+            else:
+                owner = data.setdefault("environments", {}).setdefault(file_stem(environment), {})
+                tables = owner.setdefault("actors", {}).setdefault(file_stem(actor), {}).setdefault("clips", {})
+            if table:
+                tables[clip] = table
+            else:
+                tables.pop(clip, None)
+
+        changed = manifest.write(folder, data)
+        for note in notes + (left_out if suite.hotspots_owned else []) + (physics_left_out if suite.physics_owned else []):
+            self.report({"WARNING"}, note)
+        _report_findings(self, findings)
+        self.report({"INFO"}, f"Synced {path}" if changed else "suite.toml already matches the panel")
+        return {"FINISHED"}
+
+
 class CHARPAPER_OT_stop_shape_keys(Operator):
     bl_idname = "charpaper.stop_shape_keys"
     bl_label = "Stop it"
@@ -796,6 +900,7 @@ classes = (
     CHARPAPER_OT_eye_remove,
     CHARPAPER_OT_validate,
     CHARPAPER_OT_export,
+    CHARPAPER_OT_sync,
     CHARPAPER_OT_stop_shape_keys,
     CHARPAPER_OT_unlink_object_action,
     CHARPAPER_OT_export_alerts,

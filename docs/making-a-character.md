@@ -167,7 +167,7 @@ The tab has these panels, top to bottom:
 
 | Panel | What's in it |
 |---|---|
-| **Suite** | The name, where CharPaper is and where the character goes, the timeline (read from your scene), what the app starts with, and the **Check** and **Export all** buttons. |
+| **Suite** | The name, where CharPaper is and where the character goes, the timeline (read from your scene), what the app starts with, and the **Check**, **Sync** and **Export all** buttons. |
 | **Character** | The armature. Under it: **Skins** (outfits), **Expressions** (faces) and **Gaze** (following the cursor). |
 | **Animation** | Everything that moves, grouped: the character first, then each environment's objects. Pick one to see and edit its clips. |
 | **Environments** | The places, their sky, and under each, **Sound**: its music and ambience. |
@@ -198,6 +198,18 @@ Good to know about the add-on:
 - **You don't have to export everything every time.** Skins, environments and cameras have
   their own export button and a checkbox to leave them out of *Export all*; an object's
   clips export from the Animation panel.
+- **Changed only a setting? Press Sync.** It writes the panel's settings into suite.toml and
+  exports nothing, so it takes a moment: what the app starts with, clips' labels, Gaze and
+  *Only for hotspots*, expressions' labels, which clip a prop plays by itself, hotspots,
+  physics, gaze, an environment's fog, shadows, lights and wind, and cameras' depth of field.
+  A few settings change exported files too: a clip's **Plays**, the timeline's frame range
+  or frame rate, and a new sound on a clip. Sync leaves those as they were, says so, and
+  tells you what to export. It only writes about what's already exported, so after adding a
+  new clip, outfit or environment, export it.
+- **Change several at once.** In the lists of clips, hotspots, a hotspot's areas and clips,
+  chains and colliders, **Shift-click** names to pick several. A setting you then change goes
+  to all of them, and **−** removes them all. A plain click picks one again. The settings box
+  says how many are picked.
 - **suite.toml is updated, not replaced.** What you typed into it by hand is kept, and the
   previous version is saved as `suite.toml.bak`. **Load suite.toml** fills the panel from
   an existing file.

@@ -2,6 +2,7 @@ from . import front
 from . import gaze
 from . import hotspots
 from . import migrate
+from . import multi
 from . import operators
 from . import paths
 from . import physics
@@ -26,6 +27,7 @@ def register():
     operators.register()
     gaze.register()
     front.register()
+    multi.register()
     hotspots.register()
     physics.register()
     ui.register()
@@ -35,6 +37,7 @@ def unregister():
     ui.unregister()
     physics.unregister()
     hotspots.unregister()
+    multi.unregister()
     front.unregister()
     gaze.unregister()
     operators.unregister()

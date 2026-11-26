@@ -11,6 +11,7 @@ from bpy.props import StringProperty
 from bpy.types import PropertyGroup
 
 from . import anim
+from . import multi
 from . import gaze as gaze_preview
 
 ORBIT = "orbit"
@@ -462,12 +463,13 @@ class CHARPAPER_PG_actor_clip(PropertyGroup):
             "where they can't share the action, or a lamp's Strength and Color"
         ),
     )
-    mode: EnumProperty(name="Plays", items=CLIP_MODES, default="TIMELINE")
+    mode: EnumProperty(name="Plays", items=CLIP_MODES, default="TIMELINE", update=multi.spread("mode"))
     label: StringProperty(name="Shown as", description="Name the app shows. Empty: the action's name")
     gaze: BoolProperty(
         name="Gaze",
         default=True,
         description="Let the character follow the cursor during this clip. Turn off for dances or lying poses",
+        update=multi.spread("gaze"),
     )
     slot: StringProperty(
         name="Slot",
@@ -485,13 +487,16 @@ class CHARPAPER_PG_actor_clip(PropertyGroup):
             "Keep it out of the app's list of animations: a flinch, or a loop for while a hotspot is "
             "held, only a hotspot should play"
         ),
-        update=_once_for_hotspots,
+        update=multi.spread("reaction_only", _once_for_hotspots),
     )
+    # Picked with others, to change their settings together.
+    selected: BoolProperty(options={"HIDDEN"})
+
 
 
 class CHARPAPER_PG_actor(PropertyGroup):
     clips: CollectionProperty(type=CHARPAPER_PG_actor_clip)
-    clip_index: IntProperty()
+    clip_index: IntProperty(update=multi.follow("clips", "clip_index"))
     # A prop's starred clip, by clip name: the one it plays by itself. The character's is the
     # suite's default_clip.
     start_clip: StringProperty()
@@ -528,8 +533,10 @@ class CHARPAPER_PG_hotspot_area(PropertyGroup):
         soft_max=1.0,
         precision=3,
         step=0.5,
-        update=_redraw,
+        update=multi.spread("radius", _redraw),
     )
+    # Picked with others, to change their settings together.
+    selected: BoolProperty(options={"HIDDEN"})
 
 
 class CHARPAPER_PG_hotspot_clip(PropertyGroup):
@@ -545,7 +552,10 @@ class CHARPAPER_PG_hotspot_clip(PropertyGroup):
         default=1,
         min=1,
         soft_max=10,
+        update=multi.spread("from_time"),
     )
+    # Picked with others, to change their settings together.
+    selected: BoolProperty(options={"HIDDEN"})
 
 
 class CHARPAPER_PG_hotspot_entry(PropertyGroup):
@@ -592,7 +602,7 @@ def _trigger_changed(spot, _context):
 
 
 class CHARPAPER_PG_hotspot(PropertyGroup):
-    trigger: EnumProperty(name="When", items=TRIGGERS, default="CLICK", update=_trigger_changed)
+    trigger: EnumProperty(name="When", items=TRIGGERS, default="CLICK", update=multi.spread("trigger", _trigger_changed))
     after: FloatProperty(
         name="After, seconds",
         description="How many seconds the mouse keeps still, or stays away, first",
@@ -600,6 +610,7 @@ class CHARPAPER_PG_hotspot(PropertyGroup):
         min=1.0,
         soft_max=1800.0,
         precision=0,
+        update=multi.spread("after"),
     )
     layer: BoolProperty(
         name="Layer",
@@ -607,11 +618,13 @@ class CHARPAPER_PG_hotspot(PropertyGroup):
             "Play over the reactions other hotspots set off, moving only what its clips key. Off: "
             "stop them and take their place"
         ),
+        update=multi.spread("layer"),
     )
     expression: StringProperty(
         name="Expression",
         search=_search(expression_names),
         description="The character's expression while its clips play. Empty: none",
+        update=multi.spread("expression"),
     )
     cooldown: FloatProperty(
         name="Cooldown",
@@ -619,11 +632,15 @@ class CHARPAPER_PG_hotspot(PropertyGroup):
         min=0.0,
         soft_max=10.0,
         precision=1,
+        update=multi.spread("cooldown"),
     )
+    # Picked with others, to change their settings together.
+    selected: BoolProperty(options={"HIDDEN"})
+
     areas: CollectionProperty(type=CHARPAPER_PG_hotspot_area)
-    area_index: IntProperty(update=_redraw)
+    area_index: IntProperty(update=multi.follow("areas", "area_index", _redraw))
     clips: CollectionProperty(type=CHARPAPER_PG_hotspot_clip)
-    clip_index: IntProperty()
+    clip_index: IntProperty(update=multi.follow("clips", "clip_index"))
     # What actors play on and on while it's held, and after it lets go; and what they must be
     # playing for it to go off. Empty During: any.
     meanwhile: CollectionProperty(type=CHARPAPER_PG_hotspot_entry)
@@ -675,26 +692,26 @@ class CHARPAPER_PG_physics_chain(PropertyGroup):
     """Bones of the character's armature that swing together, root first."""
 
     bones: CollectionProperty(type=CHARPAPER_PG_bone)
-    preset: EnumProperty(name="Preset", items=PRESET_ITEMS, default="HAIR", update=_preset_picked)
+    preset: EnumProperty(name="Preset", items=PRESET_ITEMS, default="HAIR", update=multi.spread("preset", _preset_picked))
     stiffness: FloatProperty(
         name="Stiffness",
         description="How strongly it springs back to the animated pose: 0 hangs loose, 1 follows the animation exactly",
-        default=0.1, min=0.0, max=1.0, update=_physics_tuned,
+        default=0.1, min=0.0, max=1.0, update=multi.spread("stiffness", _physics_tuned),
     )
     drag: FloatProperty(
         name="Drag",
         description="How quickly it settles: 0 swings on and on, 1 stops dead",
-        default=0.15, min=0.0, max=1.0, update=_physics_tuned,
+        default=0.15, min=0.0, max=1.0, update=multi.spread("drag", _physics_tuned),
     )
     gravity: FloatProperty(
         name="Gravity",
         description="How heavy it is, as a multiple of Earth's gravity",
-        default=1.0, min=0.0, soft_max=2.0, update=_physics_tuned,
+        default=1.0, min=0.0, soft_max=2.0, update=multi.spread("gravity", _physics_tuned),
     )
     radius: FloatProperty(
         name="Radius",
         description="How far the bones' tails keep from the colliders, in the armature's units",
-        default=0.02, min=0.0, soft_max=0.2, precision=3, step=0.5, update=_physics_tuned,
+        default=0.02, min=0.0, soft_max=0.2, precision=3, step=0.5, update=multi.spread("radius", _physics_tuned),
     )
     cursor: EnumProperty(
         name="Cursor",
@@ -707,8 +724,10 @@ class CHARPAPER_PG_physics_chain(PropertyGroup):
              "Gravity, wind and colliders leave it be: for grass, fur, beads, a curtain"),
         ),
         default="PUSHES",
-        update=_redraw,
+        update=multi.spread("cursor", _redraw),
     )
+    # Picked with others, to change their settings together.
+    selected: BoolProperty(options={"HIDDEN"})
 
 
 class CHARPAPER_PG_physics_collider(PropertyGroup):
@@ -718,8 +737,11 @@ class CHARPAPER_PG_physics_collider(PropertyGroup):
     radius: FloatProperty(
         name="Radius",
         description="How far the capsule reaches from the bone on every side, in the armature's units",
-        default=0.05, min=0.001, soft_max=0.5, precision=3, step=0.5, update=_redraw,
+        default=0.05, min=0.001, soft_max=0.5, precision=3, step=0.5,
+        update=multi.spread("radius", _redraw),
     )
+    # Picked with others, to change their settings together.
+    selected: BoolProperty(options={"HIDDEN"})
 
 
 def character_clip_names(suite):
@@ -800,7 +822,7 @@ class CHARPAPER_PG_suite(PropertyGroup):
     gltf: PointerProperty(type=CHARPAPER_PG_gltf)
 
     hotspots: CollectionProperty(type=CHARPAPER_PG_hotspot)
-    hotspot_index: IntProperty(update=_redraw)
+    hotspot_index: IntProperty(update=multi.follow("hotspots", "hotspot_index", _redraw))
     show_hotspots: BoolProperty(
         name="Show hotspots",
         default=True,
@@ -812,9 +834,11 @@ class CHARPAPER_PG_suite(PropertyGroup):
     hotspots_owned: BoolProperty()
 
     physics_chains: CollectionProperty(type=CHARPAPER_PG_physics_chain)
-    physics_chain_index: IntProperty(update=_redraw)
+    physics_chain_index: IntProperty(update=multi.follow("physics_chains", "physics_chain_index", _redraw))
     physics_colliders: CollectionProperty(type=CHARPAPER_PG_physics_collider)
-    physics_collider_index: IntProperty(update=_redraw)
+    physics_collider_index: IntProperty(
+        update=multi.follow("physics_colliders", "physics_collider_index", _redraw)
+    )
     show_physics: BoolProperty(
         name="Show physics",
         default=True,
