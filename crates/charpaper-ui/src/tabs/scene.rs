@@ -20,6 +20,8 @@ use crate::section::section;
 
 const GAZE_STRENGTH: Scale =
     Scale { step: 0.25, min: GazeSettings::WEAKEST, max: GazeSettings::STRONGEST, per_unit: 100.0 };
+const PARALLAX_STRENGTH: Scale =
+    Scale { step: 0.25, min: ViewSettings::WEAKEST, max: ViewSettings::STRONGEST, per_unit: 100.0 };
 
 // What the focused stage shows, and from where: the suite and what the character wears and
 // does, the camera and the environment. Clicks write to its CharacterState.
@@ -269,6 +271,29 @@ fn camera() -> impl Bundle {
                 change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.locked, step)),
             }
             .segments(),
+            Setting {
+                label: |l| fl!(l, "label-parallax"),
+                help: |l| fl!(l, "help-parallax"),
+                show: |w, l| Some(switch(l, w.focused::<ViewSettings>()?.parallax)),
+                change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.parallax, step)),
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-parallax-strength"),
+                help: |l| fl!(l, "help-parallax-strength"),
+                show: |w, _| {
+                    let view = w.focused::<ViewSettings>()?;
+                    let strength = view.parallax_strength();
+                    Some(PARALLAX_STRENGTH.number(percent(strength), strength).when(view.parallax))
+                },
+                change: |w, step| {
+                    w.edit(|view: &mut ViewSettings| {
+                        view.parallax_strength =
+                            PARALLAX_STRENGTH.nudge(view.parallax_strength(), step);
+                    });
+                },
+            }
+            .stepper(),
         ],
     )
 }

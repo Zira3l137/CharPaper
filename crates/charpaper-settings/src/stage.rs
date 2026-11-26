@@ -85,11 +85,23 @@ pub struct OrbitPose {
 #[serde(default)]
 pub struct ViewSettings {
     pub locked: bool,
+    // The camera leans a little towards the cursor.
+    pub parallax: bool,
+    pub parallax_strength: f32,
+}
+
+impl ViewSettings {
+    pub const WEAKEST: f32 = 0.25;
+    pub const STRONGEST: f32 = 2.0;
+
+    pub fn parallax_strength(&self) -> f32 {
+        self.parallax_strength.clamp(Self::WEAKEST, Self::STRONGEST)
+    }
 }
 
 impl Default for ViewSettings {
     fn default() -> Self {
-        Self { locked: false }
+        Self { locked: false, parallax: false, parallax_strength: 1.0 }
     }
 }
 

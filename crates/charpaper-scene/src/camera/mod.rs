@@ -1,5 +1,6 @@
 mod focus;
 mod orbit;
+mod parallax;
 mod rig;
 
 use bevy::anti_alias::taa::TemporalAntiAliasing;
@@ -74,6 +75,7 @@ impl Plugin for CameraPlugin {
             .add_systems(
                 PostUpdate,
                 (
+                    parallax::ease,
                     rig::follow_selected.before(VisibilitySystems::UpdateFrusta),
                     focus::focus_lens,
                     reset_history,
@@ -89,7 +91,8 @@ pub(crate) fn view_bundle() -> impl Bundle {
     let mut transform = Transform::default();
     update_camera_transform(&mut transform, &orbit);
     let reach = ShadowReach::default();
-    (Name::new("Scene view"), SceneView, orbit, Following::default(), transform, reach)
+    let sway = parallax::Sway::default();
+    (Name::new("Scene view"), SceneView, orbit, Following::default(), transform, reach, sway)
 }
 
 // A screen moved to another stage, or whose stage went away, loses its camera, display and

@@ -19,9 +19,12 @@ use crate::camera::SceneView;
 use crate::camera::focus::FocusTarget;
 use crate::camera::orbit::OrbitCamera;
 use crate::camera::orbit::update_camera_transform;
+use crate::camera::parallax::Sway;
+use crate::character::Armature;
 use crate::props::PropActor;
 use crate::props::rig_of;
 use crate::stage::Stage;
+use crate::stage::StageOf;
 use crate::state::CharacterState;
 use crate::state::prefer;
 use crate::suite::ActiveSuite;
@@ -208,6 +211,8 @@ pub(crate) fn on_rig_ready(
 // GlobalTransform is written too, the cameras' as well as the view's, because propagation
 // already ran this frame. The view's own transform counts from its stage. The projection is
 // copied only on a switch or to a new camera: assigning it makes Bevy refit the aspect ratio.
+// Parallax swings it last, around the orbit's focus, or for a suite's camera around the point
+// in front of it as far away as the character is.
 pub(crate) fn follow_selected(
     stages: Query<
         (&CharacterState, &GlobalTransform),
@@ -216,15 +221,28 @@ pub(crate) fn follow_selected(
     rigs: Query<(&CameraRig, &Lens, &ChildOf)>,
     lenses: Query<(&GlobalTransform, &Projection), (Without<SceneView>, Without<SceneCamera>)>,
     mut views: Query<
-        (Entity, &mut Transform, &mut GlobalTransform, &OrbitCamera, &mut Following, &ChildOf),
+        (
+            Entity,
+            &mut Transform,
+            &mut GlobalTransform,
+            &OrbitCamera,
+            &mut Following,
+            &ChildOf,
+            &Sway,
+        ),
         With<SceneView>,
     >,
     mut cameras: Query<
         (Ref<SceneCamera>, &mut GlobalTransform, &mut Projection, &ChildOf),
         Without<SceneView>,
     >,
+    armatures: Query<
+        (Entity, &GlobalTransform),
+        (With<Armature>, Without<SceneView>, Without<SceneCamera>),
+    >,
+    stage_of: StageOf,
 ) {
-    for (view, mut transform, mut global, orbit, mut following, stage) in &mut views {
+    for (view, mut transform, mut global, orbit, mut following, stage, sway) in &mut views {
         let Ok((state, stage_global)) = stages.get(stage.parent()) else {
             continue;
         };
@@ -242,18 +260,38 @@ pub(crate) fn follow_selected(
                     following.0 = wanted.map(str::to_string);
                 }
                 *transform = lens_global.reparented_to(stage_global);
-                *global = *lens_global;
                 (lens_projection.clone(), switched)
             }
-            // A rig still loading keeps the last view instead of flashing the orbit camera.
-            None if wanted.is_none() && following.0.is_some() => {
+            // The orbit camera's transform is kept by its handlers, so it's only taken over
+            // here to lean, or on the way back from a rig. A rig still loading keeps the last
+            // view instead of flashing the orbit camera.
+            None if wanted.is_none() => {
+                let switched = following.0.take().is_some();
+                if !switched && !sway.leaning() {
+                    continue;
+                }
                 update_camera_transform(&mut transform, orbit);
-                *global = stage_global.mul_transform(*transform);
-                following.0 = None;
-                (Projection::default(), true)
+                (Projection::default(), switched)
             }
             None => continue,
         };
+        let pivot = match lens {
+            None => orbit.focus,
+            Some(_) => {
+                let character = armatures
+                    .iter()
+                    .find(|(armature, _)| stage_of.get(*armature) == Some(stage.parent()))
+                    .map(|(_, at)| {
+                        stage_global.affine().inverse().transform_point3(at.translation())
+                    });
+                let ahead = transform.forward();
+                let depth =
+                    character.map_or(3.0, |at| (at - transform.translation).dot(*ahead)).max(0.5);
+                transform.translation + ahead * depth
+            }
+        };
+        sway.apply(&mut transform, pivot);
+        *global = stage_global.mul_transform(*transform);
         for (camera, mut camera_global, mut projection, _) in
             cameras.iter_mut().filter(|(.., parent)| parent.parent() == view)
         {

@@ -347,7 +347,7 @@ pub(crate) fn aim(
 // Where the cursor is for one of the stage's own screens, and that screen's camera: the screen
 // the cursor is on, or, with the cursor on a monitor that shows something else, the stage's
 // nearest one, so that the character looks across to it.
-fn seen_from(
+pub(crate) fn seen_from(
     stage: Entity,
     at: CursorAt,
     screens: &Query<(&Screen, &ScreenParts, Option<&ScreenPlace>)>,

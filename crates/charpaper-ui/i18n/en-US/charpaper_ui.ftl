@@ -52,6 +52,8 @@ section-environment = ENVIRONMENT
 label-environment = Environment
 label-shadows = Shadows
 label-lock-orbit = Lock orbit
+label-parallax = Parallax
+label-parallax-strength = Strength
 
 ## Graphics tab
 
@@ -291,6 +293,8 @@ help-track = The environment's music playing now. Pick a track to play it.
 help-playback = Pauses the music, and plays it on from where it stopped.
 help-order = Which track comes next: the following one, any other, or the same again.
 help-lock-orbit = Keeps the orbit camera where it is: dragging and scrolling over the scene no longer move it.
+help-parallax = The camera leans a little towards the pointer, so the scene shows its depth. It drifts back to the middle once the mouse keeps still.
+help-parallax-strength = How far the camera leans. Higher shows more depth, and more of the scene's edges.
 help-panel = Point at a setting to see what it does. The mouse wheel over a value changes it.
 help-suite = Which character to show: one for each folder in the characters folder next to CharPaper.
 help-animation = What the character is doing.
