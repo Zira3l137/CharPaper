@@ -15,7 +15,7 @@ use crate::section::Section;
 use crate::theme::*;
 use crate::widgets::*;
 
-// The outfit section of the Scene tab: a tile per skin of the suite, and the worn skin's
+// The outfit section of the Character tab: a tile per skin of the suite, and the worn skin's
 // objects to switch on and off. Lists the suite gives rather than rows, so this keeps them up.
 pub(crate) struct OutfitPlugin;
 

@@ -57,7 +57,7 @@ and **Check** warns about a missing image or World beforehand:
   the panorama as it is, as Blender does at an exposure of 0.
 ## In the app
 
-- In the app's **Graphics** tab, while the environment shows: **Sky strength**, **Sky
+- In the app's **Look** tab, while the environment shows: **Sky strength**, **Sky
   rotation**, **Sun follows sky**, **Background** (how bright the sky looks behind the scene, apart from the
   light it gives; Off hides it) and **Background blur** (0% sharp to 100%, about what a
   Principled BSDF of Roughness 0.5 reflects; it needs the environment's reflection map).

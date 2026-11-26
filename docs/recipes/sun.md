@@ -8,7 +8,7 @@ An outdoor scene has two suns. One is **in the sky**: a bright spot in the pictu
 other is your **Sun light**: it lights the scene and casts the shadows. The scene looks
 right only when both point the same way, so that shadows fall away from the bright spot.
 
-In the app, anyone can turn the sky with **Graphics → Lighting → Sky rotation**. Left
+In the app, anyone can turn the sky with **Look → Lighting → Sky rotation**. Left
 alone, the sun in the picture would move and the shadows would stay where they were. So
 CharPaper turns your Sun light too. That's **Sun follows sky**, and it's on unless you
 turn it off.
@@ -84,7 +84,7 @@ Sites that sell or share HDRIs often say "unclipped" in the description. Poly Ha
      light: Blender draws a line out of it that shows which way it shines. Rotate it (*R*)
      until that line runs from the sun in the sky into the scene.
 5. **Export**, and open the environment in the app.
-6. **Check it.** Turn **Sky rotation** in Graphics → Lighting. The shadows should swing
+6. **Check it.** Turn **Sky rotation** in Look → Lighting. The shadows should swing
    round with the sky. `charpaper.log` says whether the sun was found.
 
 ## What turns the sun, and what doesn't
@@ -101,7 +101,7 @@ Sites that sell or share HDRIs often say "unclipped" in the description. Poly Ha
 
 ## Turning it off
 
-Untick **Sun follows sky** in Graphics → Lighting, or write
+Untick **Sun follows sky** in Look → Lighting, or write
 `sun_follows_sky = false` under the environment in suite.toml. The sun then stays
 exactly as Blender has it, however the sky turns.
 

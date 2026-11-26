@@ -3,7 +3,7 @@
 # A camera
 
 1. Select the camera object and press **+** under **Cameras**. It takes the camera and its
-   name, which is what the app's Scene tab shows.
+   name, which is what the app's Character tab shows.
 2. If it moves, pick its action in **Moves with**. A camera selected when you press **+**
    gets its current action filled in.
 3. Export it with its own button, or with *Export all*. A camera is written to
@@ -24,7 +24,7 @@ scene's frame range moves in step with the character's idle, and starts over wit
   may be animated and parented to the camera. Focus
   on the armature with a bone picked to keep, say, the head sharp.
 - Animated F-Stop or Focus Distance doesn't come over. Animate a focus empty instead.
-- The viewer can scale how much everything blurs with **Strength** in the Graphics tab.
+- The viewer can scale how much everything blurs with **Strength** under Depth of field in the Look tab.
   100% is your F-Stop exactly; 200% is as if you'd halved it. They can also keep what's in
   front of the focus sharp with **Foreground blur**.
 - No blur grows wider than the viewer's **Max size**, 64 pixels across on screen by

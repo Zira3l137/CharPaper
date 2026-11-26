@@ -132,7 +132,7 @@ anything under While, when its once-only clips end.
   out on top, so the reaction's last pose fades straight into it. Make the reaction end
   close to the new animation's pose: a stand-up should end standing.
 - **The character's Then is remembered.** It becomes the animation picked in the app's
-  Scene tab, as if the viewer had picked it, and is still playing after a restart.
+  Character tab, as if the viewer had picked it, and is still playing after a restart.
 - **A prop's Then lasts until its environment is shown again,** or the app restarts. Then
   the prop is back to its ★ clip.
 - **Nothing interrupts it.** Once a hotspot with a Then has gone off, no other hotspot goes

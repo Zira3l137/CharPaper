@@ -59,7 +59,7 @@ for a few seconds, and lets go of a pointer it can't turn to, such as one behind
   comes back when it ends. A reaction that turns the head towards something should have
   it unticked, or gaze pulls the head back to the cursor. See [A reaction](reaction.md).
 - The viewer can switch following off, or change its **Strength**, under **Cursor** in the
-  app's Scene tab.
+  app's Character tab.
 - Without a gaze section the character never follows the cursor, and the app hides
   those rows.
 

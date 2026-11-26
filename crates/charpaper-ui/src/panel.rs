@@ -82,7 +82,7 @@ enum PanelButton {
     Tab(Tab),
 }
 
-// On the reveal button and the System tab while a newer version waits for an answer, since
+// On the reveal button and the Settings tab while a newer version waits for an answer, since
 // the panel is the only place CharPaper can tell anyone.
 #[derive(Component)]
 struct UpdateDot;
@@ -155,10 +155,11 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
             .with_children(|panel| {
                 panel.spawn(header());
                 panel.spawn(tab_bar());
-                panel.spawn(page(Tab::Scene, ui.tab, tabs::scene::page()));
-                panel.spawn(page(Tab::Graphics, ui.tab, tabs::graphics::page()));
+                panel.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
+                panel.spawn(page(Tab::Look, ui.tab, tabs::graphics::look_page()));
                 panel.spawn(page(Tab::Sound, ui.tab, tabs::sound::page()));
-                panel.spawn(page(Tab::System, ui.tab, tabs::system::page()));
+                panel.spawn(page(Tab::Performance, ui.tab, tabs::graphics::performance_page()));
+                panel.spawn(page(Tab::Settings, ui.tab, tabs::settings::page()));
                 panel.spawn(footer());
             })
             .with_hover_feedback();
@@ -313,7 +314,13 @@ fn tab_bar() -> impl Bundle {
         },
         Stroke(BORDER),
         Pickable::IGNORE,
-        children![tab(Tab::Scene), tab(Tab::Graphics), tab(Tab::Sound), tab(Tab::System)],
+        children![
+            tab(Tab::Character),
+            tab(Tab::Look),
+            tab(Tab::Sound),
+            tab(Tab::Performance),
+            tab(Tab::Settings),
+        ],
     )
 }
 
@@ -623,7 +630,7 @@ fn add_update_dots(
     buttons: Query<(Entity, &PanelButton), Added<PanelButton>>,
 ) {
     for (button, kind) in &buttons {
-        if matches!(kind, PanelButton::Reveal | PanelButton::Tab(Tab::System)) {
+        if matches!(kind, PanelButton::Reveal | PanelButton::Tab(Tab::Settings)) {
             commands.entity(button).with_child((
                 Node {
                     position_type: PositionType::Absolute,
@@ -654,18 +661,20 @@ fn show_update_dots(update: Res<UpdateStatus>, mut dots: Query<&mut Node, With<U
 
 fn tab_icon(tab: Tab) -> Icon {
     match tab {
-        Tab::Scene => Icon::Character,
-        Tab::Graphics => Icon::Look,
+        Tab::Character => Icon::Character,
+        Tab::Look => Icon::Look,
         Tab::Sound => Icon::Sound,
-        Tab::System => Icon::Settings,
+        Tab::Performance => Icon::Performance,
+        Tab::Settings => Icon::Settings,
     }
 }
 
 fn tab_title(tab: Tab) -> Tr {
     match tab {
-        Tab::Scene => |l| fl!(l, "tab-scene"),
-        Tab::Graphics => |l| fl!(l, "tab-graphics"),
+        Tab::Character => |l| fl!(l, "tab-character"),
+        Tab::Look => |l| fl!(l, "tab-look"),
         Tab::Sound => |l| fl!(l, "tab-sound"),
-        Tab::System => |l| fl!(l, "tab-system"),
+        Tab::Performance => |l| fl!(l, "tab-performance"),
+        Tab::Settings => |l| fl!(l, "tab-settings"),
     }
 }

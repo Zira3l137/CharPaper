@@ -5,7 +5,7 @@
 **On this page:** [Adding clips](#adding-clips) · [How each clip plays](#how-each-clip-plays) · [A clip moves only what it keys](#a-clip-moves-only-what-it-keys) · [Loops that don't pop](#loops-that-dont-pop) · [Start every action empty](#start-every-action-empty) · [Slots (Blender 4.4 and newer)](#slots-blender-44-and-newer) · [Rigs, controls and IK](#rigs-controls-and-ik) · [What Check warns about](#what-check-warns-about)
 
 An animation is a Blender action on the armature. In the app it's a **clip**: something
-the viewer can pick in the Scene tab, or that a [hotspot](hotspots.md) plays.
+the viewer can pick in the Character tab, or that a [hotspot](hotspots.md) plays.
 
 ## Adding clips
 

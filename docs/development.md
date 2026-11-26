@@ -10,7 +10,7 @@ English is built in. To add a language:
    to `locales\<tag>\charpaper_ui.ftl` next to `charpaper.exe`, where `<tag>` is a
    language tag such as `de-DE`.
 2. Translate the text after each `=`. Leave the names before it as they are.
-3. Restart CharPaper and pick the language in **System → Interface**.
+3. Restart CharPaper and pick the language in **Settings → Interface**.
 
 A line you leave out shows in English, so a half-done translation works. Russian comes
 with the app. Translations are welcome as pull requests into [`locales/`](../locales).

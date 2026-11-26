@@ -43,7 +43,7 @@ pub struct Cli {
 
     /// The panel's language, as a tag such as `de-DE`, for a translation in
     /// `locales/` next to the executable. Remembered like a choice made in the
-    /// System tab. Defaults to the one last chosen, then to the system's.
+    /// Settings tab. Defaults to the one last chosen, then to the system's.
     #[arg(long, value_name = "TAG")]
     pub language: Option<String>,
 
@@ -55,7 +55,7 @@ pub struct Cli {
 
     /// Run in an ordinary window rather than behind the desktop icons.
     ///
-    /// Remembered like a choice made in the System tab, which switches back.
+    /// Remembered like a choice made in the Settings tab, which switches back.
     /// Use this while working on the scene, or when the wallpaper won't show.
     #[arg(long)]
     pub windowed: bool,

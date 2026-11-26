@@ -47,7 +47,7 @@ See also: [Hotspots](recipes/hotspots.md) Â· [A reaction](recipes/reaction.md) Â
 
 | What you see | Why, and what to do |
 |---|---|
-| Clicking does nothing | The hotspot works only during other animations (its **Only during** list); the viewer turned **Reactions** off in the Scene tab; the hotspot isn't in suite.toml (export all); the click was on the settings panel; or the hotspot's capsule is smaller than it looks. Check for the hotspot's warnings. |
+| Clicking does nothing | The hotspot works only during other animations (its **Only during** list); the viewer turned **Reactions** off in the Character tab; the hotspot isn't in suite.toml (export all); the click was on the settings panel; or the hotspot's capsule is smaller than it looks. Check for the hotspot's warnings. |
 | A reaction lasts much longer than its keys, and can't be set off again meanwhile | It plays *Timeline*, a face or corrective slot is keyed past the body, or the action's *Manual Frame Range* is on. See [How long it lasts](recipes/reaction.md#how-long-it-lasts). |
 | The reaction plays the idle, or the idle's face | The action was made with **New** while the idle was assigned, so it's a copy. Make a fresh empty action. |
 | A reaction freezes the rest of the body | It keys bones it doesn't move. Delete those keys. |
@@ -57,7 +57,7 @@ See also: [Hotspots](recipes/hotspots.md) Â· [A reaction](recipes/reaction.md) Â
 | The While loop plays once, then freezes | It's shorter than the scene range and doesn't repeat. Give its curves a **Cycles** modifier, or its action a **Manual Frame Range** of its own frames. |
 | The While loop starts mid-way through | A Timeline clip shows the timeline's frame. Make the loop even, so any point is a good start, or use a Hold pose. |
 | A click hotspot goes off on press, not on release | It has something under **While held down**: those go off as the button goes down, so the loop can start. |
-| After a hotspot with **Then**, the character stays in the new animation | That's what Then does, and the app remembers it as the viewer's pick. Give another hotspot a Then back, or pick the animation in the Scene tab. |
+| After a hotspot with **Then**, the character stays in the new animation | That's what Then does, and the app remembers it as the viewer's pick. Give another hotspot a Then back, or pick the animation in the Character tab. |
 | The character pops when Then takes over | The reaction ends far from the new animation's pose. Make its last frames match the new animation's first. |
 | Nothing else reacts while one hotspot plays | A hotspot with **Then** holds the others back until it has switched, so states can't be left half-done. |
 | A prop forgot its state | A prop switched by Then goes back to its â˜… clip when its environment is shown again, or the app restarts. |
@@ -72,7 +72,7 @@ See also: [Hair, clothes and tails that swing (physics)](recipes/physics.md)
 
 | What you see | Why, and what to do |
 |---|---|
-| Nothing swings | The viewer turned **Physics** off in the Scene tab; the chain isn't in suite.toml (export all); or its bones aren't on the outfit worn. Check for the chain's warnings, and look in `charpaper.log` for lines starting with `physics`. |
+| Nothing swings | The viewer turned **Physics** off in the Character tab; the chain isn't in suite.toml (export all); or its bones aren't on the outfit worn. Check for the chain's warnings, and look in `charpaper.log` for lines starting with `physics`. |
 | A chain swings with one outfit and not another | Its bones are only in one outfit. That's expected: it's skipped while the other is worn. |
 | Hair sinks into the body | No collider there, or the capsule is too thin, or the chain's **Radius** is too small. Add colliders on the bones it reaches, and look at their capsules from every side. |
 | Hair floats off the body, or jumps when the character loads | A capsule is too fat, or the chain's Radius too big. Check warns when a chain *starts inside a collider*. |
@@ -80,9 +80,9 @@ See also: [Hair, clothes and tails that swing (physics)](recipes/physics.md)
 | It's stiff, or lags behind the head like jelly | Lower **Stiffness** for more swing; raise it if a long chain trails too far behind. |
 | A ponytail pokes through the back of the head | The head's capsule ends short of the back of the skull. Raise its radius, or add one on the neck. With **High quality** on, the mesh itself is used. |
 | The pointer goes through a chain | Its **Cursor** is *Ignores it*, the viewer turned **Cursor pushes** off, or a mouse button is held (dragging turns the camera). |
-| A chain set to *Only the cursor moves it* never moves | **Cursor pushes** is off in the Scene tab, or the pointer crosses its bones between their tails: only the tails are pushed. Give it more, shorter bones, or a bigger **Radius**. |
+| A chain set to *Only the cursor moves it* never moves | **Cursor pushes** is off in the Character tab, or the pointer crosses its bones between their tails: only the tails are pushed. Give it more, shorter bones, or a bigger **Radius**. |
 | A chain fights the cursor or shakes | One of its bones is one gaze turns. Keep chains off gaze's bones. |
-| No wind in the app | **Wind** is off in the Scene tab; the force field isn't in the environment's collection, isn't a Wind field, or has a Strength of 0; or the environment wasn't exported again. |
+| No wind in the app | **Wind** is off in the Character tab; the force field isn't in the environment's collection, isn't a Wind field, or has a Strength of 0; or the environment wasn't exported again. |
 | High quality looks the same as without | It reads the outfit's file after it's put on, so give it a moment. Bones that no mesh is weighted to keep their capsule, and so do colliders the chains never touch. |
 
 ## Gaze
@@ -125,7 +125,7 @@ See also: [Fog and light shafts](recipes/fog.md)
 
 | What you see | Why, and what to do |
 |---|---|
-| The fog doesn't show | Nothing lights it: the environment has no sky, and no lamp lights the fog. A sun only does with *Shadow* on. Or **Fog** is off in the Graphics tab. |
+| The fog doesn't show | Nothing lights it: the environment has no sky, and no lamp lights the fog. A sun only does with *Shadow* on. Or **Fog** is off in the Look tab. |
 | Patchy fog shows as even fog | Its Density setup isn't one the app follows. **Check** says why. Only a Noise Texture's *Fac*, fBM, through Color Ramp, Map Range, Math and Float Curve nodes, works. |
 | The fog's noise repeats | The noise's Scale is beyond about 16 across the box. Lower it, or scale the Mapping node down. |
 
@@ -135,7 +135,7 @@ See also: [A camera](recipes/camera.md)
 
 | What you see | Why, and what to do |
 |---|---|
-| Nothing blurs, and Graphics has no Depth of field | The camera in use has no F-Stop: tick *Depth of Field* on the camera and export again. For the orbit camera, set `f_stop` under `[camera]`. |
+| Nothing blurs, and the Look tab has no Depth of field | The camera in use has no F-Stop: tick *Depth of Field* on the camera and export again. For the orbit camera, set `f_stop` under `[camera]`. |
 
 ## Sound and GIFs
 

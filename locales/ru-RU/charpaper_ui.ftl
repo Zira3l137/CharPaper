@@ -5,41 +5,41 @@ language-name = Русский
 
 ## Панель
 
-tab-scene = Сцена
-tab-graphics = Графика
+tab-character = Персонаж
+tab-look = Вид
 tab-sound = Звук
-tab-system = Система
+tab-performance = Качество
+tab-settings = Настройки
 
-## Вкладка «Сцена»
+## Вкладка «Персонаж»
 
 section-suite = ПЕРСОНАЖ
 label-suite = Персонаж
 section-outfit = ОДЕЖДА
 section-parts = ЧАСТИ
-section-animation = АНИМАЦИЯ
+section-pose = ПОЗА И ЛИЦО
+section-place = МЕСТО
 label-animation = Анимация
-section-expression = МИМИКА
 label-expression = Мимика
 section-gaze = ВЗГЛЯД
 label-follow-cursor = Следить за курсором
 label-gaze-strength = Сила
+label-reactions = Реакции
 section-physics = ФИЗИКА
 label-physics = Физика
 label-physics-quality = Высокое качество
 label-wind = Ветер
 label-physics-cursor = Курсор задевает
 expression-neutral = Нейтральная
-section-camera = КАМЕРА
 label-camera = Камера
 camera-orbit = Орбита
-section-environment = ОКРУЖЕНИЕ
 label-environment = Окружение
 label-shadows = Тени
 label-lock-orbit = Закрепить орбиту
 label-parallax = Параллакс
 label-parallax-strength = Сила
 
-## Вкладка «Графика»
+## Вкладки «Вид» и «Качество»
 
 section-lighting = ОСВЕЩЕНИЕ
 label-sky-strength = Сила неба
@@ -48,7 +48,9 @@ label-sun-follows-sky = Солнце по небу
 label-background = Фон
 label-background-blur = Размытие фона
 section-quality = КАЧЕСТВО
-label-preset = Пресет
+section-bloom = СВЕЧЕНИЕ
+section-ambient-occlusion = ЗАТЕНЕНИЕ ОКРУЖЕНИЯ
+section-advanced = ДОПОЛНИТЕЛЬНО
 label-render-scale = Масштаб рендера
 label-anti-aliasing = Сглаживание
 label-depth-of-field = Глубина резкости
@@ -76,8 +78,6 @@ label-stroke-width = Толщина
 label-stroke-strength = Сила
 label-stroke-creases = Сгибы
 label-stroke-hand-drawn = Как от руки
-section-post-processing = ПОСТОБРАБОТКА
-section-image = ИЗОБРАЖЕНИЕ
 label-tonemapping = Преобразование вида
 label-exposure = Экспозиция
 label-bloom = Свечение
@@ -96,6 +96,7 @@ label-vignette-size = Размер виньетки
 label-grain = Зерно
 label-grain-size = Размер зерна
 restore-look = Сбросить настройки
+look-edited = Вы изменили вид персонажа.
 value-blur = Размытие
 value-bokeh = Боке
 value-very-low = Очень низкое
@@ -111,6 +112,11 @@ preset-moderate = Умеренный
 preset-fancy = Красивый
 preset-best = Лучший
 preset-custom = Свой
+preset-fastest-note = Больше всего кадров, ничего затратного
+preset-moderate-note = Быстро и чуть красивее
+preset-fancy-note = Сначала картинка, но в меру
+preset-best-note = Всё на максимум
+preset-custom-note = Ваши настройки, сохранённые на потом
 value-every-frame = Каждый кадр
 value-every-other-frame = Через кадр
 value-distance-short = Короткая
@@ -140,7 +146,7 @@ value-in-order = По порядку
 value-shuffle = Вперемешку
 value-repeat-one = Повторять один
 
-## Вкладка «Система»
+## Вкладка «Настройки»
 
 section-app = ПРИЛОЖЕНИЕ
 label-mode = Показывать как
@@ -273,6 +279,7 @@ help-suite = Какого персонажа показывать: по одно
 help-animation = Что делает персонаж.
 help-expression = Выражение лица персонажа.
 help-follow-cursor = Персонаж поворачивает голову и глаза вслед за указателем мыши.
+help-reactions = Персонаж и сцена откликаются, когда вы щёлкаете по ним или задерживаете на них указатель.
 help-gaze-strength = Насколько сильно персонаж поворачивается к указателю. Меньше — спокойнее, больше — поворачивается раньше.
 help-physics = Волосы, одежда и хвосты раскачиваются сами, когда персонаж двигается. Выключено — двигаются только так, как анимированы.
 help-wind = Ветер окружения порывами развевает волосы и одежду.
@@ -303,7 +310,6 @@ help-lut = Готовая цветокоррекция из папки luts пе
 help-lut-strength = Насколько сильно применять цветокоррекцию.
 help-fps-limit = Сколько кадров в секунду рисовать. Меньше кадров — меньше расход энергии.
 help-monitor = Показывает вверху экрана, сколько каждый шаг отрисовки кадра стоит процессору и видеокарте и что есть в сцене.
-help-preset = Задаёт разом всё, что меняет красоту на скорость. Измените что-нибудь сами, и пресет станет «Свой», он сохранится на потом.
 help-render-scale = Рисует сцену в меньшем разрешении ради экономии энергии, как Resolution % в Blender. Панель остаётся чёткой.
 help-anti-aliasing = Сглаживает зубчатые края. TAA сглаживает лучше всех, но может смазывать движение. Затенение окружения не работает с 4x и скрыто, пока оно включено.
 help-shadow-quality = Насколько подробны тени, на всех сценах. Низкое быстрее всего, но края ступенчатые. Высокое занимает намного больше видеопамяти.

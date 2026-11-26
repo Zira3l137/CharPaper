@@ -93,7 +93,7 @@ Click a standing character and it sits; click it again and it stands.
 
 Only one of them works at a time, so each click does the right one. The character keeps
 sitting after a restart, since Then becomes the viewer's pick. The viewer can still pick
-either idle in the Scene tab.
+either idle in the Character tab.
 
 **Other hotspots that only fit one pose:** add the idle to their **Only during**: a knee
 poke made sitting, only during `Sit_Idle`.

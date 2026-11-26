@@ -1,12 +1,13 @@
 // A module per tab, each laying out its page of sections and rows. Rows need nothing else; a
 // tab's plugin only keeps up the few parts that are not rows, such as the outfit grid.
 
+pub(crate) mod character;
 pub(crate) mod graphics;
 mod look;
 pub(crate) mod outfit;
-pub(crate) mod scene;
+mod presets;
+pub(crate) mod settings;
 pub(crate) mod sound;
-pub(crate) mod system;
 
 use bevy::prelude::*;
 use charpaper_scene::ActiveLook;
@@ -41,7 +42,12 @@ pub(crate) struct TabsPlugin;
 
 impl Plugin for TabsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((outfit::OutfitPlugin, graphics::GraphicsPlugin, system::SystemPlugin));
+        app.add_plugins((
+            outfit::OutfitPlugin,
+            graphics::GraphicsPlugin,
+            presets::PresetsPlugin,
+            settings::SettingsPlugin,
+        ));
     }
 }
 

@@ -1,8 +1,12 @@
 use bevy::prelude::*;
+use bevy::text::Justify;
+use bevy::text::LineBreak;
 use charpaper_settings::UiState;
+use i18n_embed::fluent::FluentLanguageLoader;
 
 use crate::icons::Icon;
 use crate::icons::icon;
+use crate::locale::Locale;
 use crate::locale::Tr;
 use crate::panel::new_panel;
 use crate::row::DrawRows;
@@ -18,6 +22,7 @@ impl Plugin for SectionsPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_click)
             .add_systems(Update, show_folds.run_if(resource_changed::<UiState>.or_eager(new_panel)))
+            .add_systems(Update, show_summaries.run_if(crate::tabs::sources_changed))
             .add_systems(
                 PostUpdate,
                 fit_sections.after(DrawRows).before(bevy::ui::UiSystems::Prepare),
@@ -31,29 +36,29 @@ pub(crate) enum Section {
     Outfit,
     // The worn skin's objects, switched on and off one by one. Inside Outfit.
     Parts,
-    Animation,
-    Expression,
+    // Animation and expression.
+    Pose,
+    // Environment and camera.
+    Place,
     Gaze,
     Physics,
-    Camera,
-    Environment,
-    // Image, color and film together.
-    PostProcessing,
     Lighting,
-    Image,
     Color,
-    Film,
-    FrameRate,
-    Quality,
-    Fog,
+    Bloom,
     DepthOfField,
+    Fog,
+    AmbientOcclusion,
     Strokes,
+    Film,
+    Quality,
+    FrameRate,
     Pause,
+    Advanced,
     App,
     Display,
+    Interface,
     Sound,
     Music,
-    Interface,
 }
 
 impl Section {
@@ -63,28 +68,27 @@ impl Section {
             Section::Suite => "suite",
             Section::Outfit => "outfit",
             Section::Parts => "parts",
-            Section::Animation => "animation",
-            Section::Expression => "expression",
+            Section::Pose => "pose",
+            Section::Place => "place",
             Section::Gaze => "gaze",
             Section::Physics => "physics",
-            Section::Camera => "camera",
-            Section::Environment => "environment",
-            Section::PostProcessing => "post_processing",
             Section::Lighting => "lighting",
-            Section::Image => "image",
             Section::Color => "color",
-            Section::Film => "film",
-            Section::FrameRate => "frame_rate",
-            Section::Quality => "quality",
-            Section::Fog => "fog",
+            Section::Bloom => "bloom",
             Section::DepthOfField => "depth_of_field",
+            Section::Fog => "fog",
+            Section::AmbientOcclusion => "ambient_occlusion",
             Section::Strokes => "strokes",
+            Section::Film => "film",
+            Section::Quality => "quality",
+            Section::FrameRate => "frame_rate",
             Section::Pause => "pause",
+            Section::Advanced => "advanced",
             Section::App => "app",
             Section::Display => "display",
+            Section::Interface => "interface",
             Section::Sound => "sound",
             Section::Music => "music",
-            Section::Interface => "interface",
         }
     }
 
@@ -93,17 +97,20 @@ impl Section {
         ui.folded.get(self.key()).copied().unwrap_or_else(|| self.folded_by_default())
     }
 
-    // Fine-tuning starts folded, so a first look at the panel shows the main choices.
+    // Fine-tuning starts folded, so a first look at the panel shows the main choices. Each
+    // effect folds to a line saying whether it's on, so the Look tab reads as a list of them.
     fn folded_by_default(self) -> bool {
         matches!(
             self,
             Section::Parts
-                | Section::Image
                 | Section::Color
-                | Section::Film
-                | Section::Fog
+                | Section::Bloom
                 | Section::DepthOfField
-                | Section::Pause
+                | Section::Fog
+                | Section::AmbientOcclusion
+                | Section::Strokes
+                | Section::Film
+                | Section::Advanced
         )
     }
 }
@@ -119,6 +126,14 @@ struct Fold(Section);
 // The part that folds away under the title.
 #[derive(Component)]
 struct Body(Section);
+
+// What a folded section says of how it's set, from the world as rows read it. None while
+// there is nothing to say yet.
+pub(crate) type SummaryFn = fn(&World, &FluentLanguageLoader) -> Option<String>;
+
+// The line at the end of a section's title that says how it's set, while it's folded.
+#[derive(Component)]
+struct Summary(Section, Option<SummaryFn>);
 
 // The chevron at the end of the title, pointing down while the section is open.
 #[derive(Component)]
@@ -144,7 +159,34 @@ pub(crate) fn section(title: Tr, section: Section, content: impl Bundle) -> impl
         Node { display: Display::None, flex_direction: FlexDirection::Column, ..default() },
         section,
         Pickable::IGNORE,
-        children![fold_header(title, section, PANEL_BG), body],
+        children![fold_header(title, section, PANEL_BG, None), body],
+    )
+}
+
+// A section whose title, while it's folded, says how it's set.
+pub(crate) fn summarized(
+    title: Tr,
+    section: Section,
+    summary: SummaryFn,
+    content: impl Bundle,
+) -> impl Bundle {
+    let body = (
+        Node {
+            flex_direction: FlexDirection::Column,
+            padding: UiRect::axes(Val::Px(14.0), Val::Px(4.0)),
+            border_radius: BorderRadius::all(CARD_RADIUS),
+            ..default()
+        },
+        Fill(CARD_BG),
+        Body(section),
+        Pickable::IGNORE,
+        content,
+    );
+    (
+        Node { display: Display::None, flex_direction: FlexDirection::Column, ..default() },
+        section,
+        Pickable::IGNORE,
+        children![fold_header(title, section, PANEL_BG, Some(summary)), body],
     )
 }
 
@@ -165,13 +207,18 @@ pub(crate) fn subsection(title: Tr, section: Section, content: impl Bundle) -> i
         },
         section,
         Pickable::IGNORE,
-        children![fold_header(title, section, CARD_BG), body],
+        children![fold_header(title, section, CARD_BG, None), body],
     )
 }
 
 // The whole title row is the button. It's filled with what's behind it, which looks like no
 // fill at rest but gives hover feedback something to brighten.
-fn fold_header(title: Tr, section: Section, behind: Swatch) -> impl Bundle {
+fn fold_header(
+    title: Tr,
+    section: Section,
+    behind: Swatch,
+    summary: Option<SummaryFn>,
+) -> impl Bundle {
     (
         Node {
             height: Val::Px(28.0),
@@ -185,7 +232,19 @@ fn fold_header(title: Tr, section: Section, behind: Swatch) -> impl Bundle {
         Fill(behind),
         Fold(section),
         children![
-            translated(title, SMALL_SIZE, TEXT_DIM),
+            (translated(title, SMALL_SIZE, TEXT_DIM), Node { flex_shrink: 0.0, ..default() }),
+            (
+                label("", SMALL_SIZE, TEXT_DIM),
+                TextLayout::new(Justify::Right, LineBreak::NoWrap),
+                Node {
+                    flex_grow: 1.0,
+                    min_width: Val::ZERO,
+                    margin: UiRect::horizontal(Val::Px(8.0)),
+                    overflow: Overflow::clip(),
+                    ..default()
+                },
+                Summary(section, summary),
+            ),
             (icon(Icon::ChevronDown, CHEVRON_SIZE, TEXT_DIM), Chevron(section)),
         ],
     )
@@ -216,6 +275,30 @@ fn show_folds(
         let glyph = icon.glyph().to_string();
         if text.0 != glyph {
             text.0 = glyph;
+        }
+    }
+}
+
+// Every summary works its line out again, but a line is only written when it changed.
+fn show_summaries(world: &mut World, summaries: &mut QueryState<(Entity, &'static Summary)>) {
+    let lines: Vec<(Entity, String)> = {
+        let world: &World = world;
+        let ui = world.resource::<UiState>();
+        let locale: &FluentLanguageLoader = world.resource::<Locale>();
+        let line = |(entity, summary): (Entity, &Summary)| {
+            let text = match summary.1 {
+                Some(summarize) if summary.0.is_folded(ui) => summarize(world, locale)?,
+                _ => String::new(),
+            };
+            Some((entity, text))
+        };
+        summaries.iter(world).filter_map(line).collect()
+    };
+    for (entity, line) in lines {
+        if let Some(mut text) = world.get_mut::<Text>(entity)
+            && text.0 != line
+        {
+            text.0 = line;
         }
     }
 }

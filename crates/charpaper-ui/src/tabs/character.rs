@@ -26,16 +26,7 @@ const PARALLAX_STRENGTH: Scale =
 // What the focused stage shows, and from where: the suite and what the character wears and
 // does, the camera and the environment. Clicks write to its CharacterState.
 pub(crate) fn page() -> impl Bundle {
-    children![
-        suite(),
-        outfit::section(),
-        animation(),
-        expression(),
-        gaze(),
-        physics(),
-        camera(),
-        environment()
-    ]
+    children![suite(), outfit::section(), pose(), place(), gaze(), physics()]
 }
 
 fn suite() -> impl Bundle {
@@ -61,10 +52,10 @@ fn suite() -> impl Bundle {
     )
 }
 
-fn animation() -> impl Bundle {
+fn pose() -> impl Bundle {
     section(
-        |l| fl!(l, "section-animation"),
-        Section::Animation,
+        |l| fl!(l, "section-pose"),
+        Section::Pose,
         children![
             Setting {
                 label: |l| fl!(l, "label-animation"),
@@ -84,23 +75,91 @@ fn animation() -> impl Bundle {
                     w.edit(|state: &mut CharacterState| pick(&options, &mut state.animation, step));
                 },
             }
-            .picker()
-        ],
-    )
-}
-
-fn expression() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-expression"),
-        Section::Expression,
-        children![
+            .picker(),
             Setting {
                 label: |l| fl!(l, "label-expression"),
                 help: |l| fl!(l, "help-expression"),
                 show: show_expression,
                 change: change_expression,
             }
-            .picker()
+            .picker(),
+        ],
+    )
+}
+
+fn place() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-place"),
+        Section::Place,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-environment"),
+                help: |l| fl!(l, "help-environment"),
+                show: |w, _| {
+                    let options = environments(w)?;
+                    let current = held::current(w, Loads::Environment)?;
+                    Some(choice(&options, &current, name).when(options.len() > 1))
+                },
+                change: |w, step| {
+                    if let Some(options) = environments(w) {
+                        held::step(w, Loads::Environment, &options, step);
+                    }
+                },
+            }
+            .picker(),
+            Setting {
+                label: |l| fl!(l, "label-camera"),
+                help: |l| fl!(l, "help-camera"),
+                // The orbit camera alone is no choice.
+                show: |w, l| {
+                    let options = cameras(w)?;
+                    let current = held::current(w, Loads::Camera)?;
+                    let orbit = fl!(l, "camera-orbit");
+                    let label =
+                        |camera: &Option<String>| camera.clone().unwrap_or_else(|| orbit.clone());
+                    Some(choice(&options, &current, label).when(options.len() > 1))
+                },
+                change: |w, step| {
+                    if let Some(options) = cameras(w) {
+                        held::step(w, Loads::Camera, &options, step);
+                    }
+                },
+            }
+            .picker(),
+            // Only while the stage looks through the orbit camera.
+            Setting {
+                label: |l| fl!(l, "label-lock-orbit"),
+                help: |l| fl!(l, "help-lock-orbit"),
+                show: |w, l| {
+                    let orbit = w.focused::<CharacterState>()?.camera.is_none();
+                    Some(switch(l, w.focused::<ViewSettings>()?.locked).when(orbit))
+                },
+                change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.locked, step)),
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-parallax"),
+                help: |l| fl!(l, "help-parallax"),
+                show: |w, l| Some(switch(l, w.focused::<ViewSettings>()?.parallax)),
+                change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.parallax, step)),
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-parallax-strength"),
+                help: |l| fl!(l, "help-parallax-strength"),
+                show: |w, _| {
+                    let view = w.focused::<ViewSettings>()?;
+                    let strength = view.parallax_strength();
+                    Some(PARALLAX_STRENGTH.number(percent(strength), strength).when(view.parallax))
+                },
+                change: |w, step| {
+                    w.edit(|view: &mut ViewSettings| {
+                        view.parallax_strength =
+                            PARALLAX_STRENGTH.nudge(view.parallax_strength(), step);
+                    });
+                },
+            }
+            .stepper(),
         ],
     )
 }
@@ -232,93 +291,6 @@ fn physics() -> impl Bundle {
                 },
             }
             .switch()
-        ],
-    )
-}
-
-fn camera() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-camera"),
-        Section::Camera,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-camera"),
-                help: |l| fl!(l, "help-camera"),
-                // The orbit camera alone is no choice.
-                show: |w, l| {
-                    let options = cameras(w)?;
-                    let current = held::current(w, Loads::Camera)?;
-                    let orbit = fl!(l, "camera-orbit");
-                    let label =
-                        |camera: &Option<String>| camera.clone().unwrap_or_else(|| orbit.clone());
-                    Some(choice(&options, &current, label).when(options.len() > 1))
-                },
-                change: |w, step| {
-                    if let Some(options) = cameras(w) {
-                        held::step(w, Loads::Camera, &options, step);
-                    }
-                },
-            }
-            .picker(),
-            // Only while the stage looks through the orbit camera.
-            Setting {
-                label: |l| fl!(l, "label-lock-orbit"),
-                help: |l| fl!(l, "help-lock-orbit"),
-                show: |w, l| {
-                    let orbit = w.focused::<CharacterState>()?.camera.is_none();
-                    Some(switch(l, w.focused::<ViewSettings>()?.locked).when(orbit))
-                },
-                change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.locked, step)),
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-parallax"),
-                help: |l| fl!(l, "help-parallax"),
-                show: |w, l| Some(switch(l, w.focused::<ViewSettings>()?.parallax)),
-                change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.parallax, step)),
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-parallax-strength"),
-                help: |l| fl!(l, "help-parallax-strength"),
-                show: |w, _| {
-                    let view = w.focused::<ViewSettings>()?;
-                    let strength = view.parallax_strength();
-                    Some(PARALLAX_STRENGTH.number(percent(strength), strength).when(view.parallax))
-                },
-                change: |w, step| {
-                    w.edit(|view: &mut ViewSettings| {
-                        view.parallax_strength =
-                            PARALLAX_STRENGTH.nudge(view.parallax_strength(), step);
-                    });
-                },
-            }
-            .stepper(),
-        ],
-    )
-}
-
-fn environment() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-environment"),
-        Section::Environment,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-environment"),
-                help: |l| fl!(l, "help-environment"),
-                show: |w, _| {
-                    let options = environments(w)?;
-                    let current = held::current(w, Loads::Environment)?;
-                    Some(choice(&options, &current, name).when(options.len() > 1))
-                },
-                change: |w, step| {
-                    if let Some(options) = environments(w) {
-                        held::step(w, Loads::Environment, &options, step);
-                    }
-                },
-            }
-            .picker(),
-            // The stops look evenly spaced, so the bar follows them on a log scale too.
         ],
     )
 }

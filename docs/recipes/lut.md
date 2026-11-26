@@ -3,7 +3,7 @@
 # A color grade (LUT)
 
 Put `.cube` files, as Resolve, Photoshop and most grading apps export them, into `luts/`.
-They appear under **Graphics → Color → LUT**. To have one on from the start, name it in
+They appear under **Look → Color → LUT**. To have one on from the start, name it in
 suite.toml:
 
 ```toml

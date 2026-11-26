@@ -28,7 +28,7 @@ To update, see [Updating](#updating).
 ## The panel
 
 The panel sits at the right edge of the screen. The double arrow at its top hides it, and
-the small arrow button left on that edge brings it back. With **Auto-hide button** on in the System tab, that button
+the small arrow button left on that edge brings it back. With **Auto-hide button** on in the Settings tab, that button
 disappears a few seconds after you move the pointer away, and comes back as soon as you
 point at its spot on the edge.
 
@@ -42,23 +42,27 @@ point at its spot on the edge.
 
 | Tab | What's there |
 |-----|--------------|
-| **Scene** | Which character, its outfit and the outfit's parts, animation, expression, the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks), the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them), camera (and **Parallax**, the camera leaning towards the pointer), environment and shadows. |
-| **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (the preset, render scale, anti-aliasing, shadows, ambient occlusion), fog (density, quality, jitter, resolution), depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
+| **Character** | Which character, its outfit and the outfit's parts, **Pose & face** (animation and expression), **Place** (environment, camera, **Lock orbit**, and **Parallax**, the camera leaning towards the pointer), the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks) and the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them). |
+| **Look** | **Lighting** (sky strength and rotation, whether the sun follows the sky, the background and its blur, shadows), **Color** (view transform, exposure, white balance, saturation, contrast, LUT), then an effect to a section: bloom, depth of field, fog, ambient occlusion, ink strokes, and film (vignette, grain, aberration). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
-| **System** | Wallpaper or window, start with Windows, updates, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size, side and auto-hiding button. |
+| **Performance** | The quality preset, frame rate limit and render scale, when to pause, and in **Advanced** what the presets set one by one, with the performance overlay. |
+| **Settings** | Wallpaper or window, start with Windows, updates, monitors, and the panel's language, colors, size, side and auto-hiding button. |
 
 A row only shows when it has something to offer. No camera row means the character has no
 extra cameras; no **Follow cursor** row means its author didn't set gaze up, and no
 **Reactions** row means the character has no hotspots. The **Physics** section shows only
-for a character whose hair or clothes swing, and **Wind** only in an environment with wind. In **Graphics**, Fog
-shows only in an environment with fog, Depth of field only through a camera that asks for
-it, and Ambient occlusion only with a sky and anti-aliasing other than 4x, which it can't
-run with. A setting's finer rows hide while it's off.
+for a character whose hair or clothes swing, and **Wind** only in an environment with wind.
+Fog shows only in an environment with fog, Depth of field only through a camera that asks
+for it, and Ambient occlusion only with a sky and anti-aliasing other than 4x, which it
+can't run with. A setting's finer rows hide while it's off.
 
-**Restore defaults**, under Post processing, takes the picture back to how the
-character's author set it.
+Some sections start folded, and a folded section says at the end of its title how it's
+set, such as whether an effect is on. While you've changed how the character looks, a bar
+at the top of the Look tab offers **Restore defaults**, which takes the picture back to how
+the character's author set it.
 
-**Preset**, at the top of Quality, sets everything that trades looks for speed at once:
+The **Performance** tab opens with the presets, which set everything that trades looks for
+speed at once:
 
 - **Fastest** turns off everything costly (fog, depth of field, ambient occlusion) and the
   effects (bloom, strokes, vignette, grain, aberration), and draws at half resolution.
@@ -89,7 +93,7 @@ With the **Orbit** camera chosen (it's the one every character has):
 | Hold the **middle** button and drag | Slide the view sideways and up or down |
 | Turn the **wheel** | Move closer or farther |
 
-**Lock orbit** in the Scene tab switches all three off, so you can't nudge the view by
+**Lock orbit** in the Character tab switches all three off, so you can't nudge the view by
 accident. Cameras made by the character's author can't be moved.
 
 **Touching the character.** Some characters react when you click them, or rest the
@@ -100,15 +104,15 @@ press and let go without dragging, so turning the view never sets one off.
 
 A reaction can also change what the character does from then on: a click that makes it
 sit down, and another that makes it stand up. The animation it switches to shows in the
-Scene tab as if you had picked it, and you can pick another any time. **Reactions** in the
-Scene tab's **Cursor** section switches all of this off.
+Character tab as if you had picked it, and you can pick another any time. **Reactions** in the
+Character tab's **Cursor** section switches all of this off.
 
-**Brushing hair and clothes.** With **Cursor pushes** on in the Scene tab's **Physics**
+**Brushing hair and clothes.** With **Cursor pushes** on in the Character tab's **Physics**
 section, moving the pointer over the character's hair or clothes pushes them aside, as a
 hand would. It lets go a moment after you stop, and dragging to turn the view doesn't push
 anything.
 
-**Parallax.** Turn on **Parallax** in the Scene tab's camera rows and the camera leans a
+**Parallax.** Turn on **Parallax** in the Character tab's **Place** section and the camera leans a
 little towards the pointer, swinging around what it looks at, so the scene shows its depth:
 what's in front slides one way, what's behind the other. **Strength** sets how far. It
 works with the orbit camera and with the character's own cameras, pauses while you drag to
@@ -121,7 +125,7 @@ spot that reacts makes the character react too.
 
 ## Several monitors
 
-By default the wallpaper is on your main monitor only. In **System → Display** every
+By default the wallpaper is on your main monitor only. In **Settings → Display** every
 monitor has a button. Click it to step through **Stage A**, **Stage B**, …, and **Off**.
 
 - A **stage** is one scene: a character with its own outfit, camera, environment and
@@ -165,7 +169,7 @@ turn it on again after moving the folder.
 
 Each time it starts, CharPaper asks GitHub whether a newer version is out. Only finished
 versions count, never the nightly build or a test version. When there is one, a dot shows
-on the button that brings the panel back and on the **System** tab, and **System → App**
+on the button that brings the panel back and on the **Settings** tab, and **Settings → App**
 gets two more rows:
 
 - **New version** shows its number. Click it to see what changed since your version, in
@@ -199,14 +203,14 @@ Some things to know:
 - **A failed update puts the old files back.** In the rare case that this fails too,
   they're kept in a `charpaper-backup-…` folder next to `charpaper.exe`, and
   `charpaper.log` says what happened.
-- **To stop checking**, turn off **System → App → Check for updates**. CharPaper then
+- **To stop checking**, turn off **Settings → App → Check for updates**. CharPaper then
   never contacts GitHub. The check only asks which version is the latest, and sends
   nothing but CharPaper's own version number.
 
 ## When something goes wrong
 
 - **The wallpaper doesn't show.** Double-click `run-windowed.bat`. CharPaper opens in an
-  ordinary window and stays that way until you set **System → App → Show as** back to
+  ordinary window and stays that way until you set **Settings → App → Show as** back to
   Wallpaper.
 - **The screen is empty or dark blue.** There is no character in `characters`, or the one
   chosen failed to load. `charpaper.log` says which and why.
@@ -227,7 +231,7 @@ When reporting a problem, attach `charpaper.log`.
 
 | Option | What it does |
 |--------|--------------|
-| `--windowed` | Runs in an ordinary window. Remembered until you switch back in the System tab. |
+| `--windowed` | Runs in an ordinary window. Remembered until you switch back in the Settings tab. |
 | `--suite <name>` | Shows the character in `characters\<name>`. |
 | `--language <tag>` | Sets the panel's language, like `ru-RU`. Remembered. |
 | `--bake-environments <folder>` | Makes the missing sky files for every environment of the suite in that folder, then exits. With `--dry-run` it only lists them. |

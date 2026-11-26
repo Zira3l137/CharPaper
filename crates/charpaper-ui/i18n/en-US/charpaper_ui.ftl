@@ -19,20 +19,21 @@ language-name = English
 
 ## Panel
 
-tab-scene = Scene
-tab-graphics = Graphics
+tab-character = Character
+tab-look = Look
 tab-sound = Sound
-tab-system = System
+tab-performance = Performance
+tab-settings = Settings
 
-## Scene tab
+## Character tab
 
 section-suite = CHARACTER
 label-suite = Character
 section-outfit = OUTFIT
 section-parts = PARTS
-section-animation = ANIMATION
+section-pose = POSE & FACE
+section-place = PLACE
 label-animation = Animation
-section-expression = EXPRESSION
 label-expression = Expression
 section-gaze = CURSOR
 label-follow-cursor = Follow cursor
@@ -44,17 +45,15 @@ label-physics-quality = High quality
 label-wind = Wind
 label-physics-cursor = Cursor pushes
 expression-neutral = Neutral
-section-camera = CAMERA
 label-camera = Camera
 camera-orbit = Orbit
-section-environment = ENVIRONMENT
 label-environment = Environment
 label-shadows = Shadows
 label-lock-orbit = Lock orbit
 label-parallax = Parallax
 label-parallax-strength = Strength
 
-## Graphics tab
+## Look and Performance tabs
 
 section-lighting = LIGHTING
 label-sky-strength = Sky strength
@@ -63,7 +62,9 @@ label-sun-follows-sky = Sun follows sky
 label-background = Background
 label-background-blur = Background blur
 section-quality = QUALITY
-label-preset = Preset
+section-bloom = BLOOM
+section-ambient-occlusion = AMBIENT OCCLUSION
+section-advanced = ADVANCED
 label-render-scale = Render scale
 label-anti-aliasing = Anti-aliasing
 label-depth-of-field = Depth of field
@@ -91,8 +92,6 @@ label-stroke-width = Thickness
 label-stroke-strength = Strength
 label-stroke-creases = Creases
 label-stroke-hand-drawn = Hand-drawn
-section-post-processing = POST PROCESSING
-section-image = IMAGE
 label-tonemapping = View transform
 label-exposure = Exposure
 label-bloom = Bloom
@@ -111,6 +110,8 @@ label-vignette-size = Vignette size
 label-grain = Grain
 label-grain-size = Grain size
 restore-look = Restore defaults
+# Beside Restore defaults, while the viewer has changed the look.
+look-edited = You've changed how the character looks.
 value-blur = Blur
 value-bokeh = Bokeh
 value-very-low = Very low
@@ -126,6 +127,12 @@ preset-moderate = Moderate
 preset-fancy = Fancy
 preset-best = Best
 preset-custom = Custom
+# Under each preset's name on its card.
+preset-fastest-note = Most frames, nothing costly
+preset-moderate-note = Fast, and a little nicer
+preset-fancy-note = The picture first, within reason
+preset-best-note = Everything at its most
+preset-custom-note = Your own mix, kept for later
 value-every-frame = Every frame
 value-every-other-frame = Every other frame
 # Occlusion distance.
@@ -158,7 +165,7 @@ value-in-order = In order
 value-shuffle = Shuffle
 value-repeat-one = Repeat one
 
-## System tab
+## Settings tab
 
 section-app = APP
 label-mode = Show as
@@ -338,7 +345,6 @@ help-lut = A ready-made color grade from the character's luts folder, much like 
 help-lut-strength = How much of the color grade to apply.
 help-fps-limit = How many frames a second to draw. Fewer save power.
 help-monitor = Shows at the top of the screen what drawing each frame costs the CPU and GPU, step by step, and what the scene holds.
-help-preset = Sets everything that trades looks for speed at once. Change any of it yourself and it becomes Custom, kept for later.
 help-render-scale = Draws the scene at a lower resolution to save power, like Resolution % in Blender. The panel stays sharp.
 help-anti-aliasing = Smooths jagged edges. TAA is the smoothest but can smear what moves. Ambient occlusion can't run with 4x, so it hides while 4x is on.
 help-shadow-quality = How detailed shadows are, on every stage. Low is the fastest, with blocky edges. High takes much more video memory.

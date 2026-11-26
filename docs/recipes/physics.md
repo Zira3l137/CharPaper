@@ -160,7 +160,7 @@ over.
 
 ## What the viewer can change
 
-The app's **Scene** tab has a **Physics** section with four switches, saved for each
+The app's **Character** tab has a **Physics** section with four switches, saved for each
 monitor's scene:
 
 | Setting | What it does | Shows when |

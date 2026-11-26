@@ -3,7 +3,7 @@
 # A facial expression
 
 An expression is an action that keys **only shape keys**. The viewer picks it in the app's
-Scene tab and the face holds it, over whatever the body is doing. It can be a still face
+Character tab and the face holds it, over whatever the body is doing. It can be a still face
 (one keyframe) or a living one (a smile that blinks now and then): it loops on its own
 length for as long as it's picked.
 

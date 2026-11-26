@@ -14,8 +14,8 @@ use charpaper_settings::DepthOfFieldQuality;
 use charpaper_settings::DepthOfFieldShape;
 use charpaper_settings::FogQuality;
 use charpaper_settings::FogResolution;
+use charpaper_settings::FpsLimit;
 use charpaper_settings::Graphics;
-use charpaper_settings::Preset;
 use charpaper_settings::RENDER_SCALES;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
@@ -23,6 +23,7 @@ use charpaper_settings::ShadowUpdates;
 use charpaper_settings::StrokeStrength;
 use charpaper_settings::StrokeWidth;
 use charpaper_settings::Tuning;
+use charpaper_settings::UiState;
 use charpaper_suite::BackgroundBlur;
 use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
@@ -36,8 +37,9 @@ use crate::row::percent;
 use crate::row::*;
 use crate::section::Section;
 use crate::section::section;
-use crate::section::subsection;
+use crate::section::summarized;
 use crate::tabs::look::shown_environment;
+use crate::theme::*;
 use crate::widgets::*;
 
 const EXPOSURE: Scale = Scale { step: 0.5, min: -10.0, max: 10.0, per_unit: 10.0 };
@@ -70,7 +72,7 @@ const HIGHLIGHTS: Scale = Scale { step: 0.25, min: 0.0, max: 3.0, per_unit: 100.
 const SKY_STRENGTH_STOPS: [f32; 15] =
     [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0];
 
-// The button under the post-processing rows that drops the viewer's look edits.
+// The banner over the Look tab that drops the viewer's look edits.
 pub(crate) struct GraphicsPlugin;
 
 impl Plugin for GraphicsPlugin {
@@ -82,18 +84,164 @@ impl Plugin for GraphicsPlugin {
     }
 }
 
+// Shown while the viewer has changed the look.
+#[derive(Component)]
+struct RestoreBanner;
+
 #[derive(Component)]
 struct RestoreButton;
 
-// How finely the focused stage is drawn, which the app saves with the stage in its Graphics,
-// and how the picture is finished, in its look. Shadow quality is the exception: every stage
-// shares it. A preset sets all that trades looks for speed at once; changing any of it by hand
-// makes the mix the viewer's own, Custom.
-pub(crate) fn page() -> impl Bundle {
-    children![quality(), lighting(), fog(), depth_of_field(), strokes(), post_processing()]
+// How the picture looks: the light, the color, and an effect to a section, each folding away
+// to a line saying how it's set. Most of it is the look, which the app saves with the stage;
+// which effects show at all is the stage's Graphics, where the preset can keep them off.
+pub(crate) fn look_page() -> impl Bundle {
+    children![
+        restore_banner(),
+        light(),
+        color(),
+        bloom(),
+        depth_of_field(),
+        fog(),
+        ambient_occlusion(),
+        strokes(),
+        film(),
+    ]
 }
 
-fn lighting() -> impl Bundle {
+// How finely the focused stage is drawn and how often, which the app saves with the stage in
+// its Graphics, and when it stops. A preset sets all that trades looks for speed at once;
+// changing any of it by hand makes the mix the viewer's own, Custom. Shadow quality, the frame
+// rate and when to pause are shared by every stage.
+pub(crate) fn performance_page() -> impl Bundle {
+    children![super::presets::section(), frame_rate(), pause(), advanced()]
+}
+
+fn restore_banner() -> impl Bundle {
+    (
+        Node {
+            display: Display::None,
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(10.0),
+            padding: UiRect::new(Val::Px(14.0), Val::Px(8.0), Val::Px(8.0), Val::Px(8.0)),
+            border_radius: BorderRadius::all(CARD_RADIUS),
+            ..default()
+        },
+        Fill(SELECTED_BG),
+        Pickable::IGNORE,
+        RestoreBanner,
+        children![
+            (
+                translated(|l| fl!(l, "look-edited"), SMALL_SIZE, TEXT_LABEL),
+                Node { flex_grow: 1.0, min_width: Val::ZERO, ..default() },
+            ),
+            translated_button(|l| fl!(l, "restore-look")).build(RestoreButton),
+        ],
+    )
+}
+
+// Ambient occlusion only darkens the sky's light, and there is none without its maps. Bevy's
+// can't run with MSAA.
+fn occludable(world: &World, graphics: &Graphics) -> bool {
+    let sky_lit =
+        shown_environment(world).is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
+    sky_lit && graphics.anti_aliasing != AntiAliasing::Msaa4
+}
+
+// Fog only shows in an environment with fog boxes.
+fn foggy(world: &World) -> bool {
+    shown_environment(world).is_some_and(|e| !e.settings.fog.is_empty())
+}
+
+// The rows that tune the blur, while there is one.
+fn blurs(world: &World) -> bool {
+    has_lens(world) && world.focused::<Graphics>().is_some_and(|g| g.depth_of_field.enabled)
+}
+
+// Depth of field only for a camera whose lens asks for it, as the scene reads it.
+fn has_lens(world: &World) -> bool {
+    let (Some(state), Some(suite)) =
+        (world.focused::<CharacterState>(), world.focused::<ActiveSuite>())
+    else {
+        return false;
+    };
+    match state.camera.as_deref() {
+        None => suite.camera.f_stop.is_some(),
+        Some(name) => suite.cameras.iter().any(|c| c.name == name && c.settings.f_stop.is_some()),
+    }
+}
+
+// An intensity reads as a share of the strongest the row allows, Off at none.
+// The focused stage's graphics, with the settings every stage shares, which presets set too.
+pub(super) fn edit_graphics(
+    world: &mut World,
+    edit: impl FnOnce(&mut Graphics, &mut RenderSettings),
+) {
+    let mut render = world.resource::<RenderSettings>().clone();
+    world.edit(|graphics: &mut Graphics| edit(graphics, &mut render));
+    if *world.resource::<RenderSettings>() != render {
+        *world.resource_mut::<RenderSettings>() = render;
+    }
+}
+
+// Changes by hand something a preset sets. When anything did change, what is there now is the
+// viewer's own mix.
+fn tune(world: &mut World, change: impl FnOnce(&mut Graphics, &mut RenderSettings)) {
+    edit_graphics(world, |graphics, render| {
+        let before = Tuning::of(graphics, render);
+        change(graphics, render);
+        if Tuning::of(graphics, render) != before {
+            graphics.tuned_by_hand();
+        }
+    });
+}
+
+// How much of a look's effect shows: none while the preset keeps it from showing.
+fn showing(world: &World, amount: f32, allowed: fn(&Allowed) -> bool) -> f32 {
+    let shows = world.focused::<Graphics>().is_none_or(|g| allowed(&g.allowed));
+    if shows { amount } else { 0.0 }
+}
+
+// While the preset keeps a look's effect from showing, its row shows Off and turning it up
+// lets it show, at the look's own amount, rather than changing that amount. True when it took
+// the step.
+fn gated(world: &mut World, allowed: fn(&mut Allowed) -> &mut bool, step: &Step) -> bool {
+    let Some(mut now) = world.focused::<Graphics>().map(|g| g.allowed) else {
+        return false;
+    };
+    if *allowed(&mut now) {
+        return false;
+    }
+    if step.by() > 0 {
+        tune(world, |graphics, _| *allowed(&mut graphics.allowed) = true);
+    }
+    true
+}
+
+fn strength(l: &FluentLanguageLoader, value: f32, scale: Scale) -> Shown {
+    let text = if value <= 0.0 { on_off(l, false) } else { percent(value / scale.max) };
+    scale.number(text, value)
+}
+
+// None is no LUT.
+fn luts(world: &World) -> Option<Vec<Option<String>>> {
+    let suite = world.focused::<ActiveSuite>()?;
+    Some(std::iter::once(None).chain(suite.luts.iter().map(|l| Some(l.name.clone()))).collect())
+}
+
+fn tonemapping_name(tonemapping: Tonemapping) -> &'static str {
+    match tonemapping {
+        Tonemapping::None => "None",
+        Tonemapping::Reinhard => "Reinhard",
+        Tonemapping::ReinhardLuminance => "Reinhard lum.",
+        Tonemapping::AcesFitted => "ACES",
+        Tonemapping::Agx => "AgX",
+        Tonemapping::SomewhatBoringDisplayTransform => "Boring",
+        Tonemapping::TonyMcMapface => "TonyMcMapface",
+        Tonemapping::BlenderFilmic => "Filmic",
+    }
+}
+
+fn light() -> impl Bundle {
     section(
         |l| fl!(l, "section-lighting"),
         Section::Lighting,
@@ -226,514 +374,15 @@ fn lighting() -> impl Bundle {
                 },
             }
             .switch(),
-            Setting {
-                label: |l| fl!(l, "label-shadow-quality"),
-                help: |l| fl!(l, "help-shadow-quality"),
-                show: |w, l| {
-                    let current = w.resource::<RenderSettings>().shadow_quality;
-                    Some(choice(&ShadowQuality::ALL, &current, |quality| match quality {
-                        ShadowQuality::Low => fl!(l, "value-low"),
-                        ShadowQuality::Medium => fl!(l, "value-medium"),
-                        ShadowQuality::High => fl!(l, "value-high"),
-                    }))
-                },
-                change: |w, step| {
-                    tune(w, |_, render| {
-                        pick(&ShadowQuality::ALL, &mut render.shadow_quality, step)
-                    });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-shadow-updates"),
-                help: |l| fl!(l, "help-shadow-updates"),
-                show: |w, l| {
-                    let current = w.resource::<RenderSettings>().shadow_updates;
-                    Some(choice(&ShadowUpdates::ALL, &current, |updates| match updates {
-                        ShadowUpdates::EveryFrame => fl!(l, "value-every-frame"),
-                        ShadowUpdates::EveryOtherFrame => fl!(l, "value-every-other-frame"),
-                    }))
-                },
-                change: |w, step| {
-                    tune(w, |_, render| {
-                        pick(&ShadowUpdates::ALL, &mut render.shadow_updates, step)
-                    });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-ambient-occlusion"),
-                help: |l| fl!(l, "help-ambient-occlusion"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    Some(switch(l, graphics.ambient_occlusion).when(occludable(w, graphics)))
-                },
-                change: |w, step| tune(w, |g, _| flip(&mut g.ambient_occlusion, step)),
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-ambient-occlusion-quality"),
-                help: |l| fl!(l, "help-ambient-occlusion-quality"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    let current = graphics.ambient_occlusion_quality;
-                    let shown = graphics.ambient_occlusion && occludable(w, graphics);
-                    let label = |quality: &AmbientOcclusionQuality| match quality {
-                        AmbientOcclusionQuality::Low => fl!(l, "value-low"),
-                        AmbientOcclusionQuality::Medium => fl!(l, "value-medium"),
-                        AmbientOcclusionQuality::High => fl!(l, "value-high"),
-                        AmbientOcclusionQuality::Ultra => fl!(l, "value-ultra"),
-                    };
-                    Some(choice(&AmbientOcclusionQuality::ALL, &current, label).when(shown))
-                },
-                change: |w, step| {
-                    tune(w, |g, _| {
-                        pick(&AmbientOcclusionQuality::ALL, &mut g.ambient_occlusion_quality, step);
-                    });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-ambient-occlusion-softness"),
-                help: |l| fl!(l, "help-ambient-occlusion-softness"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    let current = graphics.ambient_occlusion_softness;
-                    let shown = graphics.ambient_occlusion && occludable(w, graphics);
-                    let label = |softness: &AmbientOcclusionSoftness| match softness {
-                        AmbientOcclusionSoftness::Sharp => fl!(l, "value-distance-short"),
-                        AmbientOcclusionSoftness::Medium => fl!(l, "value-distance-medium"),
-                        AmbientOcclusionSoftness::Soft => fl!(l, "value-distance-long"),
-                    };
-                    Some(choice(&AmbientOcclusionSoftness::ALL, &current, label).when(shown))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        let softness = &mut g.ambient_occlusion_softness;
-                        pick(&AmbientOcclusionSoftness::ALL, softness, step);
-                    });
-                },
-            }
-            .segments(),
         ],
     )
 }
 
-// Ambient occlusion only darkens the sky's light, and there is none without its maps. Bevy's
-// can't run with MSAA.
-fn occludable(world: &World, graphics: &Graphics) -> bool {
-    let sky_lit =
-        shown_environment(world).is_some_and(|e| e.sky().is_some() || e.reflections().is_some());
-    sky_lit && graphics.anti_aliasing != AntiAliasing::Msaa4
-}
-
-// Fog only shows in an environment with fog boxes.
-fn foggy(world: &World) -> bool {
-    shown_environment(world).is_some_and(|e| !e.settings.fog.is_empty())
-}
-
-// The rows that tune the blur, while there is one.
-fn blurs(world: &World) -> bool {
-    has_lens(world) && world.focused::<Graphics>().is_some_and(|g| g.depth_of_field.enabled)
-}
-
-// Depth of field only for a camera whose lens asks for it, as the scene reads it.
-fn has_lens(world: &World) -> bool {
-    let (Some(state), Some(suite)) =
-        (world.focused::<CharacterState>(), world.focused::<ActiveSuite>())
-    else {
-        return false;
-    };
-    match state.camera.as_deref() {
-        None => suite.camera.f_stop.is_some(),
-        Some(name) => suite.cameras.iter().any(|c| c.name == name && c.settings.f_stop.is_some()),
-    }
-}
-
-fn quality() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-quality"),
-        Section::Quality,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-preset"),
-                help: |l| fl!(l, "help-preset"),
-                show: |w, l| {
-                    let current = w.focused::<Graphics>()?.preset;
-                    Some(choice(&Preset::ALL, &current, |preset| match preset {
-                        Preset::Fastest => fl!(l, "preset-fastest"),
-                        Preset::Moderate => fl!(l, "preset-moderate"),
-                        Preset::Fancy => fl!(l, "preset-fancy"),
-                        Preset::Best => fl!(l, "preset-best"),
-                        Preset::Custom => fl!(l, "preset-custom"),
-                    }))
-                },
-                change: |w, step| {
-                    let Some(current) = w.focused::<Graphics>().map(|g| g.preset) else {
-                        return;
-                    };
-                    if let Some(preset) = stepped(&Preset::ALL, &current, step) {
-                        edit_graphics(w, |graphics, render| graphics.pick(preset, render));
-                    }
-                },
-            }
-            .picker(),
-            Setting {
-                label: |l| fl!(l, "label-render-scale"),
-                help: |l| fl!(l, "help-render-scale"),
-                show: |w, _| {
-                    let scale = w.focused::<Graphics>()?.scale_percent();
-                    Some(choice(&RENDER_SCALES, &scale, |scale| format!("{scale}%")))
-                },
-                change: |w, step| {
-                    tune(w, |graphics, _| {
-                        let mut scale = graphics.scale_percent();
-                        pick(&RENDER_SCALES, &mut scale, step);
-                        graphics.render_scale = scale;
-                    });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-anti-aliasing"),
-                help: |l| fl!(l, "help-anti-aliasing"),
-                show: |w, l| {
-                    let current = w.focused::<Graphics>()?.anti_aliasing;
-                    Some(choice(&AntiAliasing::ALL, &current, |aa| match aa {
-                        AntiAliasing::Off => on_off(l, false),
-                        AntiAliasing::Msaa4 => "4x".into(),
-                        AntiAliasing::Taa => "TAA".into(),
-                    }))
-                },
-                change: |w, step| {
-                    tune(w, |g, _| pick(&AntiAliasing::ALL, &mut g.anti_aliasing, step));
-                },
-            }
-            .segments(),
-        ],
-    )
-}
-
-fn depth_of_field() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-depth-of-field"),
-        Section::DepthOfField,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-depth-of-field"),
-                help: |l| fl!(l, "help-depth-of-field"),
-                show: |w, l| {
-                    let dof = w.focused::<Graphics>()?.depth_of_field;
-                    Some(switch(l, dof.enabled).when(has_lens(w)))
-                },
-                change: |w, step| {
-                    tune(w, |g, _| flip(&mut g.depth_of_field.enabled, step));
-                },
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-blur-shape"),
-                help: |l| fl!(l, "help-blur-shape"),
-                show: |w, l| {
-                    let dof = w.focused::<Graphics>()?.depth_of_field;
-                    let label = |shape: &DepthOfFieldShape| match shape {
-                        DepthOfFieldShape::Blur => fl!(l, "value-blur"),
-                        DepthOfFieldShape::Bokeh => fl!(l, "value-bokeh"),
-                    };
-                    Some(choice(&DepthOfFieldShape::ALL, &dof.shape, label).when(blurs(w)))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        pick(&DepthOfFieldShape::ALL, &mut g.depth_of_field.shape, step);
-                    });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-blur-strength"),
-                help: |l| fl!(l, "help-blur-strength"),
-                show: |w, _| {
-                    let dof = w.focused::<Graphics>()?.depth_of_field;
-                    let [min, .., max] = BLUR_STRENGTH_STOPS;
-                    let shown =
-                        number(percent(dof.strength), dof.strength.ln(), min.ln(), max.ln());
-                    Some(shown.when(blurs(w)))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        let dof = &mut g.depth_of_field;
-                        dof.strength = step_stops(&BLUR_STRENGTH_STOPS, dof.strength, step.by());
-                    });
-                },
-            }
-            .stepper(),
-            Setting {
-                label: |l| fl!(l, "label-max-blur"),
-                help: |l| fl!(l, "help-max-blur"),
-                show: |w, _| {
-                    let dof = w.focused::<Graphics>()?.depth_of_field;
-                    let [min, .., max] = MAX_BLUR_STOPS;
-                    let text = format!("{:.0} px", dof.max_blur);
-                    Some(number(text, dof.max_blur.ln(), min.ln(), max.ln()).when(blurs(w)))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        let dof = &mut g.depth_of_field;
-                        dof.max_blur = step_stops(&MAX_BLUR_STOPS, dof.max_blur, step.by());
-                    });
-                },
-            }
-            .stepper(),
-            Setting {
-                label: |l| fl!(l, "label-blur-quality"),
-                help: |l| fl!(l, "help-blur-quality"),
-                show: |w, l| {
-                    let dof = w.focused::<Graphics>()?.depth_of_field;
-                    let label = |quality: &DepthOfFieldQuality| match quality {
-                        DepthOfFieldQuality::Low => fl!(l, "value-low"),
-                        DepthOfFieldQuality::Medium => fl!(l, "value-medium"),
-                        DepthOfFieldQuality::High => fl!(l, "value-high"),
-                        DepthOfFieldQuality::Ultra => fl!(l, "value-ultra"),
-                    };
-                    Some(choice(&DepthOfFieldQuality::ALL, &dof.quality, label).when(blurs(w)))
-                },
-                change: |w, step| {
-                    tune(w, |g, _| {
-                        pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field.quality, step);
-                    });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-blur-foreground"),
-                help: |l| fl!(l, "help-blur-foreground"),
-                show: |w, l| {
-                    let dof = w.focused::<Graphics>()?.depth_of_field;
-                    Some(switch(l, dof.foreground).when(blurs(w)))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| flip(&mut g.depth_of_field.foreground, step));
-                },
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-bokeh-highlights"),
-                help: |l| fl!(l, "help-bokeh-highlights"),
-                show: |w, l| {
-                    let dof = w.focused::<Graphics>()?.depth_of_field;
-                    let text = if dof.highlights <= 0.0 {
-                        on_off(l, false)
-                    } else {
-                        percent(dof.highlights)
-                    };
-                    let bokeh = blurs(w) && dof.shape == DepthOfFieldShape::Bokeh;
-                    Some(HIGHLIGHTS.number(text, dof.highlights).when(bokeh))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        let dof = &mut g.depth_of_field;
-                        dof.highlights = HIGHLIGHTS.nudge(dof.highlights, step);
-                    });
-                },
-            }
-            .stepper(),
-        ],
-    )
-}
-
-fn strokes() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-strokes"),
-        Section::Strokes,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-strokes"),
-                help: |l| fl!(l, "help-strokes"),
-                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.draws_strokes())),
-                // Turning them on while the preset keeps them off lets them show.
-                change: |w, step| {
-                    let Some(mut on) = w.focused::<Graphics>().map(Graphics::draws_strokes) else {
-                        return;
-                    };
-                    flip(&mut on, step);
-                    tune(w, |g, _| {
-                        g.strokes = on;
-                        g.allowed.strokes |= on;
-                    });
-                },
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-stroke-width"),
-                help: |l| fl!(l, "help-stroke-width"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    let label = |width: &StrokeWidth| match width {
-                        StrokeWidth::Thin => fl!(l, "value-width-thin"),
-                        StrokeWidth::Medium => fl!(l, "value-width-medium"),
-                        StrokeWidth::Thick => fl!(l, "value-width-thick"),
-                    };
-                    let current = graphics.stroke_width;
-                    Some(choice(&StrokeWidth::ALL, &current, label).when(graphics.draws_strokes()))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| pick(&StrokeWidth::ALL, &mut g.stroke_width, step));
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-stroke-strength"),
-                help: |l| fl!(l, "help-stroke-strength"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    let label = |strength: &StrokeStrength| match strength {
-                        StrokeStrength::Light => fl!(l, "value-strength-light"),
-                        StrokeStrength::Medium => fl!(l, "value-strength-medium"),
-                        StrokeStrength::Strong => fl!(l, "value-strength-strong"),
-                    };
-                    let current = graphics.stroke_strength;
-                    Some(
-                        choice(&StrokeStrength::ALL, &current, label)
-                            .when(graphics.draws_strokes()),
-                    )
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        pick(&StrokeStrength::ALL, &mut g.stroke_strength, step);
-                    });
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-stroke-creases"),
-                help: |l| fl!(l, "help-stroke-creases"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    Some(switch(l, graphics.stroke_creases).when(graphics.draws_strokes()))
-                },
-                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_creases, step)),
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-stroke-hand-drawn"),
-                help: |l| fl!(l, "help-stroke-hand-drawn"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    Some(switch(l, graphics.stroke_hand_drawn).when(graphics.draws_strokes()))
-                },
-                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_hand_drawn, step)),
-            }
-            .switch(),
-        ],
-    )
-}
-
-fn fog() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-fog"),
-        Section::Fog,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-fog"),
-                help: |l| fl!(l, "help-fog"),
-                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.fog).when(foggy(w))),
-                change: |w, step| tune(w, |g, _| flip(&mut g.fog, step)),
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-fog-density"),
-                help: |l| fl!(l, "help-fog-density"),
-                show: |w, _| {
-                    let graphics = w.focused::<Graphics>()?;
-                    let density = graphics.fog_density;
-                    let [min, .., max] = FOG_DENSITY_STOPS;
-                    let shown = number(percent(density), density.ln(), min.ln(), max.ln());
-                    Some(shown.when(graphics.fog && foggy(w)))
-                },
-                change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        g.fog_density = step_stops(&FOG_DENSITY_STOPS, g.fog_density, step.by());
-                    });
-                },
-            }
-            .stepper(),
-            Setting {
-                label: |l| fl!(l, "label-fog-quality"),
-                help: |l| fl!(l, "help-fog-quality"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    let label = |quality: &FogQuality| match quality {
-                        FogQuality::VeryLow => fl!(l, "value-very-low"),
-                        FogQuality::Low => fl!(l, "value-low"),
-                        FogQuality::Medium => fl!(l, "value-medium"),
-                        FogQuality::High => fl!(l, "value-high"),
-                        FogQuality::Ultra => fl!(l, "value-ultra"),
-                    };
-                    let shown = graphics.fog && foggy(w);
-                    Some(choice(&FogQuality::ALL, &graphics.fog_quality, label).when(shown))
-                },
-                change: |w, step| {
-                    tune(w, |g, _| pick(&FogQuality::ALL, &mut g.fog_quality, step));
-                },
-            }
-            .picker(),
-            Setting {
-                label: |l| fl!(l, "label-fog-dithering"),
-                help: |l| fl!(l, "help-fog-dithering"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    Some(switch(l, graphics.fog_dithering).when(graphics.fog && foggy(w)))
-                },
-                change: |w, step| tune(w, |g, _| flip(&mut g.fog_dithering, step)),
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-fog-resolution"),
-                help: |l| fl!(l, "help-fog-resolution"),
-                show: |w, l| {
-                    let graphics = w.focused::<Graphics>()?;
-                    let label = |resolution: &FogResolution| match resolution {
-                        FogResolution::Full => fl!(l, "value-full"),
-                        FogResolution::Half => fl!(l, "value-half"),
-                        FogResolution::Quarter => fl!(l, "value-quarter"),
-                    };
-                    let current = graphics.fog_resolution;
-                    let shown = graphics.fog && foggy(w);
-                    Some(choice(&FogResolution::ALL, &current, label).when(shown))
-                },
-                change: |w, step| {
-                    tune(w, |g, _| pick(&FogResolution::ALL, &mut g.fog_resolution, step));
-                },
-            }
-            .segments(),
-        ],
-    )
-}
-
-// Image, color and film, each folding on its own inside.
-fn post_processing() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-post-processing"),
-        Section::PostProcessing,
-        children![(
-            Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(12.0), ..default() },
-            Pickable::IGNORE,
-            children![
-                image(),
-                color(),
-                film(),
-                translated_button(|l| fl!(l, "restore-look"))
-                    .node(|n| n.display = Display::None)
-                    .build(RestoreButton),
-            ],
-        )],
-    )
-}
-
-fn image() -> impl Bundle {
-    subsection(
-        |l| fl!(l, "section-image"),
-        Section::Image,
+fn color() -> impl Bundle {
+    summarized(
+        |l| fl!(l, "section-color"),
+        Section::Color,
+        color_summary,
         children![
             Setting {
                 label: |l| fl!(l, "label-tonemapping"),
@@ -772,65 +421,6 @@ fn image() -> impl Bundle {
                 },
             }
             .stepper(),
-            Setting {
-                label: |l| fl!(l, "label-bloom"),
-                help: |l| fl!(l, "help-bloom"),
-                show: |w, l| Some(strength(l, showing(w, resolved(w)?.bloom, |a| a.bloom), BLOOM)),
-                change: |w, step| {
-                    if gated(w, |a| &mut a.bloom, step) {
-                        return;
-                    }
-                    edit_look(w, |look, current, _| {
-                        look.post.bloom = Some(BLOOM.nudge(current.bloom, step));
-                    });
-                },
-            }
-            .stepper(),
-            // Does nothing with bloom off.
-            Setting {
-                label: |l| fl!(l, "label-bloom-threshold"),
-                help: |l| fl!(l, "help-bloom-threshold"),
-                show: |w, _| {
-                    let current = resolved(w)?;
-                    let threshold = current.bloom_threshold;
-                    let shown = BLOOM_THRESHOLD.number(format!("{threshold:.1}"), threshold);
-                    Some(shown.when(showing(w, current.bloom, |a| a.bloom) > 0.0))
-                },
-                change: |w, step| {
-                    edit_look(w, |look, current, _| {
-                        let threshold = BLOOM_THRESHOLD.nudge(current.bloom_threshold, step);
-                        look.post.bloom_threshold = Some(threshold);
-                    });
-                },
-            }
-            .stepper(),
-            Setting {
-                label: |l| fl!(l, "label-chromatic-aberration"),
-                help: |l| fl!(l, "help-chromatic-aberration"),
-                show: |w, l| {
-                    let amount = resolved(w)?.chromatic_aberration;
-                    Some(strength(l, showing(w, amount, |a| a.chromatic_aberration), ABERRATION))
-                },
-                change: |w, step| {
-                    if gated(w, |a| &mut a.chromatic_aberration, step) {
-                        return;
-                    }
-                    edit_look(w, |look, current, _| {
-                        let aberration = ABERRATION.nudge(current.chromatic_aberration, step);
-                        look.post.chromatic_aberration = Some(aberration);
-                    });
-                },
-            }
-            .stepper(),
-        ],
-    )
-}
-
-fn color() -> impl Bundle {
-    subsection(
-        |l| fl!(l, "section-color"),
-        Section::Color,
-        children![
             Setting {
                 label: |l| fl!(l, "label-warmth"),
                 help: |l| fl!(l, "help-warmth"),
@@ -936,10 +526,325 @@ fn color() -> impl Bundle {
     )
 }
 
+fn bloom() -> impl Bundle {
+    summarized(
+        |l| fl!(l, "section-bloom"),
+        Section::Bloom,
+        bloom_summary,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-bloom"),
+                help: |l| fl!(l, "help-bloom"),
+                show: |w, l| Some(strength(l, showing(w, resolved(w)?.bloom, |a| a.bloom), BLOOM)),
+                change: |w, step| {
+                    if gated(w, |a| &mut a.bloom, step) {
+                        return;
+                    }
+                    edit_look(w, |look, current, _| {
+                        look.post.bloom = Some(BLOOM.nudge(current.bloom, step));
+                    });
+                },
+            }
+            .stepper(),
+            // Does nothing with bloom off.
+            Setting {
+                label: |l| fl!(l, "label-bloom-threshold"),
+                help: |l| fl!(l, "help-bloom-threshold"),
+                show: |w, _| {
+                    let current = resolved(w)?;
+                    let threshold = current.bloom_threshold;
+                    let shown = BLOOM_THRESHOLD.number(format!("{threshold:.1}"), threshold);
+                    Some(shown.when(showing(w, current.bloom, |a| a.bloom) > 0.0))
+                },
+                change: |w, step| {
+                    edit_look(w, |look, current, _| {
+                        let threshold = BLOOM_THRESHOLD.nudge(current.bloom_threshold, step);
+                        look.post.bloom_threshold = Some(threshold);
+                    });
+                },
+            }
+            .stepper(),
+        ],
+    )
+}
+
+fn depth_of_field() -> impl Bundle {
+    summarized(
+        |l| fl!(l, "section-depth-of-field"),
+        Section::DepthOfField,
+        depth_of_field_summary,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-depth-of-field"),
+                help: |l| fl!(l, "help-depth-of-field"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    Some(switch(l, dof.enabled).when(has_lens(w)))
+                },
+                change: |w, step| {
+                    tune(w, |g, _| flip(&mut g.depth_of_field.enabled, step));
+                },
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-blur-shape"),
+                help: |l| fl!(l, "help-blur-shape"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let label = |shape: &DepthOfFieldShape| match shape {
+                        DepthOfFieldShape::Blur => fl!(l, "value-blur"),
+                        DepthOfFieldShape::Bokeh => fl!(l, "value-bokeh"),
+                    };
+                    Some(choice(&DepthOfFieldShape::ALL, &dof.shape, label).when(blurs(w)))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        pick(&DepthOfFieldShape::ALL, &mut g.depth_of_field.shape, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-blur-strength"),
+                help: |l| fl!(l, "help-blur-strength"),
+                show: |w, _| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let [min, .., max] = BLUR_STRENGTH_STOPS;
+                    let shown =
+                        number(percent(dof.strength), dof.strength.ln(), min.ln(), max.ln());
+                    Some(shown.when(blurs(w)))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let dof = &mut g.depth_of_field;
+                        dof.strength = step_stops(&BLUR_STRENGTH_STOPS, dof.strength, step.by());
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-blur-foreground"),
+                help: |l| fl!(l, "help-blur-foreground"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    Some(switch(l, dof.foreground).when(blurs(w)))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| flip(&mut g.depth_of_field.foreground, step));
+                },
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-max-blur"),
+                help: |l| fl!(l, "help-max-blur"),
+                show: |w, _| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let [min, .., max] = MAX_BLUR_STOPS;
+                    let text = format!("{:.0} px", dof.max_blur);
+                    Some(number(text, dof.max_blur.ln(), min.ln(), max.ln()).when(blurs(w)))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let dof = &mut g.depth_of_field;
+                        dof.max_blur = step_stops(&MAX_BLUR_STOPS, dof.max_blur, step.by());
+                    });
+                },
+            }
+            .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-bokeh-highlights"),
+                help: |l| fl!(l, "help-bokeh-highlights"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let text = if dof.highlights <= 0.0 {
+                        on_off(l, false)
+                    } else {
+                        percent(dof.highlights)
+                    };
+                    let bokeh = blurs(w) && dof.shape == DepthOfFieldShape::Bokeh;
+                    Some(HIGHLIGHTS.number(text, dof.highlights).when(bokeh))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let dof = &mut g.depth_of_field;
+                        dof.highlights = HIGHLIGHTS.nudge(dof.highlights, step);
+                    });
+                },
+            }
+            .stepper(),
+        ],
+    )
+}
+
+fn fog() -> impl Bundle {
+    summarized(
+        |l| fl!(l, "section-fog"),
+        Section::Fog,
+        fog_summary,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-fog"),
+                help: |l| fl!(l, "help-fog"),
+                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.fog).when(foggy(w))),
+                change: |w, step| tune(w, |g, _| flip(&mut g.fog, step)),
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-fog-density"),
+                help: |l| fl!(l, "help-fog-density"),
+                show: |w, _| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let density = graphics.fog_density;
+                    let [min, .., max] = FOG_DENSITY_STOPS;
+                    let shown = number(percent(density), density.ln(), min.ln(), max.ln());
+                    Some(shown.when(graphics.fog && foggy(w)))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        g.fog_density = step_stops(&FOG_DENSITY_STOPS, g.fog_density, step.by());
+                    });
+                },
+            }
+            .stepper(),
+        ],
+    )
+}
+
+fn ambient_occlusion() -> impl Bundle {
+    summarized(
+        |l| fl!(l, "section-ambient-occlusion"),
+        Section::AmbientOcclusion,
+        ambient_occlusion_summary,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-ambient-occlusion"),
+                help: |l| fl!(l, "help-ambient-occlusion"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    Some(switch(l, graphics.ambient_occlusion).when(occludable(w, graphics)))
+                },
+                change: |w, step| tune(w, |g, _| flip(&mut g.ambient_occlusion, step)),
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-ambient-occlusion-softness"),
+                help: |l| fl!(l, "help-ambient-occlusion-softness"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let current = graphics.ambient_occlusion_softness;
+                    let shown = graphics.ambient_occlusion && occludable(w, graphics);
+                    let label = |softness: &AmbientOcclusionSoftness| match softness {
+                        AmbientOcclusionSoftness::Sharp => fl!(l, "value-distance-short"),
+                        AmbientOcclusionSoftness::Medium => fl!(l, "value-distance-medium"),
+                        AmbientOcclusionSoftness::Soft => fl!(l, "value-distance-long"),
+                    };
+                    Some(choice(&AmbientOcclusionSoftness::ALL, &current, label).when(shown))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        let softness = &mut g.ambient_occlusion_softness;
+                        pick(&AmbientOcclusionSoftness::ALL, softness, step);
+                    });
+                },
+            }
+            .segments(),
+        ],
+    )
+}
+
+fn strokes() -> impl Bundle {
+    summarized(
+        |l| fl!(l, "section-strokes"),
+        Section::Strokes,
+        strokes_summary,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-strokes"),
+                help: |l| fl!(l, "help-strokes"),
+                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.draws_strokes())),
+                // Turning them on while the preset keeps them off lets them show.
+                change: |w, step| {
+                    let Some(mut on) = w.focused::<Graphics>().map(Graphics::draws_strokes) else {
+                        return;
+                    };
+                    flip(&mut on, step);
+                    tune(w, |g, _| {
+                        g.strokes = on;
+                        g.allowed.strokes |= on;
+                    });
+                },
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-width"),
+                help: |l| fl!(l, "help-stroke-width"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let label = |width: &StrokeWidth| match width {
+                        StrokeWidth::Thin => fl!(l, "value-width-thin"),
+                        StrokeWidth::Medium => fl!(l, "value-width-medium"),
+                        StrokeWidth::Thick => fl!(l, "value-width-thick"),
+                    };
+                    let current = graphics.stroke_width;
+                    Some(choice(&StrokeWidth::ALL, &current, label).when(graphics.draws_strokes()))
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| pick(&StrokeWidth::ALL, &mut g.stroke_width, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-strength"),
+                help: |l| fl!(l, "help-stroke-strength"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let label = |strength: &StrokeStrength| match strength {
+                        StrokeStrength::Light => fl!(l, "value-strength-light"),
+                        StrokeStrength::Medium => fl!(l, "value-strength-medium"),
+                        StrokeStrength::Strong => fl!(l, "value-strength-strong"),
+                    };
+                    let current = graphics.stroke_strength;
+                    Some(
+                        choice(&StrokeStrength::ALL, &current, label)
+                            .when(graphics.draws_strokes()),
+                    )
+                },
+                change: |w, step| {
+                    w.edit(|g: &mut Graphics| {
+                        pick(&StrokeStrength::ALL, &mut g.stroke_strength, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-creases"),
+                help: |l| fl!(l, "help-stroke-creases"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    Some(switch(l, graphics.stroke_creases).when(graphics.draws_strokes()))
+                },
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_creases, step)),
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-stroke-hand-drawn"),
+                help: |l| fl!(l, "help-stroke-hand-drawn"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    Some(switch(l, graphics.stroke_hand_drawn).when(graphics.draws_strokes()))
+                },
+                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_hand_drawn, step)),
+            }
+            .switch(),
+        ],
+    )
+}
+
 fn film() -> impl Bundle {
-    subsection(
+    summarized(
         |l| fl!(l, "section-film"),
         Section::Film,
+        film_summary,
         children![
             Setting {
                 label: |l| fl!(l, "label-vignette"),
@@ -1010,83 +915,320 @@ fn film() -> impl Bundle {
                 },
             }
             .stepper(),
+            Setting {
+                label: |l| fl!(l, "label-chromatic-aberration"),
+                help: |l| fl!(l, "help-chromatic-aberration"),
+                show: |w, l| {
+                    let amount = resolved(w)?.chromatic_aberration;
+                    Some(strength(l, showing(w, amount, |a| a.chromatic_aberration), ABERRATION))
+                },
+                change: |w, step| {
+                    if gated(w, |a| &mut a.chromatic_aberration, step) {
+                        return;
+                    }
+                    edit_look(w, |look, current, _| {
+                        let aberration = ABERRATION.nudge(current.chromatic_aberration, step);
+                        look.post.chromatic_aberration = Some(aberration);
+                    });
+                },
+            }
+            .stepper(),
         ],
     )
 }
 
-// An intensity reads as a share of the strongest the row allows, Off at none.
-// The focused stage's graphics, with the settings every stage shares, which presets set too.
-fn edit_graphics(world: &mut World, edit: impl FnOnce(&mut Graphics, &mut RenderSettings)) {
-    let mut render = world.resource::<RenderSettings>().clone();
-    world.edit(|graphics: &mut Graphics| edit(graphics, &mut render));
-    if *world.resource::<RenderSettings>() != render {
-        *world.resource_mut::<RenderSettings>() = render;
-    }
+fn frame_rate() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-frame-rate"),
+        Section::FrameRate,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-fps-limit"),
+                help: |l| fl!(l, "help-fps-limit"),
+                show: |w, l| {
+                    let current = w.resource::<RenderSettings>().fps_limit;
+                    Some(choice(&FpsLimit::ALL, &current, |limit| match limit.per_second() {
+                        Some(fps) => format!("{fps:.0}"),
+                        None => fl!(l, "value-max"),
+                    }))
+                },
+                change: |w, step| {
+                    let mut settings = w.resource_mut::<RenderSettings>();
+                    pick(&FpsLimit::ALL, &mut settings.fps_limit, step);
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-render-scale"),
+                help: |l| fl!(l, "help-render-scale"),
+                show: |w, _| {
+                    let scale = w.focused::<Graphics>()?.scale_percent();
+                    Some(choice(&RENDER_SCALES, &scale, |scale| format!("{scale}%")))
+                },
+                change: |w, step| {
+                    tune(w, |graphics, _| {
+                        let mut scale = graphics.scale_percent();
+                        pick(&RENDER_SCALES, &mut scale, step);
+                        graphics.render_scale = scale;
+                    });
+                },
+            }
+            .segments(),
+        ],
+    )
 }
 
-// Changes by hand something a preset sets. When anything did change, what is there now is the
-// viewer's own mix.
-fn tune(world: &mut World, change: impl FnOnce(&mut Graphics, &mut RenderSettings)) {
-    edit_graphics(world, |graphics, render| {
-        let before = Tuning::of(graphics, render);
-        change(graphics, render);
-        if Tuning::of(graphics, render) != before {
-            graphics.tuned_by_hand();
-        }
-    });
+fn pause() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-pause"),
+        Section::Pause,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-pause-fullscreen"),
+                help: |l| fl!(l, "help-pause-fullscreen"),
+                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_when_fullscreen)),
+                change: |w, step| {
+                    flip(&mut w.resource_mut::<RenderSettings>().pause_when_fullscreen, step);
+                },
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-pause-covered"),
+                help: |l| fl!(l, "help-pause-covered"),
+                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_when_covered)),
+                change: |w, step| {
+                    flip(&mut w.resource_mut::<RenderSettings>().pause_when_covered, step);
+                },
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-pause-battery"),
+                help: |l| fl!(l, "help-pause-battery"),
+                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_on_battery)),
+                change: |w, step| {
+                    flip(&mut w.resource_mut::<RenderSettings>().pause_on_battery, step);
+                },
+            }
+            .switch(),
+        ],
+    )
 }
 
-// How much of a look's effect shows: none while the preset keeps it from showing.
-fn showing(world: &World, amount: f32, allowed: fn(&Allowed) -> bool) -> f32 {
-    let shows = world.focused::<Graphics>().is_none_or(|g| allowed(&g.allowed));
-    if shows { amount } else { 0.0 }
+// What presets set beyond the frame rate and render scale, for fine-tuning by hand, and the
+// overlay that shows what each of them costs.
+fn advanced() -> impl Bundle {
+    section(
+        |l| fl!(l, "section-advanced"),
+        Section::Advanced,
+        children![
+            Setting {
+                label: |l| fl!(l, "label-anti-aliasing"),
+                help: |l| fl!(l, "help-anti-aliasing"),
+                show: |w, l| {
+                    let current = w.focused::<Graphics>()?.anti_aliasing;
+                    Some(choice(&AntiAliasing::ALL, &current, |aa| match aa {
+                        AntiAliasing::Off => on_off(l, false),
+                        AntiAliasing::Msaa4 => "4x".into(),
+                        AntiAliasing::Taa => "TAA".into(),
+                    }))
+                },
+                change: |w, step| {
+                    tune(w, |g, _| pick(&AntiAliasing::ALL, &mut g.anti_aliasing, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-shadow-quality"),
+                help: |l| fl!(l, "help-shadow-quality"),
+                show: |w, l| {
+                    let current = w.resource::<RenderSettings>().shadow_quality;
+                    Some(choice(&ShadowQuality::ALL, &current, |quality| match quality {
+                        ShadowQuality::Low => fl!(l, "value-low"),
+                        ShadowQuality::Medium => fl!(l, "value-medium"),
+                        ShadowQuality::High => fl!(l, "value-high"),
+                    }))
+                },
+                change: |w, step| {
+                    tune(w, |_, render| {
+                        pick(&ShadowQuality::ALL, &mut render.shadow_quality, step)
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-shadow-updates"),
+                help: |l| fl!(l, "help-shadow-updates"),
+                show: |w, l| {
+                    let current = w.resource::<RenderSettings>().shadow_updates;
+                    Some(choice(&ShadowUpdates::ALL, &current, |updates| match updates {
+                        ShadowUpdates::EveryFrame => fl!(l, "value-every-frame"),
+                        ShadowUpdates::EveryOtherFrame => fl!(l, "value-every-other-frame"),
+                    }))
+                },
+                change: |w, step| {
+                    tune(w, |_, render| {
+                        pick(&ShadowUpdates::ALL, &mut render.shadow_updates, step)
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-ambient-occlusion-quality"),
+                help: |l| fl!(l, "help-ambient-occlusion-quality"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let current = graphics.ambient_occlusion_quality;
+                    let shown = graphics.ambient_occlusion && occludable(w, graphics);
+                    let label = |quality: &AmbientOcclusionQuality| match quality {
+                        AmbientOcclusionQuality::Low => fl!(l, "value-low"),
+                        AmbientOcclusionQuality::Medium => fl!(l, "value-medium"),
+                        AmbientOcclusionQuality::High => fl!(l, "value-high"),
+                        AmbientOcclusionQuality::Ultra => fl!(l, "value-ultra"),
+                    };
+                    Some(choice(&AmbientOcclusionQuality::ALL, &current, label).when(shown))
+                },
+                change: |w, step| {
+                    tune(w, |g, _| {
+                        pick(&AmbientOcclusionQuality::ALL, &mut g.ambient_occlusion_quality, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-fog-quality"),
+                help: |l| fl!(l, "help-fog-quality"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let label = |quality: &FogQuality| match quality {
+                        FogQuality::VeryLow => fl!(l, "value-very-low"),
+                        FogQuality::Low => fl!(l, "value-low"),
+                        FogQuality::Medium => fl!(l, "value-medium"),
+                        FogQuality::High => fl!(l, "value-high"),
+                        FogQuality::Ultra => fl!(l, "value-ultra"),
+                    };
+                    let shown = graphics.fog && foggy(w);
+                    Some(choice(&FogQuality::ALL, &graphics.fog_quality, label).when(shown))
+                },
+                change: |w, step| {
+                    tune(w, |g, _| pick(&FogQuality::ALL, &mut g.fog_quality, step));
+                },
+            }
+            .picker(),
+            Setting {
+                label: |l| fl!(l, "label-fog-dithering"),
+                help: |l| fl!(l, "help-fog-dithering"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    Some(switch(l, graphics.fog_dithering).when(graphics.fog && foggy(w)))
+                },
+                change: |w, step| tune(w, |g, _| flip(&mut g.fog_dithering, step)),
+            }
+            .switch(),
+            Setting {
+                label: |l| fl!(l, "label-fog-resolution"),
+                help: |l| fl!(l, "help-fog-resolution"),
+                show: |w, l| {
+                    let graphics = w.focused::<Graphics>()?;
+                    let label = |resolution: &FogResolution| match resolution {
+                        FogResolution::Full => fl!(l, "value-full"),
+                        FogResolution::Half => fl!(l, "value-half"),
+                        FogResolution::Quarter => fl!(l, "value-quarter"),
+                    };
+                    let current = graphics.fog_resolution;
+                    let shown = graphics.fog && foggy(w);
+                    Some(choice(&FogResolution::ALL, &current, label).when(shown))
+                },
+                change: |w, step| {
+                    tune(w, |g, _| pick(&FogResolution::ALL, &mut g.fog_resolution, step));
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-blur-quality"),
+                help: |l| fl!(l, "help-blur-quality"),
+                show: |w, l| {
+                    let dof = w.focused::<Graphics>()?.depth_of_field;
+                    let label = |quality: &DepthOfFieldQuality| match quality {
+                        DepthOfFieldQuality::Low => fl!(l, "value-low"),
+                        DepthOfFieldQuality::Medium => fl!(l, "value-medium"),
+                        DepthOfFieldQuality::High => fl!(l, "value-high"),
+                        DepthOfFieldQuality::Ultra => fl!(l, "value-ultra"),
+                    };
+                    Some(choice(&DepthOfFieldQuality::ALL, &dof.quality, label).when(blurs(w)))
+                },
+                change: |w, step| {
+                    tune(w, |g, _| {
+                        pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field.quality, step);
+                    });
+                },
+            }
+            .segments(),
+            Setting {
+                label: |l| fl!(l, "label-monitor"),
+                help: |l| fl!(l, "help-monitor"),
+                show: |w, l| Some(switch(l, w.resource::<UiState>().performance_monitor)),
+                change: |w, step| flip(&mut w.resource_mut::<UiState>().performance_monitor, step),
+            }
+            .switch(),
+        ],
+    )
 }
 
-// While the preset keeps a look's effect from showing, its row shows Off and turning it up
-// lets it show, at the look's own amount, rather than changing that amount. True when it took
-// the step.
-fn gated(world: &mut World, allowed: fn(&mut Allowed) -> &mut bool, step: &Step) -> bool {
-    let Some(mut now) = world.focused::<Graphics>().map(|g| g.allowed) else {
-        return false;
-    };
-    if *allowed(&mut now) {
-        return false;
-    }
-    if step.by() > 0 {
-        tune(world, |graphics, _| *allowed(&mut graphics.allowed) = true);
-    }
-    true
+// What a folded section says of itself.
+
+fn color_summary(w: &World, _: &FluentLanguageLoader) -> Option<String> {
+    let look = resolved(w)?;
+    let exposure =
+        if look.exposure == 0.0 { String::new() } else { format!(" · {:+.1} EV", look.exposure) };
+    Some(format!("{}{exposure}", tonemapping_name(look.tonemapping)))
 }
 
-fn strength(l: &FluentLanguageLoader, value: f32, scale: Scale) -> Shown {
-    let text = if value <= 0.0 { on_off(l, false) } else { percent(value / scale.max) };
-    scale.number(text, value)
+fn bloom_summary(w: &World, l: &FluentLanguageLoader) -> Option<String> {
+    let bloom = showing(w, resolved(w)?.bloom, |a| a.bloom);
+    Some(if bloom > 0.0 { percent(bloom / BLOOM.max) } else { on_off(l, false) })
 }
 
-// None is no LUT.
-fn luts(world: &World) -> Option<Vec<Option<String>>> {
-    let suite = world.focused::<ActiveSuite>()?;
-    Some(std::iter::once(None).chain(suite.luts.iter().map(|l| Some(l.name.clone()))).collect())
+fn depth_of_field_summary(w: &World, l: &FluentLanguageLoader) -> Option<String> {
+    let on = has_lens(w) && w.focused::<Graphics>()?.depth_of_field.enabled;
+    Some(on_off(l, on))
 }
 
-fn tonemapping_name(tonemapping: Tonemapping) -> &'static str {
-    match tonemapping {
-        Tonemapping::None => "None",
-        Tonemapping::Reinhard => "Reinhard",
-        Tonemapping::ReinhardLuminance => "Reinhard lum.",
-        Tonemapping::AcesFitted => "ACES",
-        Tonemapping::Agx => "AgX",
-        Tonemapping::SomewhatBoringDisplayTransform => "Boring",
-        Tonemapping::TonyMcMapface => "TonyMcMapface",
-        Tonemapping::BlenderFilmic => "Filmic",
-    }
+fn fog_summary(w: &World, l: &FluentLanguageLoader) -> Option<String> {
+    let graphics = w.focused::<Graphics>()?;
+    let on = graphics.fog && foggy(w);
+    Some(if on { percent(graphics.fog_density) } else { on_off(l, false) })
 }
 
-fn show_restore(edited: Focused<LookEdited>, mut buttons: Query<&mut Node, With<RestoreButton>>) {
+fn ambient_occlusion_summary(w: &World, l: &FluentLanguageLoader) -> Option<String> {
+    let graphics = w.focused::<Graphics>()?;
+    Some(on_off(l, graphics.ambient_occlusion && occludable(w, graphics)))
+}
+
+fn strokes_summary(w: &World, l: &FluentLanguageLoader) -> Option<String> {
+    Some(on_off(l, w.focused::<Graphics>()?.draws_strokes()))
+}
+
+// The film effects that show, by name.
+fn film_summary(w: &World, l: &FluentLanguageLoader) -> Option<String> {
+    let look = resolved(w)?;
+    let shown = [
+        (showing(w, look.vignette, |a| a.vignette), fl!(l, "label-vignette")),
+        (showing(w, look.grain, |a| a.grain), fl!(l, "label-grain")),
+        (
+            showing(w, look.chromatic_aberration, |a| a.chromatic_aberration),
+            fl!(l, "label-chromatic-aberration"),
+        ),
+    ];
+    let names: Vec<String> =
+        shown.into_iter().filter(|(amount, _)| *amount > 0.0).map(|(_, name)| name).collect();
+    Some(if names.is_empty() { on_off(l, false) } else { names.join(", ") })
+}
+
+fn show_restore(edited: Focused<LookEdited>, mut banners: Query<&mut Node, With<RestoreBanner>>) {
     let Some(edited) = edited.get() else {
         return;
     };
-    for mut node in &mut buttons {
+    for mut node in &mut banners {
         node.display = display(edited.0);
     }
 }

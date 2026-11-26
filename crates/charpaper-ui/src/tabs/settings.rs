@@ -4,12 +4,10 @@ use charpaper_scene::focused_changed;
 use charpaper_settings::Changelog;
 use charpaper_settings::ChosenMonitor;
 use charpaper_settings::DisplayMode;
-use charpaper_settings::FpsLimit;
 use charpaper_settings::Hsv;
 use charpaper_settings::Monitors;
 use charpaper_settings::Palette;
 use charpaper_settings::PanelSide;
-use charpaper_settings::RenderSettings;
 use charpaper_settings::ScreenSettings;
 use charpaper_settings::StageId;
 use charpaper_settings::StartAtLogin;
@@ -33,9 +31,9 @@ use crate::widgets::*;
 
 // The list of monitors, which are not rows but a button each, and the list of what changed
 // in a newer version.
-pub(crate) struct SystemPlugin;
+pub(crate) struct SettingsPlugin;
 
-impl Plugin for SystemPlugin {
+impl Plugin for SettingsPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(on_click)
             .add_observer(open_release_page)
@@ -78,7 +76,7 @@ struct OpenReleasePage;
 // monitors it is on and which stage each shows, how often it draws and when it stops, and the
 // panel's language and looks.
 pub(crate) fn page() -> impl Bundle {
-    children![app_section(), display_section(), frame_rate(), pause(), interface()]
+    children![app_section(), display_section(), interface()]
 }
 
 fn app_section() -> impl Bundle {
@@ -246,74 +244,6 @@ fn display_section() -> impl Bundle {
                 },
             }
             .segments(),
-        ],
-    )
-}
-
-fn frame_rate() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-frame-rate"),
-        Section::FrameRate,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-fps-limit"),
-                help: |l| fl!(l, "help-fps-limit"),
-                show: |w, l| {
-                    let current = w.resource::<RenderSettings>().fps_limit;
-                    Some(choice(&FpsLimit::ALL, &current, |limit| match limit.per_second() {
-                        Some(fps) => format!("{fps:.0}"),
-                        None => fl!(l, "value-max"),
-                    }))
-                },
-                change: |w, step| {
-                    let mut settings = w.resource_mut::<RenderSettings>();
-                    pick(&FpsLimit::ALL, &mut settings.fps_limit, step);
-                },
-            }
-            .segments(),
-            Setting {
-                label: |l| fl!(l, "label-monitor"),
-                help: |l| fl!(l, "help-monitor"),
-                show: |w, l| Some(switch(l, w.resource::<UiState>().performance_monitor)),
-                change: |w, step| flip(&mut w.resource_mut::<UiState>().performance_monitor, step),
-            }
-            .switch(),
-        ],
-    )
-}
-
-fn pause() -> impl Bundle {
-    section(
-        |l| fl!(l, "section-pause"),
-        Section::Pause,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-pause-fullscreen"),
-                help: |l| fl!(l, "help-pause-fullscreen"),
-                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_when_fullscreen)),
-                change: |w, step| {
-                    flip(&mut w.resource_mut::<RenderSettings>().pause_when_fullscreen, step);
-                },
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-pause-covered"),
-                help: |l| fl!(l, "help-pause-covered"),
-                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_when_covered)),
-                change: |w, step| {
-                    flip(&mut w.resource_mut::<RenderSettings>().pause_when_covered, step);
-                },
-            }
-            .switch(),
-            Setting {
-                label: |l| fl!(l, "label-pause-battery"),
-                help: |l| fl!(l, "help-pause-battery"),
-                show: |w, l| Some(switch(l, w.resource::<RenderSettings>().pause_on_battery)),
-                change: |w, step| {
-                    flip(&mut w.resource_mut::<RenderSettings>().pause_on_battery, step);
-                },
-            }
-            .switch(),
         ],
     )
 }

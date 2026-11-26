@@ -4,15 +4,20 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
-// Only tabs with something working behind them exist.
+// Only tabs with something working behind them exist. The aliases are the tabs' names before
+// the panel was redesigned, so a panel saved open on one reopens on the tab that took its place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Tab {
     #[default]
-    Scene,
-    Graphics,
+    #[serde(alias = "scene")]
+    Character,
+    #[serde(alias = "graphics")]
+    Look,
     Sound,
-    System,
+    Performance,
+    #[serde(alias = "system")]
+    Settings,
 }
 
 // Saved between runs by the app, so the panel reopens as it was left.

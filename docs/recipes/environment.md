@@ -17,7 +17,7 @@ Cameras in the collection are left out; they go under [Cameras](camera.md).
 4. Its music and background sound go under **Sound**, inside it. See [Sounds](sounds.md).
 
 Like skins, each environment has a checkbox (untick it to leave it out of *Export all*) and
-its own export button. The viewer switches environments in the app's Scene tab.
+its own export button. The viewer switches environments in the app's Character tab.
 
 ## Lights
 
