@@ -266,7 +266,12 @@ pub(crate) fn follow_selected(
             // here to lean, or on the way back from a rig. A rig still loading keeps the last
             // view instead of flashing the orbit camera.
             None if wanted.is_none() => {
-                let switched = following.0.take().is_some();
+                // Written only on a switch: a change to it resets TAA's history, which shows
+                // as the picture trembling if it happens every frame.
+                let switched = following.0.is_some();
+                if switched {
+                    following.0 = None;
+                }
                 if !switched && !sway.leaning() {
                     continue;
                 }
