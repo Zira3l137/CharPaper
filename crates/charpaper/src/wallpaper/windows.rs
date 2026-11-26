@@ -2,6 +2,7 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use charpaper_scene::Screen;
+use charpaper_scene::ScreenMonitor;
 use charpaper_scene::ScreenPlace;
 use charpaper_scene::ScreenSync;
 use charpaper_scene::ShowsStage;
@@ -106,17 +107,27 @@ fn assign_windows(
     }
 }
 
-// Tells the scene which stage each screen shows, and where the screen is, for span mode.
+// Tells the scene which monitor each screen is on and which stage it shows, and where the
+// screen is, for span mode.
 fn describe_screens(
     mut commands: Commands,
     settings: Res<ScreenSettings>,
-    screens: Query<(Entity, &Screen, Option<&ScreenPlace>, Option<&ShowsStage>)>,
+    screens: Query<(
+        Entity,
+        &Screen,
+        Option<&ScreenPlace>,
+        Option<&ShowsStage>,
+        Option<&ScreenMonitor>,
+    )>,
     windows: Query<&OnMonitor>,
 ) {
-    for (entity, screen, place, shows) in &screens {
+    for (entity, screen, place, shows, monitor) in &screens {
         let Ok(on) = windows.get(screen.window) else {
             continue;
         };
+        if monitor.is_none_or(|monitor| monitor.0 != on.0.id) {
+            commands.entity(entity).insert(ScreenMonitor(on.0.id.clone()));
+        }
         let stage = ShowsStage(settings.stage_of(&on.0.id));
         if shows != Some(&stage) {
             commands.entity(entity).insert(stage);

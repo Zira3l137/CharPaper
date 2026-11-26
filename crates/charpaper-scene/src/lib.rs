@@ -48,6 +48,7 @@ pub use look::Resolved;
 pub use look::RestoreLook;
 pub use screens::Screen;
 pub use screens::ScreenPlace;
+pub use screens::ScreenMonitor;
 pub use screens::ScreenSync;
 pub use screens::ScreenUi;
 pub use screens::ShowsStage;

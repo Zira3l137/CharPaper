@@ -156,6 +156,12 @@ label-ambience-volume = Ambience
 label-character-volume = Character
 section-music = MUSIC
 label-track = Track
+# Over the music's buttons.
+now-playing = Now playing
+nothing-playing = Nothing playing
+track-of = Track { $number } of { $count }
+# $place is track-of.
+music-paused = { $place } · paused
 
 ## Settings tab
 
@@ -167,6 +173,8 @@ label-start-at-login = Start with Windows
 label-check-updates = Check for updates
 label-update-version = New version
 label-update = Update
+# Heads the banner at the top of the Settings tab while a newer version is on offer.
+update-banner = A new version is out
 # The version on offer while it downloads, after downloading it failed, and while CharPaper
 # restarts to install it.
 update-downloading = { $version } · { $percent }%
@@ -192,6 +200,8 @@ stage-name = Stage { $letter }
 # After the name of a chosen monitor that is unplugged.
 monitor-missing = not connected
 label-layout = Layout
+# Under the panel's header, with several stages: which one the monitor the panel is on shows.
+label-this-monitor = This monitor
 layout-mirror = Mirror
 layout-span = Span
 section-frame-rate = FRAME RATE
@@ -371,6 +381,7 @@ help-start-at-login = Starts CharPaper whenever you sign in to Windows on this c
 help-check-updates = Asks GitHub for a newer version each time CharPaper starts. Nothing is downloaded until you click Install.
 help-update-version = A newer CharPaper is out. Click it to see what changed since your version.
 help-update = Install downloads it and restarts CharPaper with it, keeping your characters and settings. Skip hides this version.
+help-this-monitor = The stage this monitor shows. Each stage has its own character and settings. Every monitor is in the Settings tab's Display section.
 help-layout = For this monitor's stage. Mirror shows the whole scene on each of its monitors. Span spreads one wide view across them, as if they were a single screen.
 help-master-volume = How loud all of CharPaper's sound is.
 help-music-volume = How loud the environment's music is.

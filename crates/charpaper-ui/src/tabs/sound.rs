@@ -1,5 +1,7 @@
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
+use bevy::text::Justify;
+use bevy::text::LineBreak;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedStage;
 use charpaper_scene::PlayTrack;
@@ -11,6 +13,7 @@ use charpaper_settings::Volumes;
 use i18n_embed_fl::fl;
 
 use crate::icons::Icon;
+use crate::locale::Locale;
 use crate::locale::Tr;
 use crate::panel::Hint;
 use crate::panel::new_panel;
@@ -24,8 +27,8 @@ use crate::widgets::*;
 
 const VOLUME: Scale = Scale { step: 0.05, min: 0.0, max: 1.0, per_unit: 100.0 };
 
-// The music's buttons under the track: the order it plays in, the track before, play or
-// pause, and the track after. They act on the focused stage's music, as rows do.
+// What's playing, and the music's buttons under it: the order it plays in, the track before,
+// play or pause, and the track after. They act on the focused stage's music, as rows do.
 pub(crate) struct SoundPlugin;
 
 impl Plugin for SoundPlugin {
@@ -35,6 +38,7 @@ impl Plugin for SoundPlugin {
             show_controls.run_if(
                 focused_changed::<MusicSettings>
                     .or_eager(focused_changed::<Soundscape>)
+                    .or_eager(resource_changed::<Locale>)
                     .or_eager(new_panel),
             ),
         );
@@ -43,7 +47,14 @@ impl Plugin for SoundPlugin {
 
 #[derive(Component)]
 #[require(Content)]
-struct Controls;
+struct Player;
+
+// The track's name, and its place among the environment's tracks with whether it's paused.
+#[derive(Component, Clone, Copy, PartialEq)]
+enum Playing {
+    Name,
+    Place,
+}
 
 #[derive(Component, Clone, Copy, PartialEq)]
 enum MusicButton {
@@ -107,6 +118,7 @@ pub(crate) fn page() -> impl Bundle {
             |l| fl!(l, "section-music"),
             Section::Music,
             children![
+                player(),
                 Setting {
                     label: |l| fl!(l, "label-track"),
                     help: |l| fl!(l, "help-track"),
@@ -132,30 +144,49 @@ pub(crate) fn page() -> impl Bundle {
                     },
                 }
                 .picker(),
-                controls(),
             ],
         ),
     ]
 }
 
 // Hidden while the environment has no music.
-fn controls() -> impl Bundle {
-    (
+fn player() -> impl Bundle {
+    let centered = TextLayout::new(Justify::Center, LineBreak::WordBoundary);
+    let buttons = (
         Node {
-            display: Display::None,
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
             column_gap: Val::Px(12.0),
-            padding: UiRect::vertical(Val::Px(10.0)),
+            margin: UiRect::top(Val::Px(10.0)),
             ..default()
         },
         Pickable::IGNORE,
-        Controls,
         children![
             button(MusicButton::Order, Icon::Repeat, |l| fl!(l, "help-order")),
             button(MusicButton::Previous, Icon::Previous, |l| fl!(l, "help-previous")),
             button(MusicButton::PlayPause, Icon::Pause, |l| fl!(l, "help-playback")),
             button(MusicButton::Next, Icon::Next, |l| fl!(l, "help-next")),
+        ],
+    );
+    (
+        Node {
+            display: Display::None,
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: Val::Px(2.0),
+            padding: UiRect::new(Val::Px(12.0), Val::Px(12.0), Val::Px(12.0), Val::Px(14.0)),
+            margin: UiRect::vertical(Val::Px(6.0)),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        Fill(WELL_BG),
+        Pickable::IGNORE,
+        Player,
+        children![
+            translated(|l| fl!(l, "now-playing"), SMALL_SIZE, TEXT_DIM),
+            (label("", TITLE_SIZE, TEXT), centered, Playing::Name),
+            (label("", SMALL_SIZE, TEXT_DIM), centered, Playing::Place),
+            buttons,
         ],
     )
 }
@@ -185,19 +216,44 @@ fn button(kind: MusicButton, icon: Icon, hint: Tr) -> impl Bundle {
 // Play shows while paused and pause while playing; the order button shows the order, in the
 // accent unless it's the usual one.
 fn show_controls(
+    locale: Res<Locale>,
     music: Focused<MusicSettings>,
     soundscape: Focused<Soundscape>,
-    mut rows: Query<&mut Node, With<Controls>>,
+    mut players: Query<&mut Node, With<Player>>,
     buttons: Query<(&MusicButton, &Children)>,
-    mut texts: Query<(&mut Text, &mut Ink)>,
+    mut texts: Query<(&mut Text, &mut Ink), Without<Playing>>,
+    mut lines: Query<(&mut Text, &Playing)>,
 ) {
     let (Some(music), Some(soundscape)) = (music.get(), soundscape.get()) else {
         return;
     };
-    let shown = display(!soundscape.tracks().is_empty());
-    for mut node in &mut rows {
+    let tracks = soundscape.tracks();
+    let shown = display(!tracks.is_empty());
+    for mut node in &mut players {
         if node.display != shown {
             node.display = shown;
+        }
+    }
+    let playing = soundscape.playing();
+    let name = match playing.and_then(|index| tracks.get(index)) {
+        Some(name) => name.clone(),
+        None => fl!(locale, "nothing-playing"),
+    };
+    let place = playing.map(|index| {
+        let (number, count) = (index + 1, tracks.len());
+        let place = fl!(locale, "track-of", number = number, count = count);
+        match music.paused {
+            true => fl!(locale, "music-paused", place = place),
+            false => place,
+        }
+    });
+    for (mut text, line) in &mut lines {
+        let wanted = match line {
+            Playing::Name => name.as_str(),
+            Playing::Place => place.as_deref().unwrap_or_default(),
+        };
+        if text.0 != wanted {
+            wanted.clone_into(&mut text.0);
         }
     }
     for (button, children) in &buttons {

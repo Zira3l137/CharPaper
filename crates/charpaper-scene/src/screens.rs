@@ -20,6 +20,10 @@ pub struct Screen {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShowsStage(pub StageId);
 
+// The monitor a Screen is on, by the id Monitors knows it by. The app sets it.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct ScreenMonitor(pub String);
+
 // Where a Screen's window sits on the desktop, in physical pixels. The app keeps it current;
 // span mode cuts the one wide picture up by it.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]

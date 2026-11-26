@@ -1,4 +1,9 @@
+use std::collections::BTreeSet;
+
 use bevy::prelude::*;
+use charpaper_scene::CursorPosition;
+use charpaper_scene::Screen;
+use charpaper_scene::ScreenMonitor;
 use charpaper_scene::StageKey;
 use charpaper_scene::focused_changed;
 use charpaper_settings::Changelog;
@@ -18,6 +23,8 @@ use charpaper_settings::UpdateStatus;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
+use crate::icons::Icon;
+use crate::icons::icon;
 use crate::locale::Languages;
 use crate::locale::Locale;
 use crate::panel::new_panel;
@@ -49,6 +56,10 @@ impl Plugin for SettingsPlugin {
             )
             .add_systems(
                 Update,
+                show_banner.run_if(resource_changed::<UpdateStatus>.or_eager(new_panel)),
+            )
+            .add_systems(
+                Update,
                 fill_changelog.run_if(
                     resource_changed::<Changelog>
                         .or_eager(resource_changed::<Locale>)
@@ -67,6 +78,9 @@ struct MonitorList;
 struct MonitorButton(String);
 
 #[derive(Component)]
+struct UpdateBanner;
+
+#[derive(Component)]
 struct ChangelogList;
 
 #[derive(Component)]
@@ -76,7 +90,45 @@ struct OpenReleasePage;
 // monitors it is on and which stage each shows, how often it draws and when it stops, and the
 // panel's language and looks.
 pub(crate) fn page() -> impl Bundle {
-    children![app_section(), display_section(), interface()]
+    children![update_banner(), app_section(), display_section(), interface()]
+}
+
+// Over everything else on the tab while a newer version is on offer, and gone otherwise.
+fn update_banner() -> impl Bundle {
+    (
+        Node {
+            display: Display::None,
+            flex_shrink: 0.0,
+            flex_direction: FlexDirection::Column,
+            padding: UiRect::new(Val::Px(14.0), Val::Px(14.0), Val::Px(12.0), Val::Px(4.0)),
+            border_radius: BorderRadius::all(CARD_RADIUS),
+            ..default()
+        },
+        Fill(SELECTED_BG),
+        Pickable::IGNORE,
+        UpdateBanner,
+        children![
+            (
+                Node { align_items: AlignItems::Center, column_gap: Val::Px(8.0), ..default() },
+                Pickable::IGNORE,
+                children![
+                    icon(Icon::Download, FontSize::Px(16.0), ACCENT),
+                    translated(|l| fl!(l, "update-banner"), TITLE_SIZE, TEXT),
+                ],
+            ),
+            update_version(),
+            update(),
+        ],
+    )
+}
+
+fn show_banner(status: Res<UpdateStatus>, banners: Query<&mut Node, With<UpdateBanner>>) {
+    let shown = display(!matches!(*status, UpdateStatus::Idle));
+    for mut node in banners {
+        if node.display != shown {
+            node.display = shown;
+        }
+    }
 }
 
 fn app_section() -> impl Bundle {
@@ -84,8 +136,6 @@ fn app_section() -> impl Bundle {
         |l| fl!(l, "section-app"),
         Section::App,
         children![
-            update_version(),
-            update(),
             Setting {
                 label: |l| fl!(l, "label-mode"),
                 help: |l| fl!(l, "help-mode"),
@@ -131,9 +181,8 @@ fn app_section() -> impl Bundle {
     )
 }
 
-// The two rows below are buttons rather than settings: segments with none current, which act
-// on a click and ignore the wheel passing over them. Both are there only while a newer
-// version is on offer.
+// The banner's two rows are buttons rather than settings: segments with none current, which act
+// on a click and ignore the wheel passing over them.
 
 // The version on offer, and how its download goes. Its value opens what changed since the
 // running version, with a button to the release's page for the rest.
@@ -550,8 +599,7 @@ fn shown_stage(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> Option
     }
 }
 
-// A click moves the monitor on to the next stage, then Off, then round to A. There are as many
-// stages to pick from as monitors in the list, enough for each to show its own.
+// A click moves the monitor on to the next stage, then Off, then round to A.
 fn on_click(
     event: On<Pointer<Click>>,
     buttons: Query<&MonitorButton>,
@@ -561,37 +609,90 @@ fn on_click(
     let Ok(MonitorButton(id)) = buttons.get(event.entity) else {
         return;
     };
-    // Nothing chosen yet means the monitors showing it now, so the first click builds on them.
-    let mut chosen: Vec<ChosenMonitor> = match screen.monitors.is_empty() {
-        true => monitors
-            .0
-            .iter()
-            .filter_map(|m| {
-                let stage = m.stage?;
-                Some(ChosenMonitor { id: m.id.clone(), name: m.name.clone(), stage })
-            })
-            .collect(),
-        false => screen.monitors.clone(),
-    };
-    let unplugged = chosen.iter().filter(|c| monitors.get(&c.id).is_none()).count();
-    let count = (monitors.0.len() + unplugged).min(StageId::MAX);
     let options: Vec<Option<StageId>> =
-        std::iter::once(None).chain((0..count).map(StageId::new)).collect();
+        std::iter::once(None).chain(stages(&screen, &monitors).into_iter().map(Some)).collect();
     let current = shown_stage(&screen, &monitors, id);
     let at = options.iter().position(|option| *option == current).unwrap_or(0);
     let mut next = options[(at + 1) % options.len()];
     // The last connected monitor showing it can't go Off: a wallpaper on no monitor is none.
-    let others_on = chosen.iter().any(|c| &c.id != id && monitors.get(&c.id).is_some());
+    let picked = chosen(&screen, &monitors);
+    let others_on = picked.iter().any(|c| &c.id != id && monitors.get(&c.id).is_some());
     if next.is_none() && monitors.get(id).is_some() && !others_on {
         next = options[1];
     }
+    show_on(&mut screen, &monitors, id, next);
+}
 
-    chosen.retain(|c| &c.id != id);
-    if let Some(stage) = next {
+// There are as many stages to pick from as monitors in the list, enough for each to show its
+// own.
+fn stages(screen: &ScreenSettings, monitors: &Monitors) -> Vec<StageId> {
+    let unplugged = screen.monitors.iter().filter(|c| monitors.get(&c.id).is_none()).count();
+    let count = (monitors.0.len() + unplugged).min(StageId::MAX);
+    (0..count).filter_map(StageId::new).collect()
+}
+
+// Shows the stage on the monitor, or with None, stops showing the wallpaper there.
+fn show_on(screen: &mut ScreenSettings, monitors: &Monitors, id: &str, stage: Option<StageId>) {
+    let mut picked = chosen(screen, monitors);
+    picked.retain(|c| c.id != id);
+    if let Some(stage) = stage {
         let name = monitors.get(id).map(|m| m.name.clone());
         let name =
             name.or_else(|| screen.monitors.iter().find(|c| &c.id == id).map(|c| c.name.clone()));
-        chosen.push(ChosenMonitor { id: id.clone(), name: name.unwrap_or_default(), stage });
+        picked.push(ChosenMonitor { id: id.to_string(), name: name.unwrap_or_default(), stage });
     }
-    screen.monitors = chosen;
+    screen.monitors = picked;
+}
+
+// Nothing chosen yet means the monitors showing it now, so the first change builds on them.
+fn chosen(screen: &ScreenSettings, monitors: &Monitors) -> Vec<ChosenMonitor> {
+    if !screen.monitors.is_empty() {
+        return screen.monitors.clone();
+    }
+    let showing = monitors.0.iter().filter_map(|m| {
+        Some(ChosenMonitor { id: m.id.clone(), name: m.name.clone(), stage: m.stage? })
+    });
+    showing.collect()
+}
+
+// Which stage the monitor under the pointer shows: the one whose panel is in use. It offers the
+// stages the Display section does, but not Off, which would take the panel away with it.
+// Shown only while there are several stages.
+pub(crate) fn this_monitor() -> impl Bundle {
+    Setting {
+        label: |l| fl!(l, "label-this-monitor"),
+        help: |l| fl!(l, "help-this-monitor"),
+        show: |w, l| {
+            let here = monitor_here(w)?;
+            let monitors = w.resource::<Monitors>();
+            let current = monitors.get(&here)?.stage?;
+            let shown: BTreeSet<StageId> = monitors.0.iter().filter_map(|m| m.stage).collect();
+            let options = stages(w.resource::<ScreenSettings>(), monitors);
+            let label = |stage: &StageId| fl!(l, "stage-name", letter = stage.to_string());
+            Some(choice(&options, &current, label).when(shown.len() > 1))
+        },
+        change: |w, step| {
+            let Some(here) = monitor_here(w) else {
+                return;
+            };
+            w.resource_scope(|w, monitors: Mut<Monitors>| {
+                let mut screen = w.resource_mut::<ScreenSettings>();
+                let options = stages(&screen, &monitors);
+                let Some(current) = monitors.get(&here).and_then(|m| m.stage) else {
+                    return;
+                };
+                if let Some(next) = stepped(&options, &current, step) {
+                    show_on(&mut screen, &monitors, &here, Some(next));
+                }
+            });
+        },
+    }
+    .picker()
+}
+
+fn monitor_here(w: &World) -> Option<String> {
+    let at = w.get_resource::<CursorPosition>()?.0?;
+    let mut screens = w.try_query::<(&Screen, &ScreenMonitor)>()?;
+    let mut screens = screens.iter(w);
+    screens.find(|(screen, _)| screen.window == at.window).map(|(_, monitor)| monitor.0.clone())
 }

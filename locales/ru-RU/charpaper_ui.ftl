@@ -137,6 +137,10 @@ label-ambience-volume = Атмосфера
 label-character-volume = Персонаж
 section-music = МУЗЫКА
 label-track = Трек
+now-playing = Сейчас играет
+nothing-playing = Ничего не играет
+track-of = Трек { $number } из { $count }
+music-paused = { $place } · пауза
 
 ## Вкладка «Настройки»
 
@@ -148,6 +152,7 @@ label-start-at-login = Запуск с Windows
 label-check-updates = Проверять обновления
 label-update-version = Новая версия
 label-update = Обновление
+update-banner = Вышла новая версия
 update-downloading = { $version } · { $percent }%
 update-failed = { $version } · ошибка
 update-restarting = { $version } · перезапуск
@@ -168,6 +173,7 @@ section-display = ЭКРАН
 stage-name = Сцена { $letter }
 monitor-missing = не подключён
 label-layout = Раскладка
+label-this-monitor = Этот монитор
 layout-mirror = Зеркало
 layout-span = Панорама
 section-frame-rate = ЧАСТОТА КАДРОВ
@@ -336,6 +342,7 @@ help-start-at-login = Запускает CharPaper при каждом вход�
 help-check-updates = При каждом запуске CharPaper спрашивает у GitHub, нет ли новой версии. Ничего не скачивается, пока вы не нажмёте «Установить».
 help-update-version = Вышла новая версия CharPaper. Нажмите, чтобы узнать, что изменилось с вашей версии.
 help-update = «Установить» скачает её и перезапустит CharPaper, сохранив персонажей и настройки. «Пропустить» скроет эту версию.
+help-this-monitor = Сцена, которую показывает этот монитор. У каждой сцены свой персонаж и свои настройки. Все мониторы — в разделе «Экран» вкладки «Настройки».
 help-layout = Для сцены этого монитора. «Зеркало» показывает всю сцену на каждом её мониторе. «Панорама» растягивает один широкий вид на них, будто это один экран.
 help-master-volume = Общая громкость всех звуков CharPaper.
 help-music-volume = Громкость музыки окружения.

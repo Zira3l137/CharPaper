@@ -5,7 +5,6 @@ use charpaper_scene::ActiveSuite;
 use charpaper_scene::Focused;
 use charpaper_scene::ScreenSync;
 use charpaper_scene::ScreenUi;
-use charpaper_scene::StageKey;
 use charpaper_settings::PanelSide;
 use charpaper_settings::Tab;
 use charpaper_settings::UiState;
@@ -154,6 +153,7 @@ fn spawn_panel(commands: &mut Commands, ui: &UiState, screen: Entity, camera: En
         root.spawn(main_menu(ui.is_menu_closed))
             .with_children(|panel| {
                 panel.spawn(header());
+                panel.spawn(stage_bar());
                 panel.spawn(tab_bar());
                 panel.spawn(page(Tab::Character, ui.tab, tabs::character::page()));
                 panel.spawn(page(Tab::Look, ui.tab, tabs::graphics::look_page()));
@@ -300,6 +300,21 @@ fn header_button(icon: Icon, color: Swatch, hint: Tr, action: PanelButton) -> im
             .build(action),
         Hint(hint),
         Hovered::default(),
+    )
+}
+
+// Which stage this monitor shows, with several stages. With one, its row hides and the bar takes
+// no room.
+fn stage_bar() -> impl Bundle {
+    (
+        Node {
+            flex_shrink: 0.0,
+            flex_direction: FlexDirection::Column,
+            padding: UiRect::horizontal(Val::Px(16.0)),
+            ..default()
+        },
+        Pickable::IGNORE,
+        children![tabs::settings::this_monitor()],
     )
 }
 
@@ -547,22 +562,10 @@ fn track_hover(parts: Query<&Hovered>, mut panel: ResMut<PanelHovered>) {
     panel.set_if_neq(PanelHovered(parts.iter().any(Hovered::get)));
 }
 
-// The suite's name, and with several stages running, which stage the panel shows. Every
-// frame, but a Text is only touched when it changes, so the panel isn't laid out again.
-fn show_status(
-    suite: Focused<ActiveSuite>,
-    stage: Focused<StageKey>,
-    stages: Query<(), With<StageKey>>,
-    locale: Res<Locale>,
-    mut status: Query<&mut Text, With<StatusText>>,
-) {
-    let name = suite.get().map(|suite| suite.name.clone()).unwrap_or_default();
-    let wanted = match stage.get() {
-        Some(key) if stages.iter().count() > 1 => {
-            format!("{} · {name}", fl!(locale, "stage-name", letter = key.0.to_string()))
-        }
-        _ => name,
-    };
+// The suite's name; the stage bar under the header says which stage it's on. Every frame, but a
+// Text is only touched when it changes, so the panel isn't laid out again.
+fn show_status(suite: Focused<ActiveSuite>, mut status: Query<&mut Text, With<StatusText>>) {
+    let wanted = suite.get().map(|suite| suite.name.clone()).unwrap_or_default();
     for mut text in &mut status {
         if text.0 != wanted {
             text.0.clone_from(&wanted);

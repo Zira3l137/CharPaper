@@ -44,7 +44,7 @@ point at its spot on the edge.
 |-----|--------------|
 | **Character** | Which character, a tile each with a close-up of it, its outfit and the outfit's parts, **Pose & face** (animation and expression), **Place** (environment, camera, **Lock orbit**, and **Parallax**, the camera leaning towards the pointer), the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks) and the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them). |
 | **Look** | **Lighting** (sky strength and rotation, whether the sun follows the sky, the background and its blur, shadows), **Color** (view transform, exposure, white balance, saturation, contrast, LUT), then an effect to a section: bloom, depth of field, fog, ambient occlusion, ink strokes, and film (vignette, grain, aberration). |
-| **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, with buttons under it for the playing order (in order, shuffle or repeat one), the track before, play and pause, and the next track. |
+| **Sound** | Volume for everything, and for music, ambience and the character's sounds each. What's playing, which of the environment's tracks it is, and buttons under it for the playing order (in order, shuffle or repeat one), the track before, play and pause, and the next track. Under them, **Track** lists every track to pick one from. |
 | **Performance** | The quality preset, frame rate limit and render scale, when to pause, and in **Advanced** what the presets set one by one, with the performance overlay. |
 | **Settings** | Wallpaper or window, start with Windows, updates, monitors, and the panel's language, colors, size, side and auto-hiding button. |
 
@@ -135,6 +135,9 @@ monitor has a button. Click it to step through **Stage A**, **Stage B**, …, an
 - When monitors share a stage, **Layout** picks between **Mirror** (the whole picture on
   each) and **Span** (one wide picture across them).
 - The panel always shows and changes the stage under the mouse pointer.
+- With more than one stage, **This monitor** under the panel's header says which stage
+  the monitor it's on shows, and picks another. It never turns a monitor off; that's
+  only in **Settings → Display**.
 - You hear the stage the pointer is on. Move to a monitor with another stage and the sound
   follows after a moment.
 
@@ -169,8 +172,8 @@ turn it on again after moving the folder.
 
 Each time it starts, CharPaper asks GitHub whether a newer version is out. Only finished
 versions count, never the nightly build or a test version. When there is one, a dot shows
-on the button that brings the panel back and on the **Settings** tab, and **Settings → App**
-gets two more rows:
+on the button that brings the panel back and on the **Settings** tab, and a banner at the
+top of the **Settings** tab says a new version is out, with two rows:
 
 - **New version** shows its number. Click it to see what changed since your version, in
   every version in between if you're a few behind. **Open on GitHub** under the list
