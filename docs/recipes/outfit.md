@@ -18,7 +18,9 @@ The app shows each outfit on a tile with a picture of it, which it takes itself 
 time the character shows: the outfit in the **rest pose** of its file, from a three-quarter
 view of the character's front. So export with the armature in a clean rest pose, a T-pose
 or A-pose, rather than mid-gesture. The pictures are kept in the character's `thumbnails`
-folder and taken again whenever a skin is exported again.
+folder and taken again whenever a skin is exported again. The character's own tile shows a
+close-up of its head and shoulders in the outfit it starts in, centered on the head bone
+when **Gaze** names one.
 
 Each skin in the list has:
 

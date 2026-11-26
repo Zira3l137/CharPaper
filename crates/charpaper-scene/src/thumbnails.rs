@@ -1,12 +1,13 @@
-// A picture of every outfit, for the panel's outfit tiles. The app takes them itself rather than
-// the Blender add-on, which would make exports slower still: each outfit's file is put on a
+// Pictures for the panel's tiles: one of every outfit of a suite on show, and a close-up of
+// every character, its upper body in the outfit it starts in. The app takes them itself rather
+// than the Blender add-on, which would make exports slower still: the outfit's file is put on a
 // stage of its own, out of sight on a render layer no screen shows, in the rest pose its file
-// holds, lit from three sides and seen from a three-quarter view. One outfit at a time, so the
+// holds, lit from three sides and seen from a three-quarter view. One picture at a time, so the
 // wallpaper hardly feels it.
 //
-// The pictures are kept in the suite's thumbnails folder, under the outfit's name and a hash
-// of its file's size and time, so an outfit exported again is taken again and every other one
-// is read back on later runs.
+// The pictures are kept in the suite's thumbnails folder, under the outfit's name, or
+// #character for the close-up, and a hash of the outfit file's size and time, so an outfit
+// exported again is taken again and every other picture is read back on later runs.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -39,8 +40,12 @@ use bevy::render::render_resource::TextureFormat;
 use bevy::render::render_resource::TextureUsages;
 use bevy::world_serialization::WorldInstanceReady;
 
+use charpaper_suite::Suite;
+
 use crate::assets::load_gltf_in;
+use crate::config::SceneConfig;
 use crate::suite::ActiveSuite;
+use crate::suite::AvailableSuites;
 
 // Pixels a side. A row of 768 bytes is a whole number of the 256 a GPU copies a texture's rows
 // in, so the read-back picture has no padding to strip.
@@ -56,6 +61,11 @@ const SETTLE: Duration = Duration::from_millis(500);
 const QUIET: Duration = Duration::from_millis(250);
 const GIVE_UP: Duration = Duration::from_secs(20);
 const FOLDER: &str = "thumbnails";
+// The close-up's name in the folder. No outfit is likely to be called that.
+const CLOSE_UP: &str = "#character";
+// How much of the character's height a close-up shows, down from the top of its head: the
+// head, the shoulders and the chest.
+const CLOSE_UP_SHARE: f32 = 0.3;
 // Part of the hash, so pictures taken by an older way of taking them are taken again.
 const VERSION: u8 = 2;
 
@@ -64,11 +74,15 @@ pub(crate) struct ThumbnailsPlugin;
 impl Plugin for ThumbnailsPlugin {
     fn build(&self, app: &mut App) {
         let compiling = Compiling::default();
-        app.init_resource::<SkinThumbnails>()
+        app.init_resource::<Thumbnails>()
             .init_resource::<Studio>()
             .insert_resource(compiling.clone())
             .add_observer(mark_ready)
-            .add_systems(Update, (find_thumbnails, shoot).chain());
+            .add_systems(
+                Update,
+                (find_close_ups.run_if(resource_changed::<AvailableSuites>), find_outfits, shoot)
+                    .chain(),
+            );
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .insert_resource(compiling)
@@ -86,13 +100,28 @@ fn note_compiling(cache: Res<PipelineCache>, compiling: Res<Compiling>) {
     compiling.0.store(cache.waiting_pipelines().next().is_some(), Ordering::Relaxed);
 }
 
-// The picture of each outfit there is one of yet, by the suite's folder and the outfit's name.
+// The pictures taken so far: each outfit's by the suite's folder and the outfit's name, and
+// each character's close-up by the name of its folder in the characters folder.
 #[derive(Resource, Default)]
-pub struct SkinThumbnails(HashMap<(PathBuf, String), Handle<Image>>);
+pub struct Thumbnails {
+    outfits: HashMap<(PathBuf, String), Handle<Image>>,
+    close_ups: HashMap<String, Handle<Image>>,
+}
 
-impl SkinThumbnails {
-    pub fn get(&self, suite: &Path, skin: &str) -> Option<&Handle<Image>> {
-        self.0.get(&(suite.to_path_buf(), skin.to_string()))
+impl Thumbnails {
+    pub fn outfit(&self, suite: &Path, skin: &str) -> Option<&Handle<Image>> {
+        self.outfits.get(&(suite.to_path_buf(), skin.to_string()))
+    }
+
+    pub fn character(&self, folder: &str) -> Option<&Handle<Image>> {
+        self.close_ups.get(folder)
+    }
+
+    fn insert(&mut self, job: &Job, image: Handle<Image>) {
+        match &job.kind {
+            Kind::Outfit => self.outfits.insert((job.suite.clone(), job.skin.clone()), image),
+            Kind::CloseUp { folder, .. } => self.close_ups.insert(folder.clone(), image),
+        };
     }
 }
 
@@ -100,7 +129,7 @@ impl SkinThumbnails {
 struct Studio {
     queue: VecDeque<Job>,
     shoot: Option<Shoot>,
-    // Outfits with a picture, waiting for one, or whose picture failed: each is looked at once.
+    // Pictures there are, waiting to be taken, or that failed: each is looked at once a run.
     known: HashSet<(PathBuf, String)>,
 }
 
@@ -111,6 +140,32 @@ struct Job {
     // Where the character faces in its rest pose, in glTF's axes.
     front: Vec3,
     cache: PathBuf,
+    kind: Kind,
+}
+
+#[derive(Clone)]
+enum Kind {
+    Outfit,
+    // Of the character in the folder of this name, centered on its head bone when gaze names
+    // one.
+    CloseUp { folder: String, head: Option<String> },
+}
+
+impl Job {
+    // How it's named in the log and in the thumbnails folder.
+    fn name(&self) -> &str {
+        match &self.kind {
+            Kind::Outfit => &self.skin,
+            Kind::CloseUp { .. } => CLOSE_UP,
+        }
+    }
+
+    fn label(&self) -> String {
+        match &self.kind {
+            Kind::Outfit => format!("outfit {:?}", self.skin),
+            Kind::CloseUp { folder, .. } => format!("character {folder:?}"),
+        }
+    }
 }
 
 struct Shoot {
@@ -156,42 +211,95 @@ fn mark_ready(
     }
 }
 
-// A suite shown for the first time this run has its pictures read, or queued to be taken.
-fn find_thumbnails(
+// Every character has its close-up read, or queued to be taken, in the outfit it starts in.
+fn find_close_ups(
+    config: Res<SceneConfig>,
+    available: Res<AvailableSuites>,
+    mut studio: ResMut<Studio>,
+    mut thumbnails: ResMut<Thumbnails>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    for folder in &available.0 {
+        let root = config.characters_dir.join(folder);
+        if !studio.known.insert((root.clone(), CLOSE_UP.to_string())) {
+            continue;
+        }
+        // Read here just for this; a suite that fails to load says why when it's shown.
+        let Ok(suite) = Suite::load(&root) else {
+            continue;
+        };
+        let worn = suite
+            .default_skin
+            .as_ref()
+            .and_then(|name| suite.skins.iter().find(|s| &s.name == name));
+        let Some(skin) = worn.or(suite.skins.first()) else {
+            continue;
+        };
+        let head = suite.gaze.as_ref().and_then(|gaze| gaze.head.clone());
+        let kind = Kind::CloseUp { folder: folder.clone(), head };
+        look_up(&mut studio, &mut thumbnails, &mut images, &suite, &skin.name, &skin.file, kind);
+    }
+}
+
+// A suite shown for the first time this run has its outfits' pictures read, or queued to be
+// taken.
+fn find_outfits(
     suites: Query<&ActiveSuite, Changed<ActiveSuite>>,
     mut studio: ResMut<Studio>,
-    mut thumbnails: ResMut<SkinThumbnails>,
+    mut thumbnails: ResMut<Thumbnails>,
     mut images: ResMut<Assets<Image>>,
 ) {
     for suite in &suites {
-        let front = suite
-            .gaze
-            .as_ref()
-            .filter(|gaze| gaze.front.is_some())
-            .map_or(Vec3::Z, |gaze| Vec3::from_array(gaze.front_gltf()));
         for skin in &suite.skins {
-            let key = (suite.root.clone(), skin.name.clone());
-            if !studio.known.insert(key.clone()) {
+            if !studio.known.insert((suite.root.clone(), skin.name.clone())) {
                 continue;
             }
-            let file = suite.root.join(&skin.file);
-            let Some(cache) = cache_path(&suite.root, &skin.name, &file) else {
-                warn!("thumbnail of {:?}: cannot read its file", skin.name);
-                continue;
-            };
-            match fs::read(&cache) {
-                Ok(pixels) if pixels.len() == (SIZE * SIZE * 4) as usize => {
-                    thumbnails.0.insert(key, images.add(picture(pixels)));
-                }
-                _ => studio.queue.push_back(Job {
-                    suite: suite.root.clone(),
-                    skin: skin.name.clone(),
-                    file: skin.file.clone(),
-                    front: front.with_y(0.0).try_normalize().unwrap_or(Vec3::Z),
-                    cache,
-                }),
-            }
+            look_up(
+                &mut studio,
+                &mut thumbnails,
+                &mut images,
+                suite,
+                &skin.name,
+                &skin.file,
+                Kind::Outfit,
+            );
         }
+    }
+}
+
+// Reads the picture kept from an earlier run, or else queues it.
+fn look_up(
+    studio: &mut Studio,
+    thumbnails: &mut Thumbnails,
+    images: &mut Assets<Image>,
+    suite: &Suite,
+    skin: &str,
+    file: &Path,
+    kind: Kind,
+) {
+    let front = suite
+        .gaze
+        .as_ref()
+        .filter(|gaze| gaze.front.is_some())
+        .map_or(Vec3::Z, |gaze| Vec3::from_array(gaze.front_gltf()));
+    let job = Job {
+        suite: suite.root.clone(),
+        skin: skin.to_string(),
+        file: file.to_path_buf(),
+        front: front.with_y(0.0).try_normalize().unwrap_or(Vec3::Z),
+        cache: PathBuf::new(),
+        kind,
+    };
+    let Some(cache) = cache_path(&job) else {
+        warn!("thumbnail of {}: cannot read its file", job.label());
+        return;
+    };
+    match fs::read(&cache) {
+        Ok(pixels) if pixels.len() == (SIZE * SIZE * 4) as usize => {
+            let image = images.add(picture(pixels));
+            thumbnails.insert(&job, image);
+        }
+        _ => studio.queue.push_back(Job { cache, ..job }),
     }
 }
 
@@ -206,6 +314,7 @@ fn shoot(
     outfits: Query<(Entity, Has<OutfitReady>), With<StudioOutfit>>,
     bounds: Query<(&Aabb, &GlobalTransform)>,
     children: Query<&Children>,
+    bones: Query<(&Name, &GlobalTransform)>,
 ) {
     let now = time.elapsed();
     let Some(shoot) = studio.shoot.as_mut() else {
@@ -258,9 +367,17 @@ fn shoot(
             let Some((outfit, _)) = outfits.iter().next() else {
                 return;
             };
-            let Some(bounds) = bounds_of(outfit, &children, &bounds) else {
+            let Some(mut bounds) = bounds_of(outfit, &children, &bounds) else {
                 return;
             };
+            if let Kind::CloseUp { head, .. } = &shoot.job.kind {
+                let head = head.as_deref().and_then(|head| {
+                    let named = |&e: &Entity| bones.get(e).is_ok_and(|(n, _)| n.as_str() == head);
+                    let bone = children.iter_descendants(outfit).find(named)?;
+                    bones.get(bone).ok().map(|(_, at)| at.translation())
+                });
+                bounds = close_up(bounds, head);
+            }
             spawn_camera_and_lights(&mut commands, shoot, bounds);
             shoot.framed = now;
             shoot.step = Step::Taking;
@@ -269,10 +386,23 @@ fn shoot(
     }
 }
 
-// Leaves the outfit untaken for this run, with why.
+// The part of the whole figure's box a close-up frames: from the top of the head down a share
+// of the height, as wide as it is tall, around the head bone when there is one and else the
+// middle. Arms out in a T-pose are left out at the sides.
+fn close_up((min, max): (Vec3, Vec3), head: Option<Vec3>) -> (Vec3, Vec3) {
+    let height = (max.y - min.y) * CLOSE_UP_SHARE;
+    let middle = head.unwrap_or((min + max) / 2.0);
+    let half = height / 2.0;
+    (
+        Vec3::new(middle.x - half, max.y - height, min.z.max(middle.z - half)),
+        Vec3::new(middle.x + half, max.y, max.z.min(middle.z + half)),
+    )
+}
+
+// Leaves the picture untaken for this run, with why.
 fn give_up(studio: &mut Studio, commands: &mut Commands, why: &str) {
     if let Some(shoot) = studio.shoot.take() {
-        warn!("thumbnail of {:?}: {why}", shoot.job.skin);
+        warn!("thumbnail of {}: {why}", shoot.job.label());
         commands.entity(shoot.set).despawn();
     }
 }
@@ -291,14 +421,14 @@ fn start(
     // Everything under the set takes its layer, the outfit, the camera and the lights alike.
     let set = commands
         .spawn((
-            Name::new(format!("Studio for {}", job.skin)),
+            Name::new(format!("Studio for {}", job.label())),
             StudioSet,
             Transform::default(),
             Visibility::default(),
             Propagate(RenderLayers::layer(STUDIO_LAYER)),
         ))
         .id();
-    info!("thumbnail of {:?}: taking it", job.skin);
+    info!("thumbnail of {}: taking it", job.label());
     Shoot {
         job,
         gltf,
@@ -400,7 +530,7 @@ fn take(
     mut commands: Commands,
     time: Res<Time<Real>>,
     mut studio: ResMut<Studio>,
-    mut thumbnails: ResMut<SkinThumbnails>,
+    mut thumbnails: ResMut<Thumbnails>,
     mut images: ResMut<Assets<Image>>,
 ) {
     let now = time.elapsed();
@@ -421,9 +551,8 @@ fn take(
     };
     commands.entity(shoot.set).despawn();
     keep(&shoot.job, &pixels);
-    let key = (shoot.job.suite.clone(), shoot.job.skin.clone());
-    thumbnails.0.insert(key, images.add(picture(pixels)));
-    info!("thumbnail of {:?}: taken", shoot.job.skin);
+    thumbnails.insert(&shoot.job, images.add(picture(pixels)));
+    info!("thumbnail of {}: taken", shoot.job.label());
 }
 
 // Written beside the suite, and any older picture of the same outfit removed. A failure only
@@ -434,10 +563,10 @@ fn keep(job: &Job, pixels: &[u8]) {
     };
     let written = fs::create_dir_all(folder).and_then(|()| fs::write(&job.cache, pixels));
     if let Err(err) = written {
-        warn!("thumbnail of {:?}: cannot keep it in {}: {err}", job.skin, folder.display());
+        warn!("thumbnail of {}: cannot keep it in {}: {err}", job.label(), folder.display());
         return;
     }
-    let older = format!("{}.", job.skin);
+    let older = format!("{}.", job.name());
     let Ok(entries) = fs::read_dir(folder) else {
         return;
     };
@@ -453,15 +582,19 @@ fn keep(job: &Job, pixels: &[u8]) {
     }
 }
 
-fn cache_path(suite: &Path, skin: &str, file: &Path) -> Option<PathBuf> {
-    let meta = fs::metadata(file).ok()?;
+fn cache_path(job: &Job) -> Option<PathBuf> {
+    let meta = fs::metadata(job.suite.join(&job.file)).ok()?;
     let modified = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_nanos();
     let mut hash = Fnv::default();
     hash.write(&meta.len().to_le_bytes());
     hash.write(&modified.to_le_bytes());
     hash.write(&[VERSION]);
     hash.write(&SIZE.to_le_bytes());
-    Some(suite.join(FOLDER).join(format!("{skin}.{:016x}.rgba", hash.0)))
+    // A close-up's hash differs from the outfit's own picture's, and changes with its head.
+    if let Kind::CloseUp { head, .. } = &job.kind {
+        hash.write(head.as_deref().unwrap_or_default().as_bytes());
+    }
+    Some(job.suite.join(FOLDER).join(format!("{}.{:016x}.rgba", job.name(), hash.0)))
 }
 
 // FNV-1a: tiny, and the same on every run and every Rust version, unlike the standard hasher.

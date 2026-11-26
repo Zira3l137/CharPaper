@@ -1,9 +1,13 @@
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::AvailableSuites;
 use charpaper_scene::CharacterClips;
 use charpaper_scene::CharacterState;
 use charpaper_scene::Expressions;
+use charpaper_scene::Focused;
+use charpaper_scene::Thumbnails;
+use charpaper_scene::focused_changed;
 use charpaper_settings::GazeSettings;
 use charpaper_settings::PhysicsSettings;
 use charpaper_settings::ViewSettings;
@@ -11,12 +15,20 @@ use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed_fl::fl;
 
 use super::outfit;
+use super::outfit::TilePlaceholder;
+use super::outfit::picture_tile;
+use super::outfit::show_picture;
 use crate::held;
 use crate::held::Loads;
+use crate::icons::Icon;
+use crate::panel::Hint;
+use crate::panel::new_panel;
 use crate::row::percent;
 use crate::row::*;
+use crate::section::Content;
 use crate::section::Section;
 use crate::section::section;
+use crate::theme::*;
 
 const GAZE_STRENGTH: Scale =
     Scale { step: 0.25, min: GazeSettings::WEAKEST, max: GazeSettings::STRONGEST, per_unit: 100.0 };
@@ -29,27 +41,118 @@ pub(crate) fn page() -> impl Bundle {
     children![suite(), outfit::section(), pose(), place(), gaze(), physics()]
 }
 
+// A tile per character, with a close-up of it, which the scene takes in the background. Made
+// again whenever the characters folder changes.
 fn suite() -> impl Bundle {
     section(
         |l| fl!(l, "section-suite"),
         Section::Suite,
-        children![
-            Setting {
-                label: |l| fl!(l, "label-suite"),
-                help: |l| fl!(l, "help-suite"),
-                show: |w, _| {
-                    let options = suites(w);
-                    let current = held::current(w, Loads::Suite)?;
-                    Some(choice(&options, &current, name).when(options.len() > 1))
-                },
-                change: |w, step| {
-                    let options = suites(w);
-                    held::step(w, Loads::Suite, &options, step);
-                },
-            }
-            .picker()
-        ],
+        children![(
+            Node {
+                display: Display::None,
+                grid_template_columns: vec![RepeatedGridTrack::flex(3, 1.0)],
+                row_gap: Val::Px(8.0),
+                column_gap: Val::Px(8.0),
+                padding: UiRect::vertical(Val::Px(10.0)),
+                ..default()
+            },
+            Pickable::IGNORE,
+            CharacterGrid,
+        )],
     )
+}
+
+pub(crate) struct CharacterPlugin;
+
+impl Plugin for CharacterPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(on_click).add_systems(
+            Update,
+            (
+                fill_characters.run_if(resource_changed::<AvailableSuites>.or_eager(new_panel)),
+                style_characters.run_if(focused_changed::<CharacterState>.or_eager(new_panel)),
+                show_close_ups.run_if(
+                    resource_changed::<Thumbnails>
+                        .or_eager(any_match_filter::<Added<CloseUpPicture>>),
+                ),
+            )
+                .chain(),
+        );
+    }
+}
+
+#[derive(Component)]
+#[require(Content)]
+struct CharacterGrid;
+
+// Shows the character in the folder of this name.
+#[derive(Component)]
+struct CharacterTile(String);
+
+#[derive(Component)]
+struct CloseUpPicture(String);
+
+fn fill_characters(
+    mut commands: Commands,
+    available: Res<AvailableSuites>,
+    grids: Query<(Entity, &mut Node), With<CharacterGrid>>,
+) {
+    for (grid, mut node) in grids {
+        node.display = if available.0.is_empty() { Display::None } else { Display::Grid };
+        commands.entity(grid).despawn_children().with_children(|grid| {
+            for folder in &available.0 {
+                let action = (
+                    CharacterTile(folder.clone()),
+                    Hint(|l| fl!(l, "help-suite")),
+                    Hovered::default(),
+                );
+                let picture = CloseUpPicture(folder.clone());
+                grid.spawn(picture_tile(folder, Icon::Character, action, picture));
+            }
+        });
+    }
+}
+
+fn style_characters(
+    state: Focused<CharacterState>,
+    tiles: Query<(&CharacterTile, &mut Fill, &mut Stroke)>,
+) {
+    let Some(state) = state.get() else {
+        return;
+    };
+    for (tile, mut fill, mut border) in tiles {
+        let shown = state.suite.as_ref() == Some(&tile.0);
+        fill.set_if_neq(Fill(if shown { SELECTED_BG } else { BUTTON_BG }));
+        border.set_if_neq(Stroke(if shown { ACCENT } else { CLEAR }));
+    }
+}
+
+fn show_close_ups(
+    mut commands: Commands,
+    thumbnails: Res<Thumbnails>,
+    pictures: Query<(Entity, &CloseUpPicture, &Children, Has<ImageNode>)>,
+    mut placeholders: Query<&mut Node, With<TilePlaceholder>>,
+) {
+    for (entity, picture, children, shown) in &pictures {
+        if let Some(image) = thumbnails.character(&picture.0) {
+            show_picture(&mut commands, (entity, children, shown), image, &mut placeholders);
+        }
+    }
+}
+
+// Put in place at once, as a click on the old picker's list was.
+fn on_click(event: On<Pointer<Click>>, mut commands: Commands, tiles: Query<&CharacterTile>) {
+    let Ok(CharacterTile(folder)) = tiles.get(event.entity) else {
+        return;
+    };
+    let folder = folder.clone();
+    commands.queue(move |world: &mut World| {
+        let options = suites(world);
+        if let Some(index) = options.iter().position(|o| o.as_deref() == Some(folder.as_str())) {
+            let step = Step { change: Change::To(index), continuous: false };
+            held::step(world, Loads::Suite, &options, &step);
+        }
+    });
 }
 
 fn pose() -> impl Bundle {

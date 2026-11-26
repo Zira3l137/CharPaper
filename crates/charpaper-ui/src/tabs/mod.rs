@@ -43,6 +43,7 @@ pub(crate) struct TabsPlugin;
 impl Plugin for TabsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            character::CharacterPlugin,
             outfit::OutfitPlugin,
             graphics::GraphicsPlugin,
             presets::PresetsPlugin,

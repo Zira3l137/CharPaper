@@ -14,7 +14,6 @@ tab-settings = Настройки
 ## Вкладка «Персонаж»
 
 section-suite = ПЕРСОНАЖ
-label-suite = Персонаж
 section-outfit = ОДЕЖДА
 section-parts = ЧАСТИ
 section-pose = ПОЗА И ЛИЦО

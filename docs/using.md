@@ -42,7 +42,7 @@ point at its spot on the edge.
 
 | Tab | What's there |
 |-----|--------------|
-| **Character** | Which character, its outfit and the outfit's parts, **Pose & face** (animation and expression), **Place** (environment, camera, **Lock orbit**, and **Parallax**, the camera leaning towards the pointer), the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks) and the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them). |
+| **Character** | Which character, a tile each with a close-up of it, its outfit and the outfit's parts, **Pose & face** (animation and expression), **Place** (environment, camera, **Lock orbit**, and **Parallax**, the camera leaning towards the pointer), the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks) and the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them). |
 | **Look** | **Lighting** (sky strength and rotation, whether the sun follows the sky, the background and its blur, shadows), **Color** (view transform, exposure, white balance, saturation, contrast, LUT), then an effect to a section: bloom, depth of field, fog, ambient occlusion, ink strokes, and film (vignette, grain, aberration). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, with buttons under it for the playing order (in order, shuffle or repeat one), the track before, play and pause, and the next track. |
 | **Performance** | The quality preset, frame rate limit and render scale, when to pause, and in **Advanced** what the presets set one by one, with the performance overlay. |
@@ -156,7 +156,7 @@ turn it on again after moving the folder.
 
 | File or folder | What it is |
 |----------------|------------|
-| `characters\` | Your characters, one folder each. Each character's `thumbnails` folder holds the pictures of its outfits, which CharPaper takes when it first shows them: delete it and they're taken again. |
+| `characters\` | Your characters, one folder each. Each character's `thumbnails` folder holds the pictures of its outfits and a close-up of the character, which CharPaper takes when it first shows them: delete it and they're taken again. |
 | `state.toml` | Every choice you made in the panel. Delete it to start fresh. |
 | `charpaper.log` | What happened during the last run. `charpaper.previous.log` is the run before. |
 | `locales\` | Translations of the panel. |

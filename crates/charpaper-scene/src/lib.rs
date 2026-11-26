@@ -67,7 +67,7 @@ pub use stage::stage_memory_changed;
 pub use state::CharacterState;
 pub use suite::ActiveSuite;
 pub use suite::AvailableSuites;
-pub use thumbnails::SkinThumbnails;
+pub use thumbnails::Thumbnails;
 
 // Every frame, in this order: swap a stage's suite if another one was picked, fill in a suite
 // that was just loaded, then let every part catch up with the stage's CharacterState.

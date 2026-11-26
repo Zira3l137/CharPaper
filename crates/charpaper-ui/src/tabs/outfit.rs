@@ -4,7 +4,7 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedMut;
 use charpaper_scene::SkinObjects;
-use charpaper_scene::SkinThumbnails;
+use charpaper_scene::Thumbnails;
 use charpaper_scene::focused_added;
 use charpaper_scene::focused_changed;
 use charpaper_scene::focused_has;
@@ -33,8 +33,7 @@ impl Plugin for OutfitPlugin {
                 ),
                 style_skins.run_if(focused_changed::<CharacterState>.or_eager(new_panel)),
                 show_thumbnails.run_if(
-                    resource_changed::<SkinThumbnails>
-                        .or_eager(any_match_filter::<Added<TilePicture>>),
+                    resource_changed::<Thumbnails>.or_eager(any_match_filter::<Added<TilePicture>>),
                 ),
                 fill_objects.run_if(focused_changed::<SkinObjects>.or_eager(new_panel)),
                 show_objects.run_if(
@@ -64,8 +63,9 @@ struct SkinTile(String);
 #[derive(Component)]
 struct TilePicture(String);
 
+// In a tile's picture until the picture is taken.
 #[derive(Component)]
-struct TilePlaceholder;
+pub(super) struct TilePlaceholder;
 
 // Switches the worn skin's object with this name on or off.
 #[derive(Component)]
@@ -120,15 +120,27 @@ fn fill_skins(
         node.display = if suite.skins.is_empty() { Display::None } else { Display::Grid };
         commands.entity(grid).despawn_children().with_children(|grid| {
             for skin in &suite.skins {
-                grid.spawn(tile(&skin.name));
+                let name = skin.name.clone();
+                grid.spawn(picture_tile(
+                    &skin.name,
+                    Icon::Outfit,
+                    SkinTile(name.clone()),
+                    TilePicture(name),
+                ));
             }
         });
     }
 }
 
-// The skin's picture over its name. The tile is the button: the parts inside ignore the
-// pointer.
-fn tile(name: &str) -> impl Bundle {
+// A picture over a name, such as an outfit's or a character's, with `placeholder` until the
+// picture is taken. The tile is the button, with `action` saying what a click does; the parts
+// inside ignore the pointer. `picture` marks where the picture goes.
+pub(super) fn picture_tile(
+    name: &str,
+    placeholder: Icon,
+    action: impl Bundle,
+    picture: impl Bundle,
+) -> impl Bundle {
     let picture = (
         Node {
             width: Val::Percent(100.0),
@@ -140,8 +152,8 @@ fn tile(name: &str) -> impl Bundle {
         },
         Fill(WELL_BG),
         Pickable::IGNORE,
-        TilePicture(name.to_string()),
-        children![(icon(Icon::Outfit, FontSize::Px(28.0), TRACK), TilePlaceholder)],
+        picture,
+        children![(icon(placeholder, FontSize::Px(28.0), TRACK), TilePlaceholder)],
     );
     (
         Node {
@@ -156,7 +168,7 @@ fn tile(name: &str) -> impl Bundle {
         BaseBackground::default(),
         Fill(BUTTON_BG),
         Stroke(CLEAR),
-        SkinTile(name.to_string()),
+        action,
         children![
             picture,
             (
@@ -173,12 +185,31 @@ fn tile(name: &str) -> impl Bundle {
     )
 }
 
+// A tile's picture, once there is one, in place of its placeholder.
+pub(super) fn show_picture(
+    commands: &mut Commands,
+    (entity, children, shown): (Entity, &Children, bool),
+    image: &Handle<Image>,
+    placeholders: &mut Query<&mut Node, With<TilePlaceholder>>,
+) {
+    if !shown {
+        commands.entity(entity).insert(ImageNode::new(image.clone()));
+    }
+    for &child in &**children {
+        if let Ok(mut node) = placeholders.get_mut(child)
+            && node.display != Display::None
+        {
+            node.display = Display::None;
+        }
+    }
+}
+
 // A picture the app has taken replaces the placeholder. Taking them is up to the scene,
 // which does so in the background when a suite first shows.
 fn show_thumbnails(
     mut commands: Commands,
     suite: Focused<ActiveSuite>,
-    thumbnails: Res<SkinThumbnails>,
+    thumbnails: Res<Thumbnails>,
     pictures: Query<(Entity, &TilePicture, &Children, Has<ImageNode>)>,
     mut placeholders: Query<&mut Node, With<TilePlaceholder>>,
 ) {
@@ -186,16 +217,8 @@ fn show_thumbnails(
         return;
     };
     for (entity, picture, children, shown) in &pictures {
-        let Some(image) = thumbnails.get(&suite.root, &picture.0) else {
-            continue;
-        };
-        if !shown {
-            commands.entity(entity).insert(ImageNode::new(image.clone()));
-        }
-        for &child in &**children {
-            if let Ok(mut node) = placeholders.get_mut(child) {
-                node.display = Display::None;
-            }
+        if let Some(image) = thumbnails.outfit(&suite.root, &picture.0) {
+            show_picture(&mut commands, (entity, children, shown), image, &mut placeholders);
         }
     }
 }

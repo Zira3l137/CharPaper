@@ -28,7 +28,6 @@ tab-settings = Settings
 ## Character tab
 
 section-suite = CHARACTER
-label-suite = Character
 section-outfit = OUTFIT
 section-parts = PARTS
 section-pose = POSE & FACE
