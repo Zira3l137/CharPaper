@@ -35,6 +35,8 @@ point at its spot on the edge.
 - **Point at a setting** and the line at the bottom of the panel says what it does.
 - **Turn the mouse wheel over a value** to change it. Anywhere else on the panel, the
   wheel scrolls.
+- **Drag along a number's track** to change it, a step for every few pixels, as you would
+  drag a number field in Blender.
 - **Click a section's title** to fold it away.
 
 | Tab | What's there |

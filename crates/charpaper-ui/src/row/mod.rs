@@ -1,4 +1,4 @@
-mod arrows;
+mod scrub;
 mod wheel;
 mod widgets;
 
@@ -15,6 +15,7 @@ use crate::locale::Locale;
 use crate::locale::Tr;
 use crate::panel::new_panel;
 use crate::section::Content;
+use crate::theme::Fill;
 use crate::widgets::*;
 
 use widgets::Choose;
@@ -23,6 +24,8 @@ use widgets::FillBar;
 use widgets::Open;
 use widgets::PickerList;
 use widgets::SegmentBar;
+use widgets::Thumb;
+use widgets::Toggle;
 use widgets::Value;
 use widgets::list_item;
 use widgets::option_button;
@@ -36,13 +39,14 @@ pub(crate) struct RowsPlugin;
 impl Plugin for RowsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<OpenPicker>()
-            .add_plugins((wheel::WheelPlugin, arrows::ArrowsPlugin))
+            .add_plugins((wheel::WheelPlugin, scrub::ScrubPlugin))
             .add_observer(on_click)
             .add_systems(
                 PostUpdate,
                 (
                     show_rows.run_if(crate::tabs::sources_changed),
                     draw_rows,
+                    draw_switches,
                     show_open_list.run_if(resource_changed::<OpenPicker>.or_eager(new_panel)),
                 )
                     .chain()
@@ -322,6 +326,7 @@ fn draw_rows(
     children: Query<&Children>,
     mut values: Query<&mut Text, With<Value>>,
     mut bars: Query<&mut Node, (With<FillBar>, Without<Row>)>,
+    mut thumbs: Query<&mut Node, (With<Thumb>, Without<Row>, Without<FillBar>)>,
     segments: Query<(), With<SegmentBar>>,
     lists: Query<(), With<PickerList>>,
 ) {
@@ -348,6 +353,9 @@ fn draw_rows(
                 bar.left = Val::Percent(left * 100.0);
                 bar.width = Val::Percent(width * 100.0);
             }
+            if let Ok(mut thumb) = thumbs.get_mut(part) {
+                thumb.left = Val::Percent(fill * 100.0);
+            }
             let Shown::Choice { labels, current } = shown else {
                 continue;
             };
@@ -364,6 +372,30 @@ fn draw_rows(
                         list.spawn(list_item(label, index, current == Some(index)));
                     }
                 });
+            }
+        }
+    }
+}
+
+// A switch shows the second of its two choices, On, as on.
+fn draw_switches(
+    rows: Query<(Entity, &Shown), (With<Row>, Changed<Shown>)>,
+    nested: Query<(), With<Row>>,
+    children: Query<&Children>,
+    mut tracks: Query<&mut Fill, (With<Toggle>, Without<SwitchKnob>)>,
+    mut knobs: Query<(&mut Node, &mut Fill), (With<SwitchKnob>, Without<Toggle>)>,
+) {
+    for (row, shown) in &rows {
+        let Shown::Choice { current, .. } = shown else {
+            continue;
+        };
+        for part in own_parts(row, &children, &nested) {
+            let Ok(track) = tracks.get_mut(part) else {
+                continue;
+            };
+            let knob = children.get(part).ok().and_then(|inside| inside.first().copied());
+            if let Some(Ok((node, ink))) = knob.map(|knob| knobs.get_mut(knob)) {
+                paint_switch(*current == Some(1), track, node, ink);
             }
         }
     }
@@ -401,18 +433,20 @@ fn show_open_list(
 fn on_click(
     event: On<Pointer<Click>>,
     mut commands: Commands,
-    buttons: Query<(Option<&Choose>, Has<Open>)>,
+    buttons: Query<(Option<&Choose>, Has<Open>, Has<Toggle>)>,
     row_of: RowOf,
     mut open: ResMut<OpenPicker>,
 ) {
-    let (choose, opens) = match buttons.get(event.entity) {
-        Ok((None, false)) | Err(_) => return,
+    let (choose, opens, toggles) = match buttons.get(event.entity) {
+        Ok((None, false, false)) | Err(_) => return,
         Ok(found) => found,
     };
     let Some((row, _)) = row_of.get(event.entity) else {
         return;
     };
-    if let Some(&Choose(index)) = choose {
+    if toggles {
+        commands.queue(Step { change: Change::By(1), continuous: false }.on(row));
+    } else if let Some(&Choose(index)) = choose {
         commands.queue(Step { change: Change::To(index), continuous: false }.on(row));
         if open.0 == Some(row) {
             open.0 = None;

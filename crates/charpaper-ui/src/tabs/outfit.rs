@@ -9,9 +9,7 @@ use charpaper_scene::focused_changed;
 use charpaper_scene::focused_has;
 use i18n_embed_fl::fl;
 
-use crate::locale::Locale;
 use crate::panel::new_panel;
-use crate::row::on_off;
 use crate::section::Content;
 use crate::section::Section;
 use crate::theme::*;
@@ -35,7 +33,6 @@ impl Plugin for OutfitPlugin {
                 show_objects.run_if(
                     focused_changed::<CharacterState>
                         .or_eager(focused_changed::<SkinObjects>)
-                        .or_eager(resource_changed::<Locale>)
                         .or_eager(new_panel),
                 ),
             )
@@ -78,7 +75,7 @@ pub(super) fn section() -> impl Bundle {
                 Pickable::IGNORE,
                 SkinGrid,
             ),
-            crate::section::section(
+            crate::section::subsection(
                 |l| fl!(l, "section-parts"),
                 Section::Parts,
                 children![(
@@ -112,7 +109,12 @@ fn fill_skins(
                 grid.spawn(
                     button(&skin.name)
                         .font_size(SMALL_SIZE)
-                        .node(|n| n.height = Val::Px(40.0))
+                        .node(|n| {
+                            n.height = Val::Px(44.0);
+                            n.padding = UiRect::horizontal(Val::Px(6.0));
+                            n.border = UiRect::all(Val::Px(1.5));
+                            n.border_radius = BorderRadius::all(Val::Px(10.0));
+                        })
                         .build(SkinTile(skin.name.clone())),
                 );
             }
@@ -127,7 +129,7 @@ fn style_skins(state: Focused<CharacterState>, tiles: Query<(&SkinTile, &mut Fil
     for (tile, mut fill, mut border) in tiles {
         let worn = state.skin.as_ref() == Some(&tile.0);
         fill.set_if_neq(Fill(if worn { SELECTED_BG } else { BUTTON_BG }));
-        border.set_if_neq(Stroke(if worn { ACCENT } else { BORDER }));
+        border.set_if_neq(Stroke(if worn { ACCENT } else { CLEAR }));
     }
 }
 
@@ -146,20 +148,15 @@ fn fill_objects(
                 rows.spawn((
                     Node {
                         align_items: AlignItems::Center,
+                        justify_content: JustifyContent::SpaceBetween,
                         column_gap: Val::Px(12.0),
-                        height: Val::Px(32.0),
+                        height: ROW_HEIGHT,
                         ..default()
                     },
                     Pickable::IGNORE,
                     children![
-                        (
-                            Node { flex_grow: 1.0, ..default() },
-                            Pickable::IGNORE,
-                            children![label(name, BODY_SIZE, TEXT_LABEL)],
-                        ),
-                        button("-")
-                            .node(|n| n.width = Val::Px(56.0))
-                            .build(ObjectSwitch(name.to_string())),
+                        label(name, BODY_SIZE, TEXT_LABEL),
+                        switch_track(ObjectSwitch(name.to_string())),
                     ],
                 ));
             }
@@ -171,10 +168,9 @@ fn fill_objects(
 fn show_objects(
     state: Focused<CharacterState>,
     objects: Focused<SkinObjects>,
-    locale: Res<Locale>,
-    mut lists: Query<&mut Node, With<ObjectList>>,
-    switches: Query<(&ObjectSwitch, &Children)>,
-    mut texts: Query<&mut Text>,
+    mut lists: Query<&mut Node, (With<ObjectList>, Without<SwitchKnob>)>,
+    mut switches: Query<(&ObjectSwitch, &Children, &mut Fill), Without<SwitchKnob>>,
+    mut knobs: Query<(&mut Node, &mut Fill), With<SwitchKnob>>,
 ) {
     let (Some(state), Some(objects)) = (state.get(), objects.get()) else {
         return;
@@ -183,12 +179,10 @@ fn show_objects(
         node.display = display(objects.names().count() > 1);
     }
     let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
-    for (switch, children) in &switches {
+    for (switch, children, track) in &mut switches {
         let shown = !hidden.is_some_and(|hidden| hidden.contains(&switch.0));
-        for &child in &**children {
-            if let Ok(mut text) = texts.get_mut(child) {
-                text.0 = on_off(&locale, shown);
-            }
+        if let Some(Ok((knob, ink))) = children.first().map(|&knob| knobs.get_mut(knob)) {
+            paint_switch(shown, track, knob, ink);
         }
     }
 }

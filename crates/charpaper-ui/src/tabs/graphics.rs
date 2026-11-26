@@ -36,6 +36,7 @@ use crate::row::percent;
 use crate::row::*;
 use crate::section::Section;
 use crate::section::section;
+use crate::section::subsection;
 use crate::tabs::look::shown_environment;
 use crate::widgets::*;
 
@@ -162,7 +163,7 @@ fn lighting() -> impl Bundle {
                     });
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-background"),
                 help: |l| fl!(l, "help-background"),
@@ -224,7 +225,7 @@ fn lighting() -> impl Bundle {
                     });
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-shadow-quality"),
                 help: |l| fl!(l, "help-shadow-quality"),
@@ -269,7 +270,7 @@ fn lighting() -> impl Bundle {
                 },
                 change: |w, step| tune(w, |g, _| flip(&mut g.ambient_occlusion, step)),
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-ambient-occlusion-quality"),
                 help: |l| fl!(l, "help-ambient-occlusion-quality"),
@@ -429,7 +430,7 @@ fn depth_of_field() -> impl Bundle {
                     tune(w, |g, _| flip(&mut g.depth_of_field.enabled, step));
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-blur-shape"),
                 help: |l| fl!(l, "help-blur-shape"),
@@ -514,7 +515,7 @@ fn depth_of_field() -> impl Bundle {
                     w.edit(|g: &mut Graphics| flip(&mut g.depth_of_field.foreground, step));
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-bokeh-highlights"),
                 help: |l| fl!(l, "help-bokeh-highlights"),
@@ -561,7 +562,7 @@ fn strokes() -> impl Bundle {
                     });
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-stroke-width"),
                 help: |l| fl!(l, "help-stroke-width"),
@@ -612,7 +613,7 @@ fn strokes() -> impl Bundle {
                 },
                 change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_creases, step)),
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-stroke-hand-drawn"),
                 help: |l| fl!(l, "help-stroke-hand-drawn"),
@@ -622,7 +623,7 @@ fn strokes() -> impl Bundle {
                 },
                 change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_hand_drawn, step)),
             }
-            .segments(),
+            .switch(),
         ],
     )
 }
@@ -638,7 +639,7 @@ fn fog() -> impl Bundle {
                 show: |w, l| Some(switch(l, w.focused::<Graphics>()?.fog).when(foggy(w))),
                 change: |w, step| tune(w, |g, _| flip(&mut g.fog, step)),
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-fog-density"),
                 help: |l| fl!(l, "help-fog-density"),
@@ -685,7 +686,7 @@ fn fog() -> impl Bundle {
                 },
                 change: |w, step| tune(w, |g, _| flip(&mut g.fog_dithering, step)),
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-fog-resolution"),
                 help: |l| fl!(l, "help-fog-resolution"),
@@ -730,7 +731,7 @@ fn post_processing() -> impl Bundle {
 }
 
 fn image() -> impl Bundle {
-    section(
+    subsection(
         |l| fl!(l, "section-image"),
         Section::Image,
         children![
@@ -826,7 +827,7 @@ fn image() -> impl Bundle {
 }
 
 fn color() -> impl Bundle {
-    section(
+    subsection(
         |l| fl!(l, "section-color"),
         Section::Color,
         children![
@@ -936,7 +937,7 @@ fn color() -> impl Bundle {
 }
 
 fn film() -> impl Bundle {
-    section(
+    subsection(
         |l| fl!(l, "section-film"),
         Section::Film,
         children![

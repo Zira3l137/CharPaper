@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use charpaper_settings::UiState;
 
+use crate::icons::Icon;
+use crate::icons::icon;
 use crate::locale::Tr;
 use crate::panel::new_panel;
 use crate::row::DrawRows;
@@ -118,56 +120,73 @@ struct Fold(Section);
 #[derive(Component)]
 struct Body(Section);
 
-// The arrow beside the title, pointing down while the section is open.
+// The chevron at the end of the title, pointing down while the section is open.
 #[derive(Component)]
 struct Chevron(Section);
 
-// The content goes in a column under the title, usually `children![]` of rows.
+const CHEVRON_SIZE: FontSize = FontSize::Px(14.0);
+
+// The content goes on a card under the title, usually `children![]` of rows.
 pub(crate) fn section(title: Tr, section: Section, content: impl Bundle) -> impl Bundle {
+    let body = (
+        Node {
+            flex_direction: FlexDirection::Column,
+            padding: UiRect::axes(Val::Px(14.0), Val::Px(4.0)),
+            border_radius: BorderRadius::all(CARD_RADIUS),
+            ..default()
+        },
+        Fill(CARD_BG),
+        Body(section),
+        Pickable::IGNORE,
+        content,
+    );
+    (
+        Node { display: Display::None, flex_direction: FlexDirection::Column, ..default() },
+        section,
+        Pickable::IGNORE,
+        children![fold_header(title, section, PANEL_BG), body],
+    )
+}
+
+// A section inside another, already on its card: the content goes straight under the title.
+pub(crate) fn subsection(title: Tr, section: Section, content: impl Bundle) -> impl Bundle {
+    let body = (
+        Node { flex_direction: FlexDirection::Column, ..default() },
+        Body(section),
+        Pickable::IGNORE,
+        content,
+    );
     (
         Node {
             display: Display::None,
             flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(8.0),
+            margin: UiRect::top(Val::Px(4.0)),
             ..default()
         },
         section,
         Pickable::IGNORE,
-        children![
-            fold_header(title, section),
-            (
-                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default() },
-                Body(section),
-                Pickable::IGNORE,
-                content,
-            ),
-        ],
+        children![fold_header(title, section, CARD_BG), body],
     )
 }
 
-// The whole title row is the button. It's filled with the panel's own color, which looks like
-// no fill at rest but gives hover feedback something to brighten.
-fn fold_header(title: Tr, section: Section) -> impl Bundle {
+// The whole title row is the button. It's filled with what's behind it, which looks like no
+// fill at rest but gives hover feedback something to brighten.
+fn fold_header(title: Tr, section: Section, behind: Swatch) -> impl Bundle {
     (
         Node {
-            height: Val::Px(24.0),
+            height: Val::Px(28.0),
             align_items: AlignItems::Center,
-            column_gap: Val::Px(6.0),
+            justify_content: JustifyContent::SpaceBetween,
             padding: UiRect::horizontal(Val::Px(4.0)),
             border_radius: BorderRadius::all(RADIUS),
             ..default()
         },
         BaseBackground::default(),
-        Fill(PANEL_BG),
+        Fill(behind),
         Fold(section),
         children![
-            // Fixed width: the two arrows differ, and the title shouldn't shift between them.
-            (
-                Node { width: Val::Px(10.0), justify_content: JustifyContent::Center, ..default() },
-                Pickable::IGNORE,
-                children![(label("", SMALL_SIZE, TEXT_DIM), Chevron(section))],
-            ),
             translated(title, SMALL_SIZE, TEXT_DIM),
+            (icon(Icon::ChevronDown, CHEVRON_SIZE, TEXT_DIM), Chevron(section)),
         ],
     )
 }
@@ -193,9 +212,10 @@ fn show_folds(
         }
     }
     for (chevron, mut text) in &mut chevrons {
-        let arrow = if chevron.0.is_folded(&ui) { "►" } else { "▼" };
-        if text.0 != arrow {
-            text.0 = arrow.to_string();
+        let icon = if chevron.0.is_folded(&ui) { Icon::ChevronRight } else { Icon::ChevronDown };
+        let glyph = icon.glyph().to_string();
+        if text.0 != glyph {
+            text.0 = glyph;
         }
     }
 }

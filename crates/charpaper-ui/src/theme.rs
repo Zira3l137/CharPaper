@@ -24,10 +24,14 @@ impl Plugin for ThemePlugin {
 pub(crate) enum Swatch {
     Clear,
     PanelBg,
+    CardBg,
     Border,
     ButtonBg,
     WellBg,
     SelectedBg,
+    Raised,
+    Track,
+    Knob,
     Accent,
     Bar,
     LiveBorder,
@@ -40,13 +44,17 @@ pub(crate) enum Swatch {
 }
 
 impl Swatch {
-    const ALL: [Self; 15] = [
+    const ALL: [Self; 19] = [
         Self::Clear,
         Self::PanelBg,
+        Self::CardBg,
         Self::Border,
         Self::ButtonBg,
         Self::WellBg,
         Self::SelectedBg,
+        Self::Raised,
+        Self::Track,
+        Self::Knob,
         Self::Accent,
         Self::Bar,
         Self::LiveBorder,
@@ -61,12 +69,21 @@ impl Swatch {
 
 pub(crate) const CLEAR: Swatch = Swatch::Clear;
 pub(crate) const PANEL_BG: Swatch = Swatch::PanelBg;
+// Under a section's rows, a step up from the panel.
+pub(crate) const CARD_BG: Swatch = Swatch::CardBg;
 pub(crate) const BORDER: Swatch = Swatch::Border;
 pub(crate) const BUTTON_BG: Swatch = Swatch::ButtonBg;
+// The groove segments sit in, and an open list.
 pub(crate) const WELL_BG: Swatch = Swatch::WellBg;
+// A picked choice in a list or grid: tinted by the accent.
 pub(crate) const SELECTED_BG: Swatch = Swatch::SelectedBg;
+// The picked segment, raised out of its groove.
+pub(crate) const RAISED_BG: Swatch = Swatch::Raised;
+// Behind a number's fill and an off switch.
+pub(crate) const TRACK: Swatch = Swatch::Track;
+pub(crate) const KNOB: Swatch = Swatch::Knob;
 pub(crate) const ACCENT: Swatch = Swatch::Accent;
-// The bar under a number, showing how far into its range it is.
+// How far into its range a number is, along its track.
 pub(crate) const BAR: Swatch = Swatch::Bar;
 // Around a value the wheel would change right now.
 pub(crate) const LIVE_BORDER: Swatch = Swatch::LiveBorder;
@@ -79,11 +96,15 @@ pub(crate) const DANGER_TEXT: Swatch = Swatch::DangerText;
 
 pub(crate) const PANEL_WIDTH: Val = Val::Px(380.0);
 pub(crate) const PANEL_MARGIN: Val = Val::Px(16.0);
-pub(crate) const PANEL_RADIUS: Val = Val::Px(6.0);
-pub(crate) const RADIUS: Val = Val::Px(4.0);
+pub(crate) const PANEL_RADIUS: Val = Val::Px(16.0);
+pub(crate) const CARD_RADIUS: Val = Val::Px(12.0);
+pub(crate) const RADIUS: Val = Val::Px(8.0);
+// Inside something rounded by RADIUS, such as a segment in its groove.
+pub(crate) const INNER_RADIUS: Val = Val::Px(6.0);
 pub(crate) const LINE: Val = Val::Px(1.0);
-pub(crate) const CONTROL_HEIGHT: Val = Val::Px(32.0);
-pub(crate) const LABEL_WIDTH: Val = Val::Px(120.0);
+pub(crate) const CONTROL_HEIGHT: Val = Val::Px(30.0);
+pub(crate) const ROW_HEIGHT: Val = Val::Px(40.0);
+pub(crate) const LABEL_WIDTH: Val = Val::Px(116.0);
 
 pub(crate) const TITLE_SIZE: FontSize = FontSize::Px(14.0);
 pub(crate) const BODY_SIZE: FontSize = FontSize::Px(13.0);
@@ -120,16 +141,21 @@ impl Theme {
     fn new(settings: &UiTheme) -> Self {
         let base = Base::of(settings.palette);
         let accent = settings.accent.color();
+        let opacity = settings.opacity.clamp(0.0, 1.0);
         Self(std::array::from_fn(|i| match Swatch::ALL[i] {
             Swatch::Clear => Color::NONE,
-            Swatch::PanelBg => with_alpha(base.panel, settings.opacity.clamp(0.0, 1.0)),
+            Swatch::PanelBg => with_alpha(base.panel, opacity),
+            Swatch::CardBg => with_alpha(base.card, opacity),
             Swatch::Border => base.border,
             Swatch::ButtonBg => base.button,
             Swatch::WellBg => base.well,
             Swatch::SelectedBg => mix(base.well, accent, 0.22),
+            Swatch::Raised => base.raised,
+            Swatch::Track => mix(base.card, base.text, 0.14),
+            Swatch::Knob => base.knob,
             Swatch::Accent => accent,
-            Swatch::Bar => with_alpha(accent, 0.6),
-            Swatch::LiveBorder => mix(base.border, accent, 0.45),
+            Swatch::Bar => accent,
+            Swatch::LiveBorder => mix(base.border, accent, 0.7),
             Swatch::OnAccent => on(accent),
             Swatch::Text => base.text,
             Swatch::TextDim => base.text_dim,
@@ -147,9 +173,12 @@ impl Theme {
 // What a palette gives. The colors made from the accent are mixed into these.
 struct Base {
     panel: Color,
+    card: Color,
     border: Color,
     button: Color,
     well: Color,
+    raised: Color,
+    knob: Color,
     text: Color,
     text_dim: Color,
     text_label: Color,
@@ -161,21 +190,27 @@ impl Base {
     fn of(palette: Palette) -> Self {
         match palette {
             Palette::Slate => Self {
-                panel: Color::srgb_u8(0x12, 0x14, 0x1A),
-                border: Color::srgb_u8(0x2E, 0x32, 0x40),
-                button: Color::srgb_u8(0x1D, 0x20, 0x29),
-                well: Color::srgb_u8(0x15, 0x17, 0x1D),
-                text: Color::srgb_u8(0xE6, 0xE8, 0xEE),
-                text_dim: Color::srgb_u8(0xA0, 0xA7, 0xB4),
-                text_label: Color::srgb_u8(0xC9, 0xCD, 0xD6),
+                panel: Color::srgb_u8(0x13, 0x16, 0x1D),
+                card: Color::srgb_u8(0x1A, 0x1D, 0x25),
+                border: Color::srgb_u8(0x29, 0x2D, 0x38),
+                button: Color::srgb_u8(0x20, 0x24, 0x2D),
+                well: Color::srgb_u8(0x21, 0x25, 0x2E),
+                raised: Color::srgb_u8(0x31, 0x36, 0x42),
+                knob: Color::srgb_u8(0xF4, 0xF5, 0xF8),
+                text: Color::srgb_u8(0xE8, 0xEA, 0xF0),
+                text_dim: Color::srgb_u8(0x9A, 0xA1, 0xB2),
+                text_label: Color::srgb_u8(0xC5, 0xCA, 0xD6),
                 danger_border: Color::srgb_u8(0x4A, 0x2A, 0x2E),
                 danger_text: Color::srgb_u8(0xF2, 0x9A, 0x9A),
             },
             Palette::Midnight => Self {
                 panel: Color::srgb_u8(0x0A, 0x0A, 0x0C),
-                border: Color::srgb_u8(0x25, 0x26, 0x2B),
-                button: Color::srgb_u8(0x15, 0x15, 0x19),
-                well: Color::srgb_u8(0x0E, 0x0E, 0x11),
+                card: Color::srgb_u8(0x12, 0x12, 0x15),
+                border: Color::srgb_u8(0x22, 0x23, 0x28),
+                button: Color::srgb_u8(0x18, 0x19, 0x1D),
+                well: Color::srgb_u8(0x19, 0x1A, 0x1E),
+                raised: Color::srgb_u8(0x29, 0x2A, 0x30),
+                knob: Color::srgb_u8(0xF2, 0xF2, 0xF5),
                 text: Color::srgb_u8(0xED, 0xED, 0xF0),
                 text_dim: Color::srgb_u8(0x9B, 0x9C, 0xA4),
                 text_label: Color::srgb_u8(0xC7, 0xC8, 0xCE),
@@ -183,10 +218,13 @@ impl Base {
                 danger_text: Color::srgb_u8(0xF2, 0x9A, 0x9A),
             },
             Palette::Light => Self {
-                panel: Color::srgb_u8(0xF3, 0xF4, 0xF6),
-                border: Color::srgb_u8(0xCD, 0xD2, 0xDA),
-                button: Color::srgb_u8(0xFA, 0xFB, 0xFC),
-                well: Color::srgb_u8(0xE7, 0xEA, 0xEF),
+                panel: Color::srgb_u8(0xEE, 0xF0, 0xF3),
+                card: Color::srgb_u8(0xFF, 0xFF, 0xFF),
+                border: Color::srgb_u8(0xD6, 0xDA, 0xE1),
+                button: Color::srgb_u8(0xF3, 0xF4, 0xF7),
+                well: Color::srgb_u8(0xEB, 0xED, 0xF1),
+                raised: Color::srgb_u8(0xFF, 0xFF, 0xFF),
+                knob: Color::srgb_u8(0xFF, 0xFF, 0xFF),
                 text: Color::srgb_u8(0x16, 0x19, 0x1F),
                 text_dim: Color::srgb_u8(0x5A, 0x61, 0x6E),
                 text_label: Color::srgb_u8(0x34, 0x3A, 0x45),

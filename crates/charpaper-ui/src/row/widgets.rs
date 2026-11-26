@@ -3,38 +3,54 @@ use bevy::prelude::*;
 
 use super::Setting;
 use crate::icons::Icon;
+use crate::icons::icon;
 use crate::locale::Tr;
 use crate::theme::*;
 use crate::widgets::*;
 
-// The part of a row the wheel changes rather than scrolls past: the arrows and value, the
-// segments, or the picker's value.
+const CHEVRON_SIZE: FontSize = FontSize::Px(14.0);
+const THUMB: f32 = 14.0;
+
+// The part of a row the wheel changes rather than scrolls past: a number's track and value, the
+// segments, a switch, or a picker's value.
 #[derive(Component)]
 pub(crate) struct Control;
 
-// The box around a value, outlined while the wheel would change it.
+// Outlined while the wheel would change its row, and outlined in its own color, often none,
+// the rest of the time.
 #[derive(Component)]
-pub(crate) struct Well;
+pub(crate) struct Well(pub Swatch);
 
 // The text of the current value: a number, or the name of the current choice.
 #[derive(Component)]
 pub(crate) struct Value;
 
-// The bar along the bottom of a number's box, as long as the number is far into its range.
+// The accent along a number's track, as far as the number is into its range.
 #[derive(Component)]
 pub(crate) struct FillBar;
+
+// The knob at the end of the fill.
+#[derive(Component)]
+pub(crate) struct Thumb;
+
+// A number's track, which dragging along steps it.
+#[derive(Component, Default)]
+pub(crate) struct Scrub {
+    // Pixels dragged that haven't made a whole step yet.
+    pub carry: f32,
+}
 
 // Holds a row's segment buttons, one per choice.
 #[derive(Component)]
 pub(crate) struct SegmentBar;
 
+// A row's switch, which a click flips.
+#[derive(Component)]
+pub(crate) struct Toggle;
+
 // The list that opens under a picker, with a button per choice.
 #[derive(Component)]
 pub(crate) struct PickerList;
-
-// `<` and `>` beside a number, and which way they step.
-#[derive(Component)]
-pub(crate) struct Arrow(pub i32);
 
 // A choice in a row's segments or list, by its place in it.
 #[derive(Component)]
@@ -49,53 +65,80 @@ pub(crate) struct Open;
 pub(crate) struct Drawer;
 
 impl Setting {
-    // A number stepped with `<` and `>`, with a bar under it showing how far into its range it
-    // is.
+    // A number on a track, with its value beside it. The wheel over the track steps it, and so
+    // does dragging along it.
     pub(crate) fn stepper(self) -> impl Bundle {
-        let well = (
+        let track = (
             Node {
                 flex_grow: 1.0,
-                height: CONTROL_HEIGHT,
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                border: UiRect::all(LINE),
-                border_radius: BorderRadius::all(RADIUS),
+                height: Val::Px(4.0),
+                // So the thumb stays inside at either end.
+                margin: UiRect::horizontal(Val::Px(THUMB / 2.0)),
+                border_radius: BorderRadius::MAX,
                 ..default()
             },
-            Fill(WELL_BG),
-            Stroke(BORDER),
+            Fill(TRACK),
             Pickable::IGNORE,
-            Well,
             children![
-                (label("-", BODY_SIZE, TEXT), Value),
                 (
                     Node {
                         position_type: PositionType::Absolute,
+                        top: Val::ZERO,
                         bottom: Val::ZERO,
-                        height: Val::Px(2.0),
+                        border_radius: BorderRadius::MAX,
                         ..default()
                     },
                     Fill(BAR),
                     Pickable::IGNORE,
                     FillBar,
                 ),
+                (
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: Val::Px((4.0 - THUMB) / 2.0),
+                        width: Val::Px(THUMB),
+                        height: Val::Px(THUMB),
+                        margin: UiRect::left(Val::Px(-THUMB / 2.0)),
+                        border: UiRect::all(Val::Px(2.0)),
+                        border_radius: BorderRadius::MAX,
+                        ..default()
+                    },
+                    Fill(KNOB),
+                    Stroke(KNOB),
+                    Well(KNOB),
+                    Pickable::IGNORE,
+                    Thumb,
+                ),
             ],
         );
-        // Pickable, so the wheel finds it in the gaps between the arrows and the value too.
+        let value = (
+            Node {
+                width: Val::Px(52.0),
+                flex_shrink: 0.0,
+                justify_content: JustifyContent::FlexEnd,
+                ..default()
+            },
+            Pickable::IGNORE,
+            children![(label("-", CONTROL_SIZE, TEXT_DIM), Value)],
+        );
+        // Pickable all over, so the wheel and a drag find it between the track and the value too.
         let control = (
-            Node { flex_grow: 1.0, column_gap: Val::Px(4.0), ..default() },
+            Node {
+                flex_grow: 1.0,
+                height: CONTROL_HEIGHT,
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(8.0),
+                ..default()
+            },
             Control,
+            Scrub::default(),
             Hovered::default(),
-            children![
-                icon_button(Icon::ChevronLeft, Arrow(-1)),
-                well,
-                icon_button(Icon::ChevronRight, Arrow(1)),
-            ],
+            children![track, value],
         );
         (line(self.label, control), self.row(true))
     }
 
-    // Every choice side by side, for a switch or a short list: a click picks one, the wheel
+    // Every choice side by side in a groove, for a short list: a click picks one, the wheel
     // moves along them. The buttons are made from the choices the row shows.
     pub(crate) fn segments(self) -> impl Bundle {
         let control = (
@@ -109,81 +152,64 @@ impl Setting {
                 ..default()
             },
             Fill(WELL_BG),
-            Stroke(BORDER),
+            Stroke(CLEAR),
+            Well(CLEAR),
             Control,
-            Well,
             Hovered::default(),
             SegmentBar,
         );
         (line(self.label, control), self.row(false))
     }
 
-    // The current choice, which opens a list of them all under the row. For lists too long to
-    // show side by side, such as animations or environments. The wheel over it moves along the
-    // list.
+    // On or off, at the end of the row. A click flips it; the wheel turns it on going up and
+    // off going down.
+    pub(crate) fn switch(self) -> impl Bundle {
+        let control = switch_track((Control, Well(CLEAR), Toggle, Hovered::default()));
+        (end_line(self.label, control), self.row(false))
+    }
+
+    // The current choice at the end of the row, which opens a list of them all under it. For
+    // lists too long to show side by side, such as animations or environments. The wheel over
+    // it moves along the list.
     pub(crate) fn picker(self) -> impl Bundle {
         let title = self.label;
+        // A long name is cut off rather than wrapped onto a second line, and never pushes the
+        // chevron out.
         let value = (
-            Node {
-                flex_grow: 1.0,
-                height: CONTROL_HEIGHT,
-                padding: UiRect::horizontal(Val::Px(10.0)),
-                justify_content: JustifyContent::SpaceBetween,
-                align_items: AlignItems::Center,
-                border: UiRect::all(LINE),
-                border_radius: BorderRadius::all(RADIUS),
-                ..default()
-            },
-            BaseBackground::default(),
-            Fill(WELL_BG),
-            Stroke(BORDER),
-            Open,
-            Control,
-            Well,
-            Hovered::default(),
-            // A long name is cut off rather than wrapped onto a second line, and never pushes
-            // the arrow out of the box.
+            choice_box(),
             children![
                 (
-                    label("-", BODY_SIZE, TEXT),
+                    label("-", BODY_SIZE, TEXT_LABEL),
                     TextLayout::no_wrap(),
                     Node { min_width: Val::ZERO, overflow: Overflow::clip(), ..default() },
                     Value,
                 ),
-                (label("▼", SMALL_SIZE, TEXT_DIM), Node { flex_shrink: 0.0, ..default() }),
-            ],
-        );
-        // An empty column as wide as the labels keeps the list under the value. With the list
-        // hidden it has no height, so the row takes no more room than any other.
-        let list = (
-            Node { column_gap: Val::Px(12.0), ..default() },
-            Pickable::IGNORE,
-            children![
-                (Node { width: LABEL_WIDTH, flex_shrink: 0.0, ..default() }, Pickable::IGNORE),
                 (
-                    Node {
-                        display: Display::None,
-                        flex_grow: 1.0,
-                        flex_direction: FlexDirection::Column,
-                        row_gap: Val::Px(2.0),
-                        margin: UiRect::top(Val::Px(4.0)),
-                        padding: UiRect::all(Val::Px(2.0)),
-                        border: UiRect::all(LINE),
-                        border_radius: BorderRadius::all(RADIUS),
-                        ..default()
-                    },
-                    Fill(WELL_BG),
-                    Stroke(BORDER),
-                    Pickable::IGNORE,
-                    PickerList,
+                    icon(Icon::ChevronDown, CHEVRON_SIZE, TEXT_DIM),
+                    Node { flex_shrink: 0.0, ..default() }
                 ),
             ],
+        );
+        // With the list hidden it has no height, so the row takes no more room than any other.
+        let list = (
+            Node {
+                display: Display::None,
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(2.0),
+                margin: UiRect::bottom(Val::Px(6.0)),
+                padding: UiRect::all(Val::Px(4.0)),
+                border_radius: BorderRadius::all(RADIUS),
+                ..default()
+            },
+            Fill(WELL_BG),
+            Pickable::IGNORE,
+            PickerList,
         );
         (
             Node { flex_direction: FlexDirection::Column, ..default() },
             Pickable::IGNORE,
             self.row(false),
-            children![line(title, value), list],
+            children![end_line(title, value), list],
         )
     }
 
@@ -199,7 +225,7 @@ impl Setting {
                 height: Val::Px(14.0),
                 flex_shrink: 0.0,
                 border: UiRect::all(LINE),
-                border_radius: BorderRadius::all(RADIUS),
+                border_radius: BorderRadius::MAX,
                 ..default()
             },
             Fill(chip.unwrap_or(CLEAR)),
@@ -207,42 +233,27 @@ impl Setting {
             Pickable::IGNORE,
         );
         let value = (
-            Node {
-                flex_grow: 1.0,
-                height: CONTROL_HEIGHT,
-                padding: UiRect::horizontal(Val::Px(10.0)),
-                column_gap: Val::Px(8.0),
-                align_items: AlignItems::Center,
-                border: UiRect::all(LINE),
-                border_radius: BorderRadius::all(RADIUS),
-                ..default()
-            },
-            BaseBackground::default(),
-            Fill(WELL_BG),
-            Stroke(BORDER),
-            Open,
-            Control,
-            Well,
-            Hovered::default(),
+            choice_box(),
             children![
                 chip,
-                (label("-", BODY_SIZE, TEXT), Node { flex_grow: 1.0, ..default() }, Value),
-                (label("▼", SMALL_SIZE, TEXT_DIM), Node { flex_shrink: 0.0, ..default() }),
+                (label("-", BODY_SIZE, TEXT_LABEL), Value),
+                (
+                    icon(Icon::ChevronDown, CHEVRON_SIZE, TEXT_DIM),
+                    Node { flex_shrink: 0.0, ..default() }
+                ),
             ],
         );
-        // As wide as the whole row rather than under the value only: the rows inside have labels
-        // of their own.
+        // As wide as the whole row: the rows inside have labels of their own.
         let drawer = (
             Node {
                 display: Display::None,
                 flex_direction: FlexDirection::Column,
-                margin: UiRect::top(Val::Px(4.0)),
-                padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
-                border: UiRect::all(LINE),
+                margin: UiRect::bottom(Val::Px(6.0)),
+                padding: UiRect::axes(Val::Px(10.0), Val::Px(2.0)),
                 border_radius: BorderRadius::all(RADIUS),
                 ..default()
             },
-            Stroke(BORDER),
+            Fill(WELL_BG),
             Pickable::IGNORE,
             Drawer,
             rows,
@@ -251,19 +262,43 @@ impl Setting {
             Node { flex_direction: FlexDirection::Column, ..default() },
             Pickable::IGNORE,
             self.row(false),
-            children![line(title, value), drawer],
+            children![end_line(title, value), drawer],
         )
     }
 }
 
-// A label, then the row's control. Pickable, so the pointer over the label is on the row too,
-// for the help line.
+// A picker's or drawer's value: plain text on the card until the pointer is on it, with room to
+// show a hover.
+fn choice_box() -> impl Bundle {
+    (
+        Node {
+            min_width: Val::ZERO,
+            height: CONTROL_HEIGHT,
+            padding: UiRect::horizontal(Val::Px(8.0)),
+            column_gap: Val::Px(6.0),
+            align_items: AlignItems::Center,
+            border: UiRect::all(LINE),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        BaseBackground::default(),
+        Fill(CARD_BG),
+        Stroke(CLEAR),
+        Well(CLEAR),
+        Open,
+        Control,
+        Hovered::default(),
+    )
+}
+
+// A label, then the row's control filling the rest. Pickable, so the pointer over the label is
+// on the row too, for the help line.
 fn line(title: Tr, control: impl Bundle) -> impl Bundle {
     (
         Node {
             align_items: AlignItems::Center,
             column_gap: Val::Px(12.0),
-            height: Val::Px(36.0),
+            height: ROW_HEIGHT,
             ..default()
         },
         children![
@@ -277,33 +312,54 @@ fn line(title: Tr, control: impl Bundle) -> impl Bundle {
     )
 }
 
-// One of the choices in a picker's list. The current one stands out.
+// A label taking what room there is, then the row's control at its own size at the end.
+fn end_line(title: Tr, control: impl Bundle) -> impl Bundle {
+    (
+        Node {
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceBetween,
+            column_gap: Val::Px(12.0),
+            height: ROW_HEIGHT,
+            ..default()
+        },
+        children![
+            (
+                Node { flex_shrink: 0.0, ..default() },
+                Pickable::IGNORE,
+                children![translated(title, BODY_SIZE, TEXT_LABEL)],
+            ),
+            control,
+        ],
+    )
+}
+
+// One of the choices in a picker's list. The current one is tinted with the accent.
 pub(crate) fn list_item(label: &str, index: usize, current: bool) -> impl Bundle {
     ButtonBuilder::new(label)
         .font_size(BODY_SIZE)
         .text_color(if current { TEXT } else { TEXT_LABEL })
         .fill(if current { SELECTED_BG } else { WELL_BG })
         .node(|n| {
-            n.height = Val::Px(28.0);
-            n.padding = UiRect::horizontal(Val::Px(8.0));
+            n.height = Val::Px(32.0);
+            n.padding = UiRect::horizontal(Val::Px(10.0));
             n.align_items = AlignItems::Center;
-            n.border_radius = BorderRadius::all(RADIUS);
+            n.border_radius = BorderRadius::all(INNER_RADIUS);
         })
         .build(Choose(index))
 }
 
-// One of a row's segments. The current one stands out.
+// One of a row's segments. The current one is raised out of the groove.
 pub(crate) fn option_button(label: &str, index: usize, current: bool) -> impl Bundle {
     ButtonBuilder::new(label)
         .font_size(CONTROL_SIZE)
         .text_color(if current { TEXT } else { TEXT_DIM })
-        .fill(if current { SELECTED_BG } else { WELL_BG })
+        .fill(if current { RAISED_BG } else { WELL_BG })
         .node(|n| {
             n.flex_grow = 1.0;
             n.flex_basis = Val::ZERO;
             n.justify_content = JustifyContent::Center;
             n.align_items = AlignItems::Center;
-            n.border_radius = BorderRadius::all(RADIUS);
+            n.border_radius = BorderRadius::all(INNER_RADIUS);
         })
         .build(Choose(index))
 }

@@ -119,7 +119,7 @@ fn app_section() -> impl Bundle {
                     }
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-check-updates"),
                 help: |l| fl!(l, "help-check-updates"),
@@ -128,7 +128,7 @@ fn app_section() -> impl Bundle {
                     flip(&mut w.resource_mut::<SystemSettings>().check_for_updates, step);
                 },
             }
-            .segments(),
+            .switch(),
         ],
     )
 }
@@ -277,7 +277,7 @@ fn frame_rate() -> impl Bundle {
                 show: |w, l| Some(switch(l, w.resource::<UiState>().performance_monitor)),
                 change: |w, step| flip(&mut w.resource_mut::<UiState>().performance_monitor, step),
             }
-            .segments(),
+            .switch(),
         ],
     )
 }
@@ -295,7 +295,7 @@ fn pause() -> impl Bundle {
                     flip(&mut w.resource_mut::<RenderSettings>().pause_when_fullscreen, step);
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-pause-covered"),
                 help: |l| fl!(l, "help-pause-covered"),
@@ -304,7 +304,7 @@ fn pause() -> impl Bundle {
                     flip(&mut w.resource_mut::<RenderSettings>().pause_when_covered, step);
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-pause-battery"),
                 help: |l| fl!(l, "help-pause-battery"),
@@ -313,7 +313,7 @@ fn pause() -> impl Bundle {
                     flip(&mut w.resource_mut::<RenderSettings>().pause_on_battery, step);
                 },
             }
-            .segments(),
+            .switch(),
         ],
     )
 }
@@ -405,7 +405,7 @@ fn interface() -> impl Bundle {
                 show: |w, l| Some(switch(l, w.resource::<UiState>().hide_reveal_button)),
                 change: |w, step| flip(&mut w.resource_mut::<UiState>().hide_reveal_button, step),
             }
-            .segments(),
+            .switch(),
         ],
     )
 }

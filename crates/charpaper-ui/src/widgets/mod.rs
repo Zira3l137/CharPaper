@@ -58,6 +58,62 @@ pub(crate) fn icon_button(icon: Icon, action: impl Bundle) -> impl Bundle {
         .build(action)
 }
 
+// A pill with a knob that sits left while off, and right on the accent while on. `paint_switch`
+// sets which. Ignored by picking but for the track, which takes the click.
+#[derive(Component)]
+pub(crate) struct SwitchKnob;
+
+const SWITCH: Vec2 = Vec2::new(36.0, 20.0);
+const KNOB_SIZE: f32 = 14.0;
+// From the inside of the track's border.
+const KNOB_INSET: f32 = (SWITCH.y - 2.0 - KNOB_SIZE) / 2.0;
+
+pub(crate) fn switch_track(parts: impl Bundle) -> impl Bundle {
+    (
+        Node {
+            width: Val::Px(SWITCH.x),
+            height: Val::Px(SWITCH.y),
+            flex_shrink: 0.0,
+            border: UiRect::all(LINE),
+            border_radius: BorderRadius::MAX,
+            ..default()
+        },
+        BaseBackground::default(),
+        Fill(TRACK),
+        Stroke(CLEAR),
+        parts,
+        children![(
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(KNOB_INSET),
+                left: Val::Px(KNOB_INSET),
+                width: Val::Px(KNOB_SIZE),
+                height: Val::Px(KNOB_SIZE),
+                border_radius: BorderRadius::MAX,
+                ..default()
+            },
+            Fill(TEXT_LABEL),
+            Pickable::IGNORE,
+            SwitchKnob,
+        )],
+    )
+}
+
+// Written only on a change, so the panel isn't laid out again for nothing.
+pub(crate) fn paint_switch(
+    on: bool,
+    mut track: Mut<Fill>,
+    mut knob: Mut<Node>,
+    mut ink: Mut<Fill>,
+) {
+    track.set_if_neq(Fill(if on { ACCENT } else { TRACK }));
+    ink.set_if_neq(Fill(if on { KNOB } else { TEXT_LABEL }));
+    let left = Val::Px(if on { SWITCH.x - 2.0 - KNOB_INSET - KNOB_SIZE } else { KNOB_INSET });
+    if knob.left != left {
+        knob.left = left;
+    }
+}
+
 pub(crate) fn display(shown: bool) -> Display {
     if shown { Display::Flex } else { Display::None }
 }

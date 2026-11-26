@@ -123,7 +123,7 @@ fn gaze() -> impl Bundle {
                     w.edit(|gaze: &mut GazeSettings| flip(&mut gaze.follow_cursor, step));
                 },
             }
-            .segments(),
+            .switch(),
             // Does nothing while the character doesn't follow.
             Setting {
                 label: |l| fl!(l, "label-gaze-strength"),
@@ -156,7 +156,7 @@ fn gaze() -> impl Bundle {
                     w.edit(|gaze: &mut GazeSettings| flip(&mut gaze.reactions, step));
                 },
             }
-            .segments()
+            .switch()
         ],
     )
 }
@@ -180,7 +180,7 @@ fn physics() -> impl Bundle {
                     w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.enabled, step));
                 },
             }
-            .segments(),
+            .switch(),
             // Only with colliders to make finer, and while the chains swing.
             Setting {
                 label: |l| fl!(l, "label-physics-quality"),
@@ -197,7 +197,7 @@ fn physics() -> impl Bundle {
                     w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.high_quality, step));
                 },
             }
-            .segments(),
+            .switch(),
             // Only where the environment shown has wind.
             Setting {
                 label: |l| fl!(l, "label-wind"),
@@ -217,7 +217,7 @@ fn physics() -> impl Bundle {
                     w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.wind, step));
                 },
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-physics-cursor"),
                 help: |l| fl!(l, "help-physics-cursor"),
@@ -231,7 +231,7 @@ fn physics() -> impl Bundle {
                     w.edit(|physics: &mut PhysicsSettings| flip(&mut physics.cursor, step));
                 },
             }
-            .segments()
+            .switch()
         ],
     )
 }
@@ -270,14 +270,14 @@ fn camera() -> impl Bundle {
                 },
                 change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.locked, step)),
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-parallax"),
                 help: |l| fl!(l, "help-parallax"),
                 show: |w, l| Some(switch(l, w.focused::<ViewSettings>()?.parallax)),
                 change: |w, step| w.edit(|view: &mut ViewSettings| flip(&mut view.parallax, step)),
             }
-            .segments(),
+            .switch(),
             Setting {
                 label: |l| fl!(l, "label-parallax-strength"),
                 help: |l| fl!(l, "help-parallax-strength"),
