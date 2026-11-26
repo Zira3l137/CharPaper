@@ -156,7 +156,7 @@ turn it on again after moving the folder.
 
 | File or folder | What it is |
 |----------------|------------|
-| `characters\` | Your characters, one folder each. |
+| `characters\` | Your characters, one folder each. Each character's `thumbnails` folder holds the pictures of its outfits, which CharPaper takes when it first shows them: delete it and they're taken again. |
 | `state.toml` | Every choice you made in the panel. Delete it to start fresh. |
 | `charpaper.log` | What happened during the last run. `charpaper.previous.log` is the run before. |
 | `locales\` | Translations of the panel. |

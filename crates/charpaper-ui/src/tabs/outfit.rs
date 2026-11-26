@@ -4,11 +4,14 @@ use charpaper_scene::CharacterState;
 use charpaper_scene::Focused;
 use charpaper_scene::FocusedMut;
 use charpaper_scene::SkinObjects;
+use charpaper_scene::SkinThumbnails;
 use charpaper_scene::focused_added;
 use charpaper_scene::focused_changed;
 use charpaper_scene::focused_has;
 use i18n_embed_fl::fl;
 
+use crate::icons::Icon;
+use crate::icons::icon;
 use crate::panel::new_panel;
 use crate::section::Content;
 use crate::section::Section;
@@ -29,6 +32,10 @@ impl Plugin for OutfitPlugin {
                         .or_eager(new_panel.and_eager(focused_has::<ActiveSuite>)),
                 ),
                 style_skins.run_if(focused_changed::<CharacterState>.or_eager(new_panel)),
+                show_thumbnails.run_if(
+                    resource_changed::<SkinThumbnails>
+                        .or_eager(any_match_filter::<Added<TilePicture>>),
+                ),
                 fill_objects.run_if(focused_changed::<SkinObjects>.or_eager(new_panel)),
                 show_objects.run_if(
                     focused_changed::<CharacterState>
@@ -52,6 +59,13 @@ struct ObjectList;
 // Wears the skin with this name.
 #[derive(Component)]
 struct SkinTile(String);
+
+// Where the skin's picture goes, a placeholder until it's taken.
+#[derive(Component)]
+struct TilePicture(String);
+
+#[derive(Component)]
+struct TilePlaceholder;
 
 // Switches the worn skin's object with this name on or off.
 #[derive(Component)]
@@ -106,19 +120,83 @@ fn fill_skins(
         node.display = if suite.skins.is_empty() { Display::None } else { Display::Grid };
         commands.entity(grid).despawn_children().with_children(|grid| {
             for skin in &suite.skins {
-                grid.spawn(
-                    button(&skin.name)
-                        .font_size(SMALL_SIZE)
-                        .node(|n| {
-                            n.height = Val::Px(44.0);
-                            n.padding = UiRect::horizontal(Val::Px(6.0));
-                            n.border = UiRect::all(Val::Px(1.5));
-                            n.border_radius = BorderRadius::all(Val::Px(10.0));
-                        })
-                        .build(SkinTile(skin.name.clone())),
-                );
+                grid.spawn(tile(&skin.name));
             }
         });
+    }
+}
+
+// The skin's picture over its name. The tile is the button: the parts inside ignore the
+// pointer.
+fn tile(name: &str) -> impl Bundle {
+    let picture = (
+        Node {
+            width: Val::Percent(100.0),
+            aspect_ratio: Some(1.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            border_radius: BorderRadius::all(INNER_RADIUS),
+            ..default()
+        },
+        Fill(WELL_BG),
+        Pickable::IGNORE,
+        TilePicture(name.to_string()),
+        children![(icon(Icon::Outfit, FontSize::Px(28.0), TRACK), TilePlaceholder)],
+    );
+    (
+        Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(4.0),
+            padding: UiRect::all(Val::Px(4.0)),
+            border: UiRect::all(Val::Px(1.5)),
+            border_radius: BorderRadius::all(Val::Px(10.0)),
+            min_width: Val::ZERO,
+            ..default()
+        },
+        BaseBackground::default(),
+        Fill(BUTTON_BG),
+        Stroke(CLEAR),
+        SkinTile(name.to_string()),
+        children![
+            picture,
+            (
+                label(name, SMALL_SIZE, TEXT_LABEL),
+                TextLayout::no_wrap(),
+                Node {
+                    min_width: Val::ZERO,
+                    overflow: Overflow::clip(),
+                    margin: UiRect::new(Val::Px(2.0), Val::Px(2.0), Val::ZERO, Val::Px(2.0)),
+                    ..default()
+                },
+            ),
+        ],
+    )
+}
+
+// A picture the app has taken replaces the placeholder. Taking them is up to the scene,
+// which does so in the background when a suite first shows.
+fn show_thumbnails(
+    mut commands: Commands,
+    suite: Focused<ActiveSuite>,
+    thumbnails: Res<SkinThumbnails>,
+    pictures: Query<(Entity, &TilePicture, &Children, Has<ImageNode>)>,
+    mut placeholders: Query<&mut Node, With<TilePlaceholder>>,
+) {
+    let Some(suite) = suite.get() else {
+        return;
+    };
+    for (entity, picture, children, shown) in &pictures {
+        let Some(image) = thumbnails.get(&suite.root, &picture.0) else {
+            continue;
+        };
+        if !shown {
+            commands.entity(entity).insert(ImageNode::new(image.clone()));
+        }
+        for &child in &**children {
+            if let Ok(mut node) = placeholders.get_mut(child) {
+                node.display = Display::None;
+            }
+        }
     }
 }
 

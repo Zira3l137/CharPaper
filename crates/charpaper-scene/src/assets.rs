@@ -16,7 +16,12 @@ pub const CHARACTERS_SOURCE: &str = "characters";
 pub const ARMATURE_SOURCE: &str = "armature";
 
 pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
-    let folder = suite.root.file_name().unwrap_or_default();
+    path_in(&suite.root, file)
+}
+
+// A file of the suite in the folder `root`.
+fn path_in(root: &Path, file: &Path) -> AssetPath<'static> {
+    let folder = root.file_name().unwrap_or_default();
     AssetPath::from_path_buf(Path::new(folder).join(file)).with_source(CHARACTERS_SOURCE)
 }
 
@@ -25,6 +30,10 @@ pub(crate) fn asset_path(suite: &Suite, file: &Path) -> AssetPath<'static> {
 pub(crate) const GPU_ONLY: RenderAssetUsages = RenderAssetUsages::RENDER_WORLD;
 
 pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Handle<Gltf> {
+    load_gltf_in(assets, &suite.root, file)
+}
+
+pub(crate) fn load_gltf_in(assets: &AssetServer, root: &Path, file: &Path) -> Handle<Gltf> {
     assets
         .load_builder()
         .with_settings(|s: &mut GltfLoaderSettings| {
@@ -33,7 +42,7 @@ pub(crate) fn load_gltf(assets: &AssetServer, suite: &Suite, file: &Path) -> Han
             s.load_meshes = GPU_ONLY;
             s.load_materials = GPU_ONLY;
         })
-        .load(asset_path(suite, file))
+        .load(path_in(root, file))
 }
 
 // Scene 0, not the default scene: Bevy has no label for the default one, and Blender

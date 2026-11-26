@@ -27,6 +27,7 @@ mod state;
 mod strokes;
 mod suite;
 mod sun;
+mod thumbnails;
 
 pub use assets::ARMATURE_SOURCE;
 pub use assets::CHARACTERS_SOURCE;
@@ -66,6 +67,7 @@ pub use stage::stage_memory_changed;
 pub use state::CharacterState;
 pub use suite::ActiveSuite;
 pub use suite::AvailableSuites;
+pub use thumbnails::SkinThumbnails;
 
 // Every frame, in this order: swap a stage's suite if another one was picked, fill in a suite
 // that was just loaded, then let every part catch up with the stage's CharacterState.
@@ -103,6 +105,7 @@ impl Plugin for ScenePlugin {
                 environment::EnvironmentPlugin,
                 lights::LightsPlugin,
                 sun::SunPlugin,
+                thumbnails::ThumbnailsPlugin,
                 animated::AnimatedPlugin,
                 bevy_fixes::BevyFixesPlugin,
             ))

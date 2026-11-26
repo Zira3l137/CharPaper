@@ -22,6 +22,7 @@ characters/
     │   ├── casual.glb        one outfit: every mesh the character wears in it
     │   ├── casual.drivers.json   that outfit's shape key drivers, if it has any
     │   └── pajamas.glb
+    ├── thumbnails/           pictures of the outfits, which the app takes itself
     ├── clips/
     │   ├── Idle.json         one clip of the character: its timing and shape keys
     │   └── Idle.glb          the bones it moves

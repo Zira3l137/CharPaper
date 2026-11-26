@@ -14,6 +14,12 @@ shows of it), hair, eyes, clothes. Switching skins in the app swaps all of it at
 3. In **Character → Skins**, press **+**. The skin takes the collection and its name. Change
    the name if you like: it's what the app shows and the file's name.
 
+The app shows each outfit on a tile with a picture of it, which it takes itself the first
+time the character shows: the outfit in the **rest pose** of its file, from a three-quarter
+view of the character's front. So export with the armature in a clean rest pose, a T-pose
+or A-pose, rather than mid-gesture. The pictures are kept in the character's `thumbnails`
+folder and taken again whenever a skin is exported again.
+
 Each skin in the list has:
 
 - a **checkbox**: unticked, *Export all* leaves it out. Handy when you only changed one
