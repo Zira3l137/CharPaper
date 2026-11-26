@@ -2041,7 +2041,6 @@ version = "0.8.3"
 dependencies = [
  "raw-window-handle",
  "thiserror 2.0.20",
- "tracing",
 ]
 
 [[package]]
