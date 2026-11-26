@@ -89,7 +89,7 @@ pub(crate) const TITLE_SIZE: FontSize = FontSize::Px(14.0);
 pub(crate) const BODY_SIZE: FontSize = FontSize::Px(13.0);
 pub(crate) const CONTROL_SIZE: FontSize = FontSize::Px(12.0);
 pub(crate) const SMALL_SIZE: FontSize = FontSize::Px(11.0);
-pub(crate) const GLYPH_SIZE: FontSize = FontSize::Px(14.0);
+pub(crate) const ICON_SIZE: FontSize = FontSize::Px(16.0);
 
 // Parts are spawned with the part their background, border or text plays rather than a color,
 // and `repaint` gives them the theme's color for it. A part that changes look, such as a tab

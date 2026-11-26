@@ -1,6 +1,6 @@
 [CharPaper](../README.md) › [Docs](README.md)
 
-# Translating and building
+# Translating, building and icons
 
 ## Translating the panel
 
@@ -51,6 +51,30 @@ added beside it:
 
 The Blender add-on is in [`tools/blender/charpaper_exporter`](../tools/blender/charpaper_exporter).
 [RELEASING.md](../RELEASING.md) explains how versions and nightly builds are made.
+
+## The panel's icons
+
+The panel draws its icons from a font of its own,
+[`crates/charpaper-ui/assets/icons.ttf`](../crates/charpaper-ui/assets/icons.ttf), made from the
+SVGs in [`resources/icons`](../resources/icons). To add or change an icon:
+
+1. Draw it as lines on a 24×24 grid, 2 units thick, as the others are. Copy one of them for
+   the `<svg>` line at the top, which sets that up. `fill="currentColor"` fills a shape too,
+   and `stroke="none"` leaves its line out. Only `path`, `circle`, `rect`, `line` and
+   `polyline` are understood, without transforms.
+2. Save it in `resources/icons` under a lower-case name with underscores, such as
+   `arrow_left.svg`. In Rust it's then `Icon::ArrowLeft`.
+3. Run the script, which needs two Python packages:
+
+   ```
+   pip install fonttools skia-pathops
+   python tools/icons.py
+   ```
+
+   It writes the font and `crates/charpaper-ui/src/icons/glyphs.rs`, the icons' names in
+   Rust. Commit both with the SVG.
+
+Show icons at 16 pixels or larger: any smaller and their lines blur.
 
 ---
 

@@ -13,6 +13,7 @@ use charpaper_settings::UpdateStatus;
 use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
+use crate::icons::Icon;
 use crate::locale::Locale;
 use crate::locale::Tr;
 use crate::row::Row;
@@ -173,8 +174,7 @@ fn reveal_zone(closed: bool) -> impl Bundle {
 }
 
 fn reveal_button() -> impl Bundle {
-    ButtonBuilder::new("<")
-        .font_size(GLYPH_SIZE)
+    ButtonBuilder::icon(Icon::ChevronLeft)
         .text_color(TEXT)
         .fill(PANEL_BG)
         .border_color(BORDER)
@@ -243,7 +243,7 @@ fn header() -> impl Bundle {
                     (label("", SMALL_SIZE, TEXT_DIM), StatusText),
                 ],
             ),
-            glyph_button(">", PanelButton::Hide),
+            icon_button(Icon::ChevronRight, PanelButton::Hide),
         ],
     )
 }
@@ -367,7 +367,11 @@ fn dock_panels(
     mut texts: Query<&mut Text>,
 ) {
     let left = ui.theme.side == PanelSide::Left;
-    let (hide, reveal) = if left { ("<", ">") } else { (">", "<") };
+    let (hide, reveal) = if left {
+        (Icon::ChevronLeft, Icon::ChevronRight)
+    } else {
+        (Icon::ChevronRight, Icon::ChevronLeft)
+    };
     for (mut node, button, menu, zone, children) in parts {
         if zone {
             let edge = if left {
@@ -380,7 +384,7 @@ fn dock_panels(
             }
             continue;
         }
-        let glyph = match button {
+        let icon = match button {
             Some(PanelButton::Hide) => hide,
             Some(PanelButton::Reveal) => {
                 // Flush with the edge, so the side touching it has no border or rounding.
@@ -411,11 +415,12 @@ fn dock_panels(
         let Some(children) = children else {
             continue;
         };
+        let glyph = icon.glyph().to_string();
         for &child in &**children {
             if let Ok(mut text) = texts.get_mut(child)
                 && text.0 != glyph
             {
-                text.0 = glyph.to_string();
+                text.0.clone_from(&glyph);
             }
         }
     }

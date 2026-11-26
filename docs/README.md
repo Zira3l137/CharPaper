@@ -50,7 +50,7 @@ For 3D artists working in Blender.
 
 ## For developers
 
-- **[Translating and building](development.md)**: adding a language to the panel, building from source, and how the code is split.
+- **[Translating, building and icons](development.md)**: adding a language to the panel, building from source, how the code is split, and the panel's icons.
   <br><sub>[Translating the panel](development.md#translating-the-panel) · [Building from source](development.md#building-from-source)</sub>
 - **[The Blender add-on's README](../tools/blender/charpaper_exporter/README.md)**: the fine
   print for every export feature.

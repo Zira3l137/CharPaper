@@ -2,6 +2,7 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 
 use super::Setting;
+use crate::icons::Icon;
 use crate::locale::Tr;
 use crate::theme::*;
 use crate::widgets::*;
@@ -85,7 +86,11 @@ impl Setting {
             Node { flex_grow: 1.0, column_gap: Val::Px(4.0), ..default() },
             Control,
             Hovered::default(),
-            children![glyph_button("<", Arrow(-1)), well, glyph_button(">", Arrow(1))],
+            children![
+                icon_button(Icon::ChevronLeft, Arrow(-1)),
+                well,
+                icon_button(Icon::ChevronRight, Arrow(1)),
+            ],
         );
         (line(self.label, control), self.row(true))
     }

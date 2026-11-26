@@ -83,14 +83,15 @@ Windows says it protected your PC.
 | Edit a character's settings by hand | [suite.toml](docs/suite-toml.md) |
 | Fix a character that looks or loads wrong | [Troubleshooting for artists](docs/troubleshooting.md) |
 | Keep my scene light on the computer | [Keeping it fast](docs/performance.md) |
-| Translate the panel, or build CharPaper | [Translating and building](docs/development.md) |
+| Translate the panel, build CharPaper, or add an icon | [Translating, building and icons](docs/development.md) |
 
 **[All the docs, page by page](docs/README.md)**
 
 ## License
 
-- **The app**, which is everything in `crates/`, `locales/`, `schemas/` and `packaging/`, is
-  under your choice of the [MIT](LICENSE-MIT) or the [Apache 2.0](LICENSE-APACHE) license.
+- **The app**, which is everything in `crates/`, `locales/`, `schemas/` and `packaging/`, with
+  the panel's icons in `resources/icons/` and `tools/icons.py` that makes their font, is under
+  your choice of the [MIT](LICENSE-MIT) or the [Apache 2.0](LICENSE-APACHE) license.
 - **The Blender add-on** is under the [GPL 3.0 or later](tools/blender/charpaper_exporter/LICENSE),
   as add-ons that run inside Blender must be.
 - **The artwork** is © Zirael, all rights reserved: the app icon in `crates/charpaper/icon/`,

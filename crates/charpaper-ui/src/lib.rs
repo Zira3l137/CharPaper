@@ -1,5 +1,6 @@
 mod fonts;
 mod held;
+mod icons;
 mod locale;
 mod overlay;
 mod panel;
@@ -47,6 +48,7 @@ impl Plugin for SettingsPanelPlugin {
             )
             .add_plugins((
                 fonts::FontsPlugin,
+                icons::IconsPlugin,
                 panel::PanelPlugin,
                 overlay::OverlayPlugin,
                 section::SectionsPlugin,

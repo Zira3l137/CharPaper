@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
+use crate::icons::Icon;
+use crate::icons::icon_font;
 use crate::locale::Localized;
 use crate::locale::Tr;
 use crate::theme::*;
@@ -34,6 +36,11 @@ impl ButtonBuilder {
             fill: BUTTON_BG,
             border_color: CLEAR,
         }
+    }
+
+    // Sized by `font_size`, as text is.
+    pub(crate) fn icon(icon: Icon) -> Self {
+        Self { font: icon_font(ICON_SIZE), ..Self::new(icon.glyph()) }
     }
 
     pub(crate) fn translated(text: Tr) -> Self {

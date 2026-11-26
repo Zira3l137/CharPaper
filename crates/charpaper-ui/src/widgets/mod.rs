@@ -7,6 +7,7 @@ pub(crate) use button::BaseBackground;
 pub(crate) use button::ButtonBuilder;
 pub(crate) use button::HoverFeedback;
 
+use crate::icons::Icon;
 use crate::locale::Localized;
 use crate::locale::Tr;
 use crate::theme::*;
@@ -48,8 +49,8 @@ pub(crate) fn translated_button(text: Tr) -> ButtonBuilder {
         .node(|n| n.padding = UiRect::horizontal(Val::Px(14.0)))
 }
 
-pub(crate) fn glyph_button(glyph: &str, action: impl Bundle) -> impl Bundle {
-    control(ButtonBuilder::new(glyph), GLYPH_SIZE)
+pub(crate) fn icon_button(icon: Icon, action: impl Bundle) -> impl Bundle {
+    control(ButtonBuilder::icon(icon), ICON_SIZE)
         .node(|n| {
             n.width = CONTROL_HEIGHT;
             n.flex_shrink = 0.0;
