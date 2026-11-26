@@ -16,3 +16,6 @@ charpaper-suite.workspace = true
 crossbeam-channel.workspace = true
 image.workspace = true
 thiserror.workspace = true
+
+[lints]
+workspace = true

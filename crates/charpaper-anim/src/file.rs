@@ -193,7 +193,7 @@ fn track<T: Sample>(
         // In-tangent, value, out-tangent for each key. The exporter samples every frame, so
         // the values alone, joined linearly, are what Blender showed.
         gltf::animation::Interpolation::CubicSpline => {
-            let values = values.chunks_exact(3).map(|key| key[1]).collect();
+            let values = values.as_chunks::<3>().0.iter().map(|key| key[1]).collect();
             Track::new(times, values, Interpolation::Linear)
         }
     }

@@ -12,3 +12,6 @@ charpaper-settings.workspace = true
 charpaper-suite.workspace = true
 i18n-embed.workspace = true
 i18n-embed-fl.workspace = true
+
+[lints]
+workspace = true

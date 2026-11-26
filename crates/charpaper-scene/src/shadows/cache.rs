@@ -230,7 +230,7 @@ struct Drawn {
 // index, so each frame draws its share rather than all of them every `period` frames.
 fn is_turn(frame: u64, (light, face): (Entity, u8), period: u8) -> bool {
     let period = u64::from(period.max(1));
-    (frame + u64::from(light.index_u32()) + u64::from(face)) % period == 0
+    (frame + u64::from(light.index_u32()) + u64::from(face)).is_multiple_of(period)
 }
 
 // Bevy makes these views anew every frame, each set to draw. Views with occlusion culling are

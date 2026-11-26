@@ -49,7 +49,6 @@ impl Sway {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn ease(
     time: Res<Time>,
     cursor: Res<CursorPosition>,

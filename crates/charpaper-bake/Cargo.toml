@@ -10,3 +10,6 @@ charpaper-suite.workspace = true
 image.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

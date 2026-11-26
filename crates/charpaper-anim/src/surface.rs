@@ -308,7 +308,7 @@ pub fn read_parts(path: &Path, bones: &[(String, f32)]) -> Result<Vec<Part>, Sur
                 let on_bone = Vec3::Y * point.y.clamp(0.0, length);
                 found.entry(*bone).or_default().0.push(point.distance(on_bone));
             }
-            for corners in indices.chunks_exact(3) {
+            for corners in indices.as_chunks::<3>().0 {
                 if corners.iter().any(|&v| v >= positions.len() || v >= mostly.len()) {
                     continue;
                 }

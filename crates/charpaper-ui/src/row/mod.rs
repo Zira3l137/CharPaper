@@ -206,6 +206,7 @@ pub(crate) fn balance(text: impl Into<String>, value: f32, min: f32, max: f32) -
 }
 
 // max and min rather than clamp: they turn a NaN, say from the log of a zero, into 0.
+#[allow(clippy::manual_clamp)]
 fn fraction(value: f32, min: f32, max: f32) -> f32 {
     if max > min { ((value - min) / (max - min)).max(0.0).min(1.0) } else { 0.0 }
 }

@@ -98,7 +98,6 @@ enum Source {
     Rest(charpaper_anim::Transform),
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn bind_springs(
     mut commands: Commands,
     mut armatures: Query<(Entity, &CharacterActor, Option<&mut Springs>), With<Armature>>,
@@ -273,7 +272,6 @@ pub(crate) fn read_body(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn swing(
     time: Res<Time>,
     mouse: Res<Mouse>,

@@ -43,3 +43,6 @@ charpaper-windows.workspace = true
 # the workspace entry.
 [target.'cfg(target_os = "linux")'.dependencies]
 bevy = { workspace = true, features = ["x11", "wayland"] }
+
+[lints]
+workspace = true

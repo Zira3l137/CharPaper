@@ -7,6 +7,12 @@ version = "0.8.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
+[workspace.lints.clippy]
+# A Bevy system takes what it uses as parameters, and a query spells out the data it reads, so
+# both fire on ordinary systems.
+too_many_arguments = "allow"
+type_complexity = "allow"
+
 [workspace.dependencies]
 # Only what the app uses. tonemapping_luts is required: Camera3d's default tonemapper
 # reads its LUT from a ktx2 asset, hence ktx2 and zstd_rust with it.

@@ -229,7 +229,6 @@ impl SpecializedRenderPipeline for DepthOfFieldPipeline {
                         Some(ColorTargetState { format, blend: None, write_mask: ColorWrites::ALL })
                     })
                     .collect(),
-                ..default()
             }),
             ..default()
         }

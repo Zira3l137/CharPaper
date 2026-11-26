@@ -7,3 +7,6 @@ license.workspace = true
 # Bevy-free on purpose, so the aiming is tested on its own.
 [dependencies]
 glam.workspace = true
+
+[lints]
+workspace = true

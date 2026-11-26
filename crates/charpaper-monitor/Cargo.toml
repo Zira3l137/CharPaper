@@ -14,3 +14,6 @@ wgpu.workspace = true
 # costs an atomic add on every allocation and every GPU object made or dropped, all the time,
 # so only diagnostics builds do it. The app also wraps its allocator in CountingAllocator then.
 diagnostics = ["wgpu/counters"]
+
+[lints]
+workspace = true

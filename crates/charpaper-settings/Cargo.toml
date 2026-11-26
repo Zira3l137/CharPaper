@@ -9,3 +9,6 @@ bevy.workspace = true
 charpaper-suite.workspace = true
 serde.workspace = true
 toml.workspace = true
+
+[lints]
+workspace = true

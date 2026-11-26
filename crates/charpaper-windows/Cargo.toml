@@ -13,3 +13,6 @@ tracing.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
+
+[lints]
+workspace = true

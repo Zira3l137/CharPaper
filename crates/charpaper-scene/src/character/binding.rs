@@ -50,7 +50,7 @@ pub(crate) fn bind_skins(
     mut skinned: Query<&mut SkinnedMesh>,
 ) {
     for (skin_root, skin, skin_parent) in &skins {
-        let Some(armature) = armature_beside(skin_parent, &armatures) else {
+        let Some(armature) = armature_beside(skin_parent, armatures) else {
             continue;
         };
         let bones: HashMap<&str, Entity> = children

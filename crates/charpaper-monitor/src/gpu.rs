@@ -198,9 +198,11 @@ impl ClockFrame {
         let count = self.marks.len();
         let data = self.readable.slice(..).get_mapped_range();
         let stamps: Vec<u64> = data
-            .chunks_exact(8)
+            .as_chunks::<8>()
+            .0
+            .iter()
             .take(count)
-            .map(|bytes| u64::from_le_bytes(bytes.try_into().unwrap_or_default()))
+            .map(|&bytes| u64::from_le_bytes(bytes))
             .collect();
         drop(data);
 

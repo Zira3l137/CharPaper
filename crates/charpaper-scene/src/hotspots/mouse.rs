@@ -37,7 +37,6 @@ impl Mouse {
 #[derive(Default)]
 pub(super) struct Pointer(Option<(Entity, Vec2)>);
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn mouse(
     real: Res<Time<Real>>,
     buttons: Res<ButtonInput<MouseButton>>,
