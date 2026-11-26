@@ -35,16 +35,14 @@ pub(crate) enum Swatch {
     Accent,
     Bar,
     LiveBorder,
-    OnAccent,
     Text,
     TextDim,
     TextLabel,
-    DangerBorder,
     DangerText,
 }
 
 impl Swatch {
-    const ALL: [Self; 19] = [
+    const ALL: [Self; 17] = [
         Self::Clear,
         Self::PanelBg,
         Self::CardBg,
@@ -58,11 +56,9 @@ impl Swatch {
         Self::Accent,
         Self::Bar,
         Self::LiveBorder,
-        Self::OnAccent,
         Self::Text,
         Self::TextDim,
         Self::TextLabel,
-        Self::DangerBorder,
         Self::DangerText,
     ];
 }
@@ -87,11 +83,9 @@ pub(crate) const ACCENT: Swatch = Swatch::Accent;
 pub(crate) const BAR: Swatch = Swatch::Bar;
 // Around a value the wheel would change right now.
 pub(crate) const LIVE_BORDER: Swatch = Swatch::LiveBorder;
-pub(crate) const ON_ACCENT: Swatch = Swatch::OnAccent;
 pub(crate) const TEXT: Swatch = Swatch::Text;
 pub(crate) const TEXT_DIM: Swatch = Swatch::TextDim;
 pub(crate) const TEXT_LABEL: Swatch = Swatch::TextLabel;
-pub(crate) const DANGER_BORDER: Swatch = Swatch::DangerBorder;
 pub(crate) const DANGER_TEXT: Swatch = Swatch::DangerText;
 
 pub(crate) const PANEL_WIDTH: Val = Val::Px(380.0);
@@ -156,11 +150,9 @@ impl Theme {
             Swatch::Accent => accent,
             Swatch::Bar => accent,
             Swatch::LiveBorder => mix(base.border, accent, 0.7),
-            Swatch::OnAccent => on(accent),
             Swatch::Text => base.text,
             Swatch::TextDim => base.text_dim,
             Swatch::TextLabel => base.text_label,
-            Swatch::DangerBorder => base.danger_border,
             Swatch::DangerText => base.danger_text,
         }))
     }
@@ -182,7 +174,6 @@ struct Base {
     text: Color,
     text_dim: Color,
     text_label: Color,
-    danger_border: Color,
     danger_text: Color,
 }
 
@@ -200,7 +191,6 @@ impl Base {
                 text: Color::srgb_u8(0xE8, 0xEA, 0xF0),
                 text_dim: Color::srgb_u8(0x9A, 0xA1, 0xB2),
                 text_label: Color::srgb_u8(0xC5, 0xCA, 0xD6),
-                danger_border: Color::srgb_u8(0x4A, 0x2A, 0x2E),
                 danger_text: Color::srgb_u8(0xF2, 0x9A, 0x9A),
             },
             Palette::Midnight => Self {
@@ -214,7 +204,6 @@ impl Base {
                 text: Color::srgb_u8(0xED, 0xED, 0xF0),
                 text_dim: Color::srgb_u8(0x9B, 0x9C, 0xA4),
                 text_label: Color::srgb_u8(0xC7, 0xC8, 0xCE),
-                danger_border: Color::srgb_u8(0x4A, 0x24, 0x27),
                 danger_text: Color::srgb_u8(0xF2, 0x9A, 0x9A),
             },
             Palette::Light => Self {
@@ -228,7 +217,6 @@ impl Base {
                 text: Color::srgb_u8(0x16, 0x19, 0x1F),
                 text_dim: Color::srgb_u8(0x5A, 0x61, 0x6E),
                 text_label: Color::srgb_u8(0x34, 0x3A, 0x45),
-                danger_border: Color::srgb_u8(0xE5, 0xBF, 0xBF),
                 danger_text: Color::srgb_u8(0xB4, 0x23, 0x18),
             },
         }
@@ -245,21 +233,6 @@ fn mix(from: Color, to: Color, amount: f32) -> Color {
     let (a, b) = (from.to_srgba(), to.to_srgba());
     let at = |a: f32, b: f32| a + (b - a) * amount;
     Color::srgba(at(a.red, b.red), at(a.green, b.green), at(a.blue, b.blue), at(a.alpha, b.alpha))
-}
-
-// Text on the accent: near-black or white, whichever stands out more against it.
-fn on(accent: Color) -> Color {
-    let dark = Color::srgb_u8(0x08, 0x11, 0x1C);
-    let contrast = |a: Color, b: Color| {
-        let (a, b) = (luminance(a) + 0.05, luminance(b) + 0.05);
-        a.max(b) / a.min(b)
-    };
-    if contrast(accent, dark) >= contrast(accent, Color::WHITE) { dark } else { Color::WHITE }
-}
-
-fn luminance(color: Color) -> f32 {
-    let linear = color.to_linear();
-    0.2126 * linear.red + 0.7152 * linear.green + 0.0722 * linear.blue
 }
 
 fn follow_settings(ui: Res<UiState>, mut theme: ResMut<Theme>, mut scale: ResMut<UiScale>) {

@@ -46,6 +46,7 @@ pub(crate) enum Icon {
     Shuffle,
     Sliders,
     Sound,
+    Stage,
     Strokes,
     Unlock,
     Warning,
@@ -97,9 +98,10 @@ impl Icon {
             Icon::Shuffle => '\u{E027}',
             Icon::Sliders => '\u{E028}',
             Icon::Sound => '\u{E029}',
-            Icon::Strokes => '\u{E02A}',
-            Icon::Unlock => '\u{E02B}',
-            Icon::Warning => '\u{E02C}',
+            Icon::Stage => '\u{E02A}',
+            Icon::Strokes => '\u{E02B}',
+            Icon::Unlock => '\u{E02C}',
+            Icon::Warning => '\u{E02D}',
         }
     }
 }

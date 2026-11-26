@@ -21,18 +21,19 @@ at all.
 5. If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**.
    CharPaper isn't signed, which is why Windows doesn't recognize it yet.
 
-To quit, click **Quit** at the bottom of the panel.
+To quit, click the power button at the top of the panel.
 
 To update, see [Updating](#updating).
 
 ## The panel
 
-The panel sits at the right edge of the screen. The small arrow button on that edge hides
-it and brings it back. With **Auto-hide button** on in the System tab, that button
+The panel sits at the right edge of the screen. The double arrow at its top hides it, and
+the small arrow button left on that edge brings it back. With **Auto-hide button** on in the System tab, that button
 disappears a few seconds after you move the pointer away, and comes back as soon as you
 point at its spot on the edge.
 
-- **Point at a setting** and the line at the bottom of the panel says what it does.
+- **Point at a setting** or a button, and the line at the bottom of the panel says what it
+  does.
 - **Turn the mouse wheel over a value** to change it. Anywhere else on the panel, the
   wheel scrolls.
 - **Drag along a number's track** to change it, a step for every few pixels, as you would
@@ -214,7 +215,7 @@ Some things to know:
 - **A frozen picture stays on the desktop after a crash.** On Windows versions where that
   can happen, CharPaper leaves a small helper running to clean it up, which is why Task
   Manager may show a second `charpaper.exe`. If the picture stays anyway, start CharPaper
-  and quit it with the Quit button.
+  and quit it with the power button at the top of the panel.
 - **Settings went back to defaults.** `state.toml` couldn't be read. CharPaper sets a
   broken one aside as `state.toml.bad` instead of deleting it.
 

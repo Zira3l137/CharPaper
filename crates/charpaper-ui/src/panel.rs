@@ -14,6 +14,7 @@ use i18n_embed_fl::fl;
 
 use crate::PanelHovered;
 use crate::icons::Icon;
+use crate::icons::icon;
 use crate::locale::Locale;
 use crate::locale::Tr;
 use crate::row::Row;
@@ -93,6 +94,18 @@ struct StatusText;
 // The line at the bottom of the panel saying what the row under the pointer does.
 #[derive(Component)]
 struct HelpText;
+
+// What the help line says while the pointer is on a button that isn't a row.
+#[derive(Component)]
+struct Hint(Tr);
+
+// A tab's icon and title, and the color each takes while its tab is open.
+#[derive(Component)]
+struct TabInk(Tab, Swatch);
+
+// The pill behind a tab's icon, tinted while its tab is open.
+#[derive(Component)]
+struct TabPill(Tab);
 
 // For the systems that fill in what a panel shows. Each only runs on a change of what it
 // shows, which a panel made later, for a monitor switched on, would otherwise wait for.
@@ -175,7 +188,7 @@ fn reveal_zone(closed: bool) -> impl Bundle {
 
 fn reveal_button() -> impl Bundle {
     ButtonBuilder::icon(Icon::ChevronLeft)
-        .text_color(TEXT)
+        .text_color(TEXT_LABEL)
         .fill(PANEL_BG)
         .border_color(BORDER)
         .node(|n| {
@@ -203,10 +216,10 @@ fn main_menu(closed: bool) -> impl Bundle {
         Fill(PANEL_BG),
         Stroke(BORDER),
         BoxShadow(vec![ShadowStyle {
-            color: Color::linear_rgba(0.0, 0.0, 0.0, 0.50),
-            x_offset: Val::Px(-2.0),
-            y_offset: Val::Px(0.0),
-            blur_radius: Val::Px(8.0),
+            color: Color::linear_rgba(0.0, 0.0, 0.0, 0.45),
+            x_offset: Val::Px(0.0),
+            y_offset: Val::Px(12.0),
+            blur_radius: Val::Px(40.0),
             spread_radius: Val::Px(0.0),
         }]),
         // Pickable, unlike most nodes inside it: the pointer anywhere on the panel stops here
@@ -216,58 +229,125 @@ fn main_menu(closed: bool) -> impl Bundle {
     )
 }
 
+// The app's mark and name over what the panel shows, then quitting and hiding the panel.
 fn header() -> impl Bundle {
-    (
+    let mark = (
         Node {
-            height: Val::Px(56.0),
+            width: Val::Px(36.0),
+            height: Val::Px(36.0),
             flex_shrink: 0.0,
+            justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
-            column_gap: Val::Px(12.0),
-            padding: UiRect::new(Val::Px(16.0), Val::Px(12.0), Val::ZERO, Val::ZERO),
-            border: UiRect::bottom(LINE),
+            border_radius: BorderRadius::all(Val::Px(10.0)),
             ..default()
         },
-        Stroke(BORDER),
+        Fill(SELECTED_BG),
+        Pickable::IGNORE,
+        children![icon(Icon::Stage, FontSize::Px(22.0), ACCENT)],
+    );
+    (
+        Node {
+            height: Val::Px(64.0),
+            flex_shrink: 0.0,
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(10.0),
+            padding: UiRect::new(Val::Px(16.0), Val::Px(10.0), Val::ZERO, Val::ZERO),
+            ..default()
+        },
         Pickable::IGNORE,
         children![
+            mark,
             (
                 Node {
                     flex_grow: 1.0,
+                    min_width: Val::ZERO,
                     flex_direction: FlexDirection::Column,
                     row_gap: Val::Px(2.0),
                     ..default()
                 },
                 Pickable::IGNORE,
                 children![
-                    label("CHARPAPER", TITLE_SIZE, TEXT),
-                    (label("", SMALL_SIZE, TEXT_DIM), StatusText),
+                    label("CharPaper", TITLE_SIZE, TEXT),
+                    (label("", SMALL_SIZE, TEXT_DIM), TextLayout::no_wrap(), StatusText),
                 ],
             ),
-            icon_button(Icon::ChevronRight, PanelButton::Hide),
+            header_button(Icon::Power, DANGER_TEXT, |l| fl!(l, "help-quit"), PanelButton::Exit),
+            header_button(
+                Icon::ChevronsRight,
+                TEXT_DIM,
+                |l| fl!(l, "help-hide"),
+                PanelButton::Hide,
+            ),
         ],
     )
 }
 
-fn tab_bar() -> impl Bundle {
-    let tab = |tab: Tab| {
-        translated_button(tab_title(tab))
+// Just its icon until the pointer is on it. What it does shows on the help line meanwhile.
+fn header_button(icon: Icon, color: Swatch, hint: Tr, action: PanelButton) -> impl Bundle {
+    (
+        ButtonBuilder::icon(icon)
+            .text_color(color)
+            .fill(PANEL_BG)
             .node(|n| {
-                n.flex_grow = 1.0;
-                n.flex_basis = Val::ZERO;
+                n.width = Val::Px(32.0);
+                n.height = Val::Px(32.0);
+                n.flex_shrink = 0.0;
+                n.justify_content = JustifyContent::Center;
+                n.align_items = AlignItems::Center;
+                n.border_radius = BorderRadius::all(RADIUS);
             })
-            .build(PanelButton::Tab(tab))
-    };
+            .build(action),
+        Hint(hint),
+        Hovered::default(),
+    )
+}
+
+fn tab_bar() -> impl Bundle {
     (
         Node {
             flex_shrink: 0.0,
-            column_gap: Val::Px(4.0),
-            padding: UiRect::axes(Val::Px(16.0), Val::Px(12.0)),
+            column_gap: Val::Px(2.0),
+            padding: UiRect::new(Val::Px(8.0), Val::Px(8.0), Val::ZERO, Val::Px(10.0)),
             border: UiRect::bottom(LINE),
             ..default()
         },
         Stroke(BORDER),
         Pickable::IGNORE,
         children![tab(Tab::Scene), tab(Tab::Graphics), tab(Tab::Sound), tab(Tab::System)],
+    )
+}
+
+// An icon in a pill over the tab's title. The whole of it is the button.
+fn tab(tab: Tab) -> impl Bundle {
+    let pill = (
+        Node {
+            width: Val::Px(48.0),
+            height: Val::Px(28.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            border_radius: BorderRadius::MAX,
+            ..default()
+        },
+        Fill(CLEAR),
+        Pickable::IGNORE,
+        TabPill(tab),
+        children![(icon(tab_icon(tab), ICON_SIZE, TEXT_DIM), TabInk(tab, ACCENT))],
+    );
+    (
+        Node {
+            flex_grow: 1.0,
+            flex_basis: Val::ZERO,
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: Val::Px(4.0),
+            padding: UiRect::vertical(Val::Px(4.0)),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        BaseBackground::default(),
+        Fill(PANEL_BG),
+        PanelButton::Tab(tab),
+        children![pill, (translated(tab_title(tab), SMALL_SIZE, TEXT_DIM), TabInk(tab, TEXT))],
     )
 }
 
@@ -290,11 +370,12 @@ fn page(tab: Tab, active: Tab, content: impl Bundle) -> impl Bundle {
     )
 }
 
+// Room for two lines of help, so the pages don't jump as the line grows and shrinks.
 fn footer() -> impl Bundle {
     (
         Node {
             flex_shrink: 0.0,
-            align_items: AlignItems::Center,
+            align_items: AlignItems::FlexStart,
             column_gap: Val::Px(8.0),
             padding: UiRect::axes(Val::Px(16.0), Val::Px(12.0)),
             border: UiRect::top(LINE),
@@ -304,14 +385,19 @@ fn footer() -> impl Bundle {
         Pickable::IGNORE,
         children![
             (
+                icon(Icon::Info, FontSize::Px(14.0), TEXT_DIM),
+                Node { flex_shrink: 0.0, ..default() }
+            ),
+            (
                 label("", SMALL_SIZE, TEXT_DIM),
-                Node { flex_grow: 1.0, min_width: Val::ZERO, ..default() },
+                Node {
+                    flex_grow: 1.0,
+                    min_width: Val::ZERO,
+                    min_height: Val::Px(28.0),
+                    ..default()
+                },
                 HelpText,
             ),
-            translated_button(|l| fl!(l, "quit"))
-                .text_color(DANGER_TEXT)
-                .border_color(DANGER_BORDER)
-                .build(PanelButton::Exit),
         ],
     )
 }
@@ -333,23 +419,14 @@ fn show_panel(
 
 fn style_tabs(
     ui: Res<UiState>,
-    tabs: Query<(&PanelButton, &Children, &mut Fill, &mut Stroke)>,
-    mut texts: Query<&mut Ink>,
+    mut pills: Query<(&TabPill, &mut Fill)>,
+    mut inks: Query<(&TabInk, &mut Ink)>,
 ) {
-    for (button, children, mut fill, mut border) in tabs {
-        let PanelButton::Tab(tab) = button else {
-            continue;
-        };
-        let active = *tab == ui.tab;
-        let (background, outline, text) =
-            if active { (ACCENT, ACCENT, ON_ACCENT) } else { (BUTTON_BG, BORDER, TEXT_DIM) };
-        fill.set_if_neq(Fill(background));
-        border.set_if_neq(Stroke(outline));
-        for &child in &**children {
-            if let Ok(mut ink) = texts.get_mut(child) {
-                ink.set_if_neq(Ink(text));
-            }
-        }
+    for (pill, mut fill) in &mut pills {
+        fill.set_if_neq(Fill(if pill.0 == ui.tab { SELECTED_BG } else { CLEAR }));
+    }
+    for (part, mut ink) in &mut inks {
+        ink.set_if_neq(Ink(if part.0 == ui.tab { part.1 } else { TEXT_DIM }));
     }
 }
 
@@ -368,9 +445,9 @@ fn dock_panels(
 ) {
     let left = ui.theme.side == PanelSide::Left;
     let (hide, reveal) = if left {
-        (Icon::ChevronLeft, Icon::ChevronRight)
+        (Icon::ChevronsLeft, Icon::ChevronRight)
     } else {
-        (Icon::ChevronRight, Icon::ChevronLeft)
+        (Icon::ChevronsRight, Icon::ChevronLeft)
     };
     for (mut node, button, menu, zone, children) in parts {
         if zone {
@@ -491,11 +568,13 @@ fn show_status(
 fn show_help(
     locale: Res<Locale>,
     rows: Query<(Entity, &Row, Ref<Hovered>)>,
+    hints: Query<(&Hint, Ref<Hovered>)>,
     parents: Query<&ChildOf>,
     new_lines: Query<(), Added<HelpText>>,
     mut lines: Query<&mut Text, With<HelpText>>,
 ) {
-    let hover_moved = rows.iter().any(|(_, _, hovered)| hovered.is_changed());
+    let hover_moved = rows.iter().any(|(_, _, hovered)| hovered.is_changed())
+        || hints.iter().any(|(_, hovered)| hovered.is_changed());
     if !locale.is_changed() && !hover_moved && new_lines.is_empty() {
         return;
     }
@@ -505,7 +584,8 @@ fn show_help(
         .filter(|(_, _, hovered)| hovered.get())
         .max_by_key(|&(row, _, _)| parents.iter_ancestors(row).count())
         .map(|(_, row, _)| row.help);
-    let text = match hovered {
+    let hinted = hints.iter().find(|(_, hovered)| hovered.get()).map(|(hint, _)| hint.0);
+    let text = match hinted.or(hovered) {
         Some(help) => help(&locale),
         None => fl!(locale, "help-panel"),
     };
@@ -547,8 +627,8 @@ fn add_update_dots(
             commands.entity(button).with_child((
                 Node {
                     position_type: PositionType::Absolute,
-                    top: Val::Px(5.0),
-                    right: Val::Px(5.0),
+                    top: Val::Px(4.0),
+                    right: Val::Px(8.0),
                     width: Val::Px(7.0),
                     height: Val::Px(7.0),
                     border_radius: BorderRadius::all(Val::Px(3.5)),
@@ -569,6 +649,15 @@ fn show_update_dots(update: Res<UpdateStatus>, mut dots: Query<&mut Node, With<U
         if dot.display != shown {
             dot.display = shown;
         }
+    }
+}
+
+fn tab_icon(tab: Tab) -> Icon {
+    match tab {
+        Tab::Scene => Icon::Character,
+        Tab::Graphics => Icon::Look,
+        Tab::Sound => Icon::Sound,
+        Tab::System => Icon::Settings,
     }
 }
 
