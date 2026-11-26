@@ -22,6 +22,7 @@ use charpaper_settings::FogQuality;
 use charpaper_settings::FogResolution;
 use charpaper_settings::FpsLimit;
 use charpaper_settings::Graphics;
+use charpaper_settings::Preset;
 use charpaper_settings::RENDER_SCALES;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
@@ -235,6 +236,20 @@ fn apply(bench: &mut Benchmark, tuned: &mut Tuned) {
 fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
     let mut rows = vec![changed(saved, "saved settings", |_| {})];
 
+    for preset in Preset::ALL {
+        if preset == saved.graphics.preset {
+            continue;
+        }
+        let label = match preset {
+            Preset::Fastest => "preset fastest",
+            Preset::Moderate => "preset moderate",
+            Preset::Fancy => "preset fancy",
+            Preset::Best => "preset best",
+            Preset::Custom => continue,
+        };
+        rows.push(changed(saved, label, |s| s.graphics.pick(preset, &mut s.render)));
+    }
+
     if fog {
         if saved.graphics.fog {
             rows.push(changed(saved, "fog off", |s| s.graphics.fog = false));
@@ -315,8 +330,12 @@ fn plan(saved: &Setup, fog: bool, shadows: Option<bool>) -> Vec<Row> {
             }));
         }
     }
-    let label = if saved.graphics.strokes { "strokes off" } else { "strokes on" };
-    rows.push(changed(saved, label, |s| s.graphics.strokes = !s.graphics.strokes));
+    let strokes = saved.graphics.draws_strokes();
+    let label = if strokes { "strokes off" } else { "strokes on" };
+    rows.push(changed(saved, label, |s| {
+        s.graphics.strokes = !strokes;
+        s.graphics.allowed.strokes |= !strokes;
+    }));
     for anti_aliasing in AntiAliasing::ALL {
         if anti_aliasing != saved.graphics.anti_aliasing {
             let label = format!("anti-aliasing {}", anti_aliasing_name(anti_aliasing));

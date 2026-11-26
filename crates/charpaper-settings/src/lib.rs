@@ -4,6 +4,7 @@
 
 mod audio;
 mod file;
+mod quality;
 mod render;
 mod screen;
 mod stage;
@@ -17,6 +18,9 @@ pub use file::STATE_FILE;
 pub use file::SavedState;
 pub use file::load;
 pub use file::write;
+pub use quality::Allowed;
+pub use quality::Preset;
+pub use quality::Tuning;
 pub use render::AmbientOcclusionQuality;
 pub use render::AmbientOcclusionSoftness;
 pub use render::AntiAliasing;

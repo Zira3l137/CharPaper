@@ -40,7 +40,7 @@ point at its spot on the edge.
 | Tab | What's there |
 |-----|--------------|
 | **Scene** | Which character, its outfit and the outfit's parts, animation, expression, the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks), the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them), camera (and **Parallax**, the camera leaning towards the pointer), environment and shadows. |
-| **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (render scale, anti-aliasing, shadows, ambient occlusion), fog (density, quality, jitter, resolution), depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
+| **Graphics** | Sky strength, rotation, whether the sun follows the sky, background and its blur, quality settings (the preset, render scale, anti-aliasing, shadows, ambient occlusion), fog (density, quality, jitter, resolution), depth of field (shape, strength, max size, quality, foreground blur, bokeh highlights), ink strokes, and post processing (tonemapping, exposure, bloom, color, vignette, grain). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. The music track, play and pause, and playing order. |
 | **System** | Wallpaper or window, start with Windows, updates, monitors, frame rate limit, performance overlay, when to pause, and the panel's language, colors, size, side and auto-hiding button. |
 
@@ -55,10 +55,26 @@ run with. A setting's finer rows hide while it's off.
 **Restore defaults**, under Post processing, takes the picture back to how the
 character's author set it.
 
-If your computer struggles, lower **Render scale**, set **Shadow quality** to Low, turn
-on fog **Jitter** and lower fog **Quality** (or turn **Fog** off), lower depth of field
-**Quality** or **Max size**, turn physics **High quality** off, and lower the **FPS limit**. The **Performance overlay** shows what each
-frame costs.
+**Preset**, at the top of Quality, sets everything that trades looks for speed at once:
+
+- **Fastest** turns off everything costly (fog, depth of field, ambient occlusion) and the
+  effects (bloom, strokes, vignette, grain, aberration), and draws at half resolution.
+- **Moderate** stays off what's costly, but keeps cheap fog and the film effects.
+- **Fancy**, the one you start with, puts the picture first and only holds back where the
+  cost outgrows what it shows.
+- **Best** sets everything to its most.
+
+Change any of those settings yourself and the preset becomes **Custom**. CharPaper keeps
+that mix of yours while you try a preset, and picking **Custom** brings it back. Each
+stage has its own preset, except for shadow quality: every stage shares it, so a preset
+picked on one monitor changes shadows on all of them. While a preset keeps an effect
+off, its row shows Off; turning it up brings it back at the character's own amount.
+
+If your computer struggles, pick **Fastest** or **Moderate**. To fine-tune instead, lower
+**Render scale**, set **Shadow quality** to Low, turn on fog **Jitter** and lower fog
+**Quality** (or turn **Fog** off), lower depth of field **Quality** or **Max size**, turn
+physics **High quality** off, and lower the **FPS limit**. The **Performance overlay**
+shows what each frame costs.
 
 ## The mouse on the desktop
 

@@ -244,15 +244,16 @@ pub(crate) fn apply_anti_aliasing(
         } else {
             camera.remove::<ScreenSpaceAmbientOcclusion>();
         }
-        if graphics.strokes {
+        let strokes = graphics.draws_strokes();
+        if strokes {
             camera.insert((scene_strokes(&graphics), DepthPrepass, NormalPrepass));
         } else {
             camera.remove::<SceneStrokes>();
         }
-        if !ssao && !graphics.strokes {
+        if !ssao && !strokes {
             camera.remove::<NormalPrepass>();
         }
-        if !taa && !ssao && !graphics.strokes {
+        if !taa && !ssao && !strokes {
             camera.remove::<DepthPrepass>();
         }
     }

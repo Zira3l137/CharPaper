@@ -13,6 +13,8 @@ use bevy::prelude::*;
 use bevy::render::view::ColorGrading;
 use bevy::render::view::ColorGradingGlobal;
 use bevy::render::view::ColorGradingSection;
+use charpaper_settings::Allowed;
+use charpaper_settings::Graphics;
 use charpaper_suite::GradingSection;
 use charpaper_suite::Look;
 use charpaper_suite::LookEdits;
@@ -217,16 +219,29 @@ type LookedLights<'w, 's> = Query<
     AnyOf<(&'static mut DirectionalLight, &'static mut PointLight, &'static mut SpotLight)>,
 >;
 
+type LookedStages<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        Option<&'static ActiveLook>,
+        &'static ShownEnvironment,
+        Option<&'static ActiveSuite>,
+        Option<&'static Graphics>,
+    ),
+>;
+
 pub(crate) fn apply_look(
     mut commands: Commands,
-    stages: Query<(Entity, Option<&ActiveLook>, &ShownEnvironment, Option<&ActiveSuite>)>,
+    stages: LookedStages,
     mut cameras: LookedCameras,
     stage_of: StageOf,
     tree: LightTree,
     mut lights: LookedLights,
 ) {
-    for (stage, look, shown, suite) in &stages {
+    for (stage, look, shown, suite, graphics) in &stages {
         let look = look.map(|l| l.0.clone()).unwrap_or_default();
+        let allowed = graphics.map_or(Allowed::ALL, |g| g.allowed);
         let mine: Vec<Entity> = cameras
             .iter()
             .map(|(camera, ..)| camera)
@@ -236,7 +251,7 @@ pub(crate) fn apply_look(
             .map(|e| e.settings.no_shadows.as_slice())
             .unwrap_or_default();
         let lit = (unshadowed, &tree, &mut lights);
-        apply_stage_look(&mut commands, &look, shown, &mine, &mut cameras, lit);
+        apply_stage_look(&mut commands, (&look, allowed), shown, &mine, &mut cameras, lit);
     }
 }
 
@@ -249,7 +264,7 @@ pub(crate) struct LightTree<'w, 's> {
 
 fn apply_stage_look(
     commands: &mut Commands,
-    look: &Look,
+    (look, allowed): (&Look, Allowed),
     shown: &ShownEnvironment,
     mine: &[Entity],
     cameras: &mut LookedCameras,
@@ -264,19 +279,19 @@ fn apply_stage_look(
         // A higher EV100 is darker; a higher look exposure is brighter.
         let ev100 = Exposure::EV100_BLENDER - resolved.exposure;
         commands.entity(entity).insert((to_bevy(resolved.tonemapping), Exposure { ev100 }));
-        if resolved.bloom > 0.0 {
+        if allowed.bloom && resolved.bloom > 0.0 {
             commands.entity(entity).insert(bloom(&resolved));
         } else {
             commands.entity(entity).remove::<Bloom>();
         }
-        if resolved.chromatic_aberration > 0.0 {
+        if allowed.chromatic_aberration && resolved.chromatic_aberration > 0.0 {
             let intensity = resolved.chromatic_aberration;
             commands.entity(entity).insert(ChromaticAberration { intensity, ..default() });
         } else {
             commands.entity(entity).remove::<ChromaticAberration>();
         }
         let vignette = &look.post.vignette;
-        if vignette.intensity() > 0.0 {
+        if allowed.vignette && vignette.intensity() > 0.0 {
             let [r, g, b] = vignette.color();
             commands.entity(entity).insert(effect_stack::Vignette {
                 intensity: vignette.intensity(),
@@ -371,14 +386,17 @@ fn color_grading(look: &Look) -> ColorGrading {
 pub(crate) fn apply_grain(
     screens: Query<&ScreenParts>,
     stage_of: StageOf,
-    looks: Query<&ActiveLook>,
+    stages: Query<(Option<&ActiveLook>, Option<&Graphics>)>,
     mut materials: ResMut<Assets<SceneImage>>,
 ) {
     for parts in &screens {
-        let look = stage_of.get(parts.camera).and_then(|stage| looks.get(stage).ok());
+        let (look, graphics) =
+            stage_of.get(parts.camera).and_then(|stage| stages.get(stage).ok()).unwrap_or_default();
         let grain = look.map(|l| l.post.grain.clone()).unwrap_or_default();
+        let allowed = graphics.is_none_or(|g| g.allowed.grain);
+        let intensity = if allowed { grain.intensity() } else { 0.0 };
         let colored = if grain.colored() { 1.0 } else { 0.0 };
-        let wanted = Vec4::new(grain.intensity(), grain.size(), colored, 0.0);
+        let wanted = Vec4::new(intensity, grain.size(), colored, 0.0);
         // Only on a real change: every change rebuilds the material on the GPU.
         if materials.get(&parts.material).is_some_and(|m| m.settings.grain != wanted)
             && let Some(mut material) = materials.get_mut(&parts.material)
@@ -388,9 +406,10 @@ pub(crate) fn apply_grain(
     }
 }
 
-// A new camera, for a screen added while the app runs, needs the whole look too.
+// A new camera, for a screen added while the app runs, needs the whole look too. A preset can
+// keep some of the look's effects from showing.
 pub(crate) fn look_needs_applying(
-    stages: Query<(), Or<(Changed<ActiveLook>, Changed<ShownEnvironment>)>>,
+    stages: Query<(), Or<(Changed<ActiveLook>, Changed<ShownEnvironment>, Changed<Graphics>)>>,
     ready: Query<(), Added<EnvironmentReady>>,
     new_cameras: Query<(), Added<SceneCamera>>,
 ) -> bool {

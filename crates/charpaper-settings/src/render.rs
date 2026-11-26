@@ -3,6 +3,10 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+use crate::quality::Allowed;
+use crate::quality::Preset;
+use crate::quality::Tuning;
+
 // What every stage shares, saved between runs by the app, whose frame pacing reads the fps and
 // pause settings. Bevy gives all lights' shadow maps one size, so their quality is shared too.
 #[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -33,6 +37,11 @@ impl Default for RenderSettings {
 #[derive(Component, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Graphics {
+    #[serde(default = "Preset::before_presets")]
+    pub preset: Preset,
+    // The viewer's own mix, kept while a preset is picked so that picking Custom brings it back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom: Option<Tuning>,
     pub render_scale: u32,
     pub anti_aliasing: AntiAliasing,
     #[serde(deserialize_with = "DepthOfField::saved")]
@@ -51,11 +60,15 @@ pub struct Graphics {
     pub stroke_strength: StrokeStrength,
     pub stroke_creases: bool,
     pub stroke_hand_drawn: bool,
+    // What the preset lets show.
+    pub allowed: Allowed,
 }
 
 impl Default for Graphics {
     fn default() -> Self {
-        Self {
+        let mut graphics = Self {
+            preset: Preset::default(),
+            custom: None,
             render_scale: 100,
             anti_aliasing: AntiAliasing::default(),
             depth_of_field: DepthOfField::default(),
@@ -72,7 +85,12 @@ impl Default for Graphics {
             stroke_strength: StrokeStrength::default(),
             stroke_creases: true,
             stroke_hand_drawn: false,
+            allowed: Allowed::default(),
+        };
+        if let Some(tuning) = graphics.preset.tuning() {
+            tuning.apply_to_stage(&mut graphics);
         }
+        graphics
     }
 }
 

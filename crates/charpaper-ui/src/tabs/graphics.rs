@@ -6,6 +6,7 @@ use charpaper_scene::Focused;
 use charpaper_scene::LookEdited;
 use charpaper_scene::RestoreLook;
 use charpaper_scene::focused_changed;
+use charpaper_settings::Allowed;
 use charpaper_settings::AmbientOcclusionQuality;
 use charpaper_settings::AmbientOcclusionSoftness;
 use charpaper_settings::AntiAliasing;
@@ -14,12 +15,14 @@ use charpaper_settings::DepthOfFieldShape;
 use charpaper_settings::FogQuality;
 use charpaper_settings::FogResolution;
 use charpaper_settings::Graphics;
+use charpaper_settings::Preset;
 use charpaper_settings::RENDER_SCALES;
 use charpaper_settings::RenderSettings;
 use charpaper_settings::ShadowQuality;
 use charpaper_settings::ShadowUpdates;
 use charpaper_settings::StrokeStrength;
 use charpaper_settings::StrokeWidth;
+use charpaper_settings::Tuning;
 use charpaper_suite::BackgroundBlur;
 use charpaper_suite::NO_LUT;
 use charpaper_suite::Tonemapping;
@@ -83,7 +86,8 @@ struct RestoreButton;
 
 // How finely the focused stage is drawn, which the app saves with the stage in its Graphics,
 // and how the picture is finished, in its look. Shadow quality is the exception: every stage
-// shares it.
+// shares it. A preset sets all that trades looks for speed at once; changing any of it by hand
+// makes the mix the viewer's own, Custom.
 pub(crate) fn page() -> impl Bundle {
     children![quality(), lighting(), fog(), depth_of_field(), strokes(), post_processing()]
 }
@@ -233,8 +237,9 @@ fn lighting() -> impl Bundle {
                     }))
                 },
                 change: |w, step| {
-                    let mut settings = w.resource_mut::<RenderSettings>();
-                    pick(&ShadowQuality::ALL, &mut settings.shadow_quality, step);
+                    tune(w, |_, render| {
+                        pick(&ShadowQuality::ALL, &mut render.shadow_quality, step)
+                    });
                 },
             }
             .segments(),
@@ -249,8 +254,9 @@ fn lighting() -> impl Bundle {
                     }))
                 },
                 change: |w, step| {
-                    let mut settings = w.resource_mut::<RenderSettings>();
-                    pick(&ShadowUpdates::ALL, &mut settings.shadow_updates, step);
+                    tune(w, |_, render| {
+                        pick(&ShadowUpdates::ALL, &mut render.shadow_updates, step)
+                    });
                 },
             }
             .segments(),
@@ -261,7 +267,7 @@ fn lighting() -> impl Bundle {
                     let graphics = w.focused::<Graphics>()?;
                     Some(switch(l, graphics.ambient_occlusion).when(occludable(w, graphics)))
                 },
-                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.ambient_occlusion, step)),
+                change: |w, step| tune(w, |g, _| flip(&mut g.ambient_occlusion, step)),
             }
             .segments(),
             Setting {
@@ -280,7 +286,7 @@ fn lighting() -> impl Bundle {
                     Some(choice(&AmbientOcclusionQuality::ALL, &current, label).when(shown))
                 },
                 change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
+                    tune(w, |g, _| {
                         pick(&AmbientOcclusionQuality::ALL, &mut g.ambient_occlusion_quality, step);
                     });
                 },
@@ -349,6 +355,29 @@ fn quality() -> impl Bundle {
         Section::Quality,
         children![
             Setting {
+                label: |l| fl!(l, "label-preset"),
+                help: |l| fl!(l, "help-preset"),
+                show: |w, l| {
+                    let current = w.focused::<Graphics>()?.preset;
+                    Some(choice(&Preset::ALL, &current, |preset| match preset {
+                        Preset::Fastest => fl!(l, "preset-fastest"),
+                        Preset::Moderate => fl!(l, "preset-moderate"),
+                        Preset::Fancy => fl!(l, "preset-fancy"),
+                        Preset::Best => fl!(l, "preset-best"),
+                        Preset::Custom => fl!(l, "preset-custom"),
+                    }))
+                },
+                change: |w, step| {
+                    let Some(current) = w.focused::<Graphics>().map(|g| g.preset) else {
+                        return;
+                    };
+                    if let Some(preset) = stepped(&Preset::ALL, &current, step) {
+                        edit_graphics(w, |graphics, render| graphics.pick(preset, render));
+                    }
+                },
+            }
+            .picker(),
+            Setting {
                 label: |l| fl!(l, "label-render-scale"),
                 help: |l| fl!(l, "help-render-scale"),
                 show: |w, _| {
@@ -356,7 +385,7 @@ fn quality() -> impl Bundle {
                     Some(choice(&RENDER_SCALES, &scale, |scale| format!("{scale}%")))
                 },
                 change: |w, step| {
-                    w.edit(|graphics: &mut Graphics| {
+                    tune(w, |graphics, _| {
                         let mut scale = graphics.scale_percent();
                         pick(&RENDER_SCALES, &mut scale, step);
                         graphics.render_scale = scale;
@@ -376,7 +405,7 @@ fn quality() -> impl Bundle {
                     }))
                 },
                 change: |w, step| {
-                    w.edit(|g: &mut Graphics| pick(&AntiAliasing::ALL, &mut g.anti_aliasing, step));
+                    tune(w, |g, _| pick(&AntiAliasing::ALL, &mut g.anti_aliasing, step));
                 },
             }
             .segments(),
@@ -397,7 +426,7 @@ fn depth_of_field() -> impl Bundle {
                     Some(switch(l, dof.enabled).when(has_lens(w)))
                 },
                 change: |w, step| {
-                    w.edit(|g: &mut Graphics| flip(&mut g.depth_of_field.enabled, step));
+                    tune(w, |g, _| flip(&mut g.depth_of_field.enabled, step));
                 },
             }
             .segments(),
@@ -468,7 +497,7 @@ fn depth_of_field() -> impl Bundle {
                     Some(choice(&DepthOfFieldQuality::ALL, &dof.quality, label).when(blurs(w)))
                 },
                 change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
+                    tune(w, |g, _| {
                         pick(&DepthOfFieldQuality::ALL, &mut g.depth_of_field.quality, step);
                     });
                 },
@@ -519,8 +548,18 @@ fn strokes() -> impl Bundle {
             Setting {
                 label: |l| fl!(l, "label-strokes"),
                 help: |l| fl!(l, "help-strokes"),
-                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.strokes)),
-                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.strokes, step)),
+                show: |w, l| Some(switch(l, w.focused::<Graphics>()?.draws_strokes())),
+                // Turning them on while the preset keeps them off lets them show.
+                change: |w, step| {
+                    let Some(mut on) = w.focused::<Graphics>().map(Graphics::draws_strokes) else {
+                        return;
+                    };
+                    flip(&mut on, step);
+                    tune(w, |g, _| {
+                        g.strokes = on;
+                        g.allowed.strokes |= on;
+                    });
+                },
             }
             .segments(),
             Setting {
@@ -534,7 +573,7 @@ fn strokes() -> impl Bundle {
                         StrokeWidth::Thick => fl!(l, "value-width-thick"),
                     };
                     let current = graphics.stroke_width;
-                    Some(choice(&StrokeWidth::ALL, &current, label).when(graphics.strokes))
+                    Some(choice(&StrokeWidth::ALL, &current, label).when(graphics.draws_strokes()))
                 },
                 change: |w, step| {
                     w.edit(|g: &mut Graphics| pick(&StrokeWidth::ALL, &mut g.stroke_width, step));
@@ -552,7 +591,10 @@ fn strokes() -> impl Bundle {
                         StrokeStrength::Strong => fl!(l, "value-strength-strong"),
                     };
                     let current = graphics.stroke_strength;
-                    Some(choice(&StrokeStrength::ALL, &current, label).when(graphics.strokes))
+                    Some(
+                        choice(&StrokeStrength::ALL, &current, label)
+                            .when(graphics.draws_strokes()),
+                    )
                 },
                 change: |w, step| {
                     w.edit(|g: &mut Graphics| {
@@ -566,7 +608,7 @@ fn strokes() -> impl Bundle {
                 help: |l| fl!(l, "help-stroke-creases"),
                 show: |w, l| {
                     let graphics = w.focused::<Graphics>()?;
-                    Some(switch(l, graphics.stroke_creases).when(graphics.strokes))
+                    Some(switch(l, graphics.stroke_creases).when(graphics.draws_strokes()))
                 },
                 change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_creases, step)),
             }
@@ -576,7 +618,7 @@ fn strokes() -> impl Bundle {
                 help: |l| fl!(l, "help-stroke-hand-drawn"),
                 show: |w, l| {
                     let graphics = w.focused::<Graphics>()?;
-                    Some(switch(l, graphics.stroke_hand_drawn).when(graphics.strokes))
+                    Some(switch(l, graphics.stroke_hand_drawn).when(graphics.draws_strokes()))
                 },
                 change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.stroke_hand_drawn, step)),
             }
@@ -594,7 +636,7 @@ fn fog() -> impl Bundle {
                 label: |l| fl!(l, "label-fog"),
                 help: |l| fl!(l, "help-fog"),
                 show: |w, l| Some(switch(l, w.focused::<Graphics>()?.fog).when(foggy(w))),
-                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.fog, step)),
+                change: |w, step| tune(w, |g, _| flip(&mut g.fog, step)),
             }
             .segments(),
             Setting {
@@ -630,7 +672,7 @@ fn fog() -> impl Bundle {
                     Some(choice(&FogQuality::ALL, &graphics.fog_quality, label).when(shown))
                 },
                 change: |w, step| {
-                    w.edit(|g: &mut Graphics| pick(&FogQuality::ALL, &mut g.fog_quality, step));
+                    tune(w, |g, _| pick(&FogQuality::ALL, &mut g.fog_quality, step));
                 },
             }
             .picker(),
@@ -641,7 +683,7 @@ fn fog() -> impl Bundle {
                     let graphics = w.focused::<Graphics>()?;
                     Some(switch(l, graphics.fog_dithering).when(graphics.fog && foggy(w)))
                 },
-                change: |w, step| w.edit(|g: &mut Graphics| flip(&mut g.fog_dithering, step)),
+                change: |w, step| tune(w, |g, _| flip(&mut g.fog_dithering, step)),
             }
             .segments(),
             Setting {
@@ -659,9 +701,7 @@ fn fog() -> impl Bundle {
                     Some(choice(&FogResolution::ALL, &current, label).when(shown))
                 },
                 change: |w, step| {
-                    w.edit(|g: &mut Graphics| {
-                        pick(&FogResolution::ALL, &mut g.fog_resolution, step);
-                    });
+                    tune(w, |g, _| pick(&FogResolution::ALL, &mut g.fog_resolution, step));
                 },
             }
             .segments(),
@@ -734,8 +774,11 @@ fn image() -> impl Bundle {
             Setting {
                 label: |l| fl!(l, "label-bloom"),
                 help: |l| fl!(l, "help-bloom"),
-                show: |w, l| Some(strength(l, resolved(w)?.bloom, BLOOM)),
+                show: |w, l| Some(strength(l, showing(w, resolved(w)?.bloom, |a| a.bloom), BLOOM)),
                 change: |w, step| {
+                    if gated(w, |a| &mut a.bloom, step) {
+                        return;
+                    }
                     edit_look(w, |look, current, _| {
                         look.post.bloom = Some(BLOOM.nudge(current.bloom, step));
                     });
@@ -750,7 +793,7 @@ fn image() -> impl Bundle {
                     let current = resolved(w)?;
                     let threshold = current.bloom_threshold;
                     let shown = BLOOM_THRESHOLD.number(format!("{threshold:.1}"), threshold);
-                    Some(shown.when(current.bloom > 0.0))
+                    Some(shown.when(showing(w, current.bloom, |a| a.bloom) > 0.0))
                 },
                 change: |w, step| {
                     edit_look(w, |look, current, _| {
@@ -763,8 +806,14 @@ fn image() -> impl Bundle {
             Setting {
                 label: |l| fl!(l, "label-chromatic-aberration"),
                 help: |l| fl!(l, "help-chromatic-aberration"),
-                show: |w, l| Some(strength(l, resolved(w)?.chromatic_aberration, ABERRATION)),
+                show: |w, l| {
+                    let amount = resolved(w)?.chromatic_aberration;
+                    Some(strength(l, showing(w, amount, |a| a.chromatic_aberration), ABERRATION))
+                },
                 change: |w, step| {
+                    if gated(w, |a| &mut a.chromatic_aberration, step) {
+                        return;
+                    }
                     edit_look(w, |look, current, _| {
                         let aberration = ABERRATION.nudge(current.chromatic_aberration, step);
                         look.post.chromatic_aberration = Some(aberration);
@@ -894,8 +943,13 @@ fn film() -> impl Bundle {
             Setting {
                 label: |l| fl!(l, "label-vignette"),
                 help: |l| fl!(l, "help-vignette"),
-                show: |w, l| Some(strength(l, resolved(w)?.vignette, VIGNETTE)),
+                show: |w, l| {
+                    Some(strength(l, showing(w, resolved(w)?.vignette, |a| a.vignette), VIGNETTE))
+                },
                 change: |w, step| {
+                    if gated(w, |a| &mut a.vignette, step) {
+                        return;
+                    }
                     edit_look(w, |look, current, _| {
                         look.post.vignette.intensity = Some(VIGNETTE.nudge(current.vignette, step));
                     });
@@ -911,7 +965,7 @@ fn film() -> impl Bundle {
                     Some(
                         VIGNETTE_SIZE
                             .number(format!("{size:.1}"), size)
-                            .when(resolved.vignette > 0.0),
+                            .when(showing(w, resolved.vignette, |a| a.vignette) > 0.0),
                     )
                 },
                 change: |w, step| {
@@ -925,8 +979,11 @@ fn film() -> impl Bundle {
             Setting {
                 label: |l| fl!(l, "label-grain"),
                 help: |l| fl!(l, "help-grain"),
-                show: |w, l| Some(strength(l, resolved(w)?.grain, GRAIN)),
+                show: |w, l| Some(strength(l, showing(w, resolved(w)?.grain, |a| a.grain), GRAIN)),
                 change: |w, step| {
+                    if gated(w, |a| &mut a.grain, step) {
+                        return;
+                    }
                     edit_look(w, |look, current, _| {
                         look.post.grain.intensity = Some(GRAIN.nudge(current.grain, step));
                     });
@@ -940,7 +997,9 @@ fn film() -> impl Bundle {
                     let resolved = resolved(w)?;
                     let size = resolved.grain_size;
                     Some(
-                        GRAIN_SIZE.number(format!("{size:.2} px"), size).when(resolved.grain > 0.0),
+                        GRAIN_SIZE
+                            .number(format!("{size:.2} px"), size)
+                            .when(showing(w, resolved.grain, |a| a.grain) > 0.0),
                     )
                 },
                 change: |w, step| {
@@ -955,6 +1014,49 @@ fn film() -> impl Bundle {
 }
 
 // An intensity reads as a share of the strongest the row allows, Off at none.
+// The focused stage's graphics, with the settings every stage shares, which presets set too.
+fn edit_graphics(world: &mut World, edit: impl FnOnce(&mut Graphics, &mut RenderSettings)) {
+    let mut render = world.resource::<RenderSettings>().clone();
+    world.edit(|graphics: &mut Graphics| edit(graphics, &mut render));
+    if *world.resource::<RenderSettings>() != render {
+        *world.resource_mut::<RenderSettings>() = render;
+    }
+}
+
+// Changes by hand something a preset sets. When anything did change, what is there now is the
+// viewer's own mix.
+fn tune(world: &mut World, change: impl FnOnce(&mut Graphics, &mut RenderSettings)) {
+    edit_graphics(world, |graphics, render| {
+        let before = Tuning::of(graphics, render);
+        change(graphics, render);
+        if Tuning::of(graphics, render) != before {
+            graphics.tuned_by_hand();
+        }
+    });
+}
+
+// How much of a look's effect shows: none while the preset keeps it from showing.
+fn showing(world: &World, amount: f32, allowed: fn(&Allowed) -> bool) -> f32 {
+    let shows = world.focused::<Graphics>().is_none_or(|g| allowed(&g.allowed));
+    if shows { amount } else { 0.0 }
+}
+
+// While the preset keeps a look's effect from showing, its row shows Off and turning it up
+// lets it show, at the look's own amount, rather than changing that amount. True when it took
+// the step.
+fn gated(world: &mut World, allowed: fn(&mut Allowed) -> &mut bool, step: &Step) -> bool {
+    let Some(mut now) = world.focused::<Graphics>().map(|g| g.allowed) else {
+        return false;
+    };
+    if *allowed(&mut now) {
+        return false;
+    }
+    if step.by() > 0 {
+        tune(world, |graphics, _| *allowed(&mut graphics.allowed) = true);
+    }
+    true
+}
+
 fn strength(l: &FluentLanguageLoader, value: f32, scale: Scale) -> Shown {
     let text = if value <= 0.0 { on_off(l, false) } else { percent(value / scale.max) };
     scale.number(text, value)
