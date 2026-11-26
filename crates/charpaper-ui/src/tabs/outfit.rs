@@ -1,3 +1,4 @@
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use charpaper_scene::ActiveSuite;
 use charpaper_scene::CharacterState;
@@ -12,14 +13,15 @@ use i18n_embed_fl::fl;
 
 use crate::icons::Icon;
 use crate::icons::icon;
+use crate::panel::Hint;
 use crate::panel::new_panel;
 use crate::section::Content;
 use crate::section::Section;
 use crate::theme::*;
 use crate::widgets::*;
 
-// The outfit section of the Character tab: a tile per skin of the suite, and the worn skin's
-// objects to switch on and off. Lists the suite gives rather than rows, so this keeps them up.
+// The outfit section of the Character tab: a tile per skin of the suite, and a chip for each of
+// the worn skin's objects to put on and take off. Lists the suite gives rather than rows, so this keeps them up.
 pub(crate) struct OutfitPlugin;
 
 impl Plugin for OutfitPlugin {
@@ -67,7 +69,7 @@ struct TilePicture(String);
 #[derive(Component)]
 pub(super) struct TilePlaceholder;
 
-// Switches the worn skin's object with this name on or off.
+// Puts on or takes off the worn skin's object with this name.
 #[derive(Component)]
 struct ObjectSwitch(String);
 
@@ -95,8 +97,10 @@ pub(super) fn section() -> impl Bundle {
                 children![(
                     Node {
                         display: Display::None,
-                        flex_direction: FlexDirection::Column,
-                        row_gap: Val::Px(4.0),
+                        flex_wrap: FlexWrap::Wrap,
+                        row_gap: Val::Px(6.0),
+                        column_gap: Val::Px(6.0),
+                        padding: UiRect::vertical(Val::Px(6.0)),
                         ..default()
                     },
                     Pickable::IGNORE,
@@ -234,7 +238,7 @@ fn style_skins(state: Focused<CharacterState>, tiles: Query<(&SkinTile, &mut Fil
     }
 }
 
-// One row per mesh object of the worn skin, in every panel.
+// One chip per mesh object of the worn skin, in every panel, as many to a line as fit.
 fn fill_objects(
     mut commands: Commands,
     objects: Focused<SkinObjects>,
@@ -244,22 +248,10 @@ fn fill_objects(
         return;
     };
     for list in &lists {
-        commands.entity(list).despawn_children().with_children(|rows| {
+        commands.entity(list).despawn_children().with_children(|chips| {
             for name in objects.names() {
-                rows.spawn((
-                    Node {
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::SpaceBetween,
-                        column_gap: Val::Px(12.0),
-                        height: ROW_HEIGHT,
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                    children![
-                        label(name, BODY_SIZE, TEXT_LABEL),
-                        switch_track(ObjectSwitch(name.to_string())),
-                    ],
-                ));
+                let hint = Hint(|l| fl!(l, "help-part"));
+                chips.spawn(chip(name, (ObjectSwitch(name.to_string()), hint, Hovered::default())));
             }
         });
     }
@@ -269,9 +261,10 @@ fn fill_objects(
 fn show_objects(
     state: Focused<CharacterState>,
     objects: Focused<SkinObjects>,
-    mut lists: Query<&mut Node, (With<ObjectList>, Without<SwitchKnob>)>,
-    mut switches: Query<(&ObjectSwitch, &Children, &mut Fill), Without<SwitchKnob>>,
-    mut knobs: Query<(&mut Node, &mut Fill), With<SwitchKnob>>,
+    mut lists: Query<&mut Node, (With<ObjectList>, Without<ChipTick>)>,
+    mut chips: Query<(&ObjectSwitch, &Children, &mut Fill, &mut Stroke)>,
+    mut ticks: Query<&mut Node, With<ChipTick>>,
+    mut names: Query<&mut Ink, Without<ChipTick>>,
 ) {
     let (Some(state), Some(objects)) = (state.get(), objects.get()) else {
         return;
@@ -280,10 +273,13 @@ fn show_objects(
         node.display = display(objects.names().count() > 1);
     }
     let hidden = state.skin.as_ref().and_then(|skin| state.hidden.get(skin));
-    for (switch, children, track) in &mut switches {
-        let shown = !hidden.is_some_and(|hidden| hidden.contains(&switch.0));
-        if let Some(Ok((knob, ink))) = children.first().map(|&knob| knobs.get_mut(knob)) {
-            paint_switch(shown, track, knob, ink);
+    for (switch, children, fill, stroke) in &mut chips {
+        let worn = !hidden.is_some_and(|hidden| hidden.contains(&switch.0));
+        let [tick, name] = children[..] else {
+            continue;
+        };
+        if let (Ok(tick), Ok(ink)) = (ticks.get_mut(tick), names.get_mut(name)) {
+            paint_chip(worn, fill, stroke, tick, ink);
         }
     }
 }

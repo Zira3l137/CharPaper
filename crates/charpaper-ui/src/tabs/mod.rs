@@ -37,6 +37,7 @@ use charpaper_settings::Volumes;
 use crate::held::Held;
 use crate::locale::Locale;
 use crate::row::Row;
+use settings::PickedMonitor;
 
 pub(crate) struct TabsPlugin;
 
@@ -76,12 +77,12 @@ pub(crate) fn sources_changed(
     stages: Query<(), (With<Stage>, Or<StageSources>)>,
     settings: (Res<UiState>, Res<RenderSettings>, Res<ScreenSettings>, Res<Volumes>),
     world: (Res<Monitors>, Res<AvailableSuites>, Res<Held>, Res<Locale>),
-    app: (Res<SystemSettings>, Res<StartAtLogin>, Res<UpdateStatus>),
+    app: (Res<SystemSettings>, Res<StartAtLogin>, Res<UpdateStatus>, Res<PickedMonitor>),
     new_rows: Query<(), Added<Row>>,
 ) -> bool {
     let (ui, render, screen, volumes) = settings;
     let (monitors, suites, held, locale) = world;
-    let (system, start_at_login, update) = app;
+    let (system, start_at_login, update, picked_monitor) = app;
     focus.is_changed()
         || focus.0.is_some_and(|stage| stages.contains(stage))
         || ui.is_changed()
@@ -95,5 +96,6 @@ pub(crate) fn sources_changed(
         || system.is_changed()
         || start_at_login.is_changed()
         || update.is_changed()
+        || picked_monitor.is_changed()
         || !new_rows.is_empty()
 }

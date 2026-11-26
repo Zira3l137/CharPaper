@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
+use bevy::text::Justify;
+use bevy::text::LineBreak;
 use charpaper_scene::CursorPosition;
 use charpaper_scene::Screen;
 use charpaper_scene::ScreenMonitor;
@@ -27,6 +30,7 @@ use crate::icons::Icon;
 use crate::icons::icon;
 use crate::locale::Languages;
 use crate::locale::Locale;
+use crate::panel::Hint;
 use crate::panel::new_panel;
 use crate::row::percent;
 use crate::row::*;
@@ -42,13 +46,15 @@ pub(crate) struct SettingsPlugin;
 
 impl Plugin for SettingsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_click)
+        app.init_resource::<PickedMonitor>()
+            .add_observer(on_click)
             .add_observer(open_release_page)
             .add_systems(
                 Update,
                 (fill_monitors, show_monitors).chain().run_if(
                     resource_changed::<ScreenSettings>
                         .or_eager(resource_changed::<Monitors>)
+                        .or_eager(resource_changed::<PickedMonitor>)
                         .or_eager(resource_changed::<Locale>)
                         .or_eager(focused_changed::<StageKey>)
                         .or_eager(new_panel),
@@ -69,13 +75,27 @@ impl Plugin for SettingsPlugin {
     }
 }
 
+// Which monitor the Display section's Shows row is for: the first one until another is
+// clicked. Not saved.
+#[derive(Resource, Default)]
+pub(crate) struct PickedMonitor(Option<String>);
+
+// The monitors, drawn to scale and side by side as they stand.
 #[derive(Component)]
 #[require(Content)]
-struct MonitorList;
+struct MonitorStrip;
 
-// Shows the wallpaper on the monitor with this id, or stops showing it there.
+// A monitor, by its id. A click picks it.
 #[derive(Component)]
-struct MonitorButton(String);
+struct MonitorTile(String);
+
+// The stage a monitor shows, on its tile.
+#[derive(Component)]
+struct StagePill;
+
+// The picked monitor's name and size.
+#[derive(Component)]
+struct PickedName;
 
 #[derive(Component)]
 struct UpdateBanner;
@@ -257,9 +277,31 @@ fn display_section() -> impl Bundle {
         Section::Display,
         children![
             (
-                Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(4.0), ..default() },
+                Node {
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::FlexEnd,
+                    column_gap: Val::Px(TILE_GAP),
+                    padding: UiRect::vertical(Val::Px(8.0)),
+                    ..default()
+                },
                 Pickable::IGNORE,
-                MonitorList,
+                MonitorStrip,
+            ),
+            (
+                label("", SMALL_SIZE, TEXT_DIM),
+                TextLayout::new(Justify::Center, LineBreak::NoWrap),
+                Node { margin: UiRect::bottom(Val::Px(8.0)), ..default() },
+                PickedName,
+            ),
+            (
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    border: UiRect::top(LINE),
+                    ..default()
+                },
+                Stroke(BORDER),
+                Pickable::IGNORE,
+                children![monitor_shows()],
             ),
             // For the stage the panel shows, with two monitors or more showing it.
             Setting {
@@ -517,76 +559,156 @@ fn languages_of(languages: &Languages) -> Vec<Option<String>> {
     std::iter::once(None).chain(languages.0.iter().map(|l| Some(l.tag.clone()))).collect()
 }
 
-// One row per connected monitor, left to right as they stand, and one for each chosen monitor
-// that is unplugged, so it can be switched off while it is away. Made again only when the rows
-// themselves change, or for a list still empty; giving one another stage only relabels its
-// button.
+// A connected monitor, left to right as they stand, then each chosen monitor that is
+// unplugged, so it can be switched off while it is away.
+#[derive(Clone, PartialEq)]
+struct Tile {
+    id: String,
+    name: String,
+    // None while unplugged.
+    size: Option<UVec2>,
+}
+
+fn tiles(screen: &ScreenSettings, monitors: &Monitors) -> Vec<Tile> {
+    let connected = monitors.0.iter().map(|m| Tile {
+        id: m.id.clone(),
+        name: m.name.clone(),
+        size: Some(UVec2::new(m.width, m.height)),
+    });
+    let unplugged = screen.monitors.iter().filter(|chosen| monitors.get(&chosen.id).is_none());
+    let unplugged = unplugged.map(|chosen| Tile {
+        id: chosen.id.clone(),
+        name: chosen.name.clone(),
+        size: None,
+    });
+    connected.chain(unplugged).collect()
+}
+
+fn picked<'a>(picked: &PickedMonitor, tiles: &'a [Tile]) -> Option<&'a Tile> {
+    let found = tiles.iter().find(|tile| picked.0.as_ref() == Some(&tile.id));
+    found.or(tiles.first())
+}
+
+// The room the tiles share in the section's card, and how tall the tallest may be.
+const STRIP: Vec2 = Vec2::new(300.0, 84.0);
+const TILE_GAP: f32 = 10.0;
+// Enough for the number over the stage, however many monitors.
+const TILE_MIN: f32 = 48.0;
+// An unplugged monitor's size isn't known.
+const UNPLUGGED: UVec2 = UVec2::new(1920, 1080);
+
+// One scale for all, so they keep their sizes to one another, as large as fits.
+fn tile_sizes(tiles: &[Tile]) -> Vec<Vec2> {
+    let sizes: Vec<Vec2> =
+        tiles.iter().map(|tile| tile.size.unwrap_or(UNPLUGGED).as_vec2()).collect();
+    let tallest = sizes.iter().map(|size| size.y).fold(1.0, f32::max);
+    let wide: f32 = sizes.iter().map(|size| size.x).sum::<f32>().max(1.0);
+    let room = STRIP.x - TILE_GAP * tiles.len().saturating_sub(1) as f32;
+    let scale = (STRIP.y / tallest).min(room / wide);
+    sizes.iter().map(|size| (*size * scale).max(Vec2::splat(TILE_MIN))).collect()
+}
+
+// Made again only when the monitors themselves change, or for a strip still empty. Picking one,
+// or giving one another stage, only restyles the tiles.
 fn fill_monitors(
     mut commands: Commands,
     screen: Res<ScreenSettings>,
     monitors: Res<Monitors>,
-    locale: Res<Locale>,
-    lists: Query<(Entity, Option<&Children>), With<MonitorList>>,
-    mut made: Local<Vec<(String, String)>>,
+    strips: Query<(Entity, Option<&Children>), With<MonitorStrip>>,
+    mut made: Local<Vec<Tile>>,
 ) {
-    let missing = fl!(locale, "monitor-missing");
-    let connected =
-        monitors.0.iter().map(|m| (m.id.clone(), format!("{} · {}×{}", m.name, m.width, m.height)));
-    let unplugged = screen
-        .monitors
-        .iter()
-        .filter(|chosen| monitors.get(&chosen.id).is_none())
-        .map(|chosen| (chosen.id.clone(), format!("{} · {missing}", chosen.name)));
-    let rows: Vec<(String, String)> = connected.chain(unplugged).collect();
-    let changed = *made != rows;
-    for (list, children) in &lists {
+    let tiles = tiles(&screen, &monitors);
+    let changed = *made != tiles;
+    let sizes = tile_sizes(&tiles);
+    for (strip, children) in &strips {
         let filled = children.is_some_and(|c| !c.is_empty());
         if filled && !changed {
             continue;
         }
-        commands.entity(list).despawn_children().with_children(|list| {
-            for (id, label_text) in &rows {
-                list.spawn((
-                    Node {
-                        align_items: AlignItems::Center,
-                        column_gap: Val::Px(12.0),
-                        height: Val::Px(32.0),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                    children![
-                        (
-                            Node { flex_grow: 1.0, min_width: Val::ZERO, ..default() },
-                            Pickable::IGNORE,
-                            children![label(label_text, BODY_SIZE, TEXT_LABEL)],
-                        ),
-                        button("-")
-                            .node(|n| n.width = Val::Px(56.0))
-                            .build(MonitorButton(id.clone())),
-                    ],
-                ));
+        commands.entity(strip).despawn_children().with_children(|strip| {
+            for (number, (tile, size)) in tiles.iter().zip(&sizes).enumerate() {
+                strip.spawn(monitor_tile(number + 1, &tile.id, *size));
             }
         });
     }
-    *made = rows;
+    *made = tiles;
 }
 
+fn monitor_tile(number: usize, id: &str, size: Vec2) -> impl Bundle {
+    (
+        Node {
+            width: Val::Px(size.x),
+            height: Val::Px(size.y),
+            flex_shrink: 0.0,
+            flex_direction: FlexDirection::Column,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            row_gap: Val::Px(6.0),
+            border: UiRect::all(Val::Px(1.5)),
+            border_radius: BorderRadius::all(RADIUS),
+            ..default()
+        },
+        BaseBackground::default(),
+        Fill(BUTTON_BG),
+        Stroke(BORDER),
+        MonitorTile(id.to_string()),
+        Hint(|l| fl!(l, "help-monitor-tile")),
+        Hovered::default(),
+        children![
+            label(number.to_string(), FontSize::Px(18.0), TEXT),
+            (
+                Node {
+                    padding: UiRect::axes(Val::Px(7.0), Val::Px(2.0)),
+                    border_radius: BorderRadius::MAX,
+                    ..default()
+                },
+                Fill(TRACK),
+                Pickable::IGNORE,
+                children![(label("-", SMALL_SIZE, TEXT_LABEL), TextLayout::no_wrap(), StagePill)],
+            ),
+        ],
+    )
+}
+
+// The picked tile in the accent, an unplugged one see-through.
 fn show_monitors(
     screen: Res<ScreenSettings>,
     monitors: Res<Monitors>,
+    picked_monitor: Res<PickedMonitor>,
     locale: Res<Locale>,
-    buttons: Query<(&MonitorButton, &Children)>,
-    mut texts: Query<&mut Text>,
+    mut tiles: Query<(Entity, &MonitorTile, &mut Fill, &mut Stroke)>,
+    children: Query<&Children>,
+    mut pills: Query<&mut Text, With<StagePill>>,
+    mut names: Query<&mut Text, (With<PickedName>, Without<StagePill>)>,
 ) {
-    for (button, children) in &buttons {
-        let text = match shown_stage(&screen, &monitors, &button.0) {
-            Some(stage) => stage.to_string(),
-            None => on_off(&locale, false),
+    let all = self::tiles(&screen, &monitors);
+    let picked = picked(&picked_monitor, &all);
+    for (entity, tile, mut fill, mut stroke) in &mut tiles {
+        let connected = monitors.get(&tile.0).is_some();
+        let (wanted_fill, wanted_stroke) = match picked.is_some_and(|p| p.id == tile.0) {
+            true => (SELECTED_BG, ACCENT),
+            false if connected => (BUTTON_BG, BORDER),
+            false => (CLEAR, BORDER),
         };
-        for &child in &**children {
-            if let Ok(mut label) = texts.get_mut(child) {
-                label.0.clone_from(&text);
+        fill.set_if_neq(Fill(wanted_fill));
+        stroke.set_if_neq(Stroke(wanted_stroke));
+        let stage = stage_label(&locale, shown_stage(&screen, &monitors, &tile.0));
+        for part in children.iter_descendants(entity) {
+            if let Ok(mut pill) = pills.get_mut(part)
+                && pill.0 != stage
+            {
+                pill.0.clone_from(&stage);
             }
+        }
+    }
+    let name = picked.map(|tile| match tile.size {
+        Some(size) => format!("{} · {}×{}", tile.name, size.x, size.y),
+        None => format!("{} · {}", tile.name, fl!(locale, "monitor-missing")),
+    });
+    let name = name.unwrap_or_default();
+    for mut text in &mut names {
+        if text.0 != name {
+            text.0.clone_from(&name);
         }
     }
 }
@@ -599,28 +721,63 @@ fn shown_stage(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> Option
     }
 }
 
-// A click moves the monitor on to the next stage, then Off, then round to A.
+fn stage_label(l: &FluentLanguageLoader, stage: Option<StageId>) -> String {
+    match stage {
+        Some(stage) => fl!(l, "stage-name", letter = stage.to_string()),
+        None => on_off(l, false),
+    }
+}
+
 fn on_click(
     event: On<Pointer<Click>>,
-    buttons: Query<&MonitorButton>,
-    monitors: Res<Monitors>,
-    mut screen: ResMut<ScreenSettings>,
+    tiles: Query<&MonitorTile>,
+    mut picked: ResMut<PickedMonitor>,
 ) {
-    let Ok(MonitorButton(id)) = buttons.get(event.entity) else {
-        return;
-    };
-    let options: Vec<Option<StageId>> =
-        std::iter::once(None).chain(stages(&screen, &monitors).into_iter().map(Some)).collect();
-    let current = shown_stage(&screen, &monitors, id);
-    let at = options.iter().position(|option| *option == current).unwrap_or(0);
-    let mut next = options[(at + 1) % options.len()];
-    // The last connected monitor showing it can't go Off: a wallpaper on no monitor is none.
-    let picked = chosen(&screen, &monitors);
-    let others_on = picked.iter().any(|c| &c.id != id && monitors.get(&c.id).is_some());
-    if next.is_none() && monitors.get(id).is_some() && !others_on {
-        next = options[1];
+    if let Ok(MonitorTile(id)) = tiles.get(event.entity) {
+        picked.0 = Some(id.clone());
     }
-    show_on(&mut screen, &monitors, id, next);
+}
+
+// What the picked monitor shows: a stage, or Off.
+fn monitor_shows() -> impl Bundle {
+    Setting {
+        label: |l| fl!(l, "label-monitor-shows"),
+        help: |l| fl!(l, "help-monitor-shows"),
+        show: |w, l| {
+            let (screen, monitors) = (w.resource::<ScreenSettings>(), w.resource::<Monitors>());
+            let tiles = tiles(screen, monitors);
+            let id = &picked(w.resource::<PickedMonitor>(), &tiles)?.id;
+            let current = shown_stage(screen, monitors, id);
+            let options = offered(screen, monitors, id);
+            Some(choice(&options, &current, |&stage| stage_label(l, stage)))
+        },
+        change: |w, step| {
+            let picked_monitor = PickedMonitor(w.resource::<PickedMonitor>().0.clone());
+            w.resource_scope(|w, monitors: Mut<Monitors>| {
+                let mut screen = w.resource_mut::<ScreenSettings>();
+                let tiles = tiles(&screen, &monitors);
+                let Some(tile) = picked(&picked_monitor, &tiles) else {
+                    return;
+                };
+                let current = shown_stage(&screen, &monitors, &tile.id);
+                let options = offered(&screen, &monitors, &tile.id);
+                if let Some(next) = stepped(&options, &current, step) {
+                    show_on(&mut screen, &monitors, &tile.id, next);
+                }
+            });
+        },
+    }
+    .picker()
+}
+
+// Off, then every stage. Not Off for the last connected monitor showing it, though: a wallpaper
+// on no monitor is none.
+fn offered(screen: &ScreenSettings, monitors: &Monitors, id: &str) -> Vec<Option<StageId>> {
+    let others_on =
+        chosen(screen, monitors).iter().any(|c| c.id != id && monitors.get(&c.id).is_some());
+    let off = others_on || monitors.get(id).is_none();
+    let stages = stages(screen, monitors).into_iter().map(Some);
+    off.then_some(None).into_iter().chain(stages).collect()
 }
 
 // There are as many stages to pick from as monitors in the list, enough for each to show its
@@ -668,7 +825,7 @@ pub(crate) fn this_monitor() -> impl Bundle {
             let current = monitors.get(&here)?.stage?;
             let shown: BTreeSet<StageId> = monitors.0.iter().filter_map(|m| m.stage).collect();
             let options = stages(w.resource::<ScreenSettings>(), monitors);
-            let label = |stage: &StageId| fl!(l, "stage-name", letter = stage.to_string());
+            let label = |&stage: &StageId| stage_label(l, Some(stage));
             Some(choice(&options, &current, label).when(shown.len() > 1))
         },
         change: |w, step| {

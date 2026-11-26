@@ -8,6 +8,7 @@ pub(crate) use button::ButtonBuilder;
 pub(crate) use button::HoverFeedback;
 
 use crate::icons::Icon;
+use crate::icons::icon;
 use crate::locale::Localized;
 use crate::locale::Tr;
 use crate::theme::*;
@@ -111,6 +112,54 @@ pub(crate) fn paint_switch(
     let left = Val::Px(if on { SWITCH.x - 2.0 - KNOB_INSET - KNOB_SIZE } else { KNOB_INSET });
     if knob.left != left {
         knob.left = left;
+    }
+}
+
+// A tag that is on or off, one of a few names to pick any of, such as an outfit's parts. On, it
+// is tinted with the accent and ticked; `paint_chip` sets which.
+#[derive(Component)]
+pub(crate) struct ChipTick;
+
+pub(crate) fn chip(name: &str, parts: impl Bundle) -> impl Bundle {
+    (
+        Node {
+            height: CONTROL_HEIGHT,
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(6.0),
+            padding: UiRect::horizontal(Val::Px(12.0)),
+            border: UiRect::all(LINE),
+            border_radius: BorderRadius::MAX,
+            ..default()
+        },
+        BaseBackground::default(),
+        Fill(WELL_BG),
+        Stroke(BORDER),
+        parts,
+        children![
+            (
+                icon(Icon::Check, FontSize::Px(14.0), TEXT),
+                Node { display: Display::None, ..default() },
+                ChipTick,
+            ),
+            label(name, CONTROL_SIZE, TEXT_LABEL),
+        ],
+    )
+}
+
+// Written only on a change, so the panel isn't laid out again for nothing.
+pub(crate) fn paint_chip(
+    on: bool,
+    mut fill: Mut<Fill>,
+    mut stroke: Mut<Stroke>,
+    mut tick: Mut<Node>,
+    mut ink: Mut<Ink>,
+) {
+    fill.set_if_neq(Fill(if on { SELECTED_BG } else { WELL_BG }));
+    stroke.set_if_neq(Stroke(if on { ACCENT } else { BORDER }));
+    ink.set_if_neq(Ink(if on { TEXT } else { TEXT_LABEL }));
+    let shown = display(on);
+    if tick.display != shown {
+        tick.display = shown;
     }
 }
 

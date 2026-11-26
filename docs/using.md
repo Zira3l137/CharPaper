@@ -42,7 +42,7 @@ point at its spot on the edge.
 
 | Tab | What's there |
 |-----|--------------|
-| **Character** | Which character, a tile each with a close-up of it, its outfit and the outfit's parts, **Pose & face** (animation and expression), **Place** (environment, camera, **Lock orbit**, and **Parallax**, the camera leaning towards the pointer), the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks) and the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them). |
+| **Character** | Which character, a tile each with a close-up of it, its outfit and the outfit's parts (a tag each, to click on and off), **Pose & face** (animation and expression), **Place** (environment, camera, **Lock orbit**, and **Parallax**, the camera leaning towards the pointer), the **Cursor** section (whether the character follows the cursor, how strongly, and whether it reacts to clicks) and the **Physics** section (whether hair and clothes swing, in high quality, in the wind, and when the pointer brushes them). |
 | **Look** | **Lighting** (sky strength and rotation, whether the sun follows the sky, the background and its blur, shadows), **Color** (view transform, exposure, white balance, saturation, contrast, LUT), then an effect to a section: bloom, depth of field, fog, ambient occlusion, ink strokes, and film (vignette, grain, aberration). |
 | **Sound** | Volume for everything, and for music, ambience and the character's sounds each. What's playing, which of the environment's tracks it is, and buttons under it for the playing order (in order, shuffle or repeat one), the track before, play and pause, and the next track. Under them, **Track** lists every track to pick one from. |
 | **Performance** | The quality preset, frame rate limit and render scale, when to pause, and in **Advanced** what the presets set one by one, with the performance overlay. |
@@ -78,8 +78,8 @@ picked on one monitor changes shadows on all of them. While a preset keeps an ef
 off, its row shows Off; turning it up brings it back at the character's own amount.
 
 If your computer struggles, pick **Fastest** or **Moderate**. To fine-tune instead, lower
-**Render scale**, set **Shadow quality** to Low, turn on fog **Jitter** and lower fog
-**Quality** (or turn **Fog** off), lower depth of field **Quality** or **Max size**, turn
+**Render scale**, set **Shadow quality** to Low, turn on **Fog jitter** and lower **Fog
+quality** (or turn **Fog** off), lower **Blur quality** or depth of field's **Max size**, turn
 physics **High quality** off, and lower the **FPS limit**. The **Performance overlay**
 shows what each frame costs.
 
@@ -125,8 +125,10 @@ spot that reacts makes the character react too.
 
 ## Several monitors
 
-By default the wallpaper is on your main monitor only. In **Settings → Display** every
-monitor has a button. Click it to step through **Stage A**, **Stage B**, …, and **Off**.
+By default the wallpaper is on your main monitor only. **Settings → Display** draws your
+monitors side by side as they stand, each with its number and the stage it shows. Click
+one, then pick what it shows in **Shows** under them: **Stage A**, **Stage B**, …, or
+**Off**. The last monitor showing the wallpaper can't be turned off.
 
 - A **stage** is one scene: a character with its own outfit, camera, environment and
   picture settings. Monitors on the same stage show the same scene.
