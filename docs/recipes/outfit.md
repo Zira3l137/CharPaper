@@ -44,6 +44,11 @@ Each skin in the list has:
 **Modifiers and shape keys:** with *Apply modifiers* on in Export settings, glTF can't apply
 modifiers to a mesh that has shape keys without losing them. Apply such modifiers yourself
 (a Subdivision you can do without, a Mirror, a Solidify), or keep them off those meshes.
+*Shade Auto Smooth* (Blender 4.1+) is one too: it adds a *Smooth by Angle* modifier. Use
+*Shade Smooth by Angle* instead, which marks sharp edges without a modifier.
+
+**Materials** have a page of their own: [Materials and textures](materials.md). Hair,
+lashes and lace in particular should be cutouts.
 
 **Shape key names are shared across meshes.** The app moves a shape key by its name, on
 every mesh of the worn skin that has one by that name. Two meshes both with a key called
@@ -80,7 +85,11 @@ So before exporting a skin:
   meshes parented to bones.
 - **"left out (not meshes)"**: lights, cameras and the like in the skin's collection.
   Move them to an environment.
+- **"…weighted to more than 4 bones"**: the app keeps each vertex's 4 strongest bones.
+  *Weights → Limit Total* in Weight Paint mode.
+- Warnings about a skin's materials are explained in
+  [Materials and textures](materials.md#warnings-about-materials).
 
 ---
 
-[All recipes](../making-a-character.md#recipes) · [An animation](animation.md) →
+[All recipes](../making-a-character.md#recipes) · [Materials and textures](materials.md) →

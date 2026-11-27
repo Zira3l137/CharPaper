@@ -11,7 +11,12 @@ together (slots); in 4.2 and 4.3, a clip's shape keys go in a second action, its
 | Comes over | Doesn't |
 |------------|---------|
 | Meshes, UVs, vertex colors, armature deformation | Modifiers on a mesh that has shape keys (apply them yourself) |
-| Principled BSDF with image textures; PNG and JPEG | Procedural shader nodes (bake them); WebP images |
+| Principled BSDF with image textures; PNG and JPEG | Procedural shader nodes and Bump (bake them); WebP images |
+| Cutouts (alpha rounded with a Math node) and see-through alpha; Backface Culling | Sheen, Subsurface, Thin Film; textures on Transmission, Coat, Specular and Anisotropic (their values come over) |
+| Emission, following the exposure; unlit materials | A Mapping node per texture (the base color's places them all) |
+| Tangent-space normal maps | Object- and world-space normal maps |
+| Up to 4 bones on a vertex | More (the 4 strongest are kept) |
+| Sizes in meters: one Blender unit is one meter | *Unit Scale* (ignored) |
 | Shape keys, up to 256 a mesh | Draco or meshopt compressed files |
 | Shape key drivers that read bones or other shape keys | Drivers using Python, other objects, custom properties or the frame |
 | Actions on the armature, as clips on the timeline, played once or held | Animation of material or camera settings, visibility, modifiers |

@@ -161,7 +161,15 @@ every .blend on the computer.
   export as a still. To make a material unlit, like a screen or a sign that ignores the
   scene's lights, plug the image's *Color* straight into the Material Output's *Surface*. For
   transparency, put a *Mix Shader* in between: *Fac* from the image's *Alpha*, a *Transparent
-  BSDF* in its first shader slot and the image's *Color* in its second.
+  BSDF* in its first shader slot and the image's *Color* in its second. An Emission shader
+  instead exports a black base color, so the GIF wouldn't show; Check warns.
+- **Materials:** the exporter decides each material's transparency from what feeds its
+  Alpha (or a Transparent BSDF mix's *Fac*): rounded with a Round or Greater Than node, or as
+  `1 − (alpha < cutoff)`, it's a cutout; anything else below 1 is see-through. Check works
+  it out the same way and warns about a see-through skin material, alpha from a JPEG,
+  textures on inputs the app drops, sheen and subsurface, differing Mapping nodes, painted
+  color attributes no material uses, vertices on more than 4 bones and a Unit Scale other
+  than 1. See [Materials and textures](../../../docs/recipes/materials.md).
 - **Sounds** are pose markers on a clip's action. In the Action Editor, turn on *Marker >
   Show Pose Markers*, put a marker where the sound should start and name it after a sound
   in the .blend: `step_l` matches the Sound `step_l.wav` or `step_l`. The app plays it each

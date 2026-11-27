@@ -110,7 +110,11 @@ base color at the speed saved in the GIF.
 - Only GIFs play. Videos and image sequences show as a still.
 - One GIF per material, and the material's name must work as a file name.
 - For a screen that glows on its own and ignores the lights, plug the image's *Color*
-  straight into the Material Output's *Surface*.
+  straight into the Material Output's *Surface*. Not through an Emission shader: that
+  exports a black base color, and the GIF plays on the base color. See
+  [Glow](materials.md#glow).
+- Materials of the environment follow the same rules as the character's: see
+  [Materials and textures](materials.md).
 
 ## Sky and fog
 

@@ -134,4 +134,4 @@ pick.
 
 ---
 
-← [An outfit (skin)](outfit.md) · [All recipes](../making-a-character.md#recipes) · [A facial expression](expression.md) →
+← [Materials and textures](materials.md) · [All recipes](../making-a-character.md#recipes) · [A facial expression](expression.md) →

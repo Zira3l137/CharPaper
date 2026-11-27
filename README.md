@@ -75,6 +75,7 @@ Windows says it protected your PC.
 | Start it in a window, or from a script | [Command line](docs/using.md#command-line) |
 | Make my first character in Blender | [Your first character, step by step](docs/making-a-character.md#your-first-character-step-by-step) |
 | Add outfits, animations or expressions | [Recipes](docs/making-a-character.md#recipes) |
+| Set up materials: hair, glass, glow | [Materials and textures](docs/recipes/materials.md) |
 | Build a place for the character, with lights | [An environment](docs/recipes/environment.md) · [A sky](docs/recipes/sky.md) · [A sun that matches the sky](docs/recipes/sun.md) · [Fog](docs/recipes/fog.md) |
 | Make the character look at the cursor | [Following the cursor (gaze)](docs/recipes/gaze.md) |
 | Make the character react to clicks | [Hotspots](docs/recipes/hotspots.md) · [A reaction](docs/recipes/reaction.md) · [Hotspot ideas](docs/recipes/hotspot-ideas.md) |

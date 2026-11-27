@@ -22,6 +22,7 @@ For 3D artists working in Blender.
 **Recipes**, one page for each thing a character can have:
 
 - [An outfit (skin)](recipes/outfit.md): put meshes in a collection, and each object becomes a part the viewer can switch.
+- [Materials and textures](recipes/materials.md): what comes over from a Principled BSDF; cutouts and see-through; hair, glass, glow, normal maps, vertex colors.
 - [An animation](recipes/animation.md): clips on the timeline, once or held; what a clip moves; slots and other Blender 4.4 traps.
 - [A facial expression](recipes/expression.md): shape key actions the viewer can pick for the face.
 - [Shape keys that follow the body](recipes/correctives.md): correctives: drivers, or keys inside a clip.
@@ -46,7 +47,7 @@ For 3D artists working in Blender.
 - **[What comes over from Blender, and what doesn't](blender-support.md)**: one table, at a glance.
 - **[Keeping it fast](performance.md)**: what costs the most in a scene, and how to measure it.
 - **[Troubleshooting for artists](troubleshooting.md)**: what you see, why, and what to do, by topic.
-  <br><sub>[Loading](troubleshooting.md#loading) · [Outfits, animations and expressions](troubleshooting.md#outfits-animations-and-expressions) · [Reactions and hotspots](troubleshooting.md#reactions-and-hotspots) · [Physics](troubleshooting.md#physics) · [Gaze](troubleshooting.md#gaze) · [Lights and exposure](troubleshooting.md#lights-and-exposure) · [The sky and the sun](troubleshooting.md#the-sky-and-the-sun) · [Fog](troubleshooting.md#fog) · [Camera](troubleshooting.md#camera) · [Sound and GIFs](troubleshooting.md#sound-and-gifs)</sub>
+  <br><sub>[Loading](troubleshooting.md#loading) · [Outfits, animations and expressions](troubleshooting.md#outfits-animations-and-expressions) · [Materials and textures](troubleshooting.md#materials-and-textures) · [Reactions and hotspots](troubleshooting.md#reactions-and-hotspots) · [Physics](troubleshooting.md#physics) · [Gaze](troubleshooting.md#gaze) · [Lights and exposure](troubleshooting.md#lights-and-exposure) · [The sky and the sun](troubleshooting.md#the-sky-and-the-sun) · [Fog](troubleshooting.md#fog) · [Camera](troubleshooting.md#camera) · [Sound and GIFs](troubleshooting.md#sound-and-gifs)</sub>
 
 ## For developers
 

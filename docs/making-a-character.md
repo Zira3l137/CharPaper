@@ -94,9 +94,11 @@ fix it.
 
 These save the most trouble.
 
-1. **Real-world size, in meters.** The orbit camera starts 2 m from a point 1 m above the
-   ground and can't come closer than 1 m. A character 10 cm or 20 m tall will be awkward to
-   look at.
+1. **Real-world size, in meters, with Unit Scale at 1.** The orbit camera starts 2 m from a
+   point 1 m above the ground and can't come closer than 1 m. A character 10 cm or 20 m tall
+   will be awkward to look at. The exporter ignores *Scene → Units → Unit Scale*: one Blender
+   unit is always one meter in the app, and lights, fog, physics and depth of field work in
+   meters, so a scene built at another scale looks and moves wrong.
 2. **Standing on Z, facing −Y.** That is, facing you in Blender's front view (Numpad 1).
 3. **Uniform scale on the armature and everything above it.** A scale like (1, 1, 1.2)
    skews bones in the app. Apply it.
@@ -115,8 +117,12 @@ These save the most trouble.
 9. **Leave shape key sliders at 0 when you export a skin**, unless that's the face you want
    it to rest with. A slider no clip keys stays in the app where it was in Blender.
 10. **Materials: Principled BSDF with image textures.** Anything built from procedural
-    nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't.
-11. **At most 256 shape keys on a mesh.**
+    nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't. Make
+    hair, lashes and lace **cutouts**, not see-through: see
+    [Materials and textures](recipes/materials.md).
+11. **At most 256 shape keys on a mesh, and 4 bones on a vertex.** A vertex weighted to more
+    bones keeps its 4 strongest, so it bends a little differently than in Blender.
+    *Weights → Limit Total* in Weight Paint mode fixes it.
 12. **Save your .blend often.** The add-on's settings live in it.
 
 ## The add-on
@@ -268,6 +274,7 @@ the app makes of it.
 | Recipe | What it covers |
 |---|---|
 | [An outfit (skin)](recipes/outfit.md) | Put meshes in a collection, and each object becomes a part the viewer can switch. |
+| [Materials and textures](recipes/materials.md) | What comes over from a Principled BSDF; cutouts and see-through; hair, glass, glow, normal maps, vertex colors. |
 | [An animation](recipes/animation.md) | Clips on the timeline, once or held; what a clip moves; slots and other Blender 4.4 traps. |
 | [A facial expression](recipes/expression.md) | Shape key actions the viewer can pick for the face. |
 | [Shape keys that follow the body](recipes/correctives.md) | Correctives: drivers, or keys inside a clip. |

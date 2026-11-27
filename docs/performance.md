@@ -16,7 +16,12 @@ render.
   more than 2.
 - **Big GIFs take memory.** A GIF's frames are kept unpacked, up to 200 MB of them; a
   bigger one is read again on every loop instead. Keep screens small and loops short.
-- **Textures:** 2K is plenty for a character seen on a desktop.
+- **Textures:** 2K is plenty for a character seen on a desktop. The app makes each one's
+  mipmaps as the character loads, which takes a third more video memory and, for a 4K
+  texture, about a quarter of a second.
+- **Big see-through surfaces cost more than solid ones:** what's behind them is drawn first
+  and they're blended over it. Cutouts cost no more than solid surfaces. See
+  [Materials and textures](recipes/materials.md#transparency).
 - **Ship the baked `.ktx2` sky files** so first launch isn't spent making them.
 - **Physics costs very little.** Two dozen chains of five bones take a fraction of a
   millisecond a frame. Physics **High quality** costs more, most when many tails rest

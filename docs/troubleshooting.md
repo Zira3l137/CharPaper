@@ -6,7 +6,7 @@ Problems running the app itself are under
 [When something goes wrong](using.md#when-something-goes-wrong). In every case, `charpaper.log`, next to
 `charpaper.exe`, usually says what happened.
 
-**On this page:** [Loading](#loading) · [Outfits, animations and expressions](#outfits-animations-and-expressions) · [Reactions and hotspots](#reactions-and-hotspots) · [Physics](#physics) · [Gaze](#gaze) · [Lights and exposure](#lights-and-exposure) · [The sky and the sun](#the-sky-and-the-sun) · [Fog](#fog) · [Camera](#camera) · [Sound and GIFs](#sound-and-gifs)
+**On this page:** [Loading](#loading) · [Outfits, animations and expressions](#outfits-animations-and-expressions) · [Materials and textures](#materials-and-textures) · [Reactions and hotspots](#reactions-and-hotspots) · [Physics](#physics) · [Gaze](#gaze) · [Lights and exposure](#lights-and-exposure) · [The sky and the sun](#the-sky-and-the-sun) · [Fog](#fog) · [Camera](#camera) · [Sound and GIFs](#sound-and-gifs)
 
 ## Loading
 
@@ -22,6 +22,8 @@ See also: [Testing your character](making-a-character.md#testing-your-character)
 | My new default in suite.toml is ignored | The app remembers your last pick. Delete `state.toml`. |
 | The character stopped loading after I changed the export format | Files of the old format are still there, and a `.glb` and a `.gltf` of the same name clash. Delete the old ones. |
 | The character stays in its rest pose, or parts of the outfit stay behind | Bone names, or the armature object's name, differ between files. Export the model, skins and animations again from the same .blend. |
+| An animation is missing, and the log says a `.glb` *has no .json beside it* | A clip's two files were copied by hand and one was left behind, or an old export left a stray file. Export the clip again, or delete the lone `.glb`. |
+| Everything is far too big or small, lights look too weak, hair swings in slow motion | The scene isn't at real size, or its *Unit Scale* isn't 1, which the exporter ignores. Build at real size in meters with Unit Scale 1. |
 
 ## Outfits, animations and expressions
 
@@ -36,10 +38,33 @@ See also: [An outfit (skin)](recipes/outfit.md) · [An animation](recipes/animat
 | A clip plays another action's keys | Its action holds several slots for the armature and the wrong one is picked. Pick the **Slot** in the clip's settings. If the action was copied with **New**, make a fresh one. See [Slots](recipes/animation.md#slots-blender-44-and-newer). |
 | A loop pops once per round | The pose at the end of the scene's range differs from the start, or the clip's own loop doesn't fit the range. Check says which, and which end frame fits. |
 | A prop's loop stops partway through the timeline | It's shorter than the timeline and doesn't repeat. Give it a Cycles modifier or a Manual Frame Range that fits. |
-| Shape keys vanished from a mesh | It has modifiers and *Apply modifiers* is on. Apply them by hand. |
+| Shape keys vanished from a mesh | It has modifiers and *Apply modifiers* is on. Apply them by hand. *Shade Auto Smooth* (Blender 4.1+) adds one too, *Smooth by Angle*: use *Shade Smooth by Angle* instead, which needs no modifier. |
+| Part of an outfit stays at the origin, and the log says a bone *has nowhere to attach* | The skin's armature has a bone the model's doesn't, and no parent of it does either: the bone was added after the model was exported. Export the model again. |
+| A joint bends a little differently than in Blender | Its vertices are weighted to more than 4 bones; the app keeps the 4 strongest. *Weights → Limit Total* in Weight Paint mode. Check counts them. |
+| A corrective doesn't follow, and the log says the driver of it *is left out* | It uses something the app can't run. Check names it and says why; see [Shape keys that follow the body](recipes/correctives.md). If the log says it *reads … at rest, where Blender reads …*, it runs but disagrees with Blender: look at what Check says about that driver. |
 | The character rests with a face it shouldn't have | An action was still playing on the mesh's shape keys when the skin was exported, or a slider wasn't at 0. **Stop it**, set sliders, export the skin again. |
 | An expression shows nothing on one outfit | That skin's meshes have no shape keys by those names. The Expressions panel lists which meshes of each skin it touches. |
 | A clip's shape keys do nothing | They have drivers: the driver wins. Or the keys are in another action (4.4 and newer: in a slot of the clip's action; 4.2: in **Also plays**). |
+
+## Materials and textures
+
+See also: [Materials and textures](recipes/materials.md)
+
+| What you see | Why, and what to do |
+|---|---|
+| Hair or layered cards overlap in the wrong order, flickering as the camera turns | They're see-through (Blend), which the app sorts per object, not per face. Make them [cutouts](recipes/materials.md#hair-lashes-and-lace). |
+| Glass or a curtain casts a shadow as dark as a wall | A see-through surface casts a solid shadow. Untick its *Ray Visibility → Shadow*. |
+| What's behind glass is blurred, fogged or outlined through it | Depth of field, fog and ink strokes don't see see-through surfaces. Keep glass small, or out of focus edges and fog. |
+| Something is see-through that shouldn't be | Its Alpha slider is below 1, or something is plugged into Alpha. Leave Alpha at 1 for solid materials. |
+| A cutout is solid everywhere | Its alpha comes from a JPEG, or from an image saved without alpha. Use a PNG with alpha. |
+| A cutout's edges look jagged | Cutouts have hard edges. TAA anti-aliasing smooths them best. |
+| The inside of a closed object shows through it | A see-through material shows both sides. Tick *Backface Culling*. |
+| A mesh is tinted, or darker than in Blender | A painted color attribute came along, and the app multiplies base color by it. Delete it, or set *Vertex colors* to *None*. Check warns. |
+| Textures are missing | They're WebP, or made with procedural nodes (bake them), or the image file was missing when exporting. |
+| A normal map looks lit from the wrong side | It's a DirectX map (green down): invert its green channel. Or its Image Texture isn't *Non-Color*. |
+| A coat, specular or transmission texture does nothing | Only those inputs' slider values come over. |
+| A textured detail is out of place | It has a Mapping node of its own; the app places all of a material's textures like its base color. |
+| A screen stays as bright as ever when the exposure changes | It's unlit, which ignores lights and exposure. That's what unlit is for; use Emission to follow the exposure. |
 
 ## Reactions and hotspots
 
@@ -145,6 +170,8 @@ See also: [Sounds](recipes/sounds.md) · [A screen that plays a GIF](recipes/env
 |---|---|
 | A sound or the music doesn't play | It isn't Ogg Vorbis. |
 | A GIF shows as a still picture | It isn't a GIF, or its file isn't named after the material. |
+| A GIF screen stays black | Its material glows through an Emission shader, which exports a black base color. Plug the image straight into *Surface*. Check warns. |
+| The log says *no mesh wears the material* for a GIF | The material was renamed or taken off its mesh after the GIF was exported. Export the environment again. |
 
 ---
 
