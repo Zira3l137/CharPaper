@@ -9,15 +9,19 @@ use std::path::PathBuf;
 
 use charpaper_bake::BakeError;
 use charpaper_bake::BakeSettings;
+use charpaper_gltf as gltf;
 use charpaper_suite::MANIFEST_FILE;
 use chr::PACK_FILE;
 use chr::Pack;
 use chr::PackError;
 use chr::PackWriter;
+use glam::Mat4;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::exceptions::PyKeyError;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::pybacked::PyBackedBytes;
 use pyo3::types::PyBytes;
 use pyo3::types::PyDict;
 
@@ -243,6 +247,83 @@ fn bake(py: Python<'_>, panorama: PathBuf, folder: PathBuf) -> PyResult<Vec<Path
     .map_err(|err| BakeFailed::new_err(error_chain(&err)))
 }
 
+/// An armature's bones as the add-on reads them out of Blender, in the armature's order.
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct BonesArg {
+    // Each bone's exported parent by index, -1 for none, and whether it has any in Blender.
+    parents: Vec<i64>,
+    has_parent: Vec<bool>,
+    // Float32 matrices, column by column as Blender's foreach_get gives them: `rest` one per
+    // bone, `poses` one per bone for every sample in turn.
+    rest: PyBackedBytes,
+    poses: PyBackedBytes,
+    // The bones to write, by index, and their names.
+    written: Vec<(usize, String)>,
+}
+
+/// Writes a clip's .glb: the bones and objects it moves, sampled `samples` times
+/// `step_seconds` apart. `objects` are (name, float32 matrices relative to the parent in
+/// Blender, one per sample). Lets go of Python's lock while it works.
+#[pyfunction]
+#[pyo3(signature = (path, name, samples, step_seconds, optimize, bones = None, objects = Vec::new()))]
+fn write_clip(
+    py: Python<'_>,
+    path: PathBuf,
+    name: String,
+    samples: usize,
+    step_seconds: f32,
+    optimize: bool,
+    bones: Option<BonesArg>,
+    objects: Vec<(String, PyBackedBytes)>,
+) -> PyResult<()> {
+    py.detach(|| {
+        let mut nodes = Vec::new();
+        if let Some(bones) = bones {
+            let count = bones.parents.len();
+            let rest = matrices(&bones.rest, count, "rest")?;
+            let poses = matrices(&bones.poses, count * samples, "poses")?;
+            let armature = gltf::blender::Bones {
+                rest,
+                parents: bones.parents.iter().map(|&p| usize::try_from(p).ok()).collect(),
+                has_parent: bones.has_parent,
+            };
+            let mut tracks: Vec<Vec<gltf::Trs>> = vec![Vec::with_capacity(samples); count];
+            for frame in poses.chunks_exact(count) {
+                for (track, local) in tracks.iter_mut().zip(armature.locals(frame)) {
+                    track.push(local);
+                }
+            }
+            for (index, bone) in bones.written {
+                let samples = tracks
+                    .get(index)
+                    .cloned()
+                    .ok_or_else(|| PyValueError::new_err("no such bone"))?;
+                nodes.push(gltf::ClipNode { name: bone, samples });
+            }
+        }
+        for (object, locals) in objects {
+            let samples = matrices(&locals, samples, &object)?
+                .into_iter()
+                .map(gltf::blender::object_local)
+                .collect();
+            nodes.push(gltf::ClipNode { name: object, samples });
+        }
+        let clip = gltf::Clip { name, step_seconds, optimize, nodes };
+        write_file(&path, &clip.to_glb()).map_err(pack_error)
+    })
+}
+
+fn matrices(bytes: &[u8], count: usize, what: &str) -> PyResult<Vec<Mat4>> {
+    if bytes.len() != count * 64 {
+        let message = format!("{what}: {} bytes for {count} matrices", bytes.len());
+        return Err(PyValueError::new_err(message));
+    }
+    let floats: Vec<f32> =
+        bytes.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect();
+    Ok(floats.chunks_exact(16).map(Mat4::from_cols_slice).collect())
+}
+
 /// The names of the sky maps `folder` doesn't have yet.
 #[pyfunction]
 fn missing_maps(folder: PathBuf) -> Vec<&'static str> {
@@ -265,6 +346,8 @@ mod charpaper_pack {
     use super::missing_maps;
     #[pymodule_export]
     use super::pack;
+    #[pymodule_export]
+    use super::write_clip;
 
     #[pymodule_export]
     const VERSION: u16 = chr::VERSION;

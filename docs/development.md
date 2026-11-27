@@ -41,6 +41,7 @@ added beside it:
 | `charpaper-ui` | The panel and the performance overlay. |
 | `charpaper-suite` | Reads a suite folder and suite.toml. No engine inside, so it's quick to test. |
 | `charpaper-pack` | Reads and writes the [suite pack](chr-format.md), `suite.chr`. |
+| `charpaper-gltf` | Writes a suite's glTF files from what the add-on reads out of Blender, as Blender's exporter would. |
 | `charpaper-py` | The Blender add-on's Python module, `charpaper_pack`: packs and sky baking. |
 | `charpaper-bake` | Makes the sky files from a panorama. |
 | `charpaper-drivers` | Runs Blender's shape key drivers. |

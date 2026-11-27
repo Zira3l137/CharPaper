@@ -158,6 +158,7 @@ charpaper-suite = { path = "crates/charpaper-suite" }
 charpaper-bake = { path = "crates/charpaper-bake" }
 charpaper-drivers = { path = "crates/charpaper-drivers" }
 charpaper-gaze = { path = "crates/charpaper-gaze" }
+charpaper-gltf = { path = "crates/charpaper-gltf" }
 charpaper-wallpaper = { path = "crates/charpaper-wallpaper" }
 charpaper-windows = { path = "crates/charpaper-windows" }
 charpaper-ui = { path = "crates/charpaper-ui"}

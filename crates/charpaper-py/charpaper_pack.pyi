@@ -3,7 +3,7 @@
 Every call lets go of Python's lock while it works, so Blender keeps drawing.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Buffer, Callable, Iterable, Sequence
 from os import PathLike
 from typing import TypedDict
 
@@ -89,6 +89,35 @@ def bake(panorama: str | PathLike[str], folder: str | PathLike[str]) -> list[str
 
     Maps already in `folder` are left alone. Returns the paths written.
     """
+
+class Bones(TypedDict):
+    """An armature's bones in the armature's order. Matrices are float32, column by column, as
+    Blender's foreach_get gives them."""
+
+    parents: Sequence[int]
+    """Each bone's exported parent by index, -1 for none."""
+    has_parent: Sequence[bool]
+    """Whether each bone has a parent at all in Blender."""
+    rest: Buffer
+    """bone.matrix_local of every bone."""
+    poses: Buffer
+    """pose_bone.matrix of every bone, for each sample in turn."""
+    written: Sequence[tuple[int, str]]
+    """The bones the clip moves, by index and name."""
+
+def write_clip(
+    path: str | PathLike[str],
+    name: str,
+    samples: int,
+    step_seconds: float,
+    optimize: bool,
+    bones: Bones | None = None,
+    objects: Sequence[tuple[str, Buffer]] = (),
+) -> None:
+    """Writes a clip's .glb as Blender's glTF exporter would: the bones and objects it moves,
+    sampled `samples` times `step_seconds` apart. `objects` are (name, float32 matrices relative
+    to the parent in Blender, one per sample). With `optimize`, a channel that holds still keeps
+    its first and last keys."""
 
 def missing_maps(folder: str | PathLike[str]) -> list[str]:
     """The names of the sky maps `folder` doesn't have yet."""

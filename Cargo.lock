@@ -1959,6 +1959,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "charpaper-gltf"
+version = "0.9.0"
+dependencies = [
+ "charpaper-anim",
+ "glam",
+ "gltf",
+ "serde_json",
+]
+
+[[package]]
 name = "charpaper-monitor"
 version = "0.9.0"
 dependencies = [
@@ -1981,8 +1991,10 @@ name = "charpaper-py"
 version = "0.9.0"
 dependencies = [
  "charpaper-bake",
+ "charpaper-gltf",
  "charpaper-pack",
  "charpaper-suite",
+ "glam",
  "pyo3",
 ]
 
