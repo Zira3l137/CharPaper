@@ -14,7 +14,7 @@ to be baked to an image first.
 | Principled BSDF input | In the app |
 |---|---|
 | *Base Color*, *Metallic*, *Roughness*, *Alpha*, *Normal* (through a Normal Map node), *Emission Color* and *Strength* | Yes, values and textures. |
-| *Transmission Weight*, *Coat Weight*, *Coat Roughness*, *Coat Normal*, *Specular IOR Level*, *Specular Tint*, *Anisotropic* | The slider's value only. A texture plugged in is dropped. |
+| *Transmission Weight*, *Coat Weight*, *Coat Roughness*, *Coat Normal*, *Specular IOR Level*, *Specular Tint*, *Anisotropic*, *Anisotropic Rotation* | Yes, values and textures. |
 | *IOR* | Only along with transmission or specular. |
 | *Sheen*, *Subsurface*, *Thin Film*, *Coat Tint* | No. |
 
@@ -136,8 +136,6 @@ tints the mesh in the app. Delete color attributes you don't need, or set *Verte
 - **"…shows both sides"**: a see-through material without *Backface Culling*. Tick it unless
   both sides must show. A blue tip.
 - **"…takes alpha from a JPEG"**: save that image as a PNG and load the PNG.
-- **"…the app drops textures on…"**: only those inputs' slider values come over. Bake the
-  look into *Base Color* or *Roughness* if it matters.
 - **"…Sheen / Subsurface doesn't come over"**: a blue tip; the app shows the material without.
 - **"…placed by different Mapping nodes"**: give all the material's textures one Mapping
   node, or bake the placement into the images.

@@ -167,7 +167,7 @@ every .blend on the computer.
   Alpha (or a Transparent BSDF mix's *Fac*): rounded with a Round or Greater Than node, or as
   `1 − (alpha < cutoff)`, it's a cutout; anything else below 1 is see-through. Check works
   it out the same way and warns about a see-through skin material, alpha from a JPEG,
-  textures on inputs the app drops, sheen and subsurface, differing Mapping nodes, painted
+  sheen and subsurface, differing Mapping nodes, painted
   color attributes no material uses, vertices on more than 4 bones and a Unit Scale other
   than 1. See [Materials and textures](../../../docs/recipes/materials.md).
 - **Sounds** are pose markers on a clip's action. In the Action Editor, turn on *Marker >

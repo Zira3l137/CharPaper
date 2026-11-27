@@ -42,6 +42,12 @@ bevy = { version = "0.19.1", default-features = false, features = [
     # TAA.
     "bevy_anti_alias",
     "bevy_pbr",
+    # Textures on Transmission, Coat, Specular and Anisotropic, which glTF carries and Bevy
+    # otherwise drops. Off by default in Bevy only for the per-shader texture limit of old GPUs.
+    "pbr_transmission_textures",
+    "pbr_multi_layer_material_textures",
+    "pbr_specular_textures",
+    "pbr_anisotropy_texture",
     "bevy_camera",
     "bevy_light",
     "bevy_mesh",

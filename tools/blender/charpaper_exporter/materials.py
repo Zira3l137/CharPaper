@@ -3,18 +3,6 @@ from array import array
 
 from . import animated
 
-# Inputs whose value comes over but whose texture the app drops: Bevy reads those textures only
-# with features the app is built without.
-TEXTURE_IGNORED = (
-    "Transmission Weight",
-    "Coat Weight",
-    "Coat Roughness",
-    "Coat Normal",
-    "Specular IOR Level",
-    "Specular Tint",
-    "Anisotropic",
-    "Anisotropic Rotation",
-)
 # Inputs that don't come over at all.
 DROPPED = ("Sheen Weight", "Subsurface Weight")
 INFLUENCES = 4
@@ -151,13 +139,6 @@ def check(where, objects, add, Finding, character):
 
         bsdf = _principled(material)
         if bsdf is not None:
-            ignored = [s for s in TEXTURE_IGNORED if bsdf.inputs[s].is_linked]
-            if ignored:
-                add(Finding(
-                    f"{name}: the app drops textures on {_examples(ignored, limit=4)}; only the "
-                    "slider's value counts",
-                    obj,
-                ))
             dropped = [s.split()[0] for s in DROPPED if bsdf.inputs[s].is_linked or bsdf.inputs[s].default_value > 0.0]
             if dropped:
                 verb = "doesn't" if len(dropped) == 1 else "don't"

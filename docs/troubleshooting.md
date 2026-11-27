@@ -62,7 +62,6 @@ See also: [Materials and textures](recipes/materials.md)
 | A mesh is tinted, or darker than in Blender | A painted color attribute came along, and the app multiplies base color by it. Delete it, or set *Vertex colors* to *None*. Check warns. |
 | Textures are missing | They're WebP, or made with procedural nodes (bake them), or the image file was missing when exporting. |
 | A normal map looks lit from the wrong side | It's a DirectX map (green down): invert its green channel. Or its Image Texture isn't *Non-Color*. |
-| A coat, specular or transmission texture does nothing | Only those inputs' slider values come over. |
 | A textured detail is out of place | It has a Mapping node of its own; the app places all of a material's textures like its base color. |
 | A screen stays as bright as ever when the exposure changes | It's unlit, which ignores lights and exposure. That's what unlit is for; use Emission to follow the exposure. |
 
