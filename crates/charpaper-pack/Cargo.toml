@@ -1,0 +1,14 @@
+[package]
+name = "charpaper-pack"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Bevy-free on purpose: the app and the Blender add-on's Python module share it.
+[dependencies]
+blake3.workspace = true
+thiserror.workspace = true
+zstd.workspace = true
+
+[lints]
+workspace = true

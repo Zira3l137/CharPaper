@@ -138,6 +138,10 @@ zip = { version = "9.7", default-features = false, features = ["deflate-flate2"]
 # The versions Bevy builds already. flate2's pure-Rust backend for zip, which picks none.
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 sha2 = { version = "0.11", default-features = false }
+# The suite pack's compression. zstdmt lets one big file use every core while packing.
+zstd = { version = "0.13", default-features = false, features = ["zstdmt"] }
+# The suite pack's content hashes. The version Bevy builds already.
+blake3 = { version = "1.8", default-features = false, features = ["std"] }
 semver = { version = "1.0", default-features = false, features = ["std"] }
 # Builds the app icon into the Windows executable, from the app's build script.
 embed-resource = "3.0"
@@ -145,6 +149,7 @@ embed-resource = "3.0"
 charpaper-anim = { path = "crates/charpaper-anim" }
 charpaper-audio = { path = "crates/charpaper-audio" }
 charpaper-monitor = { path = "crates/charpaper-monitor" }
+charpaper-pack = { path = "crates/charpaper-pack" }
 charpaper-scene = { path = "crates/charpaper-scene" }
 charpaper-settings = { path = "crates/charpaper-settings" }
 charpaper-suite = { path = "crates/charpaper-suite" }

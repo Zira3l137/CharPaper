@@ -40,6 +40,7 @@ added beside it:
 | `charpaper-scene` | Everything drawn: character, environment, cameras, effects. |
 | `charpaper-ui` | The panel and the performance overlay. |
 | `charpaper-suite` | Reads a suite folder and suite.toml. No engine inside, so it's quick to test. |
+| `charpaper-pack` | Reads and writes the [suite pack](chr-format.md), `suite.chr`. |
 | `charpaper-bake` | Makes the sky files from a panorama. |
 | `charpaper-drivers` | Runs Blender's shape key drivers. |
 | `charpaper-gaze` | Works out where the character looks, and how neck, head and eyes share the turn. |

@@ -55,4 +55,6 @@ For 3D artists working in Blender.
   <br><sub>[Translating the panel](development.md#translating-the-panel) · [Building from source](development.md#building-from-source)</sub>
 - **[The Blender add-on's README](../tools/blender/charpaper_exporter/README.md)**: the fine
   print for every export feature.
+- **[The suite pack](chr-format.md)**: `suite.chr`, byte by byte, and how it's replaced
+  while the app runs.
 - **[RELEASING.md](../RELEASING.md)**: how versions and nightly builds are made.
