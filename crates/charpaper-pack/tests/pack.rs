@@ -1,8 +1,10 @@
 use std::fs;
+use std::io::Read;
 use std::ops::ControlFlow;
 use std::path::Path;
 use std::path::PathBuf;
 
+use charpaper_pack::FollowedPack;
 use charpaper_pack::Method;
 use charpaper_pack::Pack;
 use charpaper_pack::PackError;
@@ -276,4 +278,34 @@ fn stopping_leaves_the_old_pack_as_it_was() {
     assert!(matches!(writer.write(&out, stop), Err(PackError::Stopped)));
     assert_eq!(fs::read(&out).unwrap(), before);
     assert!(!dir.join("suite.chr.part").exists());
+}
+
+#[test]
+fn a_file_streams_out_in_part() {
+    let dir = folder("stream");
+    let pack = Pack::open(suite(&dir)).unwrap();
+    for path in ["clips/idle.json", "skins/casual.glb"] {
+        let mut start = vec![0; 100];
+        pack.reader(path).unwrap().read_exact(&mut start).unwrap();
+        assert_eq!(start, pack.read(path).unwrap()[..100]);
+        let mut whole = Vec::new();
+        pack.reader(path).unwrap().read_to_end(&mut whole).unwrap();
+        assert_eq!(whole, pack.read(path).unwrap());
+    }
+    assert!(matches!(pack.reader("nope"), Err(PackError::Missing { .. })));
+}
+
+#[test]
+fn a_followed_pack_reads_on_from_its_new_file() {
+    let dir = folder("followed");
+    let out = suite(&dir);
+    let followed = FollowedPack::open(&out).unwrap();
+    let old_id = followed.current().id();
+    let mut writer = PackWriter::new();
+    writer.add_bytes("model.glb", noise(500, 42)).unwrap();
+    write(writer, &out);
+
+    assert_eq!(followed.read("model.glb").unwrap(), noise(500, 42));
+    assert_ne!(followed.current().id(), old_id);
+    assert!(matches!(followed.read("skins/casual.glb"), Err(PackError::Missing { .. })));
 }

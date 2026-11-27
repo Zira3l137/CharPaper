@@ -4,6 +4,8 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 use crate::error::PackError;
 use crate::format::ContentHash;
@@ -107,10 +109,28 @@ impl Pack {
     }
 
     pub fn read(&self, path: &str) -> Result<Vec<u8>, PackError> {
-        let entry = self
-            .entry(path)
-            .ok_or_else(|| PackError::Missing { pack: self.path.clone(), file: path.into() })?;
+        let entry = self.find(path)?;
         self.file()?.read(entry)
+    }
+
+    /// Streams a file out, for reading only its start: a .glb's JSON without its meshes.
+    /// A damaged file shows as an `io::Error` from the reader.
+    pub fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>, PackError> {
+        let entry = self.find(path)?;
+        let PackFile { mut file, .. } = self.file()?;
+        file.seek(SeekFrom::Start(entry.offset)).map_err(|e| read_error(&self.path, e))?;
+        let stored = file.take(entry.stored);
+        Ok(match entry.method {
+            Method::Stored => Box::new(stored),
+            Method::Zstd => Box::new(
+                zstd::stream::read::Decoder::new(stored).map_err(|e| read_error(&self.path, e))?,
+            ),
+        })
+    }
+
+    fn find(&self, path: &str) -> Result<&Entry, PackError> {
+        self.entry(path)
+            .ok_or_else(|| PackError::Missing { pack: self.path.clone(), file: path.into() })
     }
 
     /// Opens the file for several reads, after checking it's still this pack.
@@ -200,4 +220,47 @@ fn prefix_len(dir: &str) -> usize {
 
 fn read_error(path: &Path, source: std::io::Error) -> PackError {
     PackError::Read { path: path.into(), source }
+}
+
+/// A pack that follows its file: when the add-on replaces it, the next read opens the new
+/// one instead of failing. What was listed from the old one may be gone from the new one.
+#[derive(Debug)]
+pub struct FollowedPack {
+    path: PathBuf,
+    current: RwLock<Arc<Pack>>,
+}
+
+impl FollowedPack {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, PackError> {
+        let pack = Pack::open(path)?;
+        Ok(Self { path: pack.path.clone(), current: RwLock::new(Arc::new(pack)) })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The pack as it was last opened.
+    pub fn current(&self) -> Arc<Pack> {
+        self.current.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    pub fn read(&self, path: &str) -> Result<Vec<u8>, PackError> {
+        self.follow(|pack| pack.read(path))
+    }
+
+    pub fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>, PackError> {
+        self.follow(|pack| pack.reader(path))
+    }
+
+    fn follow<T>(&self, read: impl Fn(&Pack) -> Result<T, PackError>) -> Result<T, PackError> {
+        match read(&self.current()) {
+            Err(PackError::Replaced(_)) => {
+                let new = Arc::new(Pack::open(&self.path)?);
+                *self.current.write().unwrap_or_else(|e| e.into_inner()) = new.clone();
+                read(&new)
+            }
+            result => result,
+        }
+    }
 }

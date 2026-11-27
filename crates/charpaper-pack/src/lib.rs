@@ -14,6 +14,7 @@ pub use format::PackId;
 pub use format::VERSION;
 pub use path::check_path;
 pub use path::pack_path;
+pub use reader::FollowedPack;
 pub use reader::Pack;
 pub use reader::PackFile;
 pub use writer::DEFAULT_LEVEL;
