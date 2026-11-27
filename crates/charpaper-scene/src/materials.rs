@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use bevy::asset::AssetEventSystems;
 use bevy::asset::RenderAssetUsages;
+use bevy::camera::Exposure;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureDimension;
 use bevy::render::render_resource::TextureFormat;
@@ -18,7 +19,35 @@ impl Plugin for MaterialsPlugin {
         // Bevy extracts an asset at the end of the frame it arrives in, and keeps a GPU-only
         // image's pixels only until then. So this runs that same frame, after the asset events
         // that tell what arrived.
-        app.add_systems(PostUpdate, add_mipmaps.after(AssetEventSystems));
+        app.add_systems(PostUpdate, (expose_emission, add_mipmaps).after(AssetEventSystems));
+    }
+}
+
+// Bevy leaves emission out of the camera's exposure by default; Blender's Film exposure darkens
+// it with everything else. Weighted in and scaled as the sky is, an Emission Strength of 1 still
+// shows as 1 at Blender's exposure, and a screen in a sunlit environment, with its exposure
+// turned down, darkens with the room around it instead of glaring.
+fn expose_emission(
+    mut events: MessageReader<AssetEvent<StandardMaterial>>,
+    assets: Res<AssetServer>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let scale = 1.0 / Exposure::BLENDER.exposure();
+    for event in events.read() {
+        let AssetEvent::Added { id } = event else {
+            continue;
+        };
+        // Only a suite's own materials: the copies the app makes of them are scaled already.
+        if assets.get_path(*id).is_none() {
+            continue;
+        }
+        if let Some(material) = materials.get_mut_untracked(*id)
+            && material.emissive_exposure_weight == 0.0
+        {
+            let e = material.emissive;
+            material.emissive = LinearRgba::rgb(e.red * scale, e.green * scale, e.blue * scale);
+            material.emissive_exposure_weight = 1.0;
+        }
     }
 }
 
