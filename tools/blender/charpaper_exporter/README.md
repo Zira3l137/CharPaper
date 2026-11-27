@@ -39,6 +39,24 @@ every .blend on the computer.
   export stops. A .blend saved before this setting existed keeps exporting where it did: to its
   picked folder, or to `//charpaper/` next to the .blend if a suite.toml is already there.
 
+## Packed or loose
+
+- **Packed**, by default: everything below goes into one file, `suite.chr`, beside
+  suite.toml. The add-on stages the export in a hidden `.export~…` folder inside the suite
+  folder and packs it at the end; a failed or cancelled export leaves the old pack as it was.
+  An export of one part (a skin, an actor) replaces only that part, and files that didn't
+  change aren't compressed again. Sky maps are baked during the export, so the app has
+  nothing to bake on first load, and the panorama they came from stays out of the pack
+  (`sky.baked-from` remembers which it was, so an unchanged sky isn't baked again). A
+  panorama you put there by hand stays in.
+- **Export unpacked** writes the files below loose, as earlier add-ons did. An unpacked export
+  into a packed suite first unpacks suite.chr into the folder, then deletes it; a packed export
+  into a loose suite takes its files into the pack, then deletes them.
+- Packing needs the `charpaper_pack` module that comes with a release of the add-on. Without
+  it (an add-on run from source), the add-on exports unpacked, and refuses a suite that is
+  already packed, since loose files beside suite.chr would never show.
+- Each export prints how long each part took to the system console.
+
 ## What goes where
 
 | Entry       | Holds                                                   | Written to                   |

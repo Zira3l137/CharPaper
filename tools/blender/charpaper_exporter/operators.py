@@ -27,6 +27,7 @@ from . import music
 from . import paths
 from . import physics
 from . import sky
+from . import suite_files
 from . import toml_io
 from . import validate
 from .audio import AUDIO
@@ -391,6 +392,12 @@ class CHARPAPER_OT_export(Operator):
     bl_label = "Export"
     bl_description = "Export to the suite folder and update suite.toml"
 
+    # How each kind of job is called in the export's timings.
+    TIMED = {
+        "MODEL": "model", "SKIN": "skins", "ACTOR": "clips", "EXPRESSIONS": "expressions",
+        "ENVIRONMENT": "environments", "SOUND": "music", "CAMERA": "cameras",
+    }
+
     what: EnumProperty(
         items=(
             ("ALL", "All", ""),
@@ -444,12 +451,23 @@ class CHARPAPER_OT_export(Operator):
             return {"CANCELLED"}
         new = not os.path.isfile(manifest.path(folder))
         paths.keep_name(suite)
-        os.makedirs(folder, exist_ok=True)
         # A previewed look is not the character's own pose, and must not be exported or validated as it.
         gaze.stop(context)
 
         findings = validate.check(context, suite)
         _store(suite, findings)
+
+        started = time.perf_counter()
+        timings = {}
+        packed = not suite.export_unpacked and suite_files.available()
+        try:
+            files, notes = suite_files.for_export(folder, packed)
+        except Exception as error:
+            traceback.print_exc()
+            self.report({"ERROR"}, f"can't prepare {folder}: {error}")
+            return {"CANCELLED"}
+        for note in notes:
+            self.report({"WARNING"}, note)
 
         done, failed, model_exported = [], [], False
         lenses, environments, exported, alerts = {}, {}, {}, []
@@ -460,10 +478,11 @@ class CHARPAPER_OT_export(Operator):
                 if missing:
                     failed.append(f"{label}: {missing}")
                     continue
+                job_started = time.perf_counter()
                 try:
                     if kind == "ACTOR":
                         actor_clips = actors.clips(entry)
-                        written = clips.export_actor(context, suite, entry, actor_clips, folder)
+                        written = clips.export_actor(context, suite, entry, actor_clips, files)
                         done += written.files
                         for note in written.notes:
                             self.report({"WARNING"}, note)
@@ -471,19 +490,22 @@ class CHARPAPER_OT_export(Operator):
                         exported[(environment, entry.name)] = (entry, actor_clips, written.cues)
                         continue
                     if kind == "EXPRESSIONS":
-                        done += clips.export_expressions(context, suite, folder)
+                        done += clips.export_expressions(context, suite, files)
                         continue
                     if kind == "SOUND":
-                        written, notes = music.export(entry, folder)
+                        written, notes = music.export(entry, files)
                         done += written
                         for note in notes:
                             self.report({"WARNING"}, note)
                         continue
-                    result = self._export(context, suite, kind, entry, folder)
+                    result = self._export(context, suite, kind, entry, files)
                 except Exception as error:
                     traceback.print_exc()
                     failed.append(f"{label}: {error}")
                     continue
+                finally:
+                    took = time.perf_counter() - job_started
+                    timings[self.TIMED[kind]] = timings.get(self.TIMED[kind], 0.0) + took
                 done.append(result.path)
                 done += result.written
                 alerts += result.alerts
@@ -502,7 +524,7 @@ class CHARPAPER_OT_export(Operator):
         wanted = {sound for _, _, tables in exported.values() for cues_of in tables.values() for _, sound in cues_of}
         if wanted:
             try:
-                written, present, notes = cues.write_sounds(folder, wanted)
+                written, present, notes = cues.write_sounds(files, wanted)
                 done += written
                 for note in notes:
                     self.report({"WARNING"}, note)
@@ -513,6 +535,26 @@ class CHARPAPER_OT_export(Operator):
             for _, _, tables in exported.values():
                 for name, cues_of in tables.items():
                     tables[name] = [(at, sound) for at, sound in cues_of if sound in present]
+
+        # Packed before suite.toml is written, so suite.toml never names what the pack lacks.
+        if files.packed and done:
+            pack_started = time.perf_counter()
+            try:
+                summary = self._pack(context, files)
+                for note in summary["notes"]:
+                    self.report({"WARNING"}, note)
+                print(
+                    f"CharPaper: packed {summary['files']} files into {suite_files.PACK_FILE}: "
+                    f"{summary['size'] / 2**20:.1f} MB as {summary['packed'] / 2**20:.1f} MB, "
+                    f"{summary['reused']} unchanged"
+                )
+            except Exception as error:
+                traceback.print_exc()
+                failed.append(f"packing into {suite_files.PACK_FILE}: {error}; the suite is as it was")
+                done = []
+            timings["packing"] = time.perf_counter() - pack_started
+        else:
+            files.discard()
 
         if suite.write_manifest and done:
             try:
@@ -532,14 +574,18 @@ class CHARPAPER_OT_export(Operator):
             finding.name, finding.severity = f"export failed: {failure}", "ERROR"
             suite.validated = True
         _report_findings(self, findings)
-        report = f"Exported {len(done)} file(s) to {folder}"
+        took = time.perf_counter() - started
+        where = os.path.join(folder, suite_files.PACK_FILE) if files.packed else folder
+        report = f"Exported {len(done)} file(s) to {where} in {took:.1f} s"
         if new and done and not suite.custom_folder:
             report += ". A new character shows in CharPaper's list after a restart"
         self.report({"INFO"}, report)
+        slowest = sorted(timings.items(), key=lambda item: -item[1])
+        print(f"CharPaper: exported in {took:.2f} s: " + ", ".join(f"{k} {v:.2f} s" for k, v in slowest))
         warnings = sum(1 for f in suite.findings if f.severity == "WARNING")
         errors = len(failed) + len(alerts)
         problems = f"{errors} errors · {warnings} warnings" if errors else f"{warnings} warnings"
-        suite.last_export = f"{time.strftime('%H:%M')} · {len(done)} files · {problems}"
+        suite.last_export = f"{time.strftime('%H:%M')} · {len(done)} files · {took:.1f} s · {problems}"
         if alerts:
             for alert in alerts:
                 finding = suite.findings.add()
@@ -566,21 +612,32 @@ class CHARPAPER_OT_export(Operator):
         return None
 
     @staticmethod
-    def _export(context, suite, kind, entry, folder):
+    def _export(context, suite, kind, entry, files):
         if kind == "MODEL":
-            return exporters.model(context, suite, folder)
+            return exporters.model(context, suite, files)
         if kind == "SKIN":
-            return exporters.skin(context, suite, entry, folder)
+            return exporters.skin(context, suite, entry, files)
         if kind == "ENVIRONMENT":
-            return exporters.environment(context, suite, entry, folder)
-        return exporters.camera(context, suite, entry, folder)
+            return exporters.environment(context, suite, entry, files)
+        return exporters.camera(context, suite, entry, files)
+
+    @staticmethod
+    def _pack(context, files):
+        wm = context.window_manager if context.window is not None else None
+        if wm is None:
+            return files.finish()
+        wm.progress_begin(0, 1)
+        try:
+            return files.finish(lambda path, done, total: wm.progress_update(done / max(total, 1)))
+        finally:
+            wm.progress_end()
 
     @staticmethod
     def _write_manifest(scene, suite, folder, model_exported, lenses, environments, exported):
         """Writes suite.toml. Returns what of the hotspots and physics it left out."""
         path = manifest.path(folder)
         existing = toml_io.load(path) if os.path.isfile(path) else {}
-        spots, left_out = hotspots.tables(suite, folder)
+        spots, left_out = hotspots.tables(suite, suite_files.view(folder))
         swinging, physics_left_out = physics.tables(suite)
         data = manifest.update(
             existing,
@@ -598,9 +655,9 @@ class CHARPAPER_OT_export(Operator):
         return (left_out if suite.hotspots_owned else []) + (physics_left_out if suite.physics_owned else [])
 
 
-def _on_disk(folder, subdir, name):
-    stem = os.path.join(folder, subdir, file_stem(name))
-    return any(os.path.isfile(stem + ext) for ext in gltf.EXTENSIONS.values())
+def _on_disk(files, subdir, name):
+    stem = f"{subdir}/{file_stem(name)}"
+    return any(files.isfile(stem + ext) for ext in gltf.EXTENSIONS.values())
 
 
 def _clip_tables_of(data, environment, actor):
@@ -637,13 +694,14 @@ class CHARPAPER_OT_sync(Operator):
         scene = context.scene
         existing = toml_io.load(path)
         notes = []
+        files = suite_files.view(folder)
 
         # Only what was exported before: suite.toml can't name files that aren't there.
         exported, kept = {}, []
         for actor in actors.all_actors(suite):
             environment = actor.environment.name if actor.environment else None
-            directory = os.path.join(folder, clips.clip_folder(actor))
-            listed = [c for c in actors.clips(actor) if os.path.isfile(os.path.join(directory, c.name + ".json"))]
+            directory = clips.clip_folder(actor)
+            listed = [c for c in actors.clips(actor) if files.isfile(os.path.join(directory, c.name + ".json"))]
             if not listed:
                 continue
             previous = _clip_tables_of(existing, environment, actor.name)
@@ -657,7 +715,7 @@ class CHARPAPER_OT_sync(Operator):
                     continue
                 start, end = clips.span(scene, clip)
                 found = cues.within(clip.action, start, end, clips.fps(scene))
-                missing = sorted({sound for _, sound in found if not os.path.isfile(cues.path(folder, sound))})
+                missing = sorted({sound for _, sound in found if not files.isfile(cues.path(sound))})
                 if missing:
                     notes.append(f"{actor.name}: {clip.name} has sounds not exported yet ({', '.join(missing)}); "
                                  f"export {actor.name} to add them")
@@ -667,14 +725,14 @@ class CHARPAPER_OT_sync(Operator):
         environments = {
             file_stem(entry.name): env_settings.table(entry.collection)
             for entry in suite.environments
-            if entry.enabled and entry.collection and _on_disk(folder, exporters.ENVIRONMENT_DIR, entry.name)
+            if entry.enabled and entry.collection and _on_disk(files, exporters.ENVIRONMENT_DIR, entry.name)
         }
         lenses = {
             file_stem(entry.name): lens.table(entry.camera, scene.render)
             for entry in suite.cameras
-            if entry.enabled and entry.camera and _on_disk(folder, exporters.CAMERAS_DIR, entry.name)
+            if entry.enabled and entry.camera and _on_disk(files, exporters.CAMERAS_DIR, entry.name)
         }
-        spots, left_out = hotspots.tables(suite, folder)
+        spots, left_out = hotspots.tables(suite, files)
         swinging, physics_left_out = physics.tables(suite)
         data = manifest.update(
             existing, suite, scene, exporters.extension(suite), False, lenses, environments, exported,

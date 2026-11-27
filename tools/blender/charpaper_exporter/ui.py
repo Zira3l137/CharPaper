@@ -17,6 +17,7 @@ from . import multi
 from . import music
 from . import paths
 from . import physics
+from . import suite_files
 from .exporters import STOP_SHAPE_KEYS
 from .exporters import UNLINK_ACTION
 from .operators import current_actor
@@ -313,6 +314,13 @@ class CHARPAPER_PT_suite(_Sidebar, Panel):
         row = layout.row(align=True)
         row.prop(suite, "write_manifest")
         row.operator("charpaper.load_manifest", icon="IMPORT")
+        row = layout.row()
+        if suite_files.available():
+            row.prop(suite, "export_unpacked")
+        else:
+            # A build from source has no wheel installed, and Blender can't pack without it.
+            row.alert = True
+            row.label(text="Exports unpacked: the charpaper_pack module isn't installed", icon=SEVERITY_TAGS["WARNING"])
         row = layout.row(align=True)
         row.scale_y = 1.4
         row.operator("charpaper.validate", text="Check", icon="VIEWZOOM")

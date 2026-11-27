@@ -10,6 +10,7 @@ from . import drivers
 from . import env_settings
 from . import front
 from . import paths
+from . import suite_files
 from . import sky
 from . import gaze as gaze_bones
 from . import gltf
@@ -224,10 +225,9 @@ def _check_names(suite, add):
 def _on_disk(suite, subdir):
     """What an earlier export left in a subfolder, by file stem or folder name."""
     folder, _ = paths.folder(suite)
-    if folder is None:
+    if folder is None or not os.path.isdir(folder):
         return set()
-    folder = os.path.join(folder, subdir)
-    return {os.path.splitext(name)[0] for name in os.listdir(folder)} if os.path.isdir(folder) else set()
+    return {os.path.splitext(name)[0] for name in suite_files.view(folder).listdir(subdir)}
 
 
 def _check_contents(suite, add):
@@ -598,7 +598,11 @@ def _check_stale_formats(suite, add):
     folder, _ = paths.folder(suite)
     if folder is None or not os.path.isdir(folder):
         return
+    # A packed export removes them itself.
+    if not suite.export_unpacked and suite_files.available():
+        return
     other = ".gltf" if suite.gltf.file_format == "GLB" else ".glb"
+    exported = suite_files.view(folder)
     groups = (
         ("skins", suite.skins),
         ("environment", suite.environments),
@@ -607,8 +611,8 @@ def _check_stale_formats(suite, add):
     stale = []
     for subdir, entries in groups:
         for entry in entries:
-            path = os.path.join(folder, subdir, file_stem(entry.name) + other)
-            if entry.enabled and os.path.isfile(path):
-                stale.append(os.path.relpath(path, folder))
+            path = f"{subdir}/{file_stem(entry.name)}{other}"
+            if entry.enabled and exported.isfile(path):
+                stale.append(path)
     if stale:
         add(Finding(f"older {other} files would sit next to the new ones; delete them: {_examples(stale)}"))

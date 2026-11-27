@@ -288,10 +288,10 @@ class Written:
         self.cues = {}
 
 
-def export_actor(context, suite, actor, clips, folder):
+def export_actor(context, suite, actor, clips, files):
     """Writes the actor's clips into its clip folder, which then holds only them."""
     scene = context.scene
-    directory = os.path.join(folder, clip_folder(actor))
+    directory = files.path(clip_folder(actor))
     done = Written()
     base = light_base(actor, clips, scene)
     kept = set()
@@ -313,16 +313,16 @@ def export_actor(context, suite, actor, clips, folder):
         done.files.append(json_path)
         start, end = span(scene, clip)
         done.cues[name] = cues.within(clip.action, start, end, fps(scene))
-    _remove_others(directory, {n + ext for n in kept for ext in (".json", ".glb")})
+    _remove_others(files, clip_folder(actor), {n + ext for n in kept for ext in (".json", ".glb")})
     return done
 
 
-def export_expressions(context, suite, folder):
+def export_expressions(context, suite, files):
     """Writes each expression's .json into expressions/, which then holds only them."""
     from .actors import Clip
 
     scene = context.scene
-    directory = os.path.join(folder, EXPRESSIONS_DIR)
+    directory = files.path(EXPRESSIONS_DIR)
     written, kept = [], set()
     for expression in suite.expressions:
         if expression.action is None:
@@ -338,14 +338,12 @@ def export_expressions(context, suite, folder):
         write_json(path, data)
         written.append(path)
         kept.add(clip.name + ".json")
-    _remove_others(directory, kept)
+    _remove_others(files, EXPRESSIONS_DIR, kept)
     return written
 
 
-def _remove_others(directory, kept):
+def _remove_others(files, folder, kept):
     # A clip removed from a list must not linger in the app. Only clip files are touched.
-    if not os.path.isdir(directory):
-        return
-    for entry in os.listdir(directory):
-        if entry.endswith((".json", ".glb")) and entry not in kept:
-            os.remove(os.path.join(directory, entry))
+    for entry in files.listdir(folder):
+        if entry.endswith((".json", ".glb")) and entry not in kept and files.isfile(f"{folder}/{entry}"):
+            files.remove(f"{folder}/{entry}")

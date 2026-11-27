@@ -16,8 +16,9 @@ def sound_name(name):
     return file_stem(stem if ext.lower() in AUDIO else name)
 
 
-def path(folder, name):
-    return os.path.join(folder, SOUNDS_DIR, name + ".ogg")
+def path(name):
+    """Where a sound goes in the suite."""
+    return f"{SOUNDS_DIR}/{name}.ogg"
 
 
 def find_sound(name):
@@ -59,15 +60,15 @@ def within(action, start, end, fps):
     return sorted((round((m.frame - start) / fps, 4), sound_name(m.name)) for m in found)
 
 
-def write_sounds(folder, names):
+def write_sounds(files, names):
     """Writes each named Sound into the suite's sounds folder. Returns the written files, the
     names whose file is there now, and notes."""
     written, present, notes = [], set(), []
     for name in sorted(names):
-        target = path(folder, name)
+        target = files.path(path(name))
         sound = find_sound(name)
         if sound is None:
-            if os.path.isfile(target):
+            if files.isfile(target):
                 present.add(name)
             else:
                 notes.append(f"no sound named {name!r} here or in {SOUNDS_DIR}/; its cues are left out")

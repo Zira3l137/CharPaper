@@ -13,6 +13,7 @@ from . import clips as clip_files
 from . import cues
 from . import drivers
 from . import paths
+from . import suite_files
 from .actors import TRANSFORM_PATH
 from .actors import shape_keys_of
 from .exporters import STOP_SHAPE_KEYS
@@ -440,11 +441,12 @@ def _check_markers(suite, scene, actor, clip, add):
             clip=clip.name,
         ))
     folder, _ = paths.folder(suite)
+    exported = suite_files.view(folder) if folder and os.path.isdir(folder) else None
     unknown = {
         cues.sound_name(m.name)
         for m in cues.markers(clip.action)
         if cues.find_sound(cues.sound_name(m.name)) is None
-        and not (folder and os.path.isfile(cues.path(folder, cues.sound_name(m.name))))
+        and not (exported and exported.isfile(cues.path(cues.sound_name(m.name))))
     }
     if unknown:
         add(Finding(

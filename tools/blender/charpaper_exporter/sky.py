@@ -1,3 +1,5 @@
+import array
+import hashlib
 import math
 import os
 import shutil
@@ -6,6 +8,7 @@ from contextlib import contextmanager
 
 import bpy
 
+from . import suite_files
 from .isolate import showing
 
 # An environment's World as the panorama the app bakes its sky and reflections from, always
@@ -23,6 +26,8 @@ NAME = "sky"
 PANORAMA_EXTENSIONS = (".hdr", ".exr")
 LINEAR_REC709 = "lin_rec709_scene"
 MAPS = ("skybox.ktx2", "specular.ktx2", "diffuse.ktx2")
+# In a pack, what the maps were baked from, since the panorama itself stays out.
+BAKED_FROM = suite_files.BAKED_FROM
 RENDER_SIZE = (2048, 1024)
 RENDER_SAMPLES = 32
 EPSILON = 1e-4
@@ -271,32 +276,63 @@ def _same_pixels(a, b):
             bpy.data.images.remove(image)
 
 
-def _place(folder, name, data, same=None):
+def _pixel_digest(path):
+    image = bpy.data.images.load(path, check_existing=False)
+    try:
+        pixels = array.array("f", bytes(4 * len(image.pixels)))
+        image.pixels.foreach_get(pixels)
+        return hashlib.sha256(bytes(str(tuple(image.size)), "ascii") + pixels.tobytes()).hexdigest()
+    finally:
+        bpy.data.images.remove(image)
+
+
+def _place(files, folder, name, data, same=None, digest=None):
     """Puts the panorama in the folder as the only one. The maps baked from an earlier one go,
-    so the app bakes them again. `same` tells an unchanged panorama apart, by default by its
-    bytes."""
-    path = os.path.join(folder, name)
-    unchanged = os.path.isfile(path) and (same(path) if same else _read(path) == data)
+    so they're baked again. `same` tells an unchanged panorama apart, by default by its bytes.
+
+    A pack keeps the maps but not the panorama they came from, so it keeps what that was
+    instead: `digest`, by default of the bytes."""
+    path = files.path(f"{folder}/{name}")
+    old = files.local(path)
+    unchanged = old is not None and (same(old) if same else _read(old) == data)
+    digest = digest or hashlib.sha256(data).hexdigest()
+    if files.packed and old is None:
+        maps = all(files.isfile(f"{folder}/{m}") for m in MAPS)
+        unchanged = maps and _baked_from(files, folder) == digest
     others = [
-        n for n in os.listdir(folder)
+        n for n in files.listdir(folder)
         if n != name and os.path.splitext(n)[1].lower() in PANORAMA_EXTENSIONS
     ]
     try:
         for other in others:
-            os.remove(os.path.join(folder, other))
+            files.remove(f"{folder}/{other}")
         if not unchanged or others:
             for map_name in MAPS:
-                if os.path.isfile(os.path.join(folder, map_name)):
-                    os.remove(os.path.join(folder, map_name))
-        if not unchanged:
+                if files.isfile(f"{folder}/{map_name}"):
+                    files.remove(f"{folder}/{map_name}")
+        # Without its maps a packed panorama has to be there to bake them from again.
+        if not unchanged or (others and old is None):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "wb") as file:
                 file.write(data)
+        if files.packed and _baked_from(files, folder) != digest:
+            os.makedirs(files.path(folder), exist_ok=True)
+            with open(files.path(f"{folder}/{BAKED_FROM}"), "w", encoding="utf-8") as file:
+                file.write(digest + "\n")
     except PermissionError as error:
         raise RuntimeError(
             f"can't replace {error.filename}: it's in use. If CharPaper is baking this sky, "
             "export again when it's done"
         ) from error
     return path
+
+
+def _baked_from(files, folder):
+    path = files.local(f"{folder}/{BAKED_FROM}")
+    if path is None:
+        return None
+    with open(path, encoding="utf-8") as file:
+        return file.read().strip()
 
 
 def world_of(scene, entry):
@@ -306,21 +342,19 @@ def world_of(scene, entry):
     return entry.world or scene.world
 
 
-def hand_placed(folder):
+def hand_placed(files, folder):
     """A panorama in the folder that no export wrote, or None."""
-    if not os.path.isdir(folder):
-        return None
-    for name in sorted(os.listdir(folder)):
+    for name in files.listdir(folder):
         stem, extension = os.path.splitext(name)
         if extension.lower() in PANORAMA_EXTENSIONS and stem != NAME:
             return name
     return None
 
 
-def export(context, world, folder):
+def export(context, world, files, folder):
     """Writes the World's panorama into the environment's folder. Returns its path, the
     suite.toml values it sets (None for the app's default), and notes for the viewer."""
-    os.makedirs(folder, exist_ok=True)
+    os.makedirs(files.path(folder), exist_ok=True)
     sky = plain(world)
     if sky is not None:
         image = sky.image
@@ -339,11 +373,11 @@ def export(context, world, folder):
         on_disk = image.packed_file is not None or os.path.isfile(image_path(image))
         data = _image_bytes(image) if on_disk else None
         if data is not None and _copyable(image, data):
-            return _place(folder, NAME + _image_extension(image), data), values, []
-        return _written(folder, lambda path: _reencode(image, path)), values, []
+            return _place(files, folder, NAME + _image_extension(image), data), values, []
+        return _written(files, folder, lambda path: _reencode(image, path)), values, []
 
     with _cycles():
-        path = _written(folder, lambda path: _render(context, world, path))
+        path = _written(files, folder, lambda path: _render(context, world, path))
     note = (
         f"World {world.name!r} isn't a single Environment Texture, so it was rendered into "
         f"{NAME}.exr with Cycles"
@@ -351,7 +385,7 @@ def export(context, world, folder):
     return path, {key: None for key in KEYS}, [note]
 
 
-def _written(folder, write):
+def _written(files, folder, write):
     """Places the EXR `write` makes, telling an unchanged one by its pixels: the file also
     carries when it was made."""
     scratch = tempfile.mkdtemp(prefix="charpaper-sky-")
@@ -362,6 +396,8 @@ def _written(folder, write):
         def same(old):
             return _same_pixels(old, made)
 
-        return _place(folder, NAME + ".exr", _read(made), same)
+        # The file also carries when it was made, so only its pixels tell it apart.
+        digest = _pixel_digest(made) if files.packed else None
+        return _place(files, folder, NAME + ".exr", _read(made), same, digest)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

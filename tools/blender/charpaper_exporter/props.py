@@ -787,6 +787,13 @@ class CHARPAPER_PG_suite(PropertyGroup):
     )
     model_name: StringProperty(name="Model", default="model")
     write_manifest: BoolProperty(name="Write suite.toml", default=True)
+    export_unpacked: BoolProperty(
+        name="Export unpacked",
+        description=(
+            "Write the suite as loose files in its folder with Blender's own glTF exporter, as older "
+            "add-ons did. Off packs it all into suite.chr beside suite.toml, which is faster"
+        ),
+    )
 
     skins: CollectionProperty(type=CHARPAPER_PG_skin)
     skin_index: IntProperty()

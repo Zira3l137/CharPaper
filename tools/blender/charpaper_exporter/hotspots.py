@@ -134,11 +134,11 @@ def _entry_table(actor, clip):
 
 
 
-def _clip_file(folder, actor, clip):
-    return os.path.join(folder, clip_files.clip_folder(actor), clip.name + ".json")
+def _clip_file(actor, clip):
+    return os.path.join(clip_files.clip_folder(actor), clip.name + ".json")
 
 
-def tables(suite, folder):
+def tables(suite, files):
     """[hotspots] for suite.toml, and what was left out of it. Only what is exported is named:
     the app refuses a suite.toml whose hotspots name a clip or expression it doesn't have."""
     out, left_out = {}, []
@@ -159,7 +159,7 @@ def tables(suite, folder):
             if found is None:
                 continue
             actor, clip = found
-            if not os.path.isfile(_clip_file(folder, actor, clip)):
+            if not files.isfile(_clip_file(actor, clip)):
                 left_out.append(f"hotspot {name!r}: {clip.name} of {actor.name} isn't exported yet")
                 continue
             table = _entry_table(actor, clip)
@@ -183,7 +183,7 @@ def tables(suite, folder):
                 if field != "during" and found[0].obj in owners:
                     continue
                 owners.add(found[0].obj)
-                if os.path.isfile(_clip_file(folder, *found)):
+                if files.isfile(_clip_file(*found)):
                     entries.append(_entry_table(*found))
                 elif field != "during":
                     missing = found[1].name
@@ -208,7 +208,7 @@ def tables(suite, folder):
             table["layer"] = True
         expression = file_stem(spot.expression) if spot.expression else ""
         if expression:
-            if expression in expressions and os.path.isfile(os.path.join(folder, "expressions", expression + ".json")):
+            if expression in expressions and files.isfile(f"expressions/{expression}.json"):
                 table["expression"] = expression
             else:
                 left_out.append(f"hotspot {name!r}: its expression {expression!r} isn't exported")

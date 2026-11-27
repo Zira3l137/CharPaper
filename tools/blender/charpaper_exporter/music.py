@@ -14,6 +14,7 @@ import bpy
 
 from . import audio
 from . import paths
+from . import suite_files
 from .exporters import ENVIRONMENT_DIR
 from .props import file_stem
 
@@ -21,8 +22,8 @@ MUSIC_DIR = "music"
 AMBIENCE_FILE = "ambience.ogg"
 
 
-def environment_folder(folder, entry):
-    return os.path.join(folder, ENVIRONMENT_DIR, file_stem(entry.name))
+def environment_folder(entry):
+    return f"{ENVIRONMENT_DIR}/{file_stem(entry.name)}"
 
 
 def source(item_path):
@@ -61,29 +62,31 @@ def _stamp(path):
     return f"{path}|{info.st_mtime_ns}|{info.st_size}|{audio.BITRATE}"
 
 
-def strays(folder, entry):
+def strays(files, entry):
     """The .ogg files in music/ an export would remove, and whether ambience.ogg would go."""
-    music = os.path.join(environment_folder(folder, entry), MUSIC_DIR)
+    music = f"{environment_folder(entry)}/{MUSIC_DIR}"
     ours = {n.lower() for n in file_names(entry)}
-    present = os.listdir(music) if os.path.isdir(music) else []
+    present = files.listdir(music)
     extra = sorted(n for n in present if n.lower().endswith(".ogg") and n.lower() not in ours)
-    ambience = os.path.join(environment_folder(folder, entry), AMBIENCE_FILE)
-    return extra, not entry.ambience and os.path.isfile(ambience)
+    ambience = f"{environment_folder(entry)}/{AMBIENCE_FILE}"
+    return extra, not entry.ambience and files.isfile(ambience)
 
 
-def export(entry, folder):
+def export(entry, files):
     """Writes the environment's music and ambience. Returns the files written and notes."""
-    here = environment_folder(folder, entry)
+    here = environment_folder(entry)
     written, notes = [], []
-    written += _write_music(entry, here, notes)
-    ambience = _write_ambience(entry, here, notes)
+    written += _write_music(entry, files, here, notes)
+    ambience = _write_ambience(entry, files, here, notes)
     if ambience:
         written.append(ambience)
     return written, notes
 
 
-def _write_music(entry, here, notes):
-    music = os.path.join(here, MUSIC_DIR)
+def _write_music(entry, files, here_rel, notes):
+    here = files.path(here_rel)
+    music_rel = f"{here_rel}/{MUSIC_DIR}"
+    music = files.path(music_rel)
     os.makedirs(here, exist_ok=True)
     # Built in a folder beside music/ and moved in once all is well, so a failure midway
     # leaves music/ as the last export wrote it.
@@ -96,8 +99,8 @@ def _write_music(entry, here, notes):
                 notes.append(f"{entry.name}: the track {title(track)!r} has no file at {path or '(none)'}; left out")
                 continue
             stamp = _stamp(path)
-            previous = os.path.join(music, track.written) if track.written else ""
-            if track.stamp == stamp and previous and os.path.isfile(previous):
+            previous = files.local(f"{music_rel}/{track.written}") if track.written else None
+            if track.stamp == stamp and previous:
                 shutil.copyfile(previous, os.path.join(staging, name))
             else:
                 print(f"CharPaper: {entry.name}: converting {os.path.basename(path)} to {name}")
@@ -109,9 +112,9 @@ def _write_music(entry, here, notes):
             done.append((track, name, stamp))
 
         os.makedirs(music, exist_ok=True)
-        for old in os.listdir(music):
+        for old in files.listdir(music_rel):
             if old.lower().endswith(".ogg"):
-                os.remove(os.path.join(music, old))
+                files.remove(f"{music_rel}/{old}")
         for track in entry.music:
             track.written = track.stamp = ""
         for track, name, stamp in done:
@@ -122,19 +125,19 @@ def _write_music(entry, here, notes):
     return [os.path.join(music, name) for _, name, _ in done]
 
 
-def _write_ambience(entry, here, notes):
-    target = os.path.join(here, AMBIENCE_FILE)
+def _write_ambience(entry, files, here, notes):
+    target = files.path(f"{here}/{AMBIENCE_FILE}")
     path = source(entry.ambience)
     if not path:
-        if os.path.isfile(target):
-            os.remove(target)
+        if files.isfile(target):
+            files.remove(target)
         entry.ambience_stamp = ""
         return None
     if not os.path.isfile(path):
         notes.append(f"{entry.name}: the ambience has no file at {path}; left as it was")
         return None
     stamp = _stamp(path)
-    if entry.ambience_stamp == stamp and os.path.isfile(target):
+    if entry.ambience_stamp == stamp and files.isfile(target):
         return target
     print(f"CharPaper: {entry.name}: converting {os.path.basename(path)} to {AMBIENCE_FILE}")
     try:
@@ -148,12 +151,13 @@ def _write_ambience(entry, here, notes):
 
 def check(suite, add, finding):
     folder, _ = paths.folder(suite)
+    files = suite_files.view(folder) if folder is not None and os.path.isdir(folder) else None
     for entry in suite.environments:
         if entry.enabled:
-            _check(entry, folder, lambda m, s="WARNING": add(finding(m, severity=s, sound=entry.name)))
+            _check(entry, files, lambda m, s="WARNING": add(finding(m, severity=s, sound=entry.name)))
 
 
-def _check(entry, folder, warn):
+def _check(entry, files, warn):
     name = entry.name
     if not entry.export_sound:
         if len(entry.music) or entry.ambience:
@@ -187,9 +191,9 @@ def _check(entry, folder, warn):
         warn(f"environment {name!r}: the ambience has no file at {ambience}")
     if ambience and ambience in seen:
         warn(f"environment {name!r}: its ambience is also a track, so it plays twice at once", "INFO")
-    if folder is None:
+    if files is None:
         return
-    extra, ambience_goes = strays(folder, entry)
+    extra, ambience_goes = strays(files, entry)
     if extra:
         shown = ", ".join(extra[:3]) + (f" and {len(extra) - 3} more" if len(extra) > 3 else "")
         isnt, it = ("isn't", "it") if len(extra) == 1 else ("aren't", "them")

@@ -97,15 +97,15 @@ def collect(suite, armature, objects):
     return data, found.problems
 
 
-def write(suite, entry, skin_path):
+def write(suite, entry, skin_path, files):
     """Writes the skin's drivers file, or removes a stale one. Returns (written, notes)."""
     objects = [o for o in entry.collection.all_objects if o.type == "MESH"]
     data, problems = collect(suite, suite.armature, objects)
     path = file_path(skin_path)
     notes = [p.message for p in problems]
     if data is None:
-        if os.path.exists(path):
-            os.remove(path)
+        if files.isfile(path):
+            files.remove(path)
         return [], notes
     _blender_rest_values(suite.armature, data["drivers"])
     for driver in data["drivers"]:

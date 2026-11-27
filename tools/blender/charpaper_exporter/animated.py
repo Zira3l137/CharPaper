@@ -90,9 +90,10 @@ def stills(objects):
             bpy.data.images.remove(still)
 
 
-def copy_gifs(objects, directory):
-    """Copies each material's GIF into the directory, and returns the written files and
+def copy_gifs(objects, files, folder):
+    """Copies each material's GIF into the suite's folder, and returns the written files and
     notes."""
+    directory = files.path(folder)
     written, notes = [], []
     for material in materials(objects):
         gif = gif_of(material)

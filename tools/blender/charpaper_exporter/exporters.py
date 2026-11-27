@@ -35,10 +35,16 @@ def extension(suite):
     return gltf.EXTENSIONS[suite.gltf.file_format]
 
 
-def target(folder, subdir, name, suite, ext=None):
-    directory = os.path.join(folder, subdir) if subdir else folder
-    os.makedirs(directory, exist_ok=True)
-    return os.path.join(directory, file_stem(name) + (ext or extension(suite)))
+def target(files, subdir, name, suite, ext=None):
+    stem = f"{subdir}/{file_stem(name)}" if subdir else file_stem(name)
+    ext = ext or extension(suite)
+    # Nobody can delete a file in a pack by hand, so the export does it.
+    for other in gltf.EXTENSIONS.values():
+        if files.packed and other != ext and files.isfile(stem + other):
+            files.remove(stem + other)
+    path = files.path(stem) + ext
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
 
 
 def _options(suite, **overrides):
@@ -65,8 +71,8 @@ def _new_data(obj, objects):
     return all(other.data != obj.data for other in objects)
 
 
-def model(context, suite, folder):
-    path = target(folder, "", suite.model_name, suite)
+def model(context, suite, files):
+    path = target(files, "", suite.model_name, suite)
     with isolated(context) as iso:
         iso.add_with_ancestors(suite.armature)
         return _run(
@@ -104,8 +110,8 @@ def shape_keys_playing(obj, frame):
 # A skin is exported as its sliders stand, and the app rests every shape key no clip keys at
 # its slider. An action playing on a mesh's shape keys has written its values into the
 # sliders, so they would export as that action's.
-def skin(context, suite, entry, folder):
-    path = target(folder, SKINS_DIR, entry.name, suite)
+def skin(context, suite, entry, files):
+    path = target(files, SKINS_DIR, entry.name, suite)
     alerts = []
     with isolated(context) as iso:
         iso.add_with_ancestors(suite.armature)
@@ -133,29 +139,29 @@ def skin(context, suite, entry, folder):
         )
     result.alerts.extend(alerts)
     # Read from the originals, once they have their names back.
-    written, notes = drivers.write(suite, entry, path)
+    written, notes = drivers.write(suite, entry, path, files)
     result.written.extend(written)
     result.notes.extend(notes)
     return result
 
 
-def environment(context, suite, entry, folder):
+def environment(context, suite, entry, files):
     result = None
     if entry.collection is not None:
-        result = _environment_scene(context, suite, entry, folder)
+        result = _environment_scene(context, suite, entry, files)
     world = sky.world_of(context.scene, entry)
     if world is None:
         if entry.export_sky:
             note = f"{entry.name}: no World in the scene, so no sky was exported"
             result.notes.append(note)
         return result
-    sky_folder = os.path.join(folder, ENVIRONMENT_DIR, file_stem(entry.name))
-    kept = sky.hand_placed(sky_folder) if entry.world is None else None
+    sky_folder = f"{ENVIRONMENT_DIR}/{file_stem(entry.name)}"
+    kept = sky.hand_placed(files, sky_folder) if entry.world is None else None
     if kept is not None:
-        path, settings = os.path.join(sky_folder, kept), {}
+        path, settings = files.path(f"{sky_folder}/{kept}"), {}
         notes = [f"{entry.name}: kept {kept}, which you put there; pick a World to replace it"]
     else:
-        path, settings, notes = sky.export(context, world, sky_folder)
+        path, settings, notes = sky.export(context, world, files, sky_folder)
     if result is None:
         result = Result(path)
     else:
@@ -167,8 +173,8 @@ def environment(context, suite, entry, folder):
 
 # Everything moves through its clips, so the file holds the scene as it stands. A lamp a clip
 # lights is set to what its clips' curves multiply, its brightest Strength and white.
-def _environment_scene(context, suite, entry, folder):
-    path = target(folder, ENVIRONMENT_DIR, entry.name, suite)
+def _environment_scene(context, suite, entry, files):
+    path = target(files, ENVIRONMENT_DIR, entry.name, suite)
     threshold = context.scene.eevee.light_threshold
     objects = [obj for obj in entry.collection.all_objects if obj.type != "CAMERA"]
     lamps = {}
@@ -191,8 +197,8 @@ def _environment_scene(context, suite, entry, folder):
             context, iso, path,
             _options(suite, export_animations=False, export_lights=True, export_cameras=False),
         )
-    gifs = os.path.join(folder, ENVIRONMENT_DIR, file_stem(entry.name), animated.ANIMATED_DIR)
-    result.written, notes = animated.copy_gifs(objects, gifs)
+    gifs = f"{ENVIRONMENT_DIR}/{file_stem(entry.name)}/{animated.ANIMATED_DIR}"
+    result.written, notes = animated.copy_gifs(objects, files, gifs)
     result.notes.extend(notes)
     return result
 
@@ -211,10 +217,10 @@ def _active_action(obj):
 # A moving camera plays on the timeline, so its action is padded to the scene's frame range
 # as a clip is, and its file is a .glb: the app reads it as its clip's .glb, beside a .json
 # that names the nodes moving in it.
-def camera(context, suite, entry, folder):
+def camera(context, suite, entry, files):
     scene = context.scene
     moving = entry.action is not None
-    path = target(folder, CAMERAS_DIR, entry.name, suite, ".glb" if moving else None)
+    path = target(files, CAMERAS_DIR, entry.name, suite, ".glb" if moving else None)
     focus = lens.exported_with(suite, entry.camera)
     frames = None if moving and entry.action.use_frame_range else (scene.frame_start, scene.frame_end)
     moved = []
@@ -258,6 +264,6 @@ def camera(context, suite, entry, folder):
         count = frames[1] - frames[0] + 1
         clips.write_json(json_path, {"format": clips.FORMAT, "fps": round(clips.fps(scene), 6), "frames": count, "nodes": moved})
         result.written.append(json_path)
-    elif os.path.isfile(json_path):
-        os.remove(json_path)
+    elif files.isfile(json_path):
+        files.remove(json_path)
     return result
