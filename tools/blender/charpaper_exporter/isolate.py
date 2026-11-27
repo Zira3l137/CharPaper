@@ -112,6 +112,9 @@ class Isolation:
         return self.copies[obj]
 
     def finish(self):
+        # glTF keeps the scene's name, and a random one would make every export a new file,
+        # which a pack would compress again and the app would take new outfit pictures of.
+        self.scene.name = "CharPaper export"
         for original, copy in self.copies.items():
             parent = original.parent
             if parent is not None and parent not in self.copies:
