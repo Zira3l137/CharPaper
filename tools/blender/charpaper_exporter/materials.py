@@ -79,6 +79,25 @@ def alpha_mode(material):
     return "BLEND"
 
 
+def is_blended(material):
+    """See-through and set to Render Method Blended, which the app blends instead of
+    dithering. Dithered is Blender's default."""
+    return alpha_mode(material) == "BLEND" and getattr(material, "surface_render_method", "DITHERED") == "BLENDED"
+
+
+def render_methods(suite):
+    """The names of the materials in the suite's skins and environments, and of those of them
+    the app should blend."""
+    known, blended = set(), set()
+    for entry in list(suite.skins) + list(suite.environments):
+        if entry.enabled and entry.collection is not None:
+            for material in _users(entry.collection.all_objects):
+                known.add(material.name)
+                if is_blended(material):
+                    blended.add(material.name)
+    return known, sorted(blended)
+
+
 def _users(objects):
     users = {}
     for obj in objects:
@@ -112,17 +131,17 @@ def check(where, objects, add, Finding, character):
         name = f"{where}: material {material.name!r}"
         if not material.use_nodes or material.node_tree is None:
             continue
-        mode = alpha_mode(material)
-        if mode == "BLEND" and character:
+        blended = is_blended(material)
+        if blended and character:
             add(Finding(
-                f"{name} is see-through (Blend): the app sorts it per object, so hair cards in one "
-                "mesh overlap wrongly, and it casts solid shadows. For hair, lashes or lace, round "
-                "its alpha to make a cutout",
+                f"{name} is see-through with Render Method Blended: the app sorts it per object, so "
+                "hair cards in one mesh overlap wrongly, and it casts solid shadows. Dithered, "
+                "Blender's default, has neither problem",
                 obj,
             ))
-        if mode == "BLEND" and not material.use_backface_culling:
+        if blended and not material.use_backface_culling:
             add(Finding(
-                f"{name} is see-through and shows both sides, so its back faces can draw over its "
+                f"{name} is Blended and shows both sides, so its back faces can draw over its "
                 "front; tick Backface Culling unless both sides must show",
                 obj,
                 severity="INFO",

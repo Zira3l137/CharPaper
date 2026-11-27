@@ -8,6 +8,7 @@ from mathutils import Vector
 from . import env_settings
 from . import front
 from . import gaze as gaze_bones
+from . import materials
 from . import toml_io
 from .actors import start_clip
 from .props import file_stem
@@ -193,6 +194,14 @@ def update(data, suite, scene, extension, model_exported, lenses, environments, 
         data.pop("physics", None)
         if physics:
             data["physics"] = physics
+
+    # The Render Method of the suite's own see-through materials; others' entries stay.
+    known, blended = materials.render_methods(suite)
+    tables = {name: table for name, table in data.get("materials", {}).items() if name not in known}
+    tables.update({name: {"render_method": "blended"} for name in blended})
+    data.pop("materials", None)
+    if tables:
+        data["materials"] = tables
     return data
 
 
