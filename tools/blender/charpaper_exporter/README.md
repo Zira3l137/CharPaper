@@ -165,8 +165,10 @@ every .blend on the computer.
   instead exports a black base color, so the GIF wouldn't show; Check warns.
 - **Materials:** the exporter decides each material's transparency from what feeds its
   Alpha (or a Transparent BSDF mix's *Fac*): rounded with a Round or Greater Than node, or as
-  `1 − (alpha < cutoff)`, it's a cutout; anything else below 1 is see-through. Check works
-  it out the same way and warns about a see-through skin material, alpha from a JPEG,
+  `1 − (alpha < cutoff)`, it's a cutout; anything else below 1 is see-through. A see-through
+  material whose *Render Method* is Blended is written to suite.toml's `[materials]`, so the
+  app blends it; the others it dithers. Check works it out the same way and warns about a
+  Blended skin material, alpha from a JPEG,
   sheen and subsurface, differing Mapping nodes, painted
   color attributes no material uses, vertices on more than 4 bones and a Unit Scale other
   than 1. See [Materials and textures](../../../docs/recipes/materials.md).

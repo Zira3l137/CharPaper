@@ -2,7 +2,7 @@
 
 # Materials and textures
 
-**On this page:** [What comes over](#what-comes-over) · [Transparency](#transparency) · [Hair, lashes and lace](#hair-lashes-and-lace) · [Glass](#glass) · [One side or both](#one-side-or-both) · [Glow](#glow) · [Normal maps](#normal-maps) · [Textures](#textures) · [Vertex colors](#vertex-colors) · [Warnings about materials](#warnings-about-materials)
+**On this page:** [What comes over](#what-comes-over) · [Transparency](#transparency) · [Dithered or Blended](#dithered-or-blended) · [Hair, lashes and lace](#hair-lashes-and-lace) · [Glass](#glass) · [One side or both](#one-side-or-both) · [Glow](#glow) · [Normal maps](#normal-maps) · [Textures](#textures) · [Vertex colors](#vertex-colors) · [Warnings about materials](#warnings-about-materials)
 
 The same for the character and the environment: every material goes out as glTF, so the app
 sees only what glTF can carry. Build materials from a **Principled BSDF** and **Image
@@ -33,47 +33,60 @@ read one anyway: it works out the kind of transparency from what feeds the **Alp
 |---|---|---|
 | **Solid** | Opaque | Nothing plugged into Alpha, slider at 1. |
 | **Cutout**: each pixel shown or not, nothing in between | Mask | Alpha through a **Math** node set to **Round** (cut at 0.5), or to **Greater Than** with your cutoff as its second value. Or `1 − (alpha < cutoff)`: a *Less Than* node, then a *Subtract* node with 1 on top. |
-| **See-through**: blended over what's behind | Blend | Anything else: a texture's Alpha plugged straight in, or the Alpha slider below 1. |
+| **See-through**: partly shows what's behind | Blend | Anything else: a texture's Alpha plugged straight in, or the Alpha slider below 1. |
 
 The same goes for a Mix Shader with a Transparent BSDF in its first slot, as for a
 see-through screen: its *Fac* counts as the alpha.
 
-**Use a cutout whenever you can.** It costs no more than a solid surface and behaves like
-one. A see-through surface has limits in the app that it doesn't have in Blender:
+### Dithered or Blended
 
-- **It's sorted per object, not per face.** Of two see-through objects the farther one is
-  drawn first, but the faces inside one object are drawn in whatever order they're stored.
-  A mesh of overlapping see-through hair cards shows inner cards over outer ones.
-- **It casts a solid shadow** wherever its alpha is above about 5%. A window at 30% casts a
-  shadow as dark as a wall. Untick *Object → Visibility → Ray Visibility → Shadow* on it to
-  cast none.
-- **The effects that need the scene's depth don't see it.** Depth of field blurs it as much
-  as whatever is behind it. Fog in front of it is the fog in front of the wall behind.
-  Ink strokes skip it, and strokes of what's behind show through. Ambient occlusion
-  ignores it, and with TAA anti-aliasing a moving see-through part smears.
+A see-through material is drawn the way its *Material → Settings → Render Method* says,
+as EEVEE draws it:
 
-*Transmission* (glass that bends light) has the same depth limits.
+- **Dithered**, Blender's default: solid pixels with gaps between them, more gaps the more
+  see-through it is. Every pixel is in front or behind on its own, so overlapping hair cards
+  and panes of glass are always in the right order; its shadow is as see-through as it is;
+  and depth of field, fog and ambient occlusion treat it as the surface it is. Ink strokes
+  leave it alone. With **TAA** anti-aliasing the pattern changes every frame and blends into
+  smooth transparency. Without TAA it stays still and looks grainy close up, like a fine
+  screen.
+- **Blended**: mixed over what's behind, smooth with any anti-aliasing. But:
+  - **It's sorted per object, not per face.** Of two blended objects the farther is drawn
+    first, but the faces inside one object are drawn in whatever order they're stored: a
+    mesh of overlapping hair cards shows inner cards over outer ones.
+  - **It casts a solid shadow** wherever its alpha is above about 5%. Untick *Object →
+    Visibility → Ray Visibility → Shadow* on it to cast none.
+  - **The effects that need the scene's depth don't see it.** Depth of field blurs it as
+    much as whatever is behind it, fog in front of it is the fog in front of the wall behind,
+    strokes of what's behind show through, and with TAA a moving blended part smears.
+
+Leave it on **Dithered** unless the grain bothers you on a surface that's alone in its
+spot: a single window or a bottle. Outfit pictures (the tiles in the Character tab) draw
+every see-through material blended, since a still picture can't smooth the grain.
+*Transmission* (glass that bends light) always has the Blended depth limits.
 
 ## Hair, lashes and lace
 
-Make them cutouts:
+Both work:
 
-1. Plug the image's *Color* into *Base Color*.
-2. Add a **Math** node set to **Round**, plug the image's *Alpha* into it, and its result
-   into the Principled BSDF's *Alpha*. For thinner or thicker strands, use **Greater Than**
-   instead and set the cutoff as its second value.
-3. Leave **Backface Culling** unticked for cards seen from both sides.
+- **Dithered see-through** keeps soft strand edges, and sorts and shadows properly. Under
+  TAA it looks like Blender's viewport; without TAA it's grainy.
+- **A cutout** has hard edges, but no grain with any anti-aliasing:
+  1. Plug the image's *Color* into *Base Color*.
+  2. Add a **Math** node set to **Round**, plug the image's *Alpha* into it, and its result
+     into the Principled BSDF's *Alpha*. For thinner or thicker strands, use **Greater Than**
+     instead and set the cutoff as its second value.
 
-A cutout's edges are hard: they stair-step a little where Blender shows soft ones. **TAA**
-anti-aliasing in the Graphics tab smooths them best; 4× MSAA smooths only the mesh's own
-edges. The app makes smaller copies of every texture for distant views (mipmaps) and keeps a
-cutout's strands as thick at a distance as close up, so hair doesn't thin out or flicker away.
+Leave **Backface Culling** unticked for cards seen from both sides. A cutout's edges
+stair-step a little; TAA smooths them best, 4× MSAA only the mesh's own edges. The app
+makes smaller copies of every texture for distant views (mipmaps) and keeps a cutout's
+strands as thick at a distance as close up, so hair doesn't thin out or flicker away.
 
 ## Glass
 
-See-through is right for glass, a window or a bottle on its own. Keep each piece its own
-object so they sort against each other, tick **Backface Culling** on closed shapes, and untick
-the object's *Shadow* visibility unless it should cast a full shadow.
+Dithered glass needs nothing special. For Blended glass, keep each piece its own object so
+they sort against each other, tick **Backface Culling** on closed shapes, and untick the
+object's *Shadow* visibility unless it should cast a full shadow.
 
 ## One side or both
 
@@ -82,8 +95,8 @@ Camera* is ticked, and the app follows that checkbox. A new material has it unti
 everything shows both sides by default.
 
 - Tick it on **closed meshes**: bodies, heads, props. It's a little faster.
-- Always tick it on a **closed see-through mesh**. Otherwise its back faces can be drawn
-  over its front ones.
+- Always tick it on a **closed Blended mesh**. Otherwise its back faces can be drawn over
+  its front ones. Dithered ones sort their faces themselves.
 - Leave it unticked on **cards and single planes** seen from both sides: hair cards,
   leaves, a flag.
 
@@ -130,11 +143,11 @@ tints the mesh in the app. Delete color attributes you don't need, or set *Verte
 
 ## Warnings about materials
 
-- **"…is see-through (Blend)"** on a skin: see [Transparency](#transparency). For hair,
-  lashes and lace, make a cutout. For a skin's glass (glasses, a visor), it's fine: keep it a
-  separate object.
-- **"…shows both sides"**: a see-through material without *Backface Culling*. Tick it unless
-  both sides must show. A blue tip.
+- **"…is see-through with Render Method Blended"** on a skin: see
+  [Dithered or Blended](#dithered-or-blended). Set it back to Dithered unless you want the
+  blending and its limits.
+- **"…is Blended and shows both sides"**: tick *Backface Culling* unless both sides must
+  show. A blue tip.
 - **"…takes alpha from a JPEG"**: save that image as a PNG and load the PNG.
 - **"…Sheen / Subsurface doesn't come over"**: a blue tip; the app shows the material without.
 - **"…placed by different Mapping nodes"**: give all the material's textures one Mapping

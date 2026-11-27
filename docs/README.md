@@ -22,7 +22,7 @@ For 3D artists working in Blender.
 **Recipes**, one page for each thing a character can have:
 
 - [An outfit (skin)](recipes/outfit.md): put meshes in a collection, and each object becomes a part the viewer can switch.
-- [Materials and textures](recipes/materials.md): what comes over from a Principled BSDF; cutouts and see-through; hair, glass, glow, normal maps, vertex colors.
+- [Materials and textures](recipes/materials.md): what comes over from a Principled BSDF; cutouts, dithered and blended see-through; hair, glass, glow, normal maps, vertex colors.
 - [An animation](recipes/animation.md): clips on the timeline, once or held; what a clip moves; slots and other Blender 4.4 traps.
 - [A facial expression](recipes/expression.md): shape key actions the viewer can pick for the face.
 - [Shape keys that follow the body](recipes/correctives.md): correctives: drivers, or keys inside a clip.

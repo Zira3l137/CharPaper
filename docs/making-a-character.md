@@ -117,9 +117,9 @@ These save the most trouble.
 9. **Leave shape key sliders at 0 when you export a skin**, unless that's the face you want
    it to rest with. A slider no clip keys stays in the app where it was in Blender.
 10. **Materials: Principled BSDF with image textures.** Anything built from procedural
-    nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't. Make
-    hair, lashes and lace **cutouts**, not see-through: see
-    [Materials and textures](recipes/materials.md).
+    nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't.
+    See-through materials follow their *Render Method*: leave it on Dithered and turn **TAA**
+    on for smooth transparency. See [Materials and textures](recipes/materials.md).
 11. **At most 256 shape keys on a mesh, and 4 bones on a vertex.** A vertex weighted to more
     bones keeps its 4 strongest, so it bends a little differently than in Blender.
     *Weights → Limit Total* in Weight Paint mode fixes it.
@@ -274,7 +274,7 @@ the app makes of it.
 | Recipe | What it covers |
 |---|---|
 | [An outfit (skin)](recipes/outfit.md) | Put meshes in a collection, and each object becomes a part the viewer can switch. |
-| [Materials and textures](recipes/materials.md) | What comes over from a Principled BSDF; cutouts and see-through; hair, glass, glow, normal maps, vertex colors. |
+| [Materials and textures](recipes/materials.md) | What comes over from a Principled BSDF; cutouts, dithered and blended see-through; hair, glass, glow, normal maps, vertex colors. |
 | [An animation](recipes/animation.md) | Clips on the timeline, once or held; what a clip moves; slots and other Blender 4.4 traps. |
 | [A facial expression](recipes/expression.md) | Shape key actions the viewer can pick for the face. |
 | [Shape keys that follow the body](recipes/correctives.md) | Correctives: drivers, or keys inside a clip. |

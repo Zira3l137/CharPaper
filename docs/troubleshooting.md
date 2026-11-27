@@ -52,13 +52,15 @@ See also: [Materials and textures](recipes/materials.md)
 
 | What you see | Why, and what to do |
 |---|---|
-| Hair or layered cards overlap in the wrong order, flickering as the camera turns | They're see-through (Blend), which the app sorts per object, not per face. Make them [cutouts](recipes/materials.md#hair-lashes-and-lace). |
-| Glass or a curtain casts a shadow as dark as a wall | A see-through surface casts a solid shadow. Untick its *Ray Visibility → Shadow*. |
-| What's behind glass is blurred, fogged or outlined through it | Depth of field, fog and ink strokes don't see see-through surfaces. Keep glass small, or out of focus edges and fog. |
+| See-through parts look grainy, like a fine screen | They're dithered, and TAA is off. Turn on TAA in the Graphics tab, or set the material's Render Method to Blended. See [Dithered or Blended](recipes/materials.md#dithered-or-blended). |
+| Hair or layered cards overlap in the wrong order, flickering as the camera turns | Their Render Method is Blended, which the app sorts per object, not per face. Set it to Dithered. |
+| Glass or a curtain casts a shadow as dark as a wall | It's Blended, which casts a solid shadow. Set it to Dithered, or untick its *Ray Visibility → Shadow*. |
+| What's behind glass is blurred, fogged or outlined through it | The glass is Blended, which depth of field, fog and ink strokes don't see. Set it to Dithered. |
 | Something is see-through that shouldn't be | Its Alpha slider is below 1, or something is plugged into Alpha. Leave Alpha at 1 for solid materials. |
 | A cutout is solid everywhere | Its alpha comes from a JPEG, or from an image saved without alpha. Use a PNG with alpha. |
 | A cutout's edges look jagged | Cutouts have hard edges. TAA anti-aliasing smooths them best. |
-| The inside of a closed object shows through it | A see-through material shows both sides. Tick *Backface Culling*. |
+| The inside of a closed object shows through it | A Blended material shows both sides. Tick *Backface Culling*, or set it to Dithered. |
+| A GIF screen with transparency looks blended, not dithered | A material a GIF plays on is always blended. |
 | A mesh is tinted, or darker than in Blender | A painted color attribute came along, and the app multiplies base color by it. Delete it, or set *Vertex colors* to *None*. Check warns. |
 | Textures are missing | They're WebP, or made with procedural nodes (bake them), or the image file was missing when exporting. |
 | A normal map looks lit from the wrong side | It's a DirectX map (green down): invert its green channel. Or its Image Texture isn't *Non-Color*. |

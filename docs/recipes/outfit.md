@@ -47,8 +47,8 @@ modifiers to a mesh that has shape keys without losing them. Apply such modifier
 *Shade Auto Smooth* (Blender 4.1+) is one too: it adds a *Smooth by Angle* modifier. Use
 *Shade Smooth by Angle* instead, which marks sharp edges without a modifier.
 
-**Materials** have a page of their own: [Materials and textures](materials.md). Hair,
-lashes and lace in particular should be cutouts.
+**Materials** have a page of their own: [Materials and textures](materials.md). For hair,
+lashes and lace, see [Hair, lashes and lace](materials.md#hair-lashes-and-lace).
 
 **Shape key names are shared across meshes.** The app moves a shape key by its name, on
 every mesh of the worn skin that has one by that name. Two meshes both with a key called

@@ -12,7 +12,7 @@ together (slots); in 4.2 and 4.3, a clip's shape keys go in a second action, its
 |------------|---------|
 | Meshes, UVs, vertex colors, armature deformation | Modifiers on a mesh that has shape keys (apply them yourself) |
 | Principled BSDF with image textures; PNG and JPEG | Procedural shader nodes and Bump (bake them); WebP images |
-| Cutouts (alpha rounded with a Math node) and see-through alpha; Backface Culling; Transmission, Coat, Specular and Anisotropic, with their textures | Sheen, Subsurface, Thin Film |
+| Cutouts (alpha rounded with a Math node) and see-through alpha, dithered or blended by the material's *Render Method*; Backface Culling; Transmission, Coat, Specular and Anisotropic, with their textures | Sheen, Subsurface, Thin Film |
 | Emission, following the exposure; unlit materials | A Mapping node per texture (the base color's places them all) |
 | Tangent-space normal maps | Object- and world-space normal maps |
 | Up to 4 bones on a vertex | More (the 4 strongest are kept) |

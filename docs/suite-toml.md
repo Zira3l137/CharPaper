@@ -45,6 +45,7 @@ which line.
 | `[camera]` | `default` camera, and where the orbit camera starts: `focus`, `radius`, `yaw_deg`, `pitch_deg`, and `f_stop` for depth of field. |
 | `[cameras.<name>]` | An exported camera's depth of field. The add-on fills it in. |
 | `[gaze]` | Which bones and shape keys follow the cursor, how far they turn, and how head, neck and eyes share a look. The add-on fills it in. |
+| `[materials.<name>]` | `render_method = "blended"` for a see-through material Blender draws Blended; without it, `dithered`. `<name>` is the material's name. The add-on writes one for each Blended material. See [Dithered or Blended](recipes/materials.md#dithered-or-blended). |
 
 ### A hotspot
 
@@ -169,7 +170,7 @@ gusts = 0.4
 - **What the add-on rewrites on every export:** the name, `[timeline]`, the *Starts with*
   defaults, the clips tables of every actor it exported, the expressions' labels, the
   hotspots and the physics (once you've made one in the add-on), each exported camera's
-  depth of field, and each exported environment's fog and shadow lists and wind, and with a World its `sky_strength` and
+  depth of field, each see-through material's `[materials]` entry, and each exported environment's fog and shadow lists and wind, and with a World its `sky_strength` and
   `sky_rotation_deg`. Before writing, it saves the old file as `suite.toml.bak`. **What it leaves alone:** `[post]`, each environment's `shadows`, `sun_follows_sky`,
   `exposure`, `background` and `background_blur`, the orbit camera, and anything
   about files you didn't export this time. An empty field in the add-on means "don't

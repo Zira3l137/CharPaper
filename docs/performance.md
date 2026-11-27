@@ -19,8 +19,8 @@ render.
 - **Textures:** 2K is plenty for a character seen on a desktop. The app makes each one's
   mipmaps as the character loads, which takes a third more video memory and, for a 4K
   texture, about a quarter of a second.
-- **Big see-through surfaces cost more than solid ones:** what's behind them is drawn first
-  and they're blended over it. Cutouts cost no more than solid surfaces. See
+- **Big Blended surfaces cost more than solid ones:** what's behind them is drawn first and
+  they're blended over it. Dithered ones and cutouts cost about what solid surfaces do. See
   [Materials and textures](recipes/materials.md#transparency).
 - **Ship the baked `.ktx2` sky files** so first launch isn't spent making them.
 - **Physics costs very little.** Two dozen chains of five bones take a fraction of a

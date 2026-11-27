@@ -113,6 +113,7 @@ base color at the speed saved in the GIF.
   straight into the Material Output's *Surface*. Not through an Emission shader: that
   exports a black base color, and the GIF plays on the base color. See
   [Glow](materials.md#glow).
+- A material a GIF plays on is always blended, never dithered, when it's see-through.
 - Materials of the environment follow the same rules as the character's: see
   [Materials and textures](materials.md).
 
