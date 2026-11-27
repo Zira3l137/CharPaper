@@ -43,4 +43,7 @@ pub enum PackError {
 
     #[error("{0:?} is added to the pack twice")]
     Duplicate(String),
+
+    #[error("packing was stopped")]
+    Stopped,
 }

@@ -1,4 +1,5 @@
 use std::fs;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -39,7 +40,7 @@ fn text(len: usize) -> Vec<u8> {
 }
 
 fn write(writer: PackWriter, out: &Path) -> charpaper_pack::Summary {
-    writer.write(out, |_| {}).unwrap()
+    writer.write(out, |_| ControlFlow::Continue(())).unwrap()
 }
 
 fn suite(dir: &Path) -> PathBuf {
@@ -197,7 +198,10 @@ fn names_differing_only_in_capitals_are_refused() {
     writer.add_bytes("skins/Casual.glb", vec![1]).unwrap();
     writer.add_bytes("skins/casual.glb", vec![2]).unwrap();
     let out = dir.join("suite.chr");
-    assert!(matches!(writer.write(&out, |_| {}), Err(PackError::CaseClash(..))));
+    assert!(matches!(
+        writer.write(&out, |_| ControlFlow::Continue(())),
+        Err(PackError::CaseClash(..))
+    ));
     assert!(!out.exists());
 }
 
@@ -256,4 +260,20 @@ fn a_missing_file_says_so() {
     let dir = folder("missing");
     let pack = Pack::open(suite(&dir)).unwrap();
     assert!(matches!(pack.read("skins/nope.glb"), Err(PackError::Missing { .. })));
+}
+
+#[test]
+fn stopping_leaves_the_old_pack_as_it_was() {
+    let dir = folder("stopped");
+    let out = suite(&dir);
+    let before = fs::read(&out).unwrap();
+    let mut writer = PackWriter::new();
+    writer.add_bytes("a.glb", noise(100, 1)).unwrap();
+    writer.add_bytes("b.glb", noise(100, 2)).unwrap();
+    let stop = |p: charpaper_pack::Progress| {
+        if p.done == 1 { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
+    };
+    assert!(matches!(writer.write(&out, stop), Err(PackError::Stopped)));
+    assert_eq!(fs::read(&out).unwrap(), before);
+    assert!(!dir.join("suite.chr.part").exists());
 }

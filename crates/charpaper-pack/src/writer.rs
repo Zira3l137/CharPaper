@@ -8,6 +8,7 @@ use std::io::BufWriter;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -157,12 +158,12 @@ impl PackWriter {
         Ok(())
     }
 
-    /// Writes beside `out` first and swaps it in at the end, so a failed or killed export
-    /// leaves the old pack as it was.
+    /// Writes beside `out` first and swaps it in at the end, so a failed, stopped or killed
+    /// export leaves the old pack as it was. `progress` stops it by breaking.
     pub fn write(
         self,
         out: impl AsRef<Path>,
-        mut progress: impl FnMut(Progress),
+        mut progress: impl FnMut(Progress) -> ControlFlow<()>,
     ) -> Result<Summary, PackError> {
         let out = out.as_ref();
         check_case(&self.files)?;
@@ -185,7 +186,7 @@ impl PackWriter {
     fn write_to(
         self,
         path: &Path,
-        progress: &mut impl FnMut(Progress),
+        progress: &mut impl FnMut(Progress) -> ControlFlow<()>,
     ) -> Result<Summary, PackError> {
         let write_error = |source| PackError::Write { path: path.into(), source };
         let mut previous = self.previous.as_ref().map(Pack::file).transpose()?;
@@ -201,7 +202,9 @@ impl PackWriter {
         let mut summary = Summary { files: self.files.len(), ..Summary::default() };
 
         for (done, (name, source)) in self.files.iter().enumerate() {
-            progress(Progress { path: Some(name), done, total: summary.files });
+            if progress(Progress { path: Some(name), done, total: summary.files }).is_break() {
+                return Err(PackError::Stopped);
+            }
             let contents: Option<Cow<[u8]>> = match source {
                 Source::Kept(_) => None,
                 Source::Bytes(bytes) => Some(Cow::Borrowed(bytes)),
@@ -261,7 +264,8 @@ impl PackWriter {
             .and_then(|()| file.sync_all())
             .map_err(write_error)?;
         summary.packed = at + index.len() as u64;
-        progress(Progress { path: None, done: summary.files, total: summary.files });
+        // Too late to stop: the pack is complete.
+        let _ = progress(Progress { path: None, done: summary.files, total: summary.files });
         Ok(summary)
     }
 }
