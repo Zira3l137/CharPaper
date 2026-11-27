@@ -294,30 +294,36 @@ def _write_nodes(context, suite, actor, clip, path, nodes):
     start, end = span(scene, clip)
     step = suite.gltf.frame_step
     frames = range(start, end + 1, step)
+    # The stand-in takes the actor's name, so the actor's own name changes once isolated.
+    name = actor.obj.name
+    moves_itself = name in nodes
     with isolated(context) as iso:
         copy = iso.stand_in_with_ancestors(actor.obj)
         anim.object_track(copy, clip.name, clip.action, (start, end), clip.slot)
         iso.finish()
         with showing(context, iso.scene):
             bones = _bone_layout(suite, copy, nodes) if copy.type == "ARMATURE" else None
-            moves_itself = actor.obj.name in nodes
             count = len(copy.pose.bones) if bones else 0
             poses = array.array("f", bytes(64 * count * len(frames)))
             locals_ = array.array("f", bytes(64 * len(frames)))
             frame_poses = array.array("f", bytes(64 * count))
             # A new scene has no depsgraph until asked for one, and frame_set alone then
             # leaves every pose as it was. The glTF exporter asks first too.
-            bpy.context.evaluated_depsgraph_get()
+            depsgraph = bpy.context.evaluated_depsgraph_get()
             for i, frame in enumerate(frames):
                 bpy.context.scene.frame_set(frame)
                 if bones:
                     copy.pose.bones.foreach_get("matrix", frame_poses)
                     poses[i * 16 * count:(i + 1) * 16 * count] = frame_poses
                 if moves_itself:
-                    locals_[i * 16:(i + 1) * 16] = _flat(_parent_matrix(copy).inverted_safe() @ copy.matrix_world)
+                    # Read evaluated: Blender copies an evaluated matrix back only to objects
+                    # that moved, and a still parent's stand-in would read as the identity.
+                    moved = copy.evaluated_get(depsgraph)
+                    local = _parent_matrix(moved).inverted_safe() @ moved.matrix_world
+                    locals_[i * 16:(i + 1) * 16] = array.array("f", _flat(local))
             if bones:
                 bones["poses"] = poses.tobytes()
-            objects = [(actor.obj.name, locals_.tobytes())] if moves_itself else []
+            objects = [(name, locals_.tobytes())] if moves_itself else []
             fps_ = fps(scene)
             suite_files.native.write_clip(
                 path, clip.name, len(frames), step / fps_, suite.gltf.optimize_animation, bones=bones, objects=objects
