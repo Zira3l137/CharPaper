@@ -16,6 +16,7 @@ from . import gltf
 from . import hotspots
 from . import physics
 from . import lens
+from . import materials
 from . import music
 from .actors import TRANSFORM_PATH
 from .checks import Finding
@@ -55,7 +56,13 @@ def check(context, suite):
     if folder is None:
         add(Finding(f"nowhere to export to: {why[0].lower()}{why[1:]}", severity="ERROR"))
     if suite.gltf.image_format == "WEBP":
-        add(Finding("WebP images only load if the app is built with Bevy's webp feature", severity="INFO"))
+        add(Finding("the app can't load WebP images, so every texture would be missing; pick Automatic or JPEG"))
+    unit_scale = context.scene.unit_settings.scale_length
+    if abs(unit_scale - 1.0) > 1e-6:
+        add(Finding(
+            f"the scene's Unit Scale is {unit_scale:g}, but the exporter ignores it: the app reads "
+            "one Blender unit as one meter, and lights, fog, physics and the camera assume real size",
+        ))
 
     armature = suite.armature
     if armature is None:
@@ -74,7 +81,7 @@ def check(context, suite):
     checks.check(context, suite, add)
     for entry in suite.environments:
         if entry.enabled:
-            _check_environment(context.scene, entry, armature, add)
+            _check_environment(context.scene, entry, armature, suite.gltf.vertex_color, add)
     music.check(suite, add, Finding)
     hotspots.check(suite, add, Finding)
     physics.check(suite, add, Finding)
@@ -276,6 +283,11 @@ def _check_skin(suite, entry, armature, add):
                 "with Apply modifiers on, the exporter may drop its shape keys",
                 obj,
             ))
+    where = f"skin {entry.name!r}"
+    materials.check(where, meshes, add, Finding, character=True)
+    materials.check_color_attributes(where, meshes, suite.gltf.vertex_color, add, Finding)
+    if armature is not None:
+        materials.check_influences(where, meshes, armature, add, Finding)
     if loose:
         add(Finding(
             f"skin {entry.name!r}: {len(loose)} mesh(es) are neither skinned nor parented to the "
@@ -351,7 +363,7 @@ def _check_world(name, world, add):
         ))
 
 
-def _check_environment(scene, entry, armature, add):
+def _check_environment(scene, entry, armature, vertex_color, add):
     world = sky.world_of(scene, entry)
     if world is not None:
         _check_world(entry.name, world, add)
@@ -374,6 +386,9 @@ def _check_environment(scene, entry, armature, add):
     _check_wind(entry.name, objects, add)
     _check_shadows(entry.name, objects, add)
     _check_animated(objects, add)
+    where = f"environment {entry.name!r}"
+    materials.check(where, objects, add, Finding, character=False)
+    materials.check_color_attributes(where, objects, vertex_color, add, Finding)
     # The environment's file has no armature, so what hangs from the character stays put.
     riding = [o.name for o in objects if armature is not None and armature in _chain(o.parent)]
     if riding:
@@ -398,6 +413,7 @@ def _check_animated(objects, add):
             ))
         if not gifs:
             continue
+        materials.check_gif_surface(material, add, Finding)
         if len(gifs) > 1:
             add(Finding(
                 f"material {material.name!r} has {len(gifs)} GIFs; the app plays one on its base "
