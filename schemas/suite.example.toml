@@ -141,3 +141,7 @@ radius = 0.09
 bone = "Neck"
 length = 0.1
 radius = 0.05
+
+# A see-through material Blender draws Blended, not Dithered.
+[materials.Visor]
+render_method = "blended"

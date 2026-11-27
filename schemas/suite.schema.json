@@ -45,6 +45,13 @@
         "$ref": "#/$defs/Hotspot"
       }
     },
+    "materials": {
+      "description": "Settings for materials, keyed by the material's name in Blender. Only\nsee-through materials have any: the add-on writes one for each whose\nRender Method is Blended.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/MaterialEntry"
+      }
+    },
     "name": {
       "description": "Name shown in the app. Defaults to the folder name.",
       "type": [
@@ -1127,6 +1134,17 @@
       },
       "additionalProperties": false
     },
+    "MaterialEntry": {
+      "type": "object",
+      "properties": {
+        "render_method": {
+          "description": "How a see-through material is drawn, as Blender's Material > Settings >\nRender Method. Defaults to dithered.",
+          "$ref": "#/$defs/RenderMethod",
+          "default": "dithered"
+        }
+      },
+      "additionalProperties": false
+    },
     "Physics": {
       "description": "Bone chains the app moves with springs, following the animation, and the\ncapsules around the body's bones they stay out of.",
       "type": "object",
@@ -1299,6 +1317,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "RenderMethod": {
+      "oneOf": [
+        {
+          "description": "Solid pixels with gaps, more of them the more see-through it is: in\nthe right order everywhere, with shadows and depth of field to match,\nand smooth under TAA anti-aliasing.",
+          "type": "string",
+          "const": "dithered"
+        },
+        {
+          "description": "Blended over what's behind: smooth without TAA, but sorted per object,\ncasting solid shadows, and left out of depth of field, fog and strokes.",
+          "type": "string",
+          "const": "blended"
+        }
+      ]
     },
     "Timeline": {
       "description": "The loop everything plays on, as Blender's timeline: the scene's frame\nrange at its frame rate. Clips in `timeline` mode show the timeline's\nframe, so they stay in step with each other.",

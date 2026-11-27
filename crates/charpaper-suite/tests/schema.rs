@@ -31,4 +31,5 @@ fn example_manifest_parses() {
     assert_eq!(manifest.environments["room"].actors["Door"].clips.len(), 1);
     assert!(manifest.environments["room"].wind.is_some());
     assert_eq!(manifest.physics.chains["Hair.01"].bones.len(), 3);
+    assert_eq!(manifest.materials["Visor"].render_method, charpaper_suite::RenderMethod::Blended);
 }

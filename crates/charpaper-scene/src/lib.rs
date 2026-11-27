@@ -7,6 +7,7 @@ mod character;
 mod clips;
 mod config;
 mod depth_of_field;
+mod dither;
 mod environment;
 mod fog;
 mod gaze;
@@ -111,6 +112,7 @@ impl Plugin for ScenePlugin {
                 animated::AnimatedPlugin,
                 bevy_fixes::BevyFixesPlugin,
                 materials::MaterialsPlugin,
+                dither::DitherPlugin,
             ))
             .add_plugins((
                 fog::FogPlugin,

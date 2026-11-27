@@ -46,6 +46,18 @@ fn normal_at(pixel: vec2<i32>) -> vec3<f32> {
     return textureLoad(normal_texture, clamped(pixel), 0).xyz * 2.0 - 1.0;
 }
 
+// A see-through surface drawn dithered leaves gaps between its pixels, and marks the ones it
+// draws with a normal alpha of 0 (dither.wgsl). Every gap would be an edge, so those pixels get
+// no lines, and edges against them count for nothing. The sky's depth is 0.
+fn dithered_at(pixel: vec2<i32>) -> bool {
+    return depth_at(pixel) > 0.0 && textureLoad(normal_texture, clamped(pixel), 0).a < 0.5;
+}
+
+// What an edge compares against: a dithered neighbor reads as the center's own depth.
+fn edge_depth_at(pixel: vec2<i32>, depth: f32) -> f32 {
+    return select(depth_at(pixel), depth, dithered_at(pixel));
+}
+
 // PCG, from "Hash Functions for GPU Rendering" (Jarzynski and Olano, 2020). Integer hashing is
 // exact for any input; the usual fract(sin(…)) hash loses precision as its input grows, and
 // lines that boiled from an ever-growing seed stopped wobbling after a few minutes.
@@ -78,8 +90,10 @@ fn boil_offset(salt: u32) -> vec2<f32> {
 fn outline(center: vec2<i32>, depth: f32, reach: i32) -> f32 {
     let across = vec2(reach, 0);
     let down = vec2(0, reach);
-    let ridge_across = 2.0 * depth - depth_at(center - across) - depth_at(center + across);
-    let ridge_down = 2.0 * depth - depth_at(center - down) - depth_at(center + down);
+    let ridge_across =
+        2.0 * depth - edge_depth_at(center - across, depth) - edge_depth_at(center + across, depth);
+    let ridge_down =
+        2.0 * depth - edge_depth_at(center - down, depth) - edge_depth_at(center + down, depth);
     let ridge = max(ridge_across, ridge_down) / depth;
     return smoothstep(OUTLINE_FROM, OUTLINE_TO, ridge);
 }
@@ -91,7 +105,7 @@ fn crease(center: vec2<i32>, reach: i32) -> f32 {
     for (var i = 0; i < 4; i += 1) {
         let offset = select(vec2(0, reach), vec2(reach, 0), i < 2) * select(1, -1, i % 2 == 1);
         let neighbor = center + offset;
-        if (depth_at(neighbor) > 0.0) {
+        if (depth_at(neighbor) > 0.0 && !dithered_at(neighbor)) {
             facing = min(facing, dot(normal, normal_at(neighbor)));
         }
     }
@@ -110,7 +124,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     // Lines go on the nearer side of an edge only, so the sky never gets one.
     let depth = depth_at(center);
-    if (depth <= 0.0) {
+    if (depth <= 0.0 || dithered_at(center)) {
         return vec4(1.0);
     }
     let reach = max(i32(round(strokes.width)), 1);

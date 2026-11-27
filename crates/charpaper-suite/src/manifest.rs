@@ -63,6 +63,33 @@ pub struct Manifest {
     /// skirts, tails, and the body they keep off.
     #[serde(default)]
     pub physics: Physics,
+    /// Settings for materials, keyed by the material's name in Blender. Only
+    /// see-through materials have any: the add-on writes one for each whose
+    /// Render Method is Blended.
+    #[serde(default)]
+    pub materials: BTreeMap<String, MaterialEntry>,
+}
+
+#[derive(Deserialize, JsonSchema, Debug, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct MaterialEntry {
+    /// How a see-through material is drawn, as Blender's Material > Settings >
+    /// Render Method. Defaults to dithered.
+    #[serde(default)]
+    pub render_method: RenderMethod,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RenderMethod {
+    /// Solid pixels with gaps, more of them the more see-through it is: in
+    /// the right order everywhere, with shadows and depth of field to match,
+    /// and smooth under TAA anti-aliasing.
+    #[default]
+    Dithered,
+    /// Blended over what's behind: smooth without TAA, but sorted per object,
+    /// casting solid shadows, and left out of depth of field, fog and strokes.
+    Blended,
 }
 
 /// Bone chains the app moves with springs, following the animation, and the

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::Component;
@@ -25,6 +26,7 @@ use crate::manifest::Manifest;
 use crate::manifest::NO_LUT;
 use crate::manifest::Physics;
 use crate::manifest::Post;
+use crate::manifest::RenderMethod;
 use crate::manifest::SCHEMA_VERSION;
 use crate::manifest::Timeline;
 use crate::manifest::Trigger;
@@ -72,6 +74,8 @@ pub struct Suite {
     pub gaze: Option<Gaze>,
     pub hotspots: BTreeMap<String, Hotspot>,
     pub physics: Physics,
+    // See-through materials to blend rather than dither, by name.
+    pub blended: BTreeSet<String>,
 }
 
 // A clip is its .json, which every clip has, and the .glb beside it when it keys bones or
@@ -355,6 +359,12 @@ impl Suite {
             gaze: manifest.gaze,
             hotspots: manifest.hotspots,
             physics: manifest.physics,
+            blended: manifest
+                .materials
+                .into_iter()
+                .filter(|(_, entry)| entry.render_method == RenderMethod::Blended)
+                .map(|(name, _)| name)
+                .collect(),
         })
     }
 
