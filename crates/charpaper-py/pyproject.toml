@@ -1,0 +1,16 @@
+# Builds the add-on's wheel: maturin build -m crates/charpaper-py/Cargo.toml
+[build-system]
+requires = ["maturin>=1.9.4,<2"]
+build-backend = "maturin"
+
+[project]
+name = "charpaper-pack"
+description = "CharPaper suite packs and sky baking, for the Blender add-on"
+# Blender 4.2 to 5.0 run 3.11, later ones newer. abi3 makes one wheel fit them all.
+requires-python = ">=3.11"
+license = "MIT OR Apache-2.0"
+dynamic = ["version"]
+
+[tool.maturin]
+module-name = "charpaper_pack"
+profile = "wheel"

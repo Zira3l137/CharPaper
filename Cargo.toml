@@ -182,3 +182,9 @@ codegen-units = 1
 # a system's panic on the main thread, and nothing here catches one to recover.
 panic = "abort"
 strip = true
+
+# The Blender add-on's Python module. A panic in it becomes a Python exception only if it
+# unwinds; aborting would take Blender down with it.
+[profile.wheel]
+inherits = "release"
+panic = "unwind"

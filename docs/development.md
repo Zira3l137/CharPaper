@@ -41,6 +41,7 @@ added beside it:
 | `charpaper-ui` | The panel and the performance overlay. |
 | `charpaper-suite` | Reads a suite folder and suite.toml. No engine inside, so it's quick to test. |
 | `charpaper-pack` | Reads and writes the [suite pack](chr-format.md), `suite.chr`. |
+| `charpaper-py` | The Blender add-on's Python module, `charpaper_pack`: packs and sky baking. |
 | `charpaper-bake` | Makes the sky files from a panorama. |
 | `charpaper-drivers` | Runs Blender's shape key drivers. |
 | `charpaper-gaze` | Works out where the character looks, and how neck, head and eyes share the turn. |
@@ -51,6 +52,28 @@ added beside it:
 | `charpaper-windows` | How Windows provides it. |
 
 The Blender add-on is in [`tools/blender/charpaper_exporter`](../tools/blender/charpaper_exporter).
+
+### The add-on's Python module
+
+The add-on packs suites and bakes skies through `charpaper_pack`, a Python module written
+in Rust, in [`crates/charpaper-py`](../crates/charpaper-py), so it runs the app's own code
+for both. It's built as a wheel with [maturin](https://www.maturin.rs), 1.9.4 or newer:
+
+```
+pip install maturin
+maturin build -m crates/charpaper-py/Cargo.toml --out dist
+pip install dist/charpaper_pack-*.whl
+python -m unittest discover crates/charpaper-py/tests
+```
+
+- One wheel per system fits every Blender from 4.2 on, since it's built for Python's stable
+  ABI from 3.11 up.
+- It builds with the `wheel` profile: the release profile, except that a panic becomes a
+  Python exception instead of closing Blender.
+- [`charpaper_pack.pyi`](../crates/charpaper-py/charpaper_pack.pyi) describes everything
+  the module offers, for editors and for reading.
+- On Windows the rest of the workspace builds without Python installed. On Linux,
+  `cargo build` needs a Python 3.11 or newer to link this crate against.
 [RELEASING.md](../RELEASING.md) explains how versions and nightly builds are made.
 
 ## The panel's icons

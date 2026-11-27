@@ -1,0 +1,22 @@
+[package]
+name = "charpaper-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "charpaper_pack"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+charpaper-bake.workspace = true
+# Renamed: the Python module, and so this library, is called charpaper_pack too.
+chr = { package = "charpaper-pack", path = "../charpaper-pack" }
+charpaper-suite.workspace = true
+pyo3 = { version = "0.30", default-features = false, features = ["macros", "abi3-py311"] }
+
+[lints]
+workspace = true
