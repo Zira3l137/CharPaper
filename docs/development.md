@@ -42,7 +42,7 @@ added beside it:
 | `charpaper-suite` | Reads a suite folder and suite.toml. No engine inside, so it's quick to test. |
 | `charpaper-pack` | Reads and writes the [suite pack](chr-format.md), `suite.chr`. |
 | `charpaper-gltf` | Writes a suite's glTF files from what the add-on reads out of Blender, as Blender's exporter would. |
-| `charpaper-py` | The Blender add-on's Python module, `charpaper_pack`: packs and sky baking. |
+| `charpaper-py` | The Blender add-on's Python module, `charpaper_pack`: packs, sky baking, and the glTF files of a packed export. |
 | `charpaper-bake` | Makes the sky files from a panorama. |
 | `charpaper-drivers` | Runs Blender's shape key drivers. |
 | `charpaper-gaze` | Works out where the character looks, and how neck, head and eyes share the turn. |
@@ -58,7 +58,9 @@ The Blender add-on is in [`tools/blender/charpaper_exporter`](../tools/blender/c
 
 The add-on packs suites and bakes skies through `charpaper_pack`, a Python module written
 in Rust, in [`crates/charpaper-py`](../crates/charpaper-py), so it runs the app's own code
-for both. It's built as a wheel with [maturin](https://www.maturin.rs), 1.9.4 or newer:
+for both. A packed export also writes its model, skin and clip files through it, with
+[`crates/charpaper-gltf`](../crates/charpaper-gltf), which is much faster than Blender's glTF
+exporter. It's built as a wheel with [maturin](https://www.maturin.rs), 1.9.4 or newer:
 
 ```
 pip install maturin
@@ -75,6 +77,26 @@ python -m unittest discover crates/charpaper-py/tests
   the module offers, for editors and for reading.
 - On Windows the rest of the workspace builds without Python installed. On Linux,
   `cargo build` needs a Python 3.11 or newer to link this crate against.
+### Checking packed exports against Blender's
+
+A packed export writes the model, skins and clips with `charpaper_pack` instead of Blender's
+glTF exporter, and they should come out the same.
+[`tools/blender/compare`](../tools/blender/compare) checks that. It builds a test character
+and exports it both ways three times: as it is, with *Deform bones only*, and with every second
+frame. Then it compares every model, skin and clip file between the two, vertex by vertex and
+frame by frame:
+
+```
+blender -b --factory-startup --python tools/blender/compare/run.py -- <work folder>
+```
+
+Blender's Python needs `charpaper_pack` for this. Install the wheel into it with
+`<blender>/<version>/python/bin/python -m pip install dist/charpaper_pack-*.whl`, or run the
+script with the [bpy module](https://pypi.org/project/bpy/) from PyPI in a virtual environment
+that has the wheel. It takes about 20 seconds and prints each difference it finds, if any.
+Run it after changing `charpaper-gltf`, `gltf_write.py` or `clips.py`, and with each Blender
+version the add-on supports.
+
 [RELEASING.md](../RELEASING.md) explains how versions and nightly builds are made.
 
 ## The panel's icons
