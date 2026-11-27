@@ -16,6 +16,11 @@ pub struct Trs {
     pub scale: Vec3,
 }
 
+impl Trs {
+    pub const IDENTITY: Self =
+        Self { translation: Vec3::ZERO, rotation: Quat::IDENTITY, scale: Vec3::ONE };
+}
+
 /// A node a clip moves, sampled at every step from the clip's first frame.
 #[derive(Debug, Clone)]
 pub struct ClipNode {

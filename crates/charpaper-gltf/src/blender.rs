@@ -80,8 +80,10 @@ fn scale_of(basis: Mat3) -> Vec3 {
     if basis.determinant() < 0.0 { -scale } else { scale }
 }
 
+// With w at 0 or above, as mathutils turns a matrix into a quaternion.
 fn quat_of(basis: Mat3) -> Quat {
     let unit = |axis: Vec3| axis.try_normalize().unwrap_or(Vec3::ZERO);
     let normalized = Mat3::from_cols(unit(basis.x_axis), unit(basis.y_axis), unit(basis.z_axis));
-    Quat::from_mat3(&normalized).normalize()
+    let q = Quat::from_mat3(&normalized).normalize();
+    if q.w < 0.0 { -q } else { q }
 }

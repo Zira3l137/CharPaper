@@ -119,5 +119,78 @@ def write_clip(
     to the parent in Blender, one per sample). With `optimize`, a channel that holds still keeps
     its first and last keys."""
 
+class Influences(TypedDict):
+    """A skinned mesh's vertex groups as joints. Integers are uint32, floats float32."""
+
+    counts: Buffer
+    """How many (joint, weight) pairs each vertex has, in vertex order."""
+    joints: Buffer
+    """Every vertex's joints by skin index, one vertex after another."""
+    weights: Buffer
+    """The weights beside `joints`, those above 0.0001 only."""
+    object_world: Buffer
+    """The mesh object's matrix_world."""
+    armature_world: Buffer
+    """The skinning armature's matrix_world."""
+
+class ShapeKey(TypedDict):
+    name: str
+    weight: float
+    positions: Buffer
+    """The key's vertex positions, float32."""
+    normals: Buffer | None
+    """The key's corner normals, when shape key normals are exported."""
+
+class Mesh(TypedDict):
+    """A mesh as foreach_get reads it, in Blender's axes."""
+
+    name: str
+    positions: Buffer
+    """The Basis's vertex positions, float32."""
+    corner_verts: Buffer
+    """Each corner's vertex, uint32."""
+    normals: Buffer
+    """Corner normals, float32."""
+    uvs: Sequence[Buffer]
+    """Each exported UV layer's corner coordinates, float32."""
+    tangents: Buffer | None
+    signs: Buffer | None
+    """Corner tangents and bitangent signs, float32, or None for both."""
+    triangles: Buffer
+    """Loop triangles as three corners each, uint32."""
+    triangle_slots: Buffer
+    """Each triangle's material slot, uint32."""
+    shape_keys: Sequence[ShapeKey]
+    """The exported keys, the Basis left out."""
+    skin: Influences | None
+
+class Node(TypedDict):
+    name: str
+    matrix: Buffer
+    """Relative to the parent, in Blender's axes, float32 column by column."""
+    children: Sequence[int]
+    mesh: int | None
+    skin: int | None
+
+class Skin(TypedDict):
+    name: str
+    joints: Sequence[int]
+    """The joints' node indices."""
+    inverse_binds: Buffer
+    """One float32 matrix per joint, in glTF's axes."""
+
+class Scene(TypedDict):
+    name: str
+    nodes: Sequence[Node]
+    roots: Sequence[int]
+    skins: Sequence[Skin]
+    meshes: Sequence[Mesh]
+
+def write_scene(path: str | PathLike[str], scene: Scene, materials: Buffer | None = None) -> None:
+    """Writes a model or skin .glb as Blender's glTF exporter would. Its materials, textures and
+    images are copied from `materials`, a .glb Blender's exporter wrote of stand-in meshes: mesh
+    `i`'s stand-in is named "charpaper~proxy~{i}", with one primitive for each material slot.
+    Raises ValueError, having written nothing, for what it doesn't write as Blender would."""
+
 def missing_maps(folder: str | PathLike[str]) -> list[str]:
     """The names of the sky maps `folder` doesn't have yet."""

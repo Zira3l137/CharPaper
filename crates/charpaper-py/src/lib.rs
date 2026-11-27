@@ -16,6 +16,8 @@ use chr::Pack;
 use chr::PackError;
 use chr::PackWriter;
 use glam::Mat4;
+use glam::Vec2;
+use glam::Vec3;
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::exceptions::PyKeyError;
@@ -314,6 +316,224 @@ fn write_clip(
     })
 }
 
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct SceneArg {
+    name: String,
+    nodes: Vec<NodeArg>,
+    roots: Vec<usize>,
+    skins: Vec<SkinArg>,
+    meshes: Vec<MeshArg>,
+}
+
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct NodeArg {
+    name: String,
+    // Relative to the parent, in Blender's axes.
+    matrix: PyBackedBytes,
+    children: Vec<usize>,
+    mesh: Option<usize>,
+    skin: Option<usize>,
+}
+
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct SkinArg {
+    name: String,
+    joints: Vec<usize>,
+    inverse_binds: PyBackedBytes,
+}
+
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct MeshArg {
+    name: String,
+    positions: PyBackedBytes,
+    corner_verts: PyBackedBytes,
+    normals: PyBackedBytes,
+    uvs: Vec<PyBackedBytes>,
+    tangents: Option<PyBackedBytes>,
+    signs: Option<PyBackedBytes>,
+    triangles: PyBackedBytes,
+    triangle_slots: PyBackedBytes,
+    shape_keys: Vec<ShapeKeyArg>,
+    skin: Option<InfluencesArg>,
+}
+
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct ShapeKeyArg {
+    name: String,
+    weight: f32,
+    positions: PyBackedBytes,
+    normals: Option<PyBackedBytes>,
+}
+
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct InfluencesArg {
+    // Per vertex how many of `joints` and `weights` are its, in order.
+    counts: PyBackedBytes,
+    joints: PyBackedBytes,
+    weights: PyBackedBytes,
+    object_world: PyBackedBytes,
+    armature_world: PyBackedBytes,
+}
+
+/// Writes a model or skin .glb from what the add-on read out of Blender, with the materials,
+/// textures and images of `materials`, a .glb Blender's exporter wrote of the meshes' material
+/// slots. Raises ValueError for what it doesn't write as Blender's exporter would, having
+/// written nothing.
+#[pyfunction]
+#[pyo3(signature = (path, scene, materials = None))]
+fn write_scene(
+    py: Python<'_>,
+    path: PathBuf,
+    scene: SceneArg,
+    materials: Option<PyBackedBytes>,
+) -> PyResult<()> {
+    py.detach(|| {
+        let nodes = scene
+            .nodes
+            .into_iter()
+            .map(|node| {
+                let matrix = matrices(&node.matrix, 1, &node.name)?[0];
+                Ok(gltf::scene::Node {
+                    trs: gltf::blender::object_local(matrix),
+                    name: node.name,
+                    children: node.children,
+                    mesh: node.mesh,
+                    skin: node.skin,
+                })
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let skins = scene
+            .skins
+            .into_iter()
+            .map(|skin| {
+                let inverse_binds = matrices(&skin.inverse_binds, skin.joints.len(), &skin.name)?;
+                Ok(gltf::scene::Skin { name: skin.name, joints: skin.joints, inverse_binds })
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let meshes = scene.meshes.into_iter().map(mesh_data).collect::<PyResult<Vec<_>>>()?;
+        let scene = gltf::Scene {
+            name: scene.name,
+            nodes,
+            roots: scene.roots,
+            meshes,
+            skins,
+            materials: materials.map(|m| m.to_vec()),
+        };
+        let glb = scene.to_glb().map_err(PyValueError::new_err)?;
+        write_file(&path, &glb).map_err(pack_error)
+    })
+}
+
+fn mesh_data(mesh: MeshArg) -> PyResult<gltf::mesh::MeshData> {
+    let name = mesh.name;
+    let wrong = |what: &str| PyValueError::new_err(format!("{name}: {what} don't fit the mesh"));
+    let positions = vec3s(&mesh.positions);
+    let corner_verts = ints(&mesh.corner_verts);
+    let corners = corner_verts.len();
+    let normals = vec3s(&mesh.normals);
+    if normals.len() != corners || corner_verts.iter().any(|&v| v as usize >= positions.len()) {
+        return Err(wrong("normals or corners"));
+    }
+    let uvs: Vec<Vec<Vec2>> = mesh
+        .uvs
+        .iter()
+        .map(|layer| floats(layer).chunks_exact(2).map(Vec2::from_slice).collect())
+        .collect();
+    if uvs.iter().any(|layer: &Vec<Vec2>| layer.len() != corners) {
+        return Err(wrong("UVs"));
+    }
+    let tangents = match (mesh.tangents, mesh.signs) {
+        (Some(tangents), Some(signs)) => Some((vec3s(&tangents), floats(&signs))),
+        _ => None,
+    };
+    if tangents.as_ref().is_some_and(|(t, s)| t.len() != corners || s.len() != corners) {
+        return Err(wrong("tangents"));
+    }
+    let triangle_corners = ints(&mesh.triangles);
+    if triangle_corners.iter().any(|&c| c as usize >= corners) {
+        return Err(wrong("triangles"));
+    }
+    let triangles: Vec<[u32; 3]> =
+        triangle_corners.chunks_exact(3).map(|t| [t[0], t[1], t[2]]).collect();
+    let triangle_slots = ints(&mesh.triangle_slots);
+    if triangle_slots.len() != triangles.len() {
+        return Err(wrong("material slots"));
+    }
+    let shape_keys = mesh
+        .shape_keys
+        .into_iter()
+        .map(|key| {
+            let positions = vec3s(&key.positions);
+            let normals = key.normals.as_deref().map(vec3s);
+            if normals.as_ref().is_some_and(|n| n.len() != corners) {
+                return Err(wrong("shape keys"));
+            }
+            Ok(gltf::mesh::ShapeKey { name: key.name, weight: key.weight, positions, normals })
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    if shape_keys.iter().any(|k| k.positions.len() != positions.len()) {
+        return Err(wrong("shape keys"));
+    }
+    let skin = match mesh.skin {
+        None => None,
+        Some(skin) => {
+            let counts = ints(&skin.counts);
+            let joints = ints(&skin.joints);
+            let weights = floats(&skin.weights);
+            if counts.len() != positions.len() || joints.len() != weights.len() {
+                return Err(wrong("vertex groups"));
+            }
+            let mut influences = Vec::with_capacity(counts.len());
+            let mut at = 0;
+            for count in counts {
+                let end = at + count as usize;
+                let pairs = joints
+                    .get(at..end)
+                    .zip(weights.get(at..end))
+                    .ok_or_else(|| wrong("vertex groups"))?;
+                influences
+                    .push(pairs.0.iter().zip(pairs.1).map(|(&j, &w)| (j as u16, w)).collect());
+                at = end;
+            }
+            Some(gltf::mesh::SkinData {
+                influences,
+                object_world: matrices(&skin.object_world, 1, &name)?[0],
+                armature_world: matrices(&skin.armature_world, 1, &name)?[0],
+            })
+        }
+    };
+    Ok(gltf::mesh::MeshData {
+        name,
+        positions,
+        corner_verts,
+        normals,
+        uvs,
+        tangents,
+        triangles,
+        triangle_slots,
+        shape_keys,
+        skin,
+    })
+}
+
+fn floats(bytes: &[u8]) -> Vec<f32> {
+    bytes.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect()
+}
+
+fn ints(bytes: &[u8]) -> Vec<u32> {
+    bytes.chunks_exact(4).map(|b| u32::from_le_bytes(b.try_into().unwrap())).collect()
+}
+
+fn vec3s(bytes: &[u8]) -> Vec<Vec3> {
+    floats(bytes).chunks_exact(3).map(Vec3::from_slice).collect()
+}
+
 fn matrices(bytes: &[u8], count: usize, what: &str) -> PyResult<Vec<Mat4>> {
     if bytes.len() != count * 64 {
         let message = format!("{what}: {} bytes for {count} matrices", bytes.len());
@@ -348,6 +568,8 @@ mod charpaper_pack {
     use super::pack;
     #[pymodule_export]
     use super::write_clip;
+    #[pymodule_export]
+    use super::write_scene;
 
     #[pymodule_export]
     const VERSION: u16 = chr::VERSION;

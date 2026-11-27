@@ -9,10 +9,12 @@ license.workspace = true
 [dependencies]
 glam.workspace = true
 gltf.workspace = true
-serde_json.workspace = true
+# Extras, where Blender keeps shape key names, are raw JSON in gltf-json.
+serde_json = { workspace = true, features = ["raw_value"] }
 
 [dev-dependencies]
 charpaper-anim.workspace = true
+gltf = { workspace = true, features = ["utils"] }
 
 [lints]
 workspace = true

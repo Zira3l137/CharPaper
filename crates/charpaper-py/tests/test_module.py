@@ -1,7 +1,10 @@
 """The Python side of charpaper_pack. With the wheel installed: python -m unittest discover crates/charpaper-py/tests"""
 
+import array
+import json
 import os
 import shutil
+import struct
 import tempfile
 import unittest
 
@@ -127,6 +130,62 @@ class PackTest(unittest.TestCase):
         self.assertEqual(cp.bake(source, maps), [])
         with self.assertRaises(cp.BakeFailed):
             cp.bake(os.path.join(self.dir, "nowhere.hdr"), os.path.join(self.dir, "empty"))
+
+
+def floats(values):
+    return array.array("f", values).tobytes()
+
+
+def ints(values):
+    return array.array("I", values).tobytes()
+
+
+IDENTITY = floats([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
+
+
+def triangle(**changes):
+    mesh = {
+        "name": "Triangle",
+        "positions": floats([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        "corner_verts": ints([0, 1, 2]),
+        "normals": floats([0, 0, 1] * 3),
+        "uvs": [floats([0, 0, 1, 0, 0, 1])],
+        "tangents": None,
+        "signs": None,
+        "triangles": ints([0, 1, 2]),
+        "triangle_slots": ints([0]),
+        "shape_keys": [{"name": "Lift", "weight": 0.5, "positions": floats([0, 0, 1, 1, 0, 0, 0, 1, 0]), "normals": None}],
+        "skin": None,
+    }
+    mesh.update(changes)
+    node = {"name": "Triangle", "matrix": IDENTITY, "children": [], "mesh": 0, "skin": None}
+    return {"name": "Scene", "nodes": [node], "roots": [0], "skins": [], "meshes": [mesh]}
+
+
+class SceneTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="charpaper-py-")
+        self.path = os.path.join(self.dir, "model.glb")
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_write_scene(self):
+        cp.write_scene(self.path, triangle())
+        with open(self.path, "rb") as file:
+            data = file.read()
+        self.assertEqual(data[:4], b"glTF")
+        length = struct.unpack_from("<I", data, 12)[0]
+        document = json.loads(data[20:20 + length])
+        mesh = document["meshes"][0]
+        self.assertEqual(mesh["extras"]["targetNames"], ["Lift"])
+        self.assertEqual(mesh["weights"], [0.5])
+        self.assertIn("TEXCOORD_0", mesh["primitives"][0]["attributes"])
+
+    def test_write_scene_refuses_what_it_cannot_write(self):
+        with self.assertRaises(ValueError):
+            cp.write_scene(self.path, triangle(normals=floats([0, 0, 1])))
+        self.assertFalse(os.path.exists(self.path))
 
 
 if __name__ == "__main__":

@@ -8,6 +8,8 @@ use gltf::json::validation::USize64;
 /// A glTF document and the binary chunk its accessors point into, written as one .glb.
 pub(crate) struct Glb {
     pub root: json::Root,
+    /// Top-level JSON written as it is, over what `root` has under the same key.
+    pub raw: serde_json::Map<String, serde_json::Value>,
     bin: Vec<u8>,
 }
 
@@ -15,7 +17,7 @@ impl Glb {
     pub fn new() -> Self {
         let mut root = json::Root::default();
         root.asset.generator = Some(format!("CharPaper {}", env!("CARGO_PKG_VERSION")));
-        Self { root, bin: Vec::new() }
+        Self { root, raw: serde_json::Map::new(), bin: Vec::new() }
     }
 
     /// Floats as an accessor of `kind`; `bounds` gives it its min and max, which glTF asks of
@@ -59,11 +61,40 @@ impl Glb {
         })
     }
 
-    fn view(&mut self, bytes: Vec<u8>) -> json::Index<json::buffer::View> {
+    /// Integers as an accessor of `kind`, in the smallest of `component` glTF allows.
+    pub fn integers(
+        &mut self,
+        values: &[u32],
+        kind: Type,
+        component: ComponentType,
+    ) -> json::Index<json::Accessor> {
+        let bytes: Vec<u8> = match component {
+            ComponentType::U8 => values.iter().map(|&v| v as u8).collect(),
+            ComponentType::U16 => values.iter().flat_map(|&v| (v as u16).to_le_bytes()).collect(),
+            _ => values.iter().flat_map(|v| v.to_le_bytes()).collect(),
+        };
+        let view = self.view(bytes);
+        self.root.push(json::Accessor {
+            buffer_view: Some(view),
+            byte_offset: None,
+            count: USize64::from(values.len() / kind.multiplicity()),
+            component_type: Valid(GenericComponentType(component)),
+            extensions: None,
+            extras: Default::default(),
+            type_: Valid(kind),
+            min: None,
+            max: None,
+            name: None,
+            normalized: false,
+            sparse: None,
+        })
+    }
+
+    pub fn view(&mut self, bytes: Vec<u8>) -> json::Index<json::buffer::View> {
         let offset = self.bin.len();
         self.bin.extend(bytes);
         let length = self.bin.len() - offset;
-        // Every accessor here is of 4-byte components, so 4-byte alignment is all glTF asks.
+        // glTF asks an accessor's data to start on a multiple of its component's size, 4 at most.
         self.bin.resize(self.bin.len().next_multiple_of(4), 0);
         self.root.push(json::buffer::View {
             buffer: json::Index::new(0),
@@ -87,7 +118,12 @@ impl Glb {
                 extras: Default::default(),
             });
         }
-        let json = json::serialize::to_vec(&self.root).expect("a glTF document always serializes");
+        let mut document =
+            serde_json::to_value(&self.root).expect("a glTF document always serializes");
+        if let Some(object) = document.as_object_mut() {
+            object.extend(std::mem::take(&mut self.raw));
+        }
+        let json = serde_json::to_vec(&document).expect("a glTF document always serializes");
         let glb = gltf::binary::Glb {
             header: gltf::binary::Header { magic: *b"glTF", version: 2, length: 0 },
             json: json.into(),
