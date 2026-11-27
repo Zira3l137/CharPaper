@@ -55,6 +55,11 @@ every .blend on the computer.
 - Packing needs the `charpaper_pack` module that comes with a release of the add-on. Without
   it (an add-on run from source), the add-on exports unpacked, and refuses a suite that is
   already packed, since loose files beside suite.chr would never show.
+- A packed export writes clips itself instead of through Blender's glTF exporter: Blender plays
+  each clip as before, and the add-on reads every bone's pose once a frame and hands them to
+  `charpaper_pack`, which works out each node's transform the way Blender's exporter does and
+  writes the .glb. The numbers are Blender's to within a millionth; clips export about six
+  times faster. Rotations also keep to one side from key to key, which Blender's don't.
 - Each export prints how long each part took to the system console.
 
 ## What goes where

@@ -12,12 +12,17 @@ clip holds its first pose, after the last its last, and a Cycles modifier repeat
 shows it. A Once clip covers its action's own keys; a Hold clip its first frame.
 """
 
+import array
 import json
 import os
+
+import bpy
+from mathutils import Matrix
 
 from . import anim
 from . import cues
 from . import gltf
+from . import suite_files
 from .actors import TRANSFORM_PATH
 from .actors import shape_keys_of
 from .isolate import isolated
@@ -278,6 +283,91 @@ def _export_nodes(context, suite, actor, clip, path):
             return gltf.export(path, options)
 
 
+# Blender's axes in glTF's, as the glTF exporter parents an object to a bone.
+Y_UP = Matrix(((1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0.0, -1.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+
+
+def _write_nodes(context, suite, actor, clip, path, nodes):
+    """The clip's .glb as _export_nodes makes it, written by charpaper_pack: Blender only
+    plays the clip on the same copies, and its poses are read a frame at a time."""
+    scene = context.scene
+    start, end = span(scene, clip)
+    step = suite.gltf.frame_step
+    frames = range(start, end + 1, step)
+    with isolated(context) as iso:
+        copy = iso.stand_in_with_ancestors(actor.obj)
+        anim.object_track(copy, clip.name, clip.action, (start, end), clip.slot)
+        iso.finish()
+        with showing(context, iso.scene):
+            bones = _bone_layout(suite, copy, nodes) if copy.type == "ARMATURE" else None
+            moves_itself = actor.obj.name in nodes
+            count = len(copy.pose.bones) if bones else 0
+            poses = array.array("f", bytes(64 * count * len(frames)))
+            locals_ = array.array("f", bytes(64 * len(frames)))
+            frame_poses = array.array("f", bytes(64 * count))
+            # A new scene has no depsgraph until asked for one, and frame_set alone then
+            # leaves every pose as it was. The glTF exporter asks first too.
+            bpy.context.evaluated_depsgraph_get()
+            for i, frame in enumerate(frames):
+                bpy.context.scene.frame_set(frame)
+                if bones:
+                    copy.pose.bones.foreach_get("matrix", frame_poses)
+                    poses[i * 16 * count:(i + 1) * 16 * count] = frame_poses
+                if moves_itself:
+                    locals_[i * 16:(i + 1) * 16] = _flat(_parent_matrix(copy).inverted_safe() @ copy.matrix_world)
+            if bones:
+                bones["poses"] = poses.tobytes()
+            objects = [(actor.obj.name, locals_.tobytes())] if moves_itself else []
+            fps_ = fps(scene)
+            suite_files.native.write_clip(
+                path, clip.name, len(frames), step / fps_, suite.gltf.optimize_animation, bones=bones, objects=objects
+            )
+    return []
+
+
+def _bone_layout(suite, armature, nodes):
+    bones = armature.data.bones
+    index = {b.name: i for i, b in enumerate(bones)}
+    exported = [b.use_deform or not suite.gltf.deform_bones_only for b in bones]
+    parents = []
+    for bone in bones:
+        parent = bone.parent
+        while parent is not None and not exported[index[parent.name]]:
+            parent = parent.parent
+        parents.append(index[parent.name] if parent is not None else -1)
+    rest = array.array("f", bytes(64 * len(bones)))
+    bones.foreach_get("matrix_local", rest)
+    written = [(index[name], name) for name in nodes if name in index]
+    if not written:
+        return None
+    return {
+        "parents": parents,
+        "has_parent": [b.parent is not None for b in bones],
+        "rest": rest.tobytes(),
+        "poses": b"",
+        "written": written,
+    }
+
+
+def _parent_matrix(obj):
+    # As the glTF exporter's object_caching works out what an object's matrix is relative to.
+    parent = obj.parent
+    if parent is None:
+        return Matrix.Identity(4)
+    if obj.parent_type == "BONE" and obj.parent_bone in parent.pose.bones:
+        return parent.matrix_world @ parent.pose.bones[obj.parent_bone].matrix @ Y_UP
+    return parent.matrix_world
+
+
+def _flat(matrix):
+    return [matrix[row][col] for col in range(4) for row in range(4)]
+
+
+def writes_clips(files):
+    """Whether this export writes clips itself rather than through Blender's glTF exporter."""
+    return files.packed and hasattr(suite_files.native, "write_clip")
+
+
 class Written:
     """What exporting one actor's clips did."""
 
@@ -306,8 +396,11 @@ def export_actor(context, suite, actor, clips, files):
         if "nodes" in data:
             glb_path = os.path.join(directory, name + ".glb")
             os.makedirs(directory, exist_ok=True)
-            # Older exporters lack some of NODES_ONLY's switches and do without.
-            _export_nodes(context, suite, actor, clip, glb_path)
+            if writes_clips(files):
+                _write_nodes(context, suite, actor, clip, glb_path, data["nodes"])
+            else:
+                # Older exporters lack some of NODES_ONLY's switches and do without.
+                _export_nodes(context, suite, actor, clip, glb_path)
             done.files.append(glb_path)
         write_json(json_path, data)
         done.files.append(json_path)
