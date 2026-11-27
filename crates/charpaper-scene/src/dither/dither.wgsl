@@ -2,7 +2,9 @@
 // surface: like EEVEE's Dithered render method. Being solid where drawn, they're sorted by
 // depth pixel by pixel, cast shadows as see-through as they are, and show in the depth that
 // depth of field, fog and strokes read. Under TAA the pattern moves every frame and blends
-// into smooth transparency; without it, it stays still.
+// into smooth transparency; without it, it stays still. Under MSAA a surface covers a share of
+// each pixel's samples (stochastic transparency, Enderton et al. 2010), so the pattern is that
+// many times finer, and depth and order still hold per sample.
 //
 // One file for both passes, so the main pass and the prepass decide each pixel alike: a pixel
 // the prepass keeps but the main pass drops would be a hole showing the clear color.
@@ -24,11 +26,11 @@
 #ifdef PREPASS_PIPELINE
 #import bevy_pbr::{
     pbr_prepass_functions,
-    prepass_io::{VertexOutput, FragmentOutput},
+    prepass_io::VertexOutput,
 }
 #else   // PREPASS_PIPELINE
 #import bevy_pbr::{
-    forward_io::{VertexOutput, FragmentOutput},
+    forward_io::VertexOutput,
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::{alpha_discard, apply_pbr_lighting, main_pass_post_lighting_processing},
 }
@@ -87,12 +89,16 @@ fn surface_alpha(in: VertexOutput) -> f32 {
     return alpha;
 }
 
+fn object_seed(in: VertexOutput) -> u32 {
+    let origin = bitcast<vec3<u32>>(mesh_functions::get_world_from_local(in.instance_index)[3].xyz);
+    return pcg(origin.x ^ pcg(origin.y ^ pcg(origin.z)));
+}
+
 // Interleaved gradient noise (Jimenez 2014): evenly spread thresholds from 0 to 1, offset per
 // object so two layers don't share one pattern, and per TAA jitter, so it changes every frame
 // under TAA and not at all without it, or in a shadow map.
 fn threshold(in: VertexOutput) -> f32 {
-    let origin = bitcast<vec3<u32>>(mesh_functions::get_world_from_local(in.instance_index)[3].xyz);
-    let object = pcg(origin.x ^ pcg(origin.y ^ pcg(origin.z)));
+    let object = object_seed(in);
     let jitter = bitcast<vec2<u32>>(view.clip_from_view[2].xy);
     let frame = pcg(jitter.x ^ pcg(jitter.y)) % 64u;
     let pixel = floor(in.position.xy)
@@ -101,18 +107,54 @@ fn threshold(in: VertexOutput) -> f32 {
     return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
 }
 
-fn kept(in: VertexOutput, margin: f32) -> bool {
-    return surface_alpha(in) > threshold(in) + margin;
+#ifdef DITHER_SAMPLES
+const SAMPLES: u32 = #{DITHER_SAMPLES}u;
+
+// Which of the pixel's samples the surface covers: as many as its alpha asks for, rounded by
+// the dither so they average out to it, starting at a sample picked per pixel and object so
+// two layers spread over different samples. With a margin it covers some of the same ones;
+// a fully opaque surface covers all of them either way.
+fn coverage(in: VertexOutput, margin: f32) -> u32 {
+    let alpha = surface_alpha(in);
+    let wanted = (alpha - margin) * f32(SAMPLES) + threshold(in);
+    let count = select(u32(clamp(floor(wanted), 0.0, f32(SAMPLES))), SAMPLES, alpha >= 1.0);
+    let run = (1u << count) - 1u;
+    let pixel = vec2<u32>(floor(in.position.xy));
+    let turn = pcg(object_seed(in) ^ pcg(pixel.x ^ pcg(pixel.y))) % SAMPLES;
+    return ((run << turn) | (run >> (SAMPLES - turn))) & ((1u << SAMPLES) - 1u);
 }
+#else   // DITHER_SAMPLES
+fn kept(in: VertexOutput, margin: f32) -> bool {
+    let alpha = surface_alpha(in);
+    return alpha >= 1.0 || alpha > threshold(in) + margin;
+}
+#endif  // DITHER_SAMPLES
 
 #ifdef PREPASS_PIPELINE
 
 #ifdef PREPASS_FRAGMENT
+// prepass_io's FragmentOutput, with the samples covered. Deferred prepasses use the base
+// material's own shader, so its deferred outputs aren't needed.
+struct PrepassOutput {
+#ifdef NORMAL_PREPASS
+    @location(0) normal: vec4<f32>,
+#endif  // NORMAL_PREPASS
+#ifdef MOTION_VECTOR_PREPASS
+    @location(1) motion_vector: vec2<f32>,
+#endif  // MOTION_VECTOR_PREPASS
+#ifdef UNCLIPPED_DEPTH_ORTHO_EMULATION
+    @builtin(frag_depth) frag_depth: f32,
+#endif  // UNCLIPPED_DEPTH_ORTHO_EMULATION
+#ifdef DITHER_SAMPLES
+    @builtin(sample_mask) mask: u32,
+#endif  // DITHER_SAMPLES
+}
+
 @fragment
 fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
-) -> FragmentOutput {
+) -> PrepassOutput {
 #ifdef BINDLESS
     let slot = mesh[in.instance_index].material_and_lightmap_bind_group_slot & 0xffffu;
     let flags = pbr_bindings::material_array[material_indices[slot].material].flags;
@@ -126,11 +168,17 @@ fn fragment(
     pbr_functions::visibility_range_dither(in.position, in.visibility_range_dither);
 #endif  // VISIBILITY_RANGE_DITHER
 
+    var out: PrepassOutput;
+#ifdef DITHER_SAMPLES
+    out.mask = coverage(in, PREPASS_MARGIN);
+    if out.mask == 0u {
+        discard;
+    }
+#else   // DITHER_SAMPLES
     if !kept(in, PREPASS_MARGIN) {
         discard;
     }
-
-    var out: FragmentOutput;
+#endif  // DITHER_SAMPLES
 
 #ifdef UNCLIPPED_DEPTH_ORTHO_EMULATION
     out.frag_depth = in.unclipped_depth;
@@ -184,29 +232,54 @@ fn fragment(
     return out;
 }
 #else   // PREPASS_FRAGMENT
+#ifdef DITHER_SAMPLES
+@fragment
+fn fragment(in: VertexOutput) -> @builtin(sample_mask) u32 {
+    let mask = coverage(in, PREPASS_MARGIN);
+    if mask == 0u {
+        discard;
+    }
+    return mask;
+}
+#else   // DITHER_SAMPLES
 @fragment
 fn fragment(in: VertexOutput) {
     if !kept(in, PREPASS_MARGIN) {
         discard;
     }
 }
+#endif  // DITHER_SAMPLES
 #endif  // PREPASS_FRAGMENT
 
 #else   // PREPASS_PIPELINE
+
+struct MainOutput {
+    @location(0) color: vec4<f32>,
+#ifdef DITHER_SAMPLES
+    @builtin(sample_mask) mask: u32,
+#endif  // DITHER_SAMPLES
+}
 
 @fragment
 fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
-) -> FragmentOutput {
+) -> MainOutput {
+    var out: MainOutput;
+#ifdef DITHER_SAMPLES
+    out.mask = coverage(in, 0.0);
+    if out.mask == 0u {
+        discard;
+    }
+#else   // DITHER_SAMPLES
     if !kept(in, 0.0) {
         discard;
     }
+#endif  // DITHER_SAMPLES
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     pbr_input.material.base_color.a = 1.0;
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
 
-    var out: FragmentOutput;
     out.color = apply_pbr_lighting(pbr_input);
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;

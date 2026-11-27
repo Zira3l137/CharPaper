@@ -2,10 +2,16 @@ use std::collections::HashMap;
 
 use bevy::asset::embedded_asset;
 use bevy::gltf::GltfMaterialName;
+use bevy::mesh::MeshVertexBufferLayoutRef;
 use bevy::pbr::ExtendedMaterial;
 use bevy::pbr::MaterialExtension;
+use bevy::pbr::MaterialExtensionKey;
+use bevy::pbr::MaterialExtensionPipeline;
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
+use bevy::render::render_resource::RenderPipelineDescriptor;
+use bevy::render::render_resource::SpecializedMeshPipelineError;
+use bevy::shader::ShaderDefVal;
 use bevy::shader::ShaderRef;
 use charpaper_suite::Suite;
 
@@ -28,6 +34,23 @@ impl MaterialExtension for Dithered {
 
     fn prepass_fragment_shader() -> ShaderRef {
         SHADER.into()
+    }
+
+    // Under MSAA both passes must cover the same samples, but Bevy tells only the main pass
+    // that it's multisampled. Every pass gets the count here; a shadow map has one sample.
+    fn specialize(
+        _pipeline: &MaterialExtensionPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef,
+        key: MaterialExtensionKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        let samples = key.mesh_key.msaa_samples();
+        if samples > 1
+            && let Some(fragment) = descriptor.fragment.as_mut()
+        {
+            fragment.shader_defs.push(ShaderDefVal::UInt("DITHER_SAMPLES".into(), samples));
+        }
+        Ok(())
     }
 }
 

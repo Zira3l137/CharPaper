@@ -48,8 +48,9 @@ as EEVEE draws it:
   and panes of glass are always in the right order; its shadow is as see-through as it is;
   and depth of field, fog and ambient occlusion treat it as the surface it is. Ink strokes
   leave it alone. With **TAA** anti-aliasing the pattern changes every frame and blends into
-  smooth transparency. Without TAA it stays still and looks grainy close up, like a fine
-  screen.
+  smooth transparency. With **4× MSAA** each pixel is split four ways, so the pattern is four
+  times finer: smooth from a little way off, faintly grainy close up. With anti-aliasing
+  off it looks grainy, like a fine screen.
 - **Blended**: mixed over what's behind, smooth with any anti-aliasing. But:
   - **It's sorted per object, not per face.** Of two blended objects the farther is drawn
     first, but the faces inside one object are drawn in whatever order they're stored: a
@@ -70,7 +71,8 @@ every see-through material blended, since a still picture can't smooth the grain
 Both work:
 
 - **Dithered see-through** keeps soft strand edges, and sorts and shadows properly. Under
-  TAA it looks like Blender's viewport; without TAA it's grainy.
+  TAA it looks like Blender's viewport, under 4× MSAA nearly so; with anti-aliasing off it's
+  grainy.
 - **A cutout** has hard edges, but no grain with any anti-aliasing:
   1. Plug the image's *Color* into *Base Color*.
   2. Add a **Math** node set to **Round**, plug the image's *Alpha* into it, and its result

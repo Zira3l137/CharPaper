@@ -52,7 +52,7 @@ See also: [Materials and textures](recipes/materials.md)
 
 | What you see | Why, and what to do |
 |---|---|
-| See-through parts look grainy, like a fine screen | They're dithered, and TAA is off. Turn on TAA in the Graphics tab, or set the material's Render Method to Blended. See [Dithered or Blended](recipes/materials.md#dithered-or-blended). |
+| See-through parts look grainy, like a fine screen | They're dithered, and anti-aliasing is off. Turn on TAA (smoothest) or 4× MSAA in the Graphics tab, or set the material's Render Method to Blended. See [Dithered or Blended](recipes/materials.md#dithered-or-blended). |
 | Hair or layered cards overlap in the wrong order, flickering as the camera turns | Their Render Method is Blended, which the app sorts per object, not per face. Set it to Dithered. |
 | Glass or a curtain casts a shadow as dark as a wall | It's Blended, which casts a solid shadow. Set it to Dithered, or untick its *Ray Visibility → Shadow*. |
 | What's behind glass is blurred, fogged or outlined through it | The glass is Blended, which depth of field, fog and ink strokes don't see. Set it to Dithered. |

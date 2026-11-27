@@ -118,8 +118,8 @@ These save the most trouble.
    it to rest with. A slider no clip keys stays in the app where it was in Blender.
 10. **Materials: Principled BSDF with image textures.** Anything built from procedural
     nodes has to be baked to textures first. PNG and JPEG images work; WebP doesn't.
-    See-through materials follow their *Render Method*: leave it on Dithered and turn **TAA**
-    on for smooth transparency. See [Materials and textures](recipes/materials.md).
+    See-through materials follow their *Render Method*: leave it on Dithered, and TAA or 4× MSAA
+    makes it smooth. See [Materials and textures](recipes/materials.md).
 11. **At most 256 shape keys on a mesh, and 4 bones on a vertex.** A vertex weighted to more
     bones keeps its 4 strongest, so it bends a little differently than in Blender.
     *Weights → Limit Total* in Weight Paint mode fixes it.
