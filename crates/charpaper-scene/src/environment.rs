@@ -251,11 +251,11 @@ pub(crate) fn finish_bakes(
                 warn!("cannot bake the maps of environment {name:?}: {err}");
                 continue;
             }
-            let root = suite.root.clone();
+            let files = suite.files.clone();
             let Some(environment) = suite.0.environments.iter_mut().find(|e| e.name == name) else {
                 continue;
             };
-            environment.find_maps(&root);
+            environment.find_maps(&files);
             info!("environment {name:?}: maps baked");
 
             if shown.name.as_deref() == Some(name.as_str()) {

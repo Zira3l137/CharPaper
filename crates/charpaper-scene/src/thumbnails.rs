@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::UNIX_EPOCH;
 
 use bevy::app::Propagate;
 use bevy::asset::RenderAssetUsages;
@@ -137,6 +136,9 @@ struct Job {
     suite: PathBuf,
     skin: String,
     file: PathBuf,
+    // Changes with the file. A packed file's is its content hash, so exporting it again
+    // unchanged keeps its picture.
+    stamp: String,
     // Where the character faces in its rest pose, in glTF's axes.
     front: Vec3,
     cache: PathBuf,
@@ -282,18 +284,20 @@ fn look_up(
         .as_ref()
         .filter(|gaze| gaze.front.is_some())
         .map_or(Vec3::Z, |gaze| Vec3::from_array(gaze.front_gltf()));
+    let Some(stamp) = suite.files.stamp(file) else {
+        warn!("thumbnail of {skin:?} in {}: cannot read its file", suite.root.display());
+        return;
+    };
     let job = Job {
         suite: suite.root.clone(),
         skin: skin.to_string(),
         file: file.to_path_buf(),
+        stamp,
         front: front.with_y(0.0).try_normalize().unwrap_or(Vec3::Z),
         cache: PathBuf::new(),
         kind,
     };
-    let Some(cache) = cache_path(&job) else {
-        warn!("thumbnail of {}: cannot read its file", job.label());
-        return;
-    };
+    let cache = cache_path(&job);
     match fs::read(&cache) {
         Ok(pixels) if pixels.len() == (SIZE * SIZE * 4) as usize => {
             let image = images.add(picture(pixels));
@@ -582,19 +586,16 @@ fn keep(job: &Job, pixels: &[u8]) {
     }
 }
 
-fn cache_path(job: &Job) -> Option<PathBuf> {
-    let meta = fs::metadata(job.suite.join(&job.file)).ok()?;
-    let modified = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_nanos();
+fn cache_path(job: &Job) -> PathBuf {
     let mut hash = Fnv::default();
-    hash.write(&meta.len().to_le_bytes());
-    hash.write(&modified.to_le_bytes());
+    hash.write(job.stamp.as_bytes());
     hash.write(&[VERSION]);
     hash.write(&SIZE.to_le_bytes());
     // A close-up's hash differs from the outfit's own picture's, and changes with its head.
     if let Kind::CloseUp { head, .. } = &job.kind {
         hash.write(head.as_deref().unwrap_or_default().as_bytes());
     }
-    Some(job.suite.join(FOLDER).join(format!("{}.{:016x}.rgba", job.name(), hash.0)))
+    job.suite.join(FOLDER).join(format!("{}.{:016x}.rgba", job.name(), hash.0))
 }
 
 // FNV-1a: tiny, and the same on every run and every Rust version, unlike the standard hasher.

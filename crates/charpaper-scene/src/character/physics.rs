@@ -12,6 +12,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::path::Path;
 
 use bevy::math::Affine3A;
 use bevy::prelude::*;
@@ -238,12 +239,14 @@ pub(crate) fn read_body(
         if body.skin != skin {
             *body = Body { skin: skin.clone(), ..default() };
             if let Some(file) = skin.and_then(|name| suite.skins.iter().find(|s| s.name == name)) {
-                let path = suite.absolute(&file.file);
+                let path = file.file.clone();
+                let files = suite.files.clone();
                 let bones: Vec<(String, f32)> =
                     suite.physics.colliders.values().map(|c| (c.bone.clone(), c.length)).collect();
                 info!("physics: reading the body from {} for high quality", path.display());
                 body.reading = Some(AsyncComputeTaskPool::get().spawn(async move {
-                    surface::read_parts(&path, &bones).map_err(|e| e.to_string())
+                    let read = |path: &Path| files.read(path).map_err(std::io::Error::other);
+                    surface::read_parts_with(&path, &bones, read).map_err(|e| e.to_string())
                 }));
             }
         }

@@ -1,7 +1,6 @@
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
-use bevy::asset::io::AssetSourceBuilder;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy::window::WindowLevel;
@@ -11,6 +10,7 @@ use charpaper_monitor::MonitorPlugin;
 use charpaper_scene::ARMATURE_SOURCE;
 use charpaper_scene::CHARACTERS_SOURCE;
 use charpaper_scene::ScenePlugin;
+use charpaper_scene::suite_source;
 use charpaper_settings::DisplayMode;
 use charpaper_settings::STATE_FILE;
 use charpaper_ui::SettingsPanelPlugin;
@@ -63,12 +63,8 @@ pub fn run(mut config: AppConfig) -> Result<()> {
     if config.benchmark {
         benchmark::unthrottle(&mut state.render);
     }
-    let characters =
-        config.scene.characters_dir.to_str().with_context(|| {
-            format!("{} is not valid UTF-8", config.scene.characters_dir.display())
-        })?;
-
-    let source = || AssetSourceBuilder::platform_default(characters, None);
+    // Each suite's files come out of its suite.chr, or off the disk when it has none.
+    let source = || suite_source(config.scene.characters_dir.clone());
     let mut app = App::new();
     // Reported once the logger exists, which is only after DefaultPlugins.
     let mut log_problem = None;

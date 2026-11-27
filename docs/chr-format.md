@@ -75,6 +75,17 @@ saves at least 5%. Files under 64 bytes, and `.ogg`, `.gif`, `.png`, `.jpg`, `.j
 `.webp` files, are never tried, since they don't shrink. A stored file's size and its
 unpacked size are the same.
 
+## In the app
+
+- A packed suite's files come out of the pack through the app's own asset source, so Bevy
+  loads them as it loads loose files. A pack holds no `.meta` files: everything in it loads
+  with Bevy's default settings, as the app asks for them.
+- A pack can't take the sky maps the app bakes on first load, so the add-on bakes them
+  before it packs, and leaves the panorama out. An environment packed with a panorama but
+  without all three maps shows without a sky, and the log says so.
+- Outfit pictures are kept by each skin's content hash, so a skin exported again
+  unchanged keeps its picture.
+
 ## What a reader checks
 
 - The magic and version. A pack of another version is refused, never guessed at.
@@ -94,8 +105,9 @@ the file.
 
 The packer writes `suite.chr.part` beside the pack and renames it over `suite.chr` once
 the pack is complete. A failed or cancelled export leaves the old pack as it was. When the
-id has changed, the app knows its index is out of date and loads the suite again, instead
-of reading old offsets out of a new file.
+id has changed, the app opens the new pack and reads on from it, instead of reading old
+offsets out of a new file. A suite already on screen keeps what it has loaded; switching to
+it again shows the new export.
 
 The same files always make the same pack, byte for byte, so exporting a suite that hasn't
 changed gives it the same id.

@@ -279,7 +279,7 @@ fn find_stage_shape_keys(
     let Some(skin) = suite.skins.iter().find(|s| &s.name == name) else {
         return;
     };
-    let meshes = match charpaper_suite::mesh_shape_keys(&suite.absolute(&skin.file)) {
+    let meshes = match suite.shape_keys(&skin.file) {
         Ok(meshes) => meshes,
         Err(err) => {
             warn!("skin {name:?}: cannot read its shape keys: {err}");

@@ -1991,11 +1991,13 @@ name = "charpaper-scene"
 version = "0.9.0"
 dependencies = [
  "bevy",
+ "blocking",
  "charpaper-anim",
  "charpaper-audio",
  "charpaper-bake",
  "charpaper-drivers",
  "charpaper-gaze",
+ "charpaper-pack",
  "charpaper-settings",
  "charpaper-suite",
  "crossbeam-channel",

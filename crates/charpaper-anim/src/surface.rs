@@ -230,8 +230,18 @@ pub enum SurfaceError {
 /// Every object's part around each of `bones`, given as their names and lengths, from a skin's
 /// .glb or .gltf.
 pub fn read_parts(path: &Path, bones: &[(String, f32)]) -> Result<Vec<Part>, SurfaceError> {
+    read_parts_with(path, bones, |path| std::fs::read(path))
+}
+
+/// As `read_parts`, with `read_file` reading the file and any buffers beside a .gltf, so the
+/// file can come out of a pack.
+pub fn read_parts_with(
+    path: &Path,
+    bones: &[(String, f32)],
+    read_file: impl Fn(&Path) -> std::io::Result<Vec<u8>>,
+) -> Result<Vec<Part>, SurfaceError> {
     let read = |path: &Path| {
-        std::fs::read(path).map_err(|e| SurfaceError::Read(path.display().to_string(), e))
+        read_file(path).map_err(|e| SurfaceError::Read(path.display().to_string(), e))
     };
     let mut gltf = gltf::Gltf::from_slice(&read(path)?)?;
     let blob = gltf.blob.take();

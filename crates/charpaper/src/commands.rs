@@ -19,6 +19,13 @@ pub fn inspect() {
 pub fn bake_environments(path: &Path, dry_run: bool) -> Result<()> {
     let suite =
         Suite::load(path).with_context(|| format!("cannot load suite at {}", path.display()))?;
+    if suite.files.is_packed() {
+        println!(
+            "{} is packed: the Blender add-on baked its maps when it exported",
+            path.display()
+        );
+        return Ok(());
+    }
     let mut any = false;
     for environment in &suite.environments {
         let Some(panorama) = &environment.panorama else {

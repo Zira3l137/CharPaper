@@ -103,7 +103,7 @@ fn find_gif_materials(
                 material: worn.0.clone(),
                 meshes: wearing.iter().map(|&(e, _)| e).collect(),
                 image: None,
-                playback: Playback::Opening(decode::open(suite.absolute(path))),
+                playback: Playback::Opening(decode::open(suite.files.clone(), path.clone())),
             },
             ChildOf(ready.entity),
         ));

@@ -138,6 +138,8 @@ zip = { version = "9.7", default-features = false, features = ["deflate-flate2"]
 # The versions Bevy builds already. flate2's pure-Rust backend for zip, which picks none.
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 sha2 = { version = "0.11", default-features = false }
+# Runs a pack's blocking reads off Bevy's IO threads. The version Bevy builds already.
+blocking = { version = "1.6", default-features = false }
 # The suite pack's compression. zstdmt lets one big file use every core while packing.
 zstd = { version = "0.13", default-features = false, features = ["zstdmt"] }
 # The suite pack's content hashes. The version Bevy builds already.

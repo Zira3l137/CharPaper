@@ -1,16 +1,16 @@
 // Each GIF decodes on a thread of its own. One whose frames fit in KEEP_LIMIT is decoded once
-// and kept; a bigger one is decoded again on every loop, a couple of frames ahead of the one
-// on screen. The thread ends once its receiver is dropped, which happens when the
+// and kept; a bigger one is read and decoded again on every loop, a couple of frames ahead of
+// the one on screen. The thread ends once its receiver is dropped, which happens when the
 // environment playing the GIF goes away.
 
-use std::fs::File;
-use std::io::BufReader;
+use std::io::Cursor;
 use std::path::Path;
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
 use bevy::log::warn;
+use charpaper_suite::SuiteFiles;
 use crossbeam_channel::Receiver;
 use crossbeam_channel::Sender;
 use crossbeam_channel::bounded;
@@ -39,20 +39,21 @@ pub(crate) struct Gif {
 
 pub(crate) type Opening = Receiver<Result<Gif, String>>;
 
-pub(crate) fn open(path: PathBuf) -> Opening {
+// `path` is in the suite, which may be packed.
+pub(crate) fn open(files: SuiteFiles, path: PathBuf) -> Opening {
     let (opened, opening) = bounded(1);
     let failed = opened.clone();
     let spawned = thread::Builder::new()
         .name(format!("gif {}", path.file_name().unwrap_or_default().display()))
-        .spawn(move || decode(&path, &opened));
+        .spawn(move || decode(&files, &path, &opened));
     if let Err(err) = spawned {
         let _ = failed.send(Err(format!("no thread to decode it on: {err}")));
     }
     opening
 }
 
-fn decode(path: &Path, opened: &Sender<Result<Gif, String>>) {
-    let read = read_frames(path).and_then(|(size, frames)| Ok((size, keep_all(frames)?)));
+fn decode(files: &SuiteFiles, path: &Path, opened: &Sender<Result<Gif, String>>) {
+    let read = read_frames(files, path).and_then(|(size, frames)| Ok((size, keep_all(frames)?)));
     let ((width, height), kept) = match read {
         Ok(read) => read,
         Err(err) => {
@@ -70,7 +71,7 @@ fn decode(path: &Path, opened: &Sender<Result<Gif, String>>) {
     // first frame, so memory drops back at once.
     let (next, frames) = bounded(STREAM_AHEAD);
     if opened.send(Ok(Gif { width, height, frames: Frames::Streamed(frames) })).is_ok() {
-        stream(path, &next);
+        stream(files, path, &next);
     }
 }
 
@@ -93,9 +94,9 @@ fn keep_all(
     Ok(Some(kept))
 }
 
-fn stream(path: &Path, next: &Sender<Frame>) {
+fn stream(files: &SuiteFiles, path: &Path, next: &Sender<Frame>) {
     loop {
-        let frames = match read_frames(path) {
+        let frames = match read_frames(files, path) {
             Ok((_, frames)) => frames,
             Err(err) => {
                 warn!("{} stopped playing: {err}", path.display());
@@ -125,10 +126,11 @@ fn stream(path: &Path, next: &Sender<Frame>) {
 
 // Frames come out whole: the decoder draws each onto what the previous ones left, as GIF asks.
 fn read_frames(
+    files: &SuiteFiles,
     path: &Path,
 ) -> Result<((u32, u32), impl Iterator<Item = Result<Frame, String>>), String> {
-    let file = File::open(path).map_err(|e| e.to_string())?;
-    let decoder = GifDecoder::new(BufReader::new(file)).map_err(|e| e.to_string())?;
+    let bytes = files.read(path).map_err(|e| e.to_string())?;
+    let decoder = GifDecoder::new(Cursor::new(bytes)).map_err(|e| e.to_string())?;
     let size = decoder.dimensions();
     let frames = decoder.into_frames().map(|frame| {
         let frame = frame.map_err(|e| e.to_string())?;

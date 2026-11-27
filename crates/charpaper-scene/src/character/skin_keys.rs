@@ -49,10 +49,10 @@ pub(crate) fn list_skin_keys(
         let suite = stage_of.get(root).and_then(|stage| suites.get(stage).ok());
         let file = suite.and_then(|suite| {
             let skin = suite.skins.iter().find(|s| s.name == skin.name)?;
-            Some(suite.absolute(&skin.file))
+            Some((suite, &skin.file))
         });
         // Bevy drops shape key names with the mesh's RAM copy, so they come from the file.
-        let found = match file.map(|file| charpaper_suite::mesh_shape_keys(&file)) {
+        let found = match file.map(|(suite, file)| suite.shape_keys(file)) {
             Some(Ok(found)) => found,
             Some(Err(err)) => {
                 warn!("skin {:?}: cannot read its shape key names: {err}", skin.name);

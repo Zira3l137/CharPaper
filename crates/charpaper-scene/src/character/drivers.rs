@@ -246,11 +246,13 @@ pub(crate) fn bind_drivers(
 }
 
 fn load(suite: &ActiveSuite, skin: &Skin, objects: &SkinObjects, rest: &BoneRest) -> Vec<Bound> {
-    let file_path = suite.absolute(&skin.file);
-    let path = file_path.with_extension("drivers.json");
-    let text = match std::fs::read_to_string(&path) {
+    let path = skin.file.with_extension("drivers.json");
+    if !suite.files.is_file(&path) {
+        return Vec::new();
+    }
+    let read = suite.read(&path).map_err(|e| e.to_string());
+    let text = match read.and_then(|bytes| String::from_utf8(bytes).map_err(|e| e.to_string())) {
         Ok(text) => text,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
         Err(err) => {
             warn!("skin {:?}: cannot read {}: {err}", skin.name, path.display());
             return Vec::new();
@@ -263,7 +265,7 @@ fn load(suite: &ActiveSuite, skin: &Skin, objects: &SkinObjects, rest: &BoneRest
             return Vec::new();
         }
     };
-    let meshes = match charpaper_suite::mesh_shape_keys(&file_path) {
+    let meshes = match suite.shape_keys(&skin.file) {
         Ok(meshes) => meshes,
         Err(err) => {
             warn!("skin {:?}: cannot read its shape keys: {err}", skin.name);
