@@ -13,6 +13,9 @@ pub enum SuiteError {
         source: std::io::Error,
     },
 
+    #[error(transparent)]
+    Pack(#[from] charpaper_pack::PackError),
+
     #[error("{path} is not a valid suite manifest")]
     Manifest {
         path: PathBuf,

@@ -10,8 +10,9 @@ use gltf::Document;
 use tracing::debug;
 use tracing::warn;
 
-use crate::document::read_document;
+use crate::document::read_document_in;
 use crate::error::SuiteError;
+use crate::files::SuiteFiles;
 use crate::manifest::Camera;
 use crate::manifest::CameraEntry;
 use crate::manifest::ClipEntry;
@@ -31,6 +32,8 @@ use crate::manifest::SCHEMA_VERSION;
 use crate::manifest::Timeline;
 use crate::manifest::Trigger;
 use crate::manifest::Wind;
+use crate::shape_keys::MeshShapeKeys;
+use crate::shape_keys::shape_keys_of;
 
 const CLIPS_DIR: &str = "clips";
 const EXPRESSIONS_DIR: &str = "expressions";
@@ -53,6 +56,7 @@ pub const SPECULAR_MAP: &str = "specular.ktx2";
 #[derive(Debug, Clone)]
 pub struct Suite {
     pub root: PathBuf,
+    pub files: SuiteFiles,
     pub name: String,
     pub model: PathBuf,
     // No model file of its own, so `model` is the default skin's file, whose meshes are that
@@ -160,30 +164,32 @@ impl Environment {
         Path::new(ENVIRONMENT_DIR).join(&self.name)
     }
 
-    pub fn find_maps(&mut self, root: &Path) {
+    pub fn find_maps(&mut self, files: &SuiteFiles) {
         let folder = self.folder();
         let map = |file: &str| {
             let path = folder.join(file);
-            root.join(&path).is_file().then_some(path)
+            files.is_file(&path).then_some(path)
         };
         (self.skybox, self.diffuse, self.specular) =
             (map(SKYBOX_MAP), map(DIFFUSE_MAP), map(SPECULAR_MAP));
     }
 
-    fn find_sounds(&mut self, root: &Path) -> Result<(), SuiteError> {
+    fn find_sounds(&mut self, files: &SuiteFiles) -> Result<(), SuiteError> {
         let folder = self.folder();
         let ambience = folder.join(AMBIENCE_FILE);
-        self.ambience = root.join(&ambience).is_file().then_some(ambience);
-        self.music = files_in(root, &folder.join(MUSIC_DIR).to_string_lossy())?
+        self.ambience = files.is_file(&ambience).then_some(ambience);
+        self.music = files
+            .files_in(&folder.join(MUSIC_DIR))?
             .into_iter()
             .filter(|p| has_extension(p, SOUND_EXTENSIONS))
             .collect();
         Ok(())
     }
 
-    fn find_animated(&mut self, root: &Path) -> Result<(), SuiteError> {
+    fn find_animated(&mut self, files: &SuiteFiles) -> Result<(), SuiteError> {
         let folder = self.folder().join(ANIMATED_DIR);
-        self.animated = files_in(root, &folder.to_string_lossy())?
+        self.animated = files
+            .files_in(&folder)?
             .into_iter()
             .filter(|p| has_extension(p, &["gif"]))
             .map(|p| (p.file_stem().unwrap_or_default().to_string_lossy().into_owned(), p))
@@ -237,11 +243,12 @@ impl Suite {
             .map_err(|source| SuiteError::Io { path: path.clone(), source })?;
         let manifest =
             toml::from_str(&text).map_err(|source| SuiteError::Manifest { path, source })?;
-        Self::resolve(root, manifest)
+        Self::resolve(SuiteFiles::open(root)?, manifest)
     }
 
-    pub fn resolve(root: impl AsRef<Path>, manifest: Manifest) -> Result<Self, SuiteError> {
-        let root = root.as_ref();
+    pub fn resolve(files: SuiteFiles, manifest: Manifest) -> Result<Self, SuiteError> {
+        let root = files.root();
+        let files = &files;
         if manifest.schema != SCHEMA_VERSION {
             return Err(SuiteError::Schema { found: manifest.schema, supported: SCHEMA_VERSION });
         }
@@ -255,20 +262,20 @@ impl Suite {
             None => root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
         };
 
-        let clips = clip_files(root, Path::new(CLIPS_DIR), &manifest.character.clips, "")?;
-        let expressions = expression_files(root, &manifest.character.expressions)?;
+        let clips = clip_files(files, Path::new(CLIPS_DIR), &manifest.character.clips, "")?;
+        let expressions = expression_files(files, &manifest.character.expressions)?;
         let default_clip = match &manifest.character.default_clip {
             Some(name) if !clips.iter().any(|c| &c.name == name) => {
                 return Err(SuiteError::UnknownDefault { kind: "clip", name: name.clone() });
             }
             default => default.clone(),
         };
-        let skins: Vec<Skin> = named_files(root, SKINS_DIR, "skin")?
+        let skins: Vec<Skin> = named_files(files, SKINS_DIR, "skin")?
             .into_iter()
             .map(|(name, file)| Skin { name, file })
             .collect();
-        let environments = resolve_environments(root, &manifest)?;
-        let cameras = resolve_cameras(root, &manifest)?;
+        let environments = resolve_environments(files, &manifest)?;
+        let cameras = resolve_cameras(files, &manifest)?;
         if cameras.iter().any(|c| c.name == ORBIT_CAMERA) {
             return Err(SuiteError::ReservedName { kind: "camera", name: ORBIT_CAMERA.into() });
         }
@@ -288,8 +295,8 @@ impl Suite {
         };
 
         let own_model = match &manifest.character.model {
-            Some(path) => Some(existing(root, path)?),
-            None => sole(root, "", "the suite folder", is_gltf)?,
+            Some(path) => Some(existing(files, path)?),
+            None => sole(files, "", "the suite folder", is_gltf)?,
         };
         let skeleton_skin = default_skin.as_ref().and_then(|d| skins.iter().find(|s| &s.name == d));
         let (model, model_is_skin) = match (own_model, skeleton_skin) {
@@ -309,7 +316,8 @@ impl Suite {
             Some(name) => Some(name.to_string()),
         };
 
-        let luts: Vec<LutFile> = files_in(root, LUTS_DIR)?
+        let luts: Vec<LutFile> = files
+            .files_in(Path::new(LUTS_DIR))?
             .into_iter()
             .filter(|p| has_extension(p, &["cube"]))
             .map(|file| {
@@ -340,6 +348,7 @@ impl Suite {
 
         Ok(Self {
             root: root.to_path_buf(),
+            files: files.clone(),
             name,
             model,
             model_is_skin,
@@ -368,8 +377,18 @@ impl Suite {
         })
     }
 
+    /// Where a file would be on disk; a packed suite's files aren't there.
     pub fn absolute(&self, relative: &Path) -> PathBuf {
         self.root.join(relative)
+    }
+
+    pub fn read(&self, relative: &Path) -> Result<Vec<u8>, SuiteError> {
+        self.files.read(relative)
+    }
+
+    /// The shape keys of each mesh in a .glb or .gltf of the suite, by node.
+    pub fn shape_keys(&self, file: &Path) -> Result<Vec<MeshShapeKeys>, String> {
+        shape_keys_of(&read_document_in(&self.files, file)?)
     }
 }
 
@@ -385,12 +404,12 @@ pub fn discover(dir: impl AsRef<Path>) -> Result<Vec<PathBuf>, SuiteError> {
 // Settings for a clip that isn't there are refused, so a typo doesn't go unnoticed. `owner`
 // prefixes clip names in that error, for an environment's actors.
 fn clip_files(
-    root: &Path,
+    files: &SuiteFiles,
     dir: &Path,
     settings: &BTreeMap<String, ClipEntry>,
     owner: &str,
 ) -> Result<Vec<ClipFile>, SuiteError> {
-    let found = files_in(root, &dir.to_string_lossy())?;
+    let found = files.files_in(dir)?;
     let mut clips = Vec::new();
     for json in found.iter().filter(|p| has_extension(p, &["json"])) {
         let name = stem(json);
@@ -403,7 +422,7 @@ fn clip_files(
             label: entry.label,
             gaze: entry.gaze.unwrap_or(true),
             reaction_only: entry.reaction_only,
-            cues: cues(root, &entry.cues)?,
+            cues: cues(files, &entry.cues)?,
             name,
         });
     }
@@ -534,20 +553,21 @@ fn check_hotspot(
     Ok(())
 }
 
-fn cues(root: &Path, cues: &[Cue]) -> Result<Vec<ClipCue>, SuiteError> {
+fn cues(files: &SuiteFiles, cues: &[Cue]) -> Result<Vec<ClipCue>, SuiteError> {
     cues.iter()
         .map(|cue| {
             let file = Path::new(SOUNDS_DIR).join(format!("{}.ogg", cue.sound));
-            Ok(ClipCue { at: cue.at, sound: existing(root, &file)? })
+            Ok(ClipCue { at: cue.at, sound: existing(files, &file)? })
         })
         .collect()
 }
 
 fn expression_files(
-    root: &Path,
+    files: &SuiteFiles,
     settings: &BTreeMap<String, ExpressionEntry>,
 ) -> Result<Vec<ExpressionFile>, SuiteError> {
-    let expressions: Vec<ExpressionFile> = files_in(root, EXPRESSIONS_DIR)?
+    let expressions: Vec<ExpressionFile> = files
+        .files_in(Path::new(EXPRESSIONS_DIR))?
         .into_iter()
         .filter(|p| has_extension(p, &["json"]))
         .map(|json| {
@@ -562,17 +582,16 @@ fn expression_files(
     Ok(expressions)
 }
 
-fn actors(root: &Path, environment: &mut Environment) -> Result<Vec<Actor>, SuiteError> {
+fn actors(files: &SuiteFiles, environment: &mut Environment) -> Result<Vec<Actor>, SuiteError> {
     let settings = std::mem::take(&mut environment.settings.actors);
     let dir = environment.folder().join(CLIPS_DIR);
     let mut actors = Vec::new();
-    for folder in read_dir(&root.join(&dir))?.into_iter().filter(|p| p.is_dir()) {
-        let name = folder.file_name().unwrap_or_default().to_string_lossy().into_owned();
+    for name in files.folders_in(&dir)? {
         let entry = settings.get(&name);
         let owner = format!("{}/{name}/", environment.name);
         let empty = BTreeMap::new();
         let clips = entry.map_or(&empty, |actor| &actor.clips);
-        let clips = clip_files(root, &dir.join(&name), clips, &owner)?;
+        let clips = clip_files(files, &dir.join(&name), clips, &owner)?;
         let default_clip = entry.and_then(|actor| actor.default_clip.clone());
         if let Some(wanted) = &default_clip {
             let clip = clips.iter().find(|clip| &clip.name == wanted);
@@ -597,13 +616,16 @@ fn stem(path: &Path) -> String {
     path.file_stem().unwrap_or_default().to_string_lossy().into_owned()
 }
 
-fn resolve_cameras(root: &Path, manifest: &Manifest) -> Result<Vec<ExportedCamera>, SuiteError> {
+fn resolve_cameras(
+    files: &SuiteFiles,
+    manifest: &Manifest,
+) -> Result<Vec<ExportedCamera>, SuiteError> {
     let mut cameras: Vec<ExportedCamera> = Vec::new();
-    for (name, file) in named_files(root, CAMERAS_DIR, "camera")? {
+    for (name, file) in named_files(files, CAMERAS_DIR, "camera")? {
         // An unreadable file stays one camera here; the app reports it when it loads the file.
-        let found = read_document(&root.join(&file)).map(|d| camera_nodes(&d)).unwrap_or_default();
+        let found = read_document_in(files, &file).map(|d| camera_nodes(&d)).unwrap_or_default();
         let json = file.with_extension("json");
-        let clip = (has_extension(&file, &["glb"]) && root.join(&json).is_file()).then_some(json);
+        let clip = (has_extension(&file, &["glb"]) && files.is_file(&json)).then_some(json);
         if found.len() <= 1 {
             cameras.push(ExportedCamera {
                 name,
@@ -671,9 +693,12 @@ fn camera_nodes(doc: &Document) -> Vec<String> {
 
 // A folder only counts if it holds a map or a panorama, or shares a scene file's name. A
 // .gltf's own texture folder is neither.
-fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environment>, SuiteError> {
+fn resolve_environments(
+    files: &SuiteFiles,
+    manifest: &Manifest,
+) -> Result<Vec<Environment>, SuiteError> {
     let mut found: BTreeMap<String, Environment> =
-        named_files(root, ENVIRONMENT_DIR, "environment")?
+        named_files(files, ENVIRONMENT_DIR, "environment")?
             .into_iter()
             .map(|(name, scene)| {
                 let environment =
@@ -682,16 +707,14 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
             })
             .collect();
 
-    for folder in read_dir(&root.join(ENVIRONMENT_DIR))?.into_iter().filter(|p| p.is_dir()) {
-        let Some(name) = folder.file_name().map(|n| n.to_string_lossy().into_owned()) else {
-            continue;
-        };
+    for name in files.folders_in(Path::new(ENVIRONMENT_DIR))? {
         let mut candidate = Environment { name: name.clone(), ..Default::default() };
-        candidate.find_maps(root);
-        candidate.find_sounds(root)?;
-        candidate.find_animated(root)?;
+        candidate.find_maps(files);
+        candidate.find_sounds(files)?;
+        candidate.find_animated(files)?;
         let relative = candidate.folder();
-        let mut panoramas: Vec<PathBuf> = files_in(root, &relative.to_string_lossy())?
+        let mut panoramas: Vec<PathBuf> = files
+            .files_in(&relative)?
             .into_iter()
             .filter(|p| has_extension(p, &["hdr", "exr"]))
             .collect();
@@ -706,6 +729,15 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
             || candidate.specular.is_some();
         if !has_content && !found.contains_key(&name) {
             continue;
+        }
+        // The app bakes maps into the suite folder, and a pack can't take them: the add-on bakes
+        // them before it packs.
+        if files.is_packed() && candidate.panorama.is_some() && candidate.needs_baking() {
+            warn!(
+                "environment {name:?} has a panorama but not all its sky maps in suite.chr, so \
+                 it shows without a sky; export it again"
+            );
+            candidate.panorama = None;
         }
         let environment = found.entry(name.clone()).or_insert_with(|| candidate.clone());
         environment.panorama = candidate.panorama;
@@ -729,7 +761,7 @@ fn resolve_environments(root: &Path, manifest: &Manifest) -> Result<Vec<Environm
         environment.settings = settings.clone();
     }
     for environment in found.values_mut() {
-        environment.actors = actors(root, environment)?;
+        environment.actors = actors(files, environment)?;
     }
 
     Ok(found.into_values().collect())
@@ -750,12 +782,12 @@ fn check_wind(wind: &Wind) -> Result<(), String> {
 }
 
 fn named_files(
-    root: &Path,
+    files: &SuiteFiles,
     dir: &str,
     kind: &'static str,
 ) -> Result<Vec<(String, PathBuf)>, SuiteError> {
     let mut found: BTreeMap<String, PathBuf> = BTreeMap::new();
-    for file in files_in(root, dir)?.into_iter().filter(|p| is_gltf(p)) {
+    for file in files.files_in(Path::new(dir))?.into_iter().filter(|p| is_gltf(p)) {
         let name = file.file_stem().unwrap_or_default().to_string_lossy().into_owned();
         if found.contains_key(&name) {
             return Err(SuiteError::DuplicateName { kind, name });
@@ -782,18 +814,19 @@ fn relative(path: &Path) -> Result<PathBuf, SuiteError> {
     Ok(clean)
 }
 
-fn existing(root: &Path, path: &Path) -> Result<PathBuf, SuiteError> {
+fn existing(files: &SuiteFiles, path: &Path) -> Result<PathBuf, SuiteError> {
     let clean = relative(path)?;
-    if root.join(&clean).is_file() { Ok(clean) } else { Err(SuiteError::Missing(clean)) }
+    if files.is_file(&clean) { Ok(clean) } else { Err(SuiteError::Missing(clean)) }
 }
 
 fn sole(
-    root: &Path,
+    files: &SuiteFiles,
     dir: &str,
     place: &'static str,
     wanted: impl Fn(&Path) -> bool,
 ) -> Result<Option<PathBuf>, SuiteError> {
-    let mut found: Vec<PathBuf> = files_in(root, dir)?.into_iter().filter(|p| wanted(p)).collect();
+    let mut found: Vec<PathBuf> =
+        files.files_in(Path::new(dir))?.into_iter().filter(|p| wanted(p)).collect();
     match found.len() {
         0 | 1 => Ok(found.pop()),
         _ => {
@@ -803,7 +836,6 @@ fn sole(
     }
 }
 
-// A missing folder is just empty: every sub-folder of a suite is optional.
 /// What the settings panel calls a music track: its file name, less the `01 - ` the Blender
 /// add-on puts in front to keep the playlist's order.
 pub fn track_title(path: &Path) -> String {
@@ -813,16 +845,6 @@ pub fn track_title(path: &Path) -> String {
         Some(title) if digits > 0 && !title.is_empty() => title.to_owned(),
         _ => stem,
     }
-}
-
-fn files_in(root: &Path, dir: &str) -> Result<Vec<PathBuf>, SuiteError> {
-    let mut files: Vec<PathBuf> = read_dir(&root.join(dir))?
-        .into_iter()
-        .filter(|p| p.is_file())
-        .filter_map(|p| p.file_name().map(|name| Path::new(dir).join(name)))
-        .collect();
-    files.sort();
-    Ok(files)
 }
 
 fn read_dir(dir: &Path) -> Result<Vec<PathBuf>, SuiteError> {

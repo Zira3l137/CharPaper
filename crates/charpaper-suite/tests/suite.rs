@@ -1,7 +1,9 @@
 use std::fs;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::path::PathBuf;
 
+use charpaper_pack::PackWriter;
 use charpaper_suite::ActorClip;
 use charpaper_suite::ChainCursor;
 use charpaper_suite::ClipMode;
@@ -136,14 +138,66 @@ impl Fixture {
         fs::write(path, contents).unwrap();
     }
 
+    // Every test loads its suite twice, loose and packed, and both must come out the same.
     fn load(&self) -> Result<Suite, SuiteError> {
-        Suite::load(&self.0)
+        let loose = Suite::load(&self.0);
+        let packed = Suite::load(self.packed());
+        match (&loose, &packed) {
+            (Ok(loose), Ok(packed)) => assert_eq!(comparable(loose), comparable(packed)),
+            (Err(a), Err(b)) => {
+                assert_eq!(std::mem::discriminant(a), std::mem::discriminant(b), "{a} / {b}")
+            }
+            (loose, packed) => panic!(
+                "loose and packed differ: {:?} / {:?}",
+                loose.as_ref().err(),
+                packed.as_ref().err()
+            ),
+        }
+        loose
     }
+
+    // Under a folder of the same name, so a suite named after its folder keeps its name.
+    fn packed(&self) -> PathBuf {
+        let root = self.packed_parent().join(self.0.file_name().unwrap());
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let manifest = self.0.join("suite.toml");
+        if manifest.is_file() {
+            fs::copy(manifest, root.join("suite.toml")).unwrap();
+        }
+        let mut writer = PackWriter::new();
+        writer.add_folder(&self.0, |path| path != "suite.toml").unwrap();
+        writer.write(root.join(charpaper_pack::PACK_FILE), |_| ControlFlow::Continue(())).unwrap();
+        root
+    }
+
+    fn packed_parent(&self) -> PathBuf {
+        std::env::temp_dir().join(format!("charpaper-suite-packed-{}", std::process::id()))
+    }
+}
+
+// What both kinds of suite must agree on: everything but where the files are. A packed
+// suite can't bake, so its panoramas without maps are left out.
+fn comparable(suite: &Suite) -> String {
+    let mut suite = suite.clone();
+    for environment in &mut suite.environments {
+        if environment.needs_baking() {
+            environment.panorama = None;
+        }
+    }
+    let Suite { root: _, files: _, .. } = &suite;
+    format!("{:?}", (&suite.name, &suite.model, suite.model_is_skin, &suite.timeline))
+        + &format!("{:?}", (&suite.clips, &suite.default_clip, &suite.expressions))
+        + &format!("{:?}", (&suite.skins, &suite.default_skin, &suite.cameras))
+        + &format!("{:?}", (&suite.default_camera, &suite.environments, &suite.default_environment))
+        + &format!("{:?}", (&suite.luts, &suite.post, &suite.camera, &suite.gaze))
+        + &format!("{:?}", (&suite.hotspots, &suite.physics, &suite.blended))
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
+        let _ = fs::remove_dir_all(self.packed_parent().join(self.0.file_name().unwrap()));
     }
 }
 
@@ -573,6 +627,41 @@ up = "brows_up"
     let keys = charpaper_suite::mesh_shape_keys(&fixture.0.join("skins/casual.gltf")).unwrap();
     assert_eq!(keys[0].node, "Face");
     assert_eq!(keys[0].keys, ["mouth_corner_up", "brows_up"]);
+}
+
+// A .glb with megabytes of meshes after its JSON, in a pack: only the JSON is unpacked.
+fn glb(json: &str) -> Vec<u8> {
+    let mut json = json.as_bytes().to_vec();
+    json.resize(json.len().next_multiple_of(4), b' ');
+    let bin = vec![7u8; 4 << 20];
+    let total = 12 + 8 + json.len() + 8 + bin.len();
+    let mut out = Vec::with_capacity(total);
+    for word in [0x4654_6C67, 2, total as u32, json.len() as u32, 0x4E4F_534A] {
+        out.extend(u32::to_le_bytes(word));
+    }
+    out.extend(json);
+    out.extend([bin.len() as u32, 0x004E_4942].iter().flat_map(|w| w.to_le_bytes()));
+    out.extend(bin);
+    out
+}
+
+#[test]
+fn a_packed_suite_reads_its_files_out_of_the_pack() {
+    let fixture = Fixture::new("packed-reads", "schema = 2");
+    fixture.write("skins/face.glb", glb(&face()));
+    let loose = fixture.load().unwrap();
+    let packed = Suite::load(fixture.packed()).unwrap();
+    assert!(packed.files.is_packed() && !loose.files.is_packed());
+
+    let face = Path::new("skins").join("face.glb");
+    let keys = packed.shape_keys(&face).unwrap();
+    assert_eq!(keys, loose.shape_keys(&face).unwrap());
+    assert_eq!(keys[0].keys, ["mouth_corner_up", "brows_up"]);
+    let idle = Path::new("clips/idle.json");
+    assert_eq!(packed.read(idle).unwrap(), b"read by the app");
+    assert!(packed.files.stamp(idle).is_some());
+    assert_ne!(packed.files.stamp(idle), packed.files.stamp(&face));
+    assert!(matches!(packed.read(Path::new("clips/nope.json")), Err(SuiteError::Pack(_))));
 }
 
 #[test]

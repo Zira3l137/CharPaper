@@ -1,15 +1,33 @@
 use std::fs::File;
+use std::io::BufReader;
 use std::io::Read;
 use std::path::Path;
 
 use gltf::Document;
 
+use crate::files::SuiteFiles;
+
 // Reads only the JSON, never the binary chunk: that is where the megabytes are.
 pub(crate) fn read_document(path: &Path) -> Result<Document, String> {
-    let json = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("glb")) {
-        read_glb_json(path)?
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    document_from(BufReader::new(file), is_glb(path))
+}
+
+pub(crate) fn read_document_in(files: &SuiteFiles, file: &Path) -> Result<Document, String> {
+    document_from(files.reader(file).map_err(|e| e.to_string())?, is_glb(file))
+}
+
+fn is_glb(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("glb"))
+}
+
+fn document_from(mut reader: impl Read, glb: bool) -> Result<Document, String> {
+    let json = if glb {
+        read_glb_json(reader)?
     } else {
-        std::fs::read(path).map_err(|e| e.to_string())?
+        let mut json = Vec::new();
+        reader.read_to_end(&mut json).map_err(|e| e.to_string())?;
+        json
     };
     let root = gltf::json::Root::from_slice(&json).map_err(|e| {
         // Bevy can't load this extension at all, and the raw parse error wouldn't tell the artist
@@ -27,11 +45,10 @@ pub(crate) fn read_document(path: &Path) -> Result<Document, String> {
 }
 
 // A .glb is a 12-byte header, then the JSON chunk, then usually one binary chunk.
-fn read_glb_json(path: &Path) -> Result<Vec<u8>, String> {
+fn read_glb_json(mut file: impl Read) -> Result<Vec<u8>, String> {
     const MAGIC: &[u8; 4] = b"glTF";
     const JSON_CHUNK: u32 = 0x4E4F_534A;
 
-    let mut file = File::open(path).map_err(|e| e.to_string())?;
     let mut head = [0u8; 20];
     file.read_exact(&mut head).map_err(|_| "file is too short to be a .glb".to_string())?;
 

@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use gltf::Document;
+
 use crate::document::read_document;
 
 // glTF has no place for shape key names; Blender writes them into each mesh's extras as
@@ -14,7 +16,10 @@ pub struct MeshShapeKeys {
 }
 
 pub fn mesh_shape_keys(path: &Path) -> Result<Vec<MeshShapeKeys>, String> {
-    let doc = read_document(path)?;
+    shape_keys_of(&read_document(path)?)
+}
+
+pub(crate) fn shape_keys_of(doc: &Document) -> Result<Vec<MeshShapeKeys>, String> {
     let meshes = doc
         .nodes()
         .filter_map(|node| {

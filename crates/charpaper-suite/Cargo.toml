@@ -6,6 +6,7 @@ license.workspace = true
 
 # Bevy-free on purpose.
 [dependencies]
+charpaper-pack.workspace = true
 gltf.workspace = true
 schemars.workspace = true
 serde.workspace = true
