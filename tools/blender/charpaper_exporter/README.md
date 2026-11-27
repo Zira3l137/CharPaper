@@ -60,6 +60,14 @@ every .blend on the computer.
   `charpaper_pack`, which works out each node's transform the way Blender's exporter does and
   writes the .glb. The numbers are Blender's to within a millionth; clips export about six
   times faster. Rotations also keep to one side from key to key, which Blender's don't.
+- The model and skins are written the same way: the add-on reads each mesh with its
+  modifiers applied (Armature modifiers left to the app), its vertex groups and shape keys,
+  and `charpaper_pack` builds the primitives, skin and shape key targets as Blender's exporter
+  would. Materials, textures and images still come from Blender's exporter, run on one
+  stand-in triangle per material slot, so they come out exactly as before. A file with
+  something this doesn't cover, such as vertex colors, a curve or text object, instancing, or
+  a vertex with no weight on any bone, is written by Blender's exporter as before, and the
+  console says why.
 - Each export prints how long each part took to the system console.
 
 ## What goes where

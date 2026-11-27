@@ -31,6 +31,7 @@ class Isolation:
         self._data = {}
         self._renamed = []
         self._bridges = {}
+        self._finished = False
 
     def _step_aside(self, block):
         name = block.name
@@ -112,6 +113,9 @@ class Isolation:
         return self.copies[obj]
 
     def finish(self):
+        if self._finished:
+            return
+        self._finished = True
         # glTF keeps the scene's name, and a random one would make every export a new file,
         # which a pack would compress again and the app would take new outfit pictures of.
         self.scene.name = "CharPaper export"

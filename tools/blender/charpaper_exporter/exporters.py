@@ -6,6 +6,7 @@ from . import animated
 from . import clips
 from . import drivers
 from . import gltf
+from . import gltf_write
 from . import lens
 from . import lights
 from . import sky
@@ -62,6 +63,19 @@ def _run(context, isolation, filepath, options):
     return result
 
 
+def _write(context, suite, isolation, files, filepath, options):
+    """In a packed export, the file as charpaper_pack writes it, unless it says it can't write
+    it as Blender's exporter would; then, and in an unpacked export, Blender's exporter's."""
+    if files.packed and gltf_write.available():
+        isolation.finish()
+        try:
+            gltf_write.write(context, isolation, filepath, suite)
+            return Result(filepath)
+        except gltf_write.Unsupported as why:
+            print(f"CharPaper: {os.path.basename(filepath)} is left to Blender's glTF exporter: {why}")
+    return _run(context, isolation, filepath, options)
+
+
 def _shape_keyed(obj):
     return obj.type == "MESH" and obj.data.shape_keys is not None
 
@@ -75,8 +89,8 @@ def model(context, suite, files):
     path = target(files, "", suite.model_name, suite)
     with isolated(context) as iso:
         iso.add_with_ancestors(suite.armature)
-        return _run(
-            context, iso, path,
+        return _write(
+            context, suite, iso, files, path,
             _options(suite, export_animations=False, export_lights=False, export_cameras=False),
         )
 
@@ -133,8 +147,8 @@ def skin(context, suite, entry, files):
                 copy = iso.add(obj, own_mesh=_shape_keyed(obj))
                 if _shape_keyed(copy) and _new_data(copy, meshes):
                     meshes.append(copy)
-        result = _run(
-            context, iso, path,
+        result = _write(
+            context, suite, iso, files, path,
             _options(suite, export_animations=False, export_lights=False, export_cameras=False),
         )
     result.alerts.extend(alerts)
