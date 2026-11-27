@@ -14,6 +14,7 @@ mod hotspots;
 mod lights;
 mod look;
 mod lut;
+mod materials;
 mod props;
 mod render;
 mod screens;
@@ -109,6 +110,7 @@ impl Plugin for ScenePlugin {
                 thumbnails::ThumbnailsPlugin,
                 animated::AnimatedPlugin,
                 bevy_fixes::BevyFixesPlugin,
+                materials::MaterialsPlugin,
             ))
             .add_plugins((
                 fog::FogPlugin,

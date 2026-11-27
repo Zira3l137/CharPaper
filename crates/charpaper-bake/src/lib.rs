@@ -5,6 +5,7 @@
 mod cube;
 mod filter;
 mod ktx2;
+pub mod mipmaps;
 mod panorama;
 mod sun;
 
