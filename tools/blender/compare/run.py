@@ -38,7 +38,11 @@ VARIANTS = {
 }
 
 
+KINDS = ("objects", "meshes", "lights", "cameras", "scenes", "images", "materials", "shape_keys", "actions")
+
+
 def export(blend, folder, unpacked, settings):
+    """Exports, and returns how many data blocks the export left behind in the .blend."""
     bpy.ops.wm.open_mainfile(filepath=blend)
     suite = bpy.context.scene.charpaper
     shutil.rmtree(folder, ignore_errors=True)
@@ -46,7 +50,15 @@ def export(blend, folder, unpacked, settings):
     suite.export_unpacked = unpacked
     for name, value in settings.items():
         setattr(suite.gltf, name, value)
+    before = {kind: set(getattr(bpy.data, kind).keys()) for kind in KINDS}
     bpy.ops.charpaper.export(what="ALL", index=-1)
+    left = 0
+    for kind, names in before.items():
+        new = sorted(set(getattr(bpy.data, kind).keys()) - names)
+        if new:
+            print(f"DIFFERS: {'unpacked' if unpacked else 'packed'} export left {kind} behind: {new[:6]}")
+            left += len(new)
+    return left
 
 
 def main(work):
@@ -63,8 +75,8 @@ def main(work):
         print(f"\n== {variant}")
         loose = os.path.join(work, variant, "loose")
         packed = os.path.join(work, variant, "packed")
-        export(blend, loose, True, settings)
-        export(blend, packed, False, settings)
+        problems += export(blend, loose, True, settings)
+        problems += export(blend, packed, False, settings)
         pack = suite_files.native.Pack(os.path.join(packed, suite_files.native.PACK_FILE))
         scenes = ["model.glb", "environment/Room.glb"]
         scenes += sorted(p for f in ("skins", "cameras") for p in pack.files_in(f) if p.endswith(".glb"))
