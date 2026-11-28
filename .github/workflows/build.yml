@@ -58,9 +58,10 @@ jobs:
           key: ${{ matrix.target }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # Only the Bevy-free crates: their tests are quick, and they guard the suite format.
+      # Only the Bevy-free crates: their tests are quick, and they guard the suite format, the pack
+      # and what the add-on's packed export writes.
       - name: Test
-        run: cargo test --locked --no-fail-fast --target ${{ matrix.target }} -p charpaper-suite -p charpaper-bake -p charpaper-gaze -p charpaper-update
+        run: cargo test --locked --no-fail-fast --target ${{ matrix.target }} -p charpaper-suite -p charpaper-bake -p charpaper-gaze -p charpaper-update -p charpaper-pack -p charpaper-gltf -p charpaper-anim -p charpaper-drivers
 
       - name: Build
         run: cargo build --locked --release --target ${{ matrix.target }} -p charpaper
