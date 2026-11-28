@@ -36,6 +36,27 @@ def available():
     return native is not None
 
 
+def call(write, *args, **kwargs):
+    """Calls one of charpaper_pack's writers. PyO3 raises TypeError when what the add-on hands
+    the module doesn't fit what it takes, which happens when the module comes from another
+    build than the add-on's Python, so the error says which module Blender found."""
+    try:
+        return write(*args, **kwargs)
+    except TypeError as error:
+        raise RuntimeError(
+            f"{_chain(error)}. The charpaper_pack module at {os.path.dirname(native.__file__)} "
+            "doesn't match this add-on; install both from the same build"
+        ) from error
+
+
+def _chain(error):
+    found = []
+    while error is not None:
+        found.append(f"missing {error}" if isinstance(error, KeyError) else str(error))
+        error = error.__cause__
+    return ": ".join(found)
+
+
 def pack_path(folder):
     return os.path.join(folder, PACK_FILE)
 

@@ -304,7 +304,8 @@ def _write_nodes(context, suite, actor, clip, path, nodes):
             poses, objects = sample(frames, copy if bones else None, [copy] if moves_itself else [])
             if bones:
                 bones["poses"] = poses
-            suite_files.native.write_clip(
+            suite_files.call(
+                suite_files.native.write_clip,
                 path,
                 clip.name,
                 len(frames),

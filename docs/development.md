@@ -110,6 +110,8 @@ maturin build -m crates/charpaper-py/Cargo.toml --out dist
 - Each Blender version has its own Python and extensions folder: do both for each you test.
 - The panel shows *Export unpacked* once Blender finds the module, and says it isn't
   installed when it doesn't.
+- A module older than the Python files fails the export with *the charpaper_pack module at …
+  doesn't match this add-on*, naming the folder Blender loaded it from. Install it again.
 
 ### Checking packed exports against Blender's
 

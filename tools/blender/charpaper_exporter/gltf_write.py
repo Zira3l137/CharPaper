@@ -106,7 +106,7 @@ def write(context, iso, path, suite, lights=False, cameras=False, animation=None
         iso.scene.frame_set(frame)
     materials = _materials(context, meshes, suite) if meshes else None
     try:
-        suite_files.native.write_scene(path, description, materials)
+        suite_files.call(suite_files.native.write_scene, path, description, materials)
     except ValueError as error:
         raise Unsupported(str(error)) from error
 
