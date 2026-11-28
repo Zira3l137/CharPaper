@@ -4,7 +4,7 @@
 
 At a glance. The [recipes](making-a-character.md#recipes) have the details.
 
-**Blender versions:** 4.2 to 5.2. In 4.4 and newer, one action can key bones and shape keys
+**Blender versions:** 4.2 to 5.3. In 4.4 and newer, one action can key bones and shape keys
 together (slots); in 4.2 and 4.3, a clip's shape keys go in a second action, its
 **Also plays**.
 
@@ -18,6 +18,7 @@ together (slots); in 4.2 and 4.3, a clip's shape keys go in a second action, its
 | Up to 4 bones on a vertex | More (the 4 strongest are kept) |
 | Sizes in meters: one Blender unit is one meter | *Unit Scale* (ignored) |
 | Shape keys, up to 256 a mesh | Draco or meshopt compressed files |
+| Linked duplicates (*Alt+D*) and collection instances, each mesh kept once | Geometry Nodes instances (*Realize Instances* first) |
 | Shape key drivers that read bones or other shape keys | Drivers using Python, other objects, custom properties or the frame |
 | Actions on the armature, as clips on the timeline, played once or held | Animation of material or camera settings, visibility, modifiers |
 | Shape keys keyed in a clip, on any mesh of the skin | Keys on a shape key that also has a driver (the driver wins) |

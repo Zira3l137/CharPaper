@@ -8,7 +8,8 @@ Two kinds of builds come out of GitHub Actions, both on the
 | Nightly | every push to `main`          | `nightly`, replaced each time | commits since the last version |
 | Version | a tag like `v0.2.0` is pushed | `v0.2.0`, kept forever | commits since the previous version |
 
-Each one carries the app for every platform (`charpaper-<label>-windows-x64.zip`), the
+Each one carries the app for each platform it's built for, today Windows
+(`charpaper-<label>-windows-x64.zip`), the
 Blender add-on for every platform Blender runs on (`charpaper_exporter-<label>-windows-x64.zip`,
 `-linux-x64`, `-macos-arm64`, `-macos-x64`) and `SHA256SUMS.txt`. Each add-on zip carries
 its platform's `charpaper_pack` wheel, which Blender installs with it; the Build workflow

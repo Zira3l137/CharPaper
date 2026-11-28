@@ -97,8 +97,9 @@ Both play the same frame of the same loop, as in Blender.
   hold hotspots.
 - Give each prop a unique name: the clip folder is named after it, and two props whose
   names make the same folder name overwrite each other (Check warns).
-- For repeated props use linked duplicates (*Alt+D*). Objects sharing a mesh share it in
-  the file, and the app keeps it in memory once.
+- For repeated props use linked duplicates (*Alt+D*) or collection instances (*Add →
+  Collection Instance*). Objects sharing a mesh share it in the file, and the app keeps it
+  in memory once.
 
 ## A screen that plays a GIF
 

@@ -20,6 +20,9 @@ See also: [Testing your character](making-a-character.md#testing-your-character)
 | The log says the schema version isn't supported | The suite was exported by an older add-on. Install the add-on from the same release as the app, open the .blend, and **Export all**. |
 | A hotspot names a clip or expression that doesn't exist | A clip was renamed or removed after the hotspot was made. Fix the hotspot in the add-on and export again. |
 | My new default in suite.toml is ignored | The app remembers your last pick. Delete `state.toml`. |
+| A file I changed by hand in the suite folder makes no difference | The suite is packed: the app reads `suite.chr`, and loose files beside it never show. Tick **Export unpacked** and export again, then change the loose files. |
+| Export says the suite is packed and the add-on can neither unpack nor pack it | The add-on was installed without its `charpaper_pack` module: from source, or from another system's zip. Install it from the release for your system. |
+| The log says suite.chr *is damaged* or *is pack format …* | The pack was cut short while copying, or was exported by another release of the add-on. Export the suite again with the add-on from the app's release. |
 | The character stopped loading after I changed the export format | Files of the old format are still there, and a `.glb` and a `.gltf` of the same name clash. Delete the old ones. |
 | The character stays in its rest pose, or parts of the outfit stay behind | Bone names, or the armature object's name, differ between files. Export the model, skins and animations again from the same .blend. |
 | An animation is missing, and the log says a `.glb` *has no .json beside it* | A clip's two files were copied by hand and one was left behind, or an old export left a stray file. Export the clip again, or delete the lone `.glb`. |

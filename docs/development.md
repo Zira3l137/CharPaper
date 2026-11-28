@@ -113,8 +113,8 @@ maturin build -m crates/charpaper-py/Cargo.toml --out dist
 
 ### Checking packed exports against Blender's
 
-A packed export writes the model, skins and clips with `charpaper_pack` instead of Blender's
-glTF exporter, and they should come out the same.
+A packed export writes the model, skins, environments, cameras and clips with `charpaper_pack`
+instead of Blender's glTF exporter, and they should come out the same.
 [`tools/blender/compare`](../tools/blender/compare) checks that. It builds a test character
 and exports it both ways three times: as it is, with *Deform bones only*, and with every second
 frame. Then it compares every model, skin, environment, camera and clip file between the two,
@@ -128,8 +128,9 @@ Blender's Python needs `charpaper_pack` for this, installed as
 [above](#working-on-the-add-on-from-a-checkout), or run the script with the
 [bpy module](https://pypi.org/project/bpy/) from PyPI in a virtual environment that has the
 wheel. It takes about 20 seconds and prints each difference it finds, if any.
-Run it after changing `charpaper-gltf`, `gltf_write.py` or `clips.py`, and with each Blender
-version the add-on supports.
+Run it after changing `charpaper-gltf`, `gltf_write.py`, `clips.py`, `isolate.py` or
+`image_cache.py`, and with each Blender version the add-on supports. It also fails when an
+export leaves data behind in the .blend.
 
 [RELEASING.md](../RELEASING.md) explains how versions and nightly builds are made.
 

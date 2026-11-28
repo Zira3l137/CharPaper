@@ -11,7 +11,9 @@ engines or code.
 ## How a character is put together
 
 What the app calls a character is a folder, called a **suite**, inside `characters`. The
-Blender add-on writes all of it for you. It looks like this:
+Blender add-on writes all of it for you: `suite.toml`, the settings you can read and edit,
+and `suite.chr`, one file that packs every other file of the suite. Inside the pack, or
+loose in the folder if you tick **Export unpacked**, it looks like this:
 
 ```
 characters/
@@ -174,7 +176,7 @@ The tab has these panels, top to bottom:
 
 | Panel | What's in it |
 |---|---|
-| **Suite** | The name, where CharPaper is and where the character goes, the timeline (read from your scene), what the app starts with, and the **Check**, **Sync** and **Export all** buttons. |
+| **Suite** | The name, where CharPaper is and where the character goes, the timeline (read from your scene), what the app starts with, **Export unpacked**, and the **Check**, **Sync** and **Export all** buttons. |
 | **Character** | The armature. Under it: **Skins** (outfits), **Expressions** (faces) and **Gaze** (following the cursor). |
 | **Animation** | Everything that moves, grouped: the character first, then each environment's objects. Pick one to see and edit its clips. |
 | **Environments** | The places, their sky, and under each, **Sound**: its music and ambience. |

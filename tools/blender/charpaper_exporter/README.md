@@ -1,6 +1,6 @@
 # CharPaper Exporter
 
-A Blender add-on (4.2 to 5.2) that exports a whole CharPaper character suite from one
+A Blender add-on (4.2 to 5.3) that exports a whole CharPaper character suite from one
 `.blend`: the model, skins, clips, expressions, environments, cameras, hotspots, and
 `suite.toml`. The step-by-step guide for artists is
 [Making a character](../../../docs/making-a-character.md); this page is the fine print.
