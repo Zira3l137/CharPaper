@@ -1,4 +1,5 @@
-"""Model and skin files written by charpaper_pack, in place of Blender's glTF exporter.
+"""Model, skin, environment and camera files written by charpaper_pack, in place of
+Blender's glTF exporter.
 
 Blender's exporter spends most of a skin in Python, turning every corner of every mesh into a
 glTF vertex. Here the add-on reads each mesh out in a few bulk calls, and charpaper_pack builds
@@ -12,20 +13,27 @@ then left to Blender's exporter whole.
 """
 
 import array
+import math
 import os
 import shutil
 import tempfile
 
 import bpy
 from mathutils import Matrix
+from mathutils import Quaternion
 
 from . import gltf
 from . import suite_files
 from .isolate import showing
 
 Y_UP = Matrix(((1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0.0, -1.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+# glTF's cameras and lights look down their -Z with +Y up, Blender's down -Z with +Y up in their
+# own Z-up space: the exporter turns them -90° about X to match.
+TURN = Quaternion((2**0.5 / 2, -(2**0.5) / 2, 0.0, 0.0)).to_matrix().to_4x4()
 MIN_INFLUENCE = 0.0001
 TYPES = {"MESH", "EMPTY", "ARMATURE"}
+WATTS_TO_LUMENS = 683
+LIGHT_KINDS = {"POINT": "point", "SPOT": "spot", "SUN": "directional"}
 
 
 class Unsupported(Exception):
@@ -36,17 +44,24 @@ def available():
     return hasattr(suite_files.native, "write_scene")
 
 
-def write(context, iso, path, suite):
-    """Writes the isolated scene as Blender's exporter does with the panel's settings, without
-    lights, cameras or animation. Raises Unsupported, having written nothing, for what it can't."""
+def write(context, iso, path, suite, lights=False, cameras=False, animation=None):
+    """Writes the isolated scene as Blender's exporter does with the panel's settings, with its
+    lights and cameras if asked. `animation`, if given, is called with the node tree once the
+    meshes are read and returns what plays in the file, as write_scene takes it. Raises
+    Unsupported, having written nothing, for what it can't."""
     settings = suite.gltf
     if settings.file_format != "GLB":
         raise Unsupported("files are .gltf + .bin")
     if settings.vertex_color == "ACTIVE":
         raise Unsupported("Vertex colors is Active")
     with showing(context, iso.scene):
+        # The exporter writes the scene as it stands on frame 0, then goes back. A new scene
+        # has no depsgraph until asked for one, and frame_set alone would then move nothing.
+        frame = iso.scene.frame_current
+        context.evaluated_depsgraph_get()
+        iso.scene.frame_set(0)
         depsgraph = context.evaluated_depsgraph_get()
-        tree = _Tree(iso.scene, settings)
+        tree = _Tree(iso.scene, settings, lights, cameras)
         meshes = []
         try:
             for node in tree.nodes:
@@ -62,12 +77,82 @@ def write(context, iso, path, suite):
             "roots": tree.roots,
             "skins": tree.skin_descriptions(),
             "meshes": [m.description for m in meshes],
+            "lights": tree.lights,
+            "cameras": tree.cameras,
+            "animation": animation(tree) if animation is not None else None,
         }
+        iso.scene.frame_set(frame)
     materials = _materials(context, meshes, suite) if meshes else None
     try:
         suite_files.native.write_scene(path, description, materials)
     except ValueError as error:
         raise Unsupported(str(error)) from error
+
+
+def _shared(index_of, found, data, describe, context):
+    # One glTF light or camera for each Blender one, however many objects show it.
+    if data not in index_of:
+        description = describe(data, context)
+        index_of[data] = None if description is None else len(found)
+        if description is not None:
+            found.append(description)
+    return index_of[data]
+
+
+def _emits_through_nodes(lamp):
+    tree = lamp.node_tree if getattr(lamp, "use_nodes", False) else None
+    return tree is not None and any(n.type == "EMISSION" for n in tree.nodes)
+
+
+def _light(lamp, settings):
+    """The light as the exporter's gather_lights_punctual makes it; None for an area light,
+    which glTF has no light for."""
+    kind = LIGHT_KINDS.get(lamp.type)
+    if kind is None:
+        return None
+    if _emits_through_nodes(lamp):
+        raise Unsupported(f"the light {lamp.name} shines through its nodes")
+    intensity = lamp.energy
+    if settings.lighting_mode != "RAW":
+        if lamp.type != "SUN":
+            intensity /= 4 * math.pi
+        if settings.lighting_mode == "SPEC":
+            intensity *= WATTS_TO_LUMENS
+    cone = None
+    if lamp.type == "SPOT":
+        angle = lamp.spot_size * 0.5
+        cone = (angle - angle * lamp.spot_blend, angle)
+    return {
+        "name": lamp.name,
+        "kind": kind,
+        "color": list(lamp.color),
+        "intensity": intensity,
+        "range": lamp.cutoff_distance if lamp.use_custom_distance else None,
+        "cone": cone,
+    }
+
+
+def _camera(camera, scene):
+    """The camera as the exporter's gather_camera makes it, its aspect the scene's render size;
+    None for a panoramic one."""
+    render = scene.render
+    width = render.resolution_x * render.pixel_aspect_x
+    height = render.resolution_y * render.pixel_aspect_y
+    found = {"name": camera.name, "znear": camera.clip_start, "zfar": camera.clip_end}
+    found.update(aspect_ratio=None, yfov=None, xmag=None, ymag=None)
+    if camera.type == "PERSP":
+        aspect = width / height
+        fits_width = camera.sensor_fit != "VERTICAL" if width >= height else camera.sensor_fit == "HORIZONTAL"
+        yfov = 2.0 * math.atan(math.tan(camera.angle * 0.5) / aspect) if fits_width else camera.angle
+        found.update(kind="perspective", aspect_ratio=aspect, yfov=yfov)
+    elif camera.type == "ORTHO":
+        square = max(width, height)
+        xmag = camera.ortho_scale * (width / square) / 2
+        ymag = camera.ortho_scale * (height / square) / 2
+        found.update(kind="orthographic", xmag=xmag, ymag=ymag)
+    else:
+        return None
+    return found
 
 
 def _flat(matrix):
@@ -90,6 +175,8 @@ class _Node:
         self.original = None
         self.mesh = None
         self.skin = None
+        self.light = None
+        self.camera = None
 
     def description(self):
         return {
@@ -98,6 +185,8 @@ class _Node:
             "children": [c.index for c in self.children],
             "mesh": self.mesh,
             "skin": self.skin,
+            "light": self.light,
+            "camera": self.camera,
         }
 
 
@@ -105,14 +194,18 @@ class _Tree:
     """The exporter's node tree: objects as Blender parents them, an armature's bones under it,
     and their world matrices as the exporter works them out, with armatures at rest."""
 
-    def __init__(self, scene, settings):
+    def __init__(self, scene, settings, lights=False, cameras=False):
         self.settings = settings
         self.nodes = []
         self.bone_nodes = {}
         self.skins = {}
+        # The types the exporter turns, as it does only when it exports them.
+        self.turned = {t for t, on in (("LIGHT", lights), ("CAMERA", cameras)) if on}
+        self.lights = []
+        self.cameras = []
         objects = [o for o in scene.objects]
         for obj in objects:
-            if obj.type not in TYPES:
+            if obj.type not in TYPES | self.turned:
                 raise Unsupported(f"{obj.name} is a {obj.type.lower()}")
             if obj.instance_type != "NONE":
                 raise Unsupported(f"{obj.name} instances something")
@@ -123,6 +216,12 @@ class _Tree:
             node.children.extend(node.late)
         for node in self.nodes:
             node.local = self._local(node)
+        lights_of, cameras_of = {}, {}
+        for node in self.nodes:
+            if node.obj is not None and node.obj.type == "LIGHT":
+                node.light = _shared(lights_of, self.lights, node.obj.data, _light, settings)
+            elif node.obj is not None and node.obj.type == "CAMERA":
+                node.camera = _shared(cameras_of, self.cameras, node.obj.data, _camera, scene)
         # Every armature gets its skin, as in Blender's files, used by a mesh or not.
         for node in self.nodes:
             if node.obj is not None and node.obj.type == "ARMATURE":
@@ -146,8 +245,13 @@ class _Tree:
             node.original = node.world
             node.world = rest @ (pose.inverted_safe() @ node.world)
         elif parent is not None and parent.original is not None:
+            node.world = node.world @ self._turn(obj)
             node.original = node.world
             node.world = parent.world @ (parent.original.inverted_safe() @ node.world)
+        # In the exporter's order: after moving to a bone's rest, before following a parent's
+        # move to one.
+        if node.original is None or parent.bone is not None:
+            node.world = node.world @ self._turn(obj)
         if obj.type == "ARMATURE":
             self._add_bones(obj, node)
         for child in sorted(obj.children, key=lambda c: c.name):
@@ -161,6 +265,9 @@ class _Tree:
             else:
                 raise Unsupported(f"{child.name} is parented to its {child.parent_type.lower()}")
         return node
+
+    def _turn(self, obj):
+        return TURN if obj.type in self.turned else Matrix.Identity(4)
 
     def _exported(self, bone):
         return bone.use_deform or not self.settings.deform_bones_only

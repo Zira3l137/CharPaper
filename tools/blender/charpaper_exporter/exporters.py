@@ -1,5 +1,7 @@
 import os
 
+import bpy
+
 from . import actors
 from . import anim
 from . import animated
@@ -63,13 +65,14 @@ def _run(context, isolation, filepath, options):
     return result
 
 
-def _write(context, suite, isolation, files, filepath, options):
+def _write(context, suite, isolation, files, filepath, options, **written):
     """In a packed export, the file as charpaper_pack writes it, unless it says it can't write
-    it as Blender's exporter would; then, and in an unpacked export, Blender's exporter's."""
+    it as Blender's exporter would; then, and in an unpacked export, Blender's exporter's.
+    `written` goes to gltf_write.write: what of lights, cameras and animation the file has."""
     if files.packed and gltf_write.available():
         isolation.finish()
         try:
-            gltf_write.write(context, isolation, filepath, suite)
+            gltf_write.write(context, isolation, filepath, suite, **written)
             return Result(filepath)
         except gltf_write.Unsupported as why:
             print(f"CharPaper: {os.path.basename(filepath)} is left to Blender's glTF exporter: {why}")
@@ -207,9 +210,10 @@ def _environment_scene(context, suite, entry, files):
                     if white:
                         copy.data.color = (1.0, 1.0, 1.0)
                 lights.give_range(copy.data, threshold)
-        result = _run(
-            context, iso, path,
+        result = _write(
+            context, suite, iso, files, path,
             _options(suite, export_animations=False, export_lights=True, export_cameras=False),
+            lights=True,
         )
     gifs = f"{ENVIRONMENT_DIR}/{file_stem(entry.name)}/{animated.ANIMATED_DIR}"
     result.written, notes = animated.copy_gifs(objects, files, gifs)
@@ -231,6 +235,34 @@ def _active_action(obj):
 # A moving camera plays on the timeline, so its action is padded to the scene's frame range
 # as a clip is, and its file is a .glb: the app reads it as its clip's .glb, beside a .json
 # that names the nodes moving in it.
+def _camera_motion(suite, copies, clip, tree):
+    """The camera file's animation as Blender's exporter samples it: each moving copy over its
+    own NLA strip, from its first frame, a channel nothing keys left out while it holds still."""
+    spans = set()
+    for copy in copies:
+        strip = copy.animation_data.nla_tracks[clip].strips[0]
+        spans.add((int(strip.frame_start), int(strip.frame_end)))
+    if len(spans) != 1:
+        raise gltf_write.Unsupported("the camera's moving objects play over different frames")
+    (first, last), = spans
+    step = suite.gltf.frame_step
+    frames = range(first, last + 1, step)
+    _, objects = clips.sample(frames, objects=copies)
+    kinds = {}
+    for copy in copies:
+        kinds[copy.name] = clips.channel_kinds(copy, clip).get(copy.name, ("baked",) * 3)
+    return {
+        "name": clip,
+        "samples": len(frames),
+        "step_seconds": step / clips.fps(bpy.context.scene),
+        "optimize": suite.gltf.optimize_animation,
+        "drop_still_baked": True,
+        "objects": objects,
+        "turned": [copy.name for copy in copies if copy.type in tree.turned],
+        "channels": kinds,
+    }
+
+
 def camera(context, suite, entry, files):
     scene = context.scene
     moving = entry.action is not None
@@ -259,17 +291,23 @@ def camera(context, suite, entry, files):
                 if action is not None and clip is not None:
                     anim.object_track(iso.copies[obj], clip, action, frames)
                     moved.append(iso.copies[obj].name)
-        result = _run(
-            context, iso, path,
-            _options(
-                suite,
-                export_animations=clip is not None,
-                export_animation_mode="NLA_TRACKS",
-                export_lights=False,
-                export_cameras=True,
-                **({"export_format": "GLB"} if moving else {}),
-            ),
+        options = _options(
+            suite,
+            export_animations=clip is not None,
+            export_animation_mode="NLA_TRACKS",
+            export_lights=False,
+            export_cameras=True,
+            **({"export_format": "GLB"} if moving else {}),
         )
+        if clip is not None and not suite.gltf.force_sampling:
+            # Blender's exporter then writes the keys as they are, which this writer doesn't.
+            result = _run(context, iso, path, options)
+        else:
+            motion = None
+            if clip is not None:
+                copies = [obj for obj in iso.scene.objects if obj.name in moved]
+                motion = lambda tree: _camera_motion(suite, copies, clip, tree)
+            result = _write(context, suite, iso, files, path, options, cameras=True, animation=motion)
     json_path = os.path.splitext(path)[0] + ".json"
     if moving:
         if entry.action.use_frame_range:

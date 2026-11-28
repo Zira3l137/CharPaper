@@ -58,9 +58,9 @@ The Blender add-on is in [`tools/blender/charpaper_exporter`](../tools/blender/c
 
 The add-on packs suites and bakes skies through `charpaper_pack`, a Python module written
 in Rust, in [`crates/charpaper-py`](../crates/charpaper-py), so it runs the app's own code
-for both. A packed export also writes its model, skin and clip files through it, with
-[`crates/charpaper-gltf`](../crates/charpaper-gltf), which is much faster than Blender's glTF
-exporter. It's built as a wheel with [maturin](https://www.maturin.rs), 1.9.4 or newer:
+for both. A packed export also writes its model, skin, environment, camera and clip files
+through it, with [`crates/charpaper-gltf`](../crates/charpaper-gltf), which is much faster
+than Blender's glTF exporter. It's built as a wheel with [maturin](https://www.maturin.rs), 1.9.4 or newer:
 
 ```
 pip install maturin
@@ -83,8 +83,8 @@ A packed export writes the model, skins and clips with `charpaper_pack` instead 
 glTF exporter, and they should come out the same.
 [`tools/blender/compare`](../tools/blender/compare) checks that. It builds a test character
 and exports it both ways three times: as it is, with *Deform bones only*, and with every second
-frame. Then it compares every model, skin and clip file between the two, vertex by vertex and
-frame by frame:
+frame. Then it compares every model, skin, environment, camera and clip file between the two,
+vertex by vertex and frame by frame:
 
 ```
 blender -b --factory-startup --python tools/blender/compare/run.py -- <work folder>

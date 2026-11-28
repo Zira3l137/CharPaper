@@ -295,40 +295,123 @@ def _write_nodes(context, suite, actor, clip, path, nodes):
     step = suite.gltf.frame_step
     frames = range(start, end + 1, step)
     # The stand-in takes the actor's name, so the actor's own name changes once isolated.
-    name = actor.obj.name
-    moves_itself = name in nodes
+    moves_itself = actor.obj.name in nodes
     with isolated(context) as iso:
         copy = iso.stand_in_with_ancestors(actor.obj)
         anim.object_track(copy, clip.name, clip.action, (start, end), clip.slot)
         iso.finish()
         with showing(context, iso.scene):
             bones = _bone_layout(suite, copy, nodes) if copy.type == "ARMATURE" else None
-            count = len(copy.pose.bones) if bones else 0
-            poses = array.array("f", bytes(64 * count * len(frames)))
-            locals_ = array.array("f", bytes(64 * len(frames)))
-            frame_poses = array.array("f", bytes(64 * count))
-            # A new scene has no depsgraph until asked for one, and frame_set alone then
-            # leaves every pose as it was. The glTF exporter asks first too.
-            depsgraph = bpy.context.evaluated_depsgraph_get()
-            for i, frame in enumerate(frames):
-                bpy.context.scene.frame_set(frame)
-                if bones:
-                    copy.pose.bones.foreach_get("matrix", frame_poses)
-                    poses[i * 16 * count:(i + 1) * 16 * count] = frame_poses
-                if moves_itself:
-                    # Read evaluated: Blender copies an evaluated matrix back only to objects
-                    # that moved, and a still parent's stand-in would read as the identity.
-                    moved = copy.evaluated_get(depsgraph)
-                    local = _parent_matrix(moved).inverted_safe() @ moved.matrix_world
-                    locals_[i * 16:(i + 1) * 16] = array.array("f", _flat(local))
+            poses, objects = sample(frames, copy if bones else None, [copy] if moves_itself else [])
             if bones:
-                bones["poses"] = poses.tobytes()
-            objects = [(name, locals_.tobytes())] if moves_itself else []
-            fps_ = fps(scene)
+                bones["poses"] = poses
             suite_files.native.write_clip(
-                path, clip.name, len(frames), step / fps_, suite.gltf.optimize_animation, bones=bones, objects=objects
+                path,
+                clip.name,
+                len(frames),
+                step / fps(scene),
+                suite.gltf.optimize_animation,
+                bones=bones,
+                objects=objects,
+                channels=channel_kinds(copy, clip.name),
             )
     return []
+
+
+def sample(frames, armature=None, objects=()):
+    """Plays the scene shown over `frames` and reads, each frame, every pose bone's matrix of
+    `armature` and each of `objects`' matrix relative to its parent, as the glTF exporter samples
+    them. Returns the poses and (name, matrices) for each object, as float32 bytes."""
+    count = len(armature.pose.bones) if armature is not None else 0
+    poses = array.array("f", bytes(64 * count * len(frames)))
+    locals_ = [array.array("f", bytes(64 * len(frames))) for _ in objects]
+    frame_poses = array.array("f", bytes(64 * count))
+    # A new scene has no depsgraph until asked for one, and frame_set alone then
+    # leaves every pose as it was. The glTF exporter asks first too.
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    for i, frame in enumerate(frames):
+        bpy.context.scene.frame_set(frame)
+        if count:
+            armature.pose.bones.foreach_get("matrix", frame_poses)
+            poses[i * 16 * count:(i + 1) * 16 * count] = frame_poses
+        for obj, matrices in zip(objects, locals_):
+            # Read evaluated: Blender copies an evaluated matrix back only to objects that
+            # moved, and a still parent's stand-in would read as the identity.
+            moved = obj.evaluated_get(depsgraph)
+            local = _parent_matrix(moved).inverted_safe() @ moved.matrix_world
+            matrices[i * 16:(i + 1) * 16] = array.array("f", _flat(local))
+    return poses.tobytes(), [(obj.name, m.tobytes()) for obj, m in zip(objects, locals_)]
+
+
+# The exporter's get_target: the channel each transform property keys.
+_CHANNEL = {
+    "location": 0,
+    "delta_location": 0,
+    "rotation_quaternion": 1,
+    "rotation_euler": 1,
+    "rotation_axis_angle": 1,
+    "delta_rotation_quaternion": 1,
+    "delta_rotation_euler": 1,
+    "scale": 2,
+    "delta_scale": 2,
+}
+
+
+def _rotation_fits(prop, mode):
+    # The exporter skips the curves of a rotation the target doesn't use.
+    if prop in {"rotation_quaternion", "delta_rotation_quaternion"}:
+        return mode == "QUATERNION"
+    if prop == "rotation_axis_angle":
+        return mode == "AXIS_ANGLE"
+    if prop in {"rotation_euler", "delta_rotation_euler"}:
+        return mode not in {"QUATERNION", "AXIS_ANGLE"}
+    return True
+
+
+def channel_kinds(obj, track):
+    """By node name, how the glTF exporter treats the translation, rotation and scale of `obj`
+    and its bones as the NLA track `track` moves them: "keyed"; "stepped", keyed with Constant
+    interpolation on the first key; or "baked", not keyed. Nodes nothing keys are left out.
+
+    The exporter looks for the keys in the action named as the track, whichever action the
+    track plays, and finds none when there is no such action."""
+    action = bpy.data.actions.get(track)
+    if action is None:
+        return {}
+    strip = obj.animation_data.nla_tracks[track].strips[0]
+    slot = getattr(strip, "action_slot", None) if strip.action == action else None
+    found = {}
+    for curve in anim.fcurves(action, slot):
+        if len(curve.keyframe_points) == 0:
+            continue
+        path = curve.data_path
+        prop = path.rsplit(".", 1)[-1]
+        if prop not in _CHANNEL:
+            continue
+        bone = anim.BONE_PATH.match(path)
+        if bone is not None:
+            name = bone.group(1).replace('\\"', '"').replace("\\\\", "\\")
+            target = obj.pose.bones.get(name) if obj.type == "ARMATURE" else None
+            if target is None or path != f'{bone.group(0)}.{prop}':
+                continue
+        elif path == prop:
+            name, target = obj.name, obj
+        else:
+            continue
+        if _rotation_fits(prop, target.rotation_mode):
+            found.setdefault(name, {}).setdefault(prop, curve)
+    kinds = {}
+    for name, props in found.items():
+        channels = ["baked"] * 3
+        keyed = [0] * 3
+        for prop, curve in props.items():
+            index = _CHANNEL[prop]
+            keyed[index] += 1
+            stepped = curve.keyframe_points[0].interpolation == "CONSTANT"
+            # A property keyed with its delta too is sampled, so linear.
+            channels[index] = "stepped" if stepped and keyed[index] == 1 else "keyed"
+        kinds[name] = tuple(channels)
+    return kinds
 
 
 def _bone_layout(suite, armature, nodes):
