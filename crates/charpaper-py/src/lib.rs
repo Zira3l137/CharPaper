@@ -593,7 +593,7 @@ fn mesh_data(mesh: MeshArg) -> PyResult<gltf::mesh::MeshData> {
     let uvs: Vec<Vec<Vec2>> = mesh
         .uvs
         .iter()
-        .map(|layer| floats(layer).chunks_exact(2).map(Vec2::from_slice).collect())
+        .map(|layer| floats(layer).as_chunks().0.iter().map(|&uv| Vec2::from_array(uv)).collect())
         .collect();
     if uvs.iter().any(|layer: &Vec<Vec2>| layer.len() != corners) {
         return Err(wrong("UVs"));
@@ -609,8 +609,7 @@ fn mesh_data(mesh: MeshArg) -> PyResult<gltf::mesh::MeshData> {
     if triangle_corners.iter().any(|&c| c as usize >= corners) {
         return Err(wrong("triangles"));
     }
-    let triangles: Vec<[u32; 3]> =
-        triangle_corners.chunks_exact(3).map(|t| [t[0], t[1], t[2]]).collect();
+    let triangles: Vec<[u32; 3]> = triangle_corners.as_chunks().0.to_vec();
     let triangle_slots = ints(&mesh.triangle_slots);
     if triangle_slots.len() != triangles.len() {
         return Err(wrong("material slots"));
@@ -673,15 +672,15 @@ fn mesh_data(mesh: MeshArg) -> PyResult<gltf::mesh::MeshData> {
 }
 
 fn floats(bytes: &[u8]) -> Vec<f32> {
-    bytes.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect()
+    bytes.as_chunks().0.iter().map(|&b| f32::from_le_bytes(b)).collect()
 }
 
 fn ints(bytes: &[u8]) -> Vec<u32> {
-    bytes.chunks_exact(4).map(|b| u32::from_le_bytes(b.try_into().unwrap())).collect()
+    bytes.as_chunks().0.iter().map(|&b| u32::from_le_bytes(b)).collect()
 }
 
 fn vec3s(bytes: &[u8]) -> Vec<Vec3> {
-    floats(bytes).chunks_exact(3).map(Vec3::from_slice).collect()
+    floats(bytes).as_chunks().0.iter().map(|&v| Vec3::from_array(v)).collect()
 }
 
 fn matrices(bytes: &[u8], count: usize, what: &str) -> PyResult<Vec<Mat4>> {
@@ -689,9 +688,7 @@ fn matrices(bytes: &[u8], count: usize, what: &str) -> PyResult<Vec<Mat4>> {
         let message = format!("{what}: {} bytes for {count} matrices", bytes.len());
         return Err(PyValueError::new_err(message));
     }
-    let floats: Vec<f32> =
-        bytes.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect();
-    Ok(floats.chunks_exact(16).map(Mat4::from_cols_slice).collect())
+    Ok(floats(bytes).as_chunks().0.iter().map(Mat4::from_cols_array).collect())
 }
 
 /// The names of the sky maps `folder` doesn't have yet.
