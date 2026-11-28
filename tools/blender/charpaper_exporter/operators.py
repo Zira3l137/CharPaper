@@ -31,6 +31,7 @@ from . import suite_files
 from . import toml_io
 from . import validate
 from .audio import AUDIO
+from .isolate import away
 from .isolate import object_mode
 from .props import file_stem
 from .props import suite_of
@@ -471,7 +472,7 @@ class CHARPAPER_OT_export(Operator):
 
         done, failed, model_exported = [], [], False
         lenses, environments, exported, alerts = {}, {}, {}, []
-        with object_mode(context):
+        with object_mode(context), away(context):
             for kind, entry in self._jobs(suite):
                 label = entry.name if entry is not None else kind.lower()
                 missing = self._missing(context.scene, suite, kind, entry)

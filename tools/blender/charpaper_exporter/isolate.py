@@ -229,7 +229,11 @@ class Isolation:
         # In one pass: removing objects one at a time looks through the whole file for each.
         copies = [copy for original, copy in self.copies.items() if copy is not original]
         bpy.data.batch_remove([*copies, *self._bridges.values()])
-        bpy.data.batch_remove([data for data in self._data.values() if data.users == 0])
+        # By what uses them, not their count of users: the exporter can leave one behind that
+        # no data block holds.
+        owned = list(self._data.values())
+        held = bpy.data.user_map(subset=owned) if owned else {}
+        bpy.data.batch_remove([data for data in owned if not held.get(data)])
         bpy.data.scenes.remove(self.scene)
         for block, name in reversed(self._renamed):
             block.name = name
@@ -292,9 +296,60 @@ def showing(context, scene):
     previous = window.scene
     window.scene = scene
     try:
-        yield
+        with context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
+            yield
     finally:
         window.scene = previous
+        if _away:
+            _away[-1].come_back()
+
+
+# The run of exports away() is in, if any.
+_away = []
+
+
+class _Away:
+    def __init__(self, context, home, layer):
+        self.context = context
+        self.home = home
+        self.layer = layer
+        self.overrides = []
+
+    def come_back(self):
+        # Setting window.scene makes it the context's scene too, past any override: so the
+        # user's scene is overridden in again, each time, and all let go of at the end.
+        override = self.context.temp_override(scene=self.home, view_layer=self.layer)
+        override.__enter__()
+        self.overrides.append(override)
+
+    def close(self):
+        while self.overrides:
+            self.overrides.pop().__exit__(None, None, None)
+
+
+@contextmanager
+def away(context):
+    """For a run of exports: the window shows an empty scene between them, while the code
+    still finds the user's scene as context.scene. Each export makes and removes objects, and
+    Blender then rebuilds the whole of the scene the window comes back to, which in a scene of
+    thousands of objects takes a good part of a second. This way it's rebuilt once, at the end."""
+    window = context.window
+    if window is None or _away:
+        yield
+        return
+    home, layer = window.scene, context.view_layer
+    lobby = bpy.data.scenes.new("charpaper~lobby")
+    window.scene = lobby
+    run = _Away(context, home, layer)
+    _away.append(run)
+    run.come_back()
+    try:
+        yield
+    finally:
+        _away.pop()
+        run.close()
+        window.scene = home
+        bpy.data.scenes.remove(lobby)
 
 
 @contextmanager
