@@ -11,6 +11,7 @@ pub mod clip;
 pub mod mesh;
 pub mod scene;
 
+pub use clip::Channel;
 pub use clip::Clip;
 pub use clip::ClipNode;
 pub use clip::Trs;

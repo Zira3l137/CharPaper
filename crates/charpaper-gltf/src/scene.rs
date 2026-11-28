@@ -11,6 +11,7 @@ use gltf::json::mesh::Semantic;
 use gltf::json::validation::Checked::Valid;
 
 use crate::build::Glb;
+use crate::clip::Clip;
 use crate::clip::Trs;
 use crate::mesh::MeshData;
 use crate::mesh::Primitive;
@@ -25,6 +26,10 @@ pub struct Scene {
     pub roots: Vec<usize>,
     pub meshes: Vec<MeshData>,
     pub skins: Vec<Skin>,
+    pub lights: Vec<Light>,
+    pub cameras: Vec<Camera>,
+    /// What plays in the file: a moving camera's motion. Its nodes are the scene's, by name.
+    pub animation: Option<Clip>,
     /// In it, mesh `i` here is the mesh named `proxy_name(i)`, with one primitive for each of
     /// its material slots in order.
     pub materials: Option<Vec<u8>>,
@@ -37,6 +42,8 @@ pub struct Node {
     pub children: Vec<usize>,
     pub mesh: Option<usize>,
     pub skin: Option<usize>,
+    pub light: Option<usize>,
+    pub camera: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +51,37 @@ pub struct Skin {
     pub name: String,
     pub joints: Vec<usize>,
     pub inverse_binds: Vec<Mat4>,
+}
+
+/// A light as KHR_lights_punctual has it, its numbers as Blender's exporter works them out.
+#[derive(Debug, Clone)]
+pub struct Light {
+    pub name: String,
+    pub kind: LightKind,
+    pub color: [f32; 3],
+    pub intensity: f32,
+    pub range: Option<f32>,
+    /// A spot's inner and outer cone angles.
+    pub cone: Option<(f32, f32)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LightKind {
+    Point,
+    Spot,
+    Directional,
+}
+
+#[derive(Debug, Clone)]
+pub struct Camera {
+    pub name: String,
+    pub projection: Projection,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Projection {
+    Perspective { aspect_ratio: f32, yfov: f32, znear: f32, zfar: f32 },
+    Orthographic { xmag: f32, ymag: f32, znear: f32, zfar: f32 },
 }
 
 /// The name of mesh `index`'s stand-in in the materials file.
@@ -88,8 +126,19 @@ impl Scene {
             });
         }
 
+        let lights: Vec<_> = self.lights.iter().map(light).collect();
+        if !lights.is_empty() {
+            let extensions = glb.root.extensions.get_or_insert_with(Default::default);
+            extensions.khr_lights_punctual =
+                Some(json::extensions::root::KhrLightsPunctual { lights });
+            used(&mut glb.root.extensions_used, "KHR_lights_punctual");
+        }
+        for camera in &self.cameras {
+            glb.root.push(write_camera(camera));
+        }
+
         for node in &self.nodes {
-            let Trs { translation, rotation, scale } = node.trs;
+            let Trs { translation, rotation, scale } = near(node.trs);
             let children =
                 node.children.iter().map(|&c| json::Index::new(c as u32)).collect::<Vec<_>>();
             glb.root.push(json::Node {
@@ -101,8 +150,33 @@ impl Scene {
                 rotation: (rotation != Quat::IDENTITY)
                     .then(|| json::scene::UnitQuaternion(rotation.to_array())),
                 scale: (scale != Vec3::ONE).then(|| scale.into()),
+                camera: node.camera.map(|c| json::Index::new(c as u32)),
+                // Built up from the default: Bevy's build adds fields to it.
+                extensions: node.light.map(|l| {
+                    let mut extensions = json::extensions::scene::Node::default();
+                    extensions.khr_lights_punctual =
+                        Some(json::extensions::scene::khr_lights_punctual::KhrLightsPunctual {
+                            light: json::Index::new(l as u32),
+                        });
+                    extensions
+                }),
                 ..Default::default()
             });
+        }
+        if let Some(clip) = &self.animation {
+            let nodes = clip
+                .nodes
+                .iter()
+                .map(|moved| {
+                    let index = self.nodes.iter().position(|n| n.name == moved.name);
+                    index.map(|i| json::Index::new(i as u32)).ok_or_else(|| {
+                        format!("{} moves in the animation but isn't in the file", moved.name)
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if let Some(animation) = clip.animation(&mut glb, &nodes) {
+                glb.root.push(animation);
+            }
         }
         let scene = glb.root.push(json::Scene {
             extensions: None,
@@ -160,12 +234,16 @@ fn take_materials(
             image["bufferView"] = serde_json::json!(glb.view(data.to_vec()).value());
         }
     }
-    for key in
-        ["materials", "textures", "samplers", "images", "extensionsUsed", "extensionsRequired"]
-    {
+    for key in ["materials", "textures", "samplers", "images"] {
         if let Some(value) = object.remove(key) {
             glb.raw.insert(key.into(), value);
         }
+    }
+    for name in &proxy.extensions_used {
+        used(&mut glb.root.extensions_used, name);
+    }
+    for name in &proxy.extensions_required {
+        used(&mut glb.root.extensions_required, name);
     }
     Ok(slots)
 }
@@ -246,5 +324,81 @@ fn write_mesh(
         name: Some(mesh.name.clone()),
         primitives: written,
         weights: (!names.is_empty()).then(|| mesh.shape_keys.iter().map(|k| k.weight).collect()),
+    }
+}
+
+fn used(list: &mut Vec<String>, extension: &str) {
+    if !list.iter().any(|e| e == extension) {
+        list.push(extension.to_owned());
+    }
+}
+
+// As the exporter's round_if_near: what is within float noise of the identity is the identity,
+// and left out.
+fn near(trs: Trs) -> Trs {
+    let snap = |v: f32, to: f32| if (v - to).abs() > 2.0e-6 { v } else { to };
+    let Trs { translation: t, rotation: r, scale: s } = trs;
+    Trs {
+        translation: t.map(|v| snap(v, 0.0)),
+        rotation: Quat::from_xyzw(snap(r.x, 0.0), snap(r.y, 0.0), snap(r.z, 0.0), snap(r.w, 1.0)),
+        scale: s.map(|v| snap(v, 1.0)),
+    }
+}
+
+fn light(light: &Light) -> json::extensions::scene::khr_lights_punctual::Light {
+    use json::extensions::scene::khr_lights_punctual as khr;
+    let kind = match light.kind {
+        LightKind::Point => khr::Type::Point,
+        LightKind::Spot => khr::Type::Spot,
+        LightKind::Directional => khr::Type::Directional,
+    };
+    khr::Light {
+        color: light.color,
+        extensions: None,
+        extras: Default::default(),
+        intensity: light.intensity,
+        name: Some(light.name.clone()),
+        range: light.range,
+        spot: light
+            .cone
+            .map(|(inner, outer)| khr::Spot { inner_cone_angle: inner, outer_cone_angle: outer }),
+        type_: Valid(kind),
+    }
+}
+
+fn write_camera(camera: &Camera) -> json::Camera {
+    let (perspective, orthographic, kind) = match camera.projection {
+        Projection::Perspective { aspect_ratio, yfov, znear, zfar } => (
+            Some(json::camera::Perspective {
+                aspect_ratio: Some(aspect_ratio),
+                yfov,
+                zfar: Some(zfar),
+                znear,
+                extensions: None,
+                extras: Default::default(),
+            }),
+            None,
+            json::camera::Type::Perspective,
+        ),
+        Projection::Orthographic { xmag, ymag, znear, zfar } => (
+            None,
+            Some(json::camera::Orthographic {
+                xmag,
+                ymag,
+                zfar,
+                znear,
+                extensions: None,
+                extras: Default::default(),
+            }),
+            json::camera::Type::Orthographic,
+        ),
+    };
+    json::Camera {
+        name: Some(camera.name.clone()),
+        orthographic,
+        perspective,
+        type_: Valid(kind),
+        extensions: None,
+        extras: Default::default(),
     }
 }

@@ -3,9 +3,9 @@
 Every call lets go of Python's lock while it works, so Blender keeps drawing.
 """
 
-from collections.abc import Buffer, Callable, Iterable, Sequence
+from collections.abc import Buffer, Callable, Iterable, Mapping, Sequence
 from os import PathLike
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 VERSION: int
 """The pack format this module reads and writes."""
@@ -90,6 +90,10 @@ def bake(panorama: str | PathLike[str], folder: str | PathLike[str]) -> list[str
     Maps already in `folder` are left alone. Returns the paths written.
     """
 
+Channel = Literal["keyed", "stepped", "baked"]
+"""How the exporter treats a node's translation, rotation or scale in a clip: keyed; keyed with
+Constant interpolation on its first key, so it steps; or baked, moved by something else."""
+
 class Bones(TypedDict):
     """An armature's bones in the armature's order. Matrices are float32, column by column, as
     Blender's foreach_get gives them."""
@@ -113,11 +117,13 @@ def write_clip(
     optimize: bool,
     bones: Bones | None = None,
     objects: Sequence[tuple[str, Buffer]] = (),
+    channels: Mapping[str, tuple[Channel, Channel, Channel]] = {},
 ) -> None:
     """Writes a clip's .glb as Blender's glTF exporter would: the bones and objects it moves,
     sampled `samples` times `step_seconds` apart. `objects` are (name, float32 matrices relative
     to the parent in Blender, one per sample). With `optimize`, a channel that holds still keeps
-    its first and last keys."""
+    its first and last keys. `channels` gives, by node, how the exporter treats its translation,
+    rotation and scale; a node left out is keyed."""
 
 class Influences(TypedDict):
     """A skinned mesh's vertex groups as joints. Integers are uint32, floats float32."""
@@ -167,10 +173,51 @@ class Mesh(TypedDict):
 class Node(TypedDict):
     name: str
     matrix: Buffer
-    """Relative to the parent, in Blender's axes, float32 column by column."""
+    """Relative to the parent, in Blender's axes, float32 column by column. A camera's or
+    light's is turned -90° about X, as the exporter turns them."""
     children: Sequence[int]
     mesh: int | None
     skin: int | None
+    light: int | None
+    camera: int | None
+
+class Light(TypedDict):
+    """A KHR_lights_punctual light, its numbers as the exporter works them out."""
+
+    name: str
+    kind: Literal["point", "spot", "directional"]
+    color: Sequence[float]
+    intensity: float
+    range: float | None
+    cone: tuple[float, float] | None
+    """A spot's inner and outer cone angles."""
+
+class Camera(TypedDict):
+    name: str
+    kind: Literal["perspective", "orthographic"]
+    znear: float
+    zfar: float
+    aspect_ratio: float | None
+    yfov: float | None
+    """For a perspective camera."""
+    xmag: float | None
+    ymag: float | None
+    """For an orthographic one."""
+
+class Animation(TypedDict):
+    """What plays in a scene's file, as write_clip takes it, its objects among the scene's
+    nodes."""
+
+    name: str
+    samples: int
+    step_seconds: float
+    optimize: bool
+    drop_still_baked: bool
+    """Leaves out a baked channel that holds still, as the exporter does in a camera's file."""
+    objects: Sequence[tuple[str, Buffer]]
+    turned: Sequence[str]
+    """The cameras and lights among `objects`, whose rotation the exporter turns."""
+    channels: Mapping[str, tuple[Channel, Channel, Channel]]
 
 class Skin(TypedDict):
     name: str
@@ -185,9 +232,12 @@ class Scene(TypedDict):
     roots: Sequence[int]
     skins: Sequence[Skin]
     meshes: Sequence[Mesh]
+    lights: Sequence[Light]
+    cameras: Sequence[Camera]
+    animation: Animation | None
 
 def write_scene(path: str | PathLike[str], scene: Scene, materials: Buffer | None = None) -> None:
-    """Writes a model or skin .glb as Blender's glTF exporter would. Its materials, textures and
+    """Writes a model, skin, environment or camera .glb as Blender's glTF exporter would. Its materials, textures and
     images are copied from `materials`, a .glb Blender's exporter wrote of stand-in meshes: mesh
     `i`'s stand-in is named "charpaper~proxy~{i}", with one primitive for each material slot.
     Raises ValueError, having written nothing, for what it doesn't write as Blender would."""

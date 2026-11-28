@@ -158,8 +158,17 @@ def triangle(**changes):
         "skin": None,
     }
     mesh.update(changes)
-    node = {"name": "Triangle", "matrix": IDENTITY, "children": [], "mesh": 0, "skin": None}
-    return {"name": "Scene", "nodes": [node], "roots": [0], "skins": [], "meshes": [mesh]}
+    node = {"name": "Triangle", "matrix": IDENTITY, "children": [], "mesh": 0, "skin": None, "light": None, "camera": None}
+    return {
+        "name": "Scene",
+        "nodes": [node],
+        "roots": [0],
+        "skins": [],
+        "meshes": [mesh],
+        "lights": [],
+        "cameras": [],
+        "animation": None,
+    }
 
 
 class SceneTest(unittest.TestCase):
@@ -181,6 +190,34 @@ class SceneTest(unittest.TestCase):
         self.assertEqual(mesh["extras"]["targetNames"], ["Lift"])
         self.assertEqual(mesh["weights"], [0.5])
         self.assertIn("TEXCOORD_0", mesh["primitives"][0]["attributes"])
+
+    def test_write_scene_with_a_light_a_camera_and_motion(self):
+        scene = triangle()
+        lamp = {"name": "Lamp", "kind": "spot", "color": [1, 1, 1], "intensity": 5.0, "range": None, "cone": (0.2, 0.4)}
+        lens = {"name": "Lens", "kind": "perspective", "znear": 0.1, "zfar": 100.0, "aspect_ratio": 1.5, "yfov": 0.7, "xmag": None, "ymag": None}
+        scene["lights"], scene["cameras"] = [lamp], [lens]
+        scene["nodes"].append({"name": "Cam", "matrix": IDENTITY, "children": [], "mesh": None, "skin": None, "light": 0, "camera": 0})
+        scene["roots"].append(1)
+        scene["animation"] = {
+            "name": "Shot",
+            "samples": 2,
+            "step_seconds": 0.5,
+            "optimize": True,
+            "drop_still_baked": True,
+            "objects": [("Cam", IDENTITY * 2)],
+            "turned": ["Cam"],
+            "channels": {"Cam": ("stepped", "baked", "baked")},
+        }
+        cp.write_scene(self.path, scene)
+        with open(self.path, "rb") as file:
+            data = file.read()
+        document = json.loads(data[20:20 + struct.unpack_from("<I", data, 12)[0]])
+        self.assertEqual(document["extensionsUsed"], ["KHR_lights_punctual"])
+        self.assertEqual(document["cameras"][0]["name"], "Lens")
+        self.assertEqual(len(document["animations"][0]["channels"]), 1)
+        with self.assertRaises(ValueError):
+            scene["animation"]["channels"] = {"Cam": ("keyed", "sometimes", "keyed")}
+            cp.write_scene(self.path, scene)
 
     def test_write_scene_refuses_what_it_cannot_write(self):
         with self.assertRaises(ValueError):

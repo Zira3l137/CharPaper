@@ -60,6 +60,25 @@ impl Bones {
 /// An object's local transform in glTF, from its matrix relative to its parent in Blender.
 pub fn object_local(matrix: Mat4) -> Trs {
     let (scale, rotation, translation) = decompose(matrix);
+    swizzled(translation, rotation, scale)
+}
+
+/// As `object_local`, for a camera or light moving in a clip. Blender's look down their -Z,
+/// glTF's down their own -Z with +Y up, so the exporter turns their rotation by -90° about X.
+/// It turns the rotation alone, after taking the matrix apart, which differs from turning the
+/// matrix when the scale isn't even.
+pub fn turned_local(matrix: Mat4) -> Trs {
+    let (scale, rotation, translation) = decompose(matrix);
+    let turn = Quat::from_xyzw(
+        -std::f32::consts::FRAC_1_SQRT_2,
+        0.0,
+        0.0,
+        std::f32::consts::FRAC_1_SQRT_2,
+    );
+    swizzled(translation, quat_of(Mat3::from_quat(rotation) * Mat3::from_quat(turn)), scale)
+}
+
+fn swizzled(translation: Vec3, rotation: Quat, scale: Vec3) -> Trs {
     Trs {
         translation: Vec3::new(translation.x, translation.z, -translation.y),
         rotation: Quat::from_xyzw(rotation.x, rotation.z, -rotation.y, rotation.w),

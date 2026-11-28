@@ -2,6 +2,7 @@
 //! the same code the app runs. Every call lets go of Python's lock while it works, so
 //! Blender keeps drawing.
 
+use std::collections::HashMap;
 use std::fs;
 use std::ops::ControlFlow;
 use std::path::Path;
@@ -266,9 +267,11 @@ struct BonesArg {
 
 /// Writes a clip's .glb: the bones and objects it moves, sampled `samples` times
 /// `step_seconds` apart. `objects` are (name, float32 matrices relative to the parent in
-/// Blender, one per sample). Lets go of Python's lock while it works.
+/// Blender, one per sample). `channels` tells, by node, how the exporter treats translation,
+/// rotation and scale: "keyed", "stepped" or "baked"; a node left out is keyed. Lets go of
+/// Python's lock while it works.
 #[pyfunction]
-#[pyo3(signature = (path, name, samples, step_seconds, optimize, bones = None, objects = Vec::new()))]
+#[pyo3(signature = (path, name, samples, step_seconds, optimize, bones = None, objects = Vec::new(), channels = HashMap::new()))]
 fn write_clip(
     py: Python<'_>,
     path: PathBuf,
@@ -278,6 +281,7 @@ fn write_clip(
     optimize: bool,
     bones: Option<BonesArg>,
     objects: Vec<(String, PyBackedBytes)>,
+    channels: HashMap<String, [String; 3]>,
 ) -> PyResult<()> {
     py.detach(|| {
         let mut nodes = Vec::new();
@@ -301,19 +305,96 @@ fn write_clip(
                     .get(index)
                     .cloned()
                     .ok_or_else(|| PyValueError::new_err("no such bone"))?;
-                nodes.push(gltf::ClipNode { name: bone, samples });
+                let channels = channel_kinds(&channels, &bone)?;
+                nodes.push(gltf::ClipNode { name: bone, samples, channels });
             }
         }
-        for (object, locals) in objects {
-            let samples = matrices(&locals, samples, &object)?
-                .into_iter()
-                .map(gltf::blender::object_local)
-                .collect();
-            nodes.push(gltf::ClipNode { name: object, samples });
-        }
-        let clip = gltf::Clip { name, step_seconds, optimize, nodes };
+        nodes.extend(object_nodes(objects, samples, &[], &channels)?);
+        let clip = gltf::Clip { name, step_seconds, optimize, drop_still_baked: false, nodes };
         write_file(&path, &clip.to_glb()).map_err(pack_error)
     })
+}
+
+fn object_nodes(
+    objects: Vec<(String, PyBackedBytes)>,
+    samples: usize,
+    turned: &[String],
+    channels: &HashMap<String, [String; 3]>,
+) -> PyResult<Vec<gltf::ClipNode>> {
+    objects
+        .into_iter()
+        .map(|(object, locals)| {
+            let local = match turned.contains(&object) {
+                true => gltf::blender::turned_local,
+                false => gltf::blender::object_local,
+            };
+            let samples = matrices(&locals, samples, &object)?.into_iter().map(local).collect();
+            let channels = channel_kinds(channels, &object)?;
+            Ok(gltf::ClipNode { name: object, samples, channels })
+        })
+        .collect()
+}
+
+fn channel_kinds(
+    channels: &HashMap<String, [String; 3]>,
+    node: &str,
+) -> PyResult<[gltf::Channel; 3]> {
+    let Some(kinds) = channels.get(node) else {
+        return Ok([gltf::Channel::Keyed; 3]);
+    };
+    let mut found = [gltf::Channel::Keyed; 3];
+    for (slot, kind) in found.iter_mut().zip(kinds) {
+        *slot = match kind.as_str() {
+            "keyed" => gltf::Channel::Keyed,
+            "stepped" => gltf::Channel::Stepped,
+            "baked" => gltf::Channel::Baked,
+            other => {
+                return Err(PyValueError::new_err(format!("{node}: no channel kind {other:?}")));
+            }
+        };
+    }
+    Ok(found)
+}
+
+/// What plays in a scene's file, as `write_clip` has it, its objects among the scene's nodes.
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct AnimationArg {
+    name: String,
+    samples: usize,
+    step_seconds: f32,
+    optimize: bool,
+    drop_still_baked: bool,
+    objects: Vec<(String, PyBackedBytes)>,
+    // Cameras and lights, whose rotation the exporter turns.
+    turned: Vec<String>,
+    channels: HashMap<String, [String; 3]>,
+}
+
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct LightArg {
+    name: String,
+    // "point", "spot" or "directional".
+    kind: String,
+    color: [f32; 3],
+    intensity: f32,
+    range: Option<f32>,
+    cone: Option<(f32, f32)>,
+}
+
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct CameraArg {
+    name: String,
+    // "perspective" with aspect_ratio and yfov, or "orthographic" with xmag and ymag.
+    kind: String,
+    znear: f32,
+    zfar: f32,
+    aspect_ratio: Option<f32>,
+    yfov: Option<f32>,
+    xmag: Option<f32>,
+    ymag: Option<f32>,
 }
 
 #[derive(FromPyObject)]
@@ -324,6 +405,9 @@ struct SceneArg {
     roots: Vec<usize>,
     skins: Vec<SkinArg>,
     meshes: Vec<MeshArg>,
+    lights: Vec<LightArg>,
+    cameras: Vec<CameraArg>,
+    animation: Option<AnimationArg>,
 }
 
 #[derive(FromPyObject)]
@@ -335,6 +419,8 @@ struct NodeArg {
     children: Vec<usize>,
     mesh: Option<usize>,
     skin: Option<usize>,
+    light: Option<usize>,
+    camera: Option<usize>,
 }
 
 #[derive(FromPyObject)]
@@ -405,6 +491,8 @@ fn write_scene(
                     children: node.children,
                     mesh: node.mesh,
                     skin: node.skin,
+                    light: node.light,
+                    camera: node.camera,
                 })
             })
             .collect::<PyResult<Vec<_>>>()?;
@@ -417,17 +505,79 @@ fn write_scene(
             })
             .collect::<PyResult<Vec<_>>>()?;
         let meshes = scene.meshes.into_iter().map(mesh_data).collect::<PyResult<Vec<_>>>()?;
+        let lights = scene.lights.into_iter().map(light).collect::<PyResult<Vec<_>>>()?;
+        let cameras = scene.cameras.into_iter().map(camera).collect::<PyResult<Vec<_>>>()?;
+        let animation = match scene.animation {
+            None => None,
+            Some(clip) => Some(gltf::Clip {
+                nodes: object_nodes(clip.objects, clip.samples, &clip.turned, &clip.channels)?,
+                name: clip.name,
+                step_seconds: clip.step_seconds,
+                optimize: clip.optimize,
+                drop_still_baked: clip.drop_still_baked,
+            }),
+        };
         let scene = gltf::Scene {
             name: scene.name,
             nodes,
             roots: scene.roots,
             meshes,
             skins,
+            lights,
+            cameras,
+            animation,
             materials: materials.map(|m| m.to_vec()),
         };
         let glb = scene.to_glb().map_err(PyValueError::new_err)?;
         write_file(&path, &glb).map_err(pack_error)
     })
+}
+
+fn light(light: LightArg) -> PyResult<gltf::scene::Light> {
+    use gltf::scene::LightKind;
+    let kind = match light.kind.as_str() {
+        "point" => LightKind::Point,
+        "spot" => LightKind::Spot,
+        "directional" => LightKind::Directional,
+        other => {
+            return Err(PyValueError::new_err(format!("{}: no light kind {other:?}", light.name)));
+        }
+    };
+    Ok(gltf::scene::Light {
+        name: light.name,
+        kind,
+        color: light.color,
+        intensity: light.intensity,
+        range: light.range,
+        cone: light.cone,
+    })
+}
+
+fn camera(camera: CameraArg) -> PyResult<gltf::scene::Camera> {
+    use gltf::scene::Projection;
+    let missing = || PyValueError::new_err(format!("{}: the camera lacks a value", camera.name));
+    let (znear, zfar) = (camera.znear, camera.zfar);
+    let projection = match camera.kind.as_str() {
+        "perspective" => Projection::Perspective {
+            aspect_ratio: camera.aspect_ratio.ok_or_else(missing)?,
+            yfov: camera.yfov.ok_or_else(missing)?,
+            znear,
+            zfar,
+        },
+        "orthographic" => Projection::Orthographic {
+            xmag: camera.xmag.ok_or_else(missing)?,
+            ymag: camera.ymag.ok_or_else(missing)?,
+            znear,
+            zfar,
+        },
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "{}: no camera kind {other:?}",
+                camera.name
+            )));
+        }
+    };
+    Ok(gltf::scene::Camera { name: camera.name, projection })
 }
 
 fn mesh_data(mesh: MeshArg) -> PyResult<gltf::mesh::MeshData> {

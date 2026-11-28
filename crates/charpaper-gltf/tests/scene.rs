@@ -1,9 +1,16 @@
+use charpaper_gltf::Channel;
+use charpaper_gltf::Clip;
+use charpaper_gltf::ClipNode;
 use charpaper_gltf::Scene;
 use charpaper_gltf::Trs;
 use charpaper_gltf::mesh::MeshData;
 use charpaper_gltf::mesh::ShapeKey;
 use charpaper_gltf::mesh::SkinData;
+use charpaper_gltf::scene::Camera;
+use charpaper_gltf::scene::Light;
+use charpaper_gltf::scene::LightKind;
 use charpaper_gltf::scene::Node;
+use charpaper_gltf::scene::Projection;
 use charpaper_gltf::scene::Skin;
 use glam::Mat4;
 use glam::Vec2;
@@ -105,6 +112,8 @@ fn the_file_holds_the_mesh_its_shape_keys_and_its_skin() {
         children,
         mesh,
         skin,
+        light: None,
+        camera: None,
     };
     let scene = Scene {
         name: "Test".into(),
@@ -120,7 +129,7 @@ fn the_file_holds_the_mesh_its_shape_keys_and_its_skin() {
             joints: vec![1],
             inverse_binds: vec![Mat4::IDENTITY],
         }],
-        materials: None,
+        ..Default::default()
     };
     let glb = scene.to_glb().unwrap();
 
@@ -158,5 +167,64 @@ fn an_unweighted_vertex_is_left_to_blender() {
         armature_world: Mat4::IDENTITY,
     });
     let scene = Scene { meshes: vec![mesh], ..Default::default() };
+    assert!(scene.to_glb().is_err());
+}
+
+fn plain(name: &str, light: Option<usize>, camera: Option<usize>) -> Node {
+    Node {
+        name: name.into(),
+        trs: Trs::IDENTITY,
+        children: vec![],
+        mesh: None,
+        skin: None,
+        light,
+        camera,
+    }
+}
+
+#[test]
+fn lights_and_cameras_and_what_moves_them() {
+    let lamp = Light {
+        name: "Lamp".into(),
+        kind: LightKind::Spot,
+        color: [1.0, 0.5, 0.25],
+        intensity: 12.0,
+        range: Some(4.0),
+        cone: Some((0.2, 0.4)),
+    };
+    let lens = Projection::Perspective { aspect_ratio: 1.5, yfov: 0.7, znear: 0.1, zfar: 100.0 };
+    let moving = ClipNode {
+        name: "Cam".into(),
+        samples: vec![Trs::IDENTITY; 3],
+        channels: [Channel::Keyed, Channel::Baked, Channel::Baked],
+    };
+    let mut scene = Scene {
+        name: "Shot".into(),
+        nodes: vec![plain("Lamp", Some(0), None), plain("Cam", None, Some(0))],
+        roots: vec![0, 1],
+        lights: vec![lamp],
+        cameras: vec![Camera { name: "Lens".into(), projection: lens }],
+        animation: Some(Clip {
+            name: "Shot".into(),
+            step_seconds: 0.5,
+            optimize: true,
+            drop_still_baked: true,
+            nodes: vec![moving],
+        }),
+        ..Default::default()
+    };
+    let glb = scene.to_glb().unwrap();
+    let file = gltf::Gltf::from_slice(&glb).unwrap();
+    assert!(file.extensions_used().any(|e| e == "KHR_lights_punctual"));
+    let light = file.lights().unwrap().next().unwrap();
+    assert_eq!(light.range(), Some(4.0));
+    assert!(matches!(light.kind(), gltf::khr_lights_punctual::Kind::Spot { .. }));
+    let camera = file.nodes().find_map(|n| n.camera()).unwrap();
+    assert_eq!(camera.name(), Some("Lens"));
+    let animation = file.animations().next().unwrap();
+    let channels: Vec<_> = animation.channels().map(|c| c.target().node().name()).collect();
+    assert_eq!(channels, [Some("Cam")], "only its still keyed channel stays");
+
+    scene.animation.as_mut().unwrap().nodes[0].name = "Elsewhere".into();
     assert!(scene.to_glb().is_err());
 }

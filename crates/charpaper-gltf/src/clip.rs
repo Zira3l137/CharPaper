@@ -21,11 +21,24 @@ impl Trs {
         Self { translation: Vec3::ZERO, rotation: Quat::IDENTITY, scale: Vec3::ONE };
 }
 
+/// How the exporter treats one of a node's channels: translation, rotation or scale.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Channel {
+    /// Keyed in the clip's action.
+    #[default]
+    Keyed,
+    /// Keyed, its first key Constant: the value jumps from sample to sample.
+    Stepped,
+    /// Not keyed, moved by something else: a parent, a constraint.
+    Baked,
+}
+
 /// A node a clip moves, sampled at every step from the clip's first frame.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ClipNode {
     pub name: String,
     pub samples: Vec<Trs>,
+    pub channels: [Channel; 3],
 }
 
 /// A clip's .glb: the nodes it moves and one animation moving them, all the app reads of it.
@@ -37,6 +50,8 @@ pub struct Clip {
     pub step_seconds: f32,
     /// As Blender's *Optimize keys*: a channel that holds still keeps its first and last keys.
     pub optimize: bool,
+    /// Leaves out a baked channel that holds still, as Blender does unless told to keep it.
+    pub drop_still_baked: bool,
     pub nodes: Vec<ClipNode>,
 }
 
@@ -44,8 +59,35 @@ pub struct Clip {
 const STILL: f32 = 1e-4;
 
 impl Clip {
+    /// The clip's .glb, of its nodes and nothing else.
     pub fn to_glb(&self) -> Vec<u8> {
         let mut glb = Glb::new();
+        let nodes: Vec<_> = self
+            .nodes
+            .iter()
+            .map(|n| glb.root.push(json::Node { name: Some(n.name.clone()), ..Default::default() }))
+            .collect();
+        let animation = self.animation(&mut glb, &nodes);
+        let scene = glb.root.push(json::Scene {
+            extensions: None,
+            extras: Default::default(),
+            name: None,
+            nodes,
+        });
+        glb.root.scene = Some(scene);
+        if let Some(animation) = animation {
+            glb.root.push(animation);
+        }
+        glb.into_vec()
+    }
+
+    /// The animation moving `nodes`, one for each of the clip's nodes, or None when nothing
+    /// in it moves.
+    pub(crate) fn animation(
+        &self,
+        glb: &mut Glb,
+        nodes: &[json::Index<json::Node>],
+    ) -> Option<json::Animation> {
         let samples = self.nodes.iter().map(|n| n.samples.len()).max().unwrap_or(0);
         let all_times: Vec<f32> = (0..samples).map(|i| i as f32 * self.step_seconds).collect();
         let times = glb.floats(&all_times, Type::Scalar, true);
@@ -61,9 +103,7 @@ impl Clip {
             name: Some(self.name.clone()),
             samplers: Vec::new(),
         };
-        for node in &self.nodes {
-            let index =
-                glb.root.push(json::Node { name: Some(node.name.clone()), ..Default::default() });
+        for (node, &index) in self.nodes.iter().zip(nodes) {
             let translations: Vec<[f32; 3]> =
                 node.samples.iter().map(|s| s.translation.into()).collect();
             let rotations: Vec<[f32; 4]> = continuous(node.samples.iter().map(|s| s.rotation));
@@ -73,16 +113,18 @@ impl Clip {
                 (Property::Rotation, Type::Vec4, flatten(&rotations)),
                 (Property::Scale, Type::Vec3, flatten(&scales)),
             ];
-            for (property, kind, values) in channels {
+            for ((property, kind, values), how) in channels.into_iter().zip(node.channels) {
                 let width = kind.multiplicity();
-                let still = self.optimize && samples > 2 && holds_still(&values, width);
-                let (input, values, interpolation) = match still {
-                    true => {
+                let still = holds_still(&values, width);
+                let (input, values, interpolation) = match how {
+                    Channel::Baked if self.drop_still_baked && still => continue,
+                    _ if self.optimize && samples > 2 && still => {
                         let first_last =
                             [&values[..width], &values[values.len() - width..]].concat();
                         (ends, first_last, Interpolation::Step)
                     }
-                    false => (times, values, Interpolation::Linear),
+                    Channel::Stepped => (times, values, Interpolation::Step),
+                    _ => (times, values, Interpolation::Linear),
                 };
                 let output = glb.floats(&values, kind, false);
                 let sampler = json::Index::push(
@@ -108,18 +150,7 @@ impl Clip {
                 });
             }
         }
-        let nodes = (0..self.nodes.len() as u32).map(json::Index::new).collect();
-        let scene = glb.root.push(json::Scene {
-            extensions: None,
-            extras: Default::default(),
-            name: None,
-            nodes,
-        });
-        glb.root.scene = Some(scene);
-        if !animation.channels.is_empty() {
-            glb.root.push(animation);
-        }
-        glb.into_vec()
+        (!animation.channels.is_empty()).then_some(animation)
     }
 }
 
