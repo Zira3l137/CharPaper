@@ -6,9 +6,8 @@
 
 use std::collections::HashMap;
 
-use glam::DMat3;
-use glam::DMat4;
 use glam::DVec3;
+use glam::Mat3;
 use glam::Mat4;
 use glam::Vec2;
 use glam::Vec3;
@@ -47,7 +46,16 @@ pub struct SkinData {
     /// Each vertex's (joint, weight) pairs, the weights above Blender's 0.0001 only.
     pub influences: Vec<Vec<(u16, f32)>>,
     pub object_world: Mat4,
-    pub armature_world: Mat4,
+    /// What turns the normals and tangents into the armature's space, made as the exporter
+    /// makes them in Blender's float32 math, with `apply` the armature's inverse world matrix
+    /// times the object's: `armature_world.to_3x3() @ apply.to_3x3().inverted_safe()
+    /// .transposed()`, and `apply.to_quaternion().to_matrix()`. Rebuilt in other math, they
+    /// come out a hair apart, and a value on a rounding edge then rounds the other way.
+    pub normal_matrix: Mat3,
+    pub tangent_matrix: Mat3,
+    /// Whether the exporter's NumPy math on the moved values runs in float32, as it does
+    /// where NumPy reads a Blender matrix as float32 (Blender 5.3 does), not float64 (4.2).
+    pub float32: bool,
 }
 
 /// One material slot's triangles, as glTF wants them, in glTF's axes.
@@ -76,13 +84,25 @@ const DECIMALS: f64 = 1e4;
 
 impl MeshData {
     pub fn primitives(&self) -> Vec<Primitive> {
-        let skinned = self.skin.as_ref().map(|s| (s.object_world, s.armature_world));
+        let skin = self.skin.as_ref();
 
-        // A skinned mesh is moved by a float64 matrix, so from there on, as in the exporter's
-        // NumPy, its values are float64 until written.
-        let object = skinned.map_or(DMat4::IDENTITY, |(object, _)| object.as_dmat4());
+        // A skinned mesh is moved by a matrix, and from there on its values take the matrix's
+        // precision in the exporter's NumPy until written. Held as float64 either way, as a
+        // float32 value converts exactly.
+        let float32 = skin.is_some_and(|s| s.float32);
+        let object = skin.map_or(Mat4::IDENTITY, |s| s.object_world);
         let placed = |points: &[Vec3]| -> Vec<DVec3> {
-            points.iter().map(|p| object.transform_point3(p.as_dvec3())).collect()
+            match float32 {
+                true => points.iter().map(|p| object.transform_point3(*p).as_dvec3()).collect(),
+                false => {
+                    let object = object.as_dmat4();
+                    points.iter().map(|p| object.transform_point3(p.as_dvec3())).collect()
+                }
+            }
+        };
+        let less = |a: DVec3, b: DVec3| match float32 {
+            true => a.as_vec3() - b.as_vec3(),
+            false => (a - b).as_vec3(),
         };
         let base = placed(&self.positions);
         let key_positions: Vec<Vec<[f32; 3]>> = self
@@ -90,23 +110,20 @@ impl MeshData {
             .iter()
             .map(|key| {
                 let moved = placed(&key.positions);
-                moved.iter().zip(&base).map(|(k, b)| y_up(finite((*k - *b).as_vec3()))).collect()
+                moved.iter().zip(&base).map(|(k, b)| y_up(finite(less(*k, *b)))).collect()
             })
             .collect();
         let positions: Vec<[f32; 3]> = base.iter().map(|p| y_up(p.as_vec3())).collect();
 
-        let normal_matrix = skinned.map(|(object, armature)| {
-            let (object, armature) = (object.as_dmat4(), armature.as_dmat4());
-            let apply = DMat3::from_mat4(armature.inverse() * object).inverse().transpose();
-            DMat3::from_mat4(armature) * apply
-        });
+        let normal_matrix = skin.map(|s| s.normal_matrix);
         let turned = |n: Vec3| match normal_matrix {
-            Some(m) => (m * n.as_dvec3()).normalize_or_zero(),
+            Some(m) if float32 => normalized(m * n).as_dvec3(),
+            Some(m) => normalized64(m.as_dmat3() * n.as_dvec3()),
             None => n.as_dvec3(),
         };
         let up = |n: DVec3| if n == DVec3::ZERO { DVec3::Z } else { n };
         let normals: Vec<DVec3> =
-            self.normals.iter().map(|n| up(turned(round(*n).normalize_or_zero()))).collect();
+            self.normals.iter().map(|n| up(turned(normalized(round(*n))))).collect();
         let key_normals: Vec<Vec<[f32; 3]>> = self
             .shape_keys
             .iter()
@@ -115,15 +132,13 @@ impl MeshData {
                 // Rounded, not normalized, before the turn: as the exporter does.
                 key.iter()
                     .zip(&normals)
-                    .map(|(n, b)| y_up((up(turned(round(*n))) - *b).as_vec3()))
+                    .map(|(n, b)| y_up(less(up(turned(round(*n))), *b)))
                     .collect()
             })
             .collect();
         let normals: Vec<[f32; 3]> = normals.iter().map(|n| y_up(n.as_vec3())).collect();
 
-        let tangent_matrix = skinned.map(|(object, armature)| {
-            DMat3::from_quat(quat_of(armature.inverse() * object).as_dquat())
-        });
+        let tangent_matrix = skin.map(|s| s.tangent_matrix);
         let tangents: Option<Vec<[f32; 4]>> = self.tangents.as_ref().map(|(tangents, signs)| {
             let flip = tangent_matrix.is_some_and(|m| m.determinant() < 0.0);
             tangents
@@ -132,7 +147,10 @@ impl MeshData {
                 .map(|(t, &sign)| {
                     let mut t = round(*t);
                     if let Some(m) = tangent_matrix {
-                        t = round64((m * t.as_dvec3()).normalize_or_zero()).as_vec3();
+                        t = match float32 {
+                            true => round(normalized(m * t)),
+                            false => round64(normalized64(m.as_dmat3() * t.as_dvec3())).as_vec3(),
+                        };
                     }
                     let [x, y, z] = y_up(t);
                     [x, y, z, if flip { -sign } else { sign }]
@@ -251,15 +269,23 @@ fn round(v: Vec3) -> Vec3 {
     (v * DECIMALS as f32).map(f32::round_ties_even) / DECIMALS as f32
 }
 
+// As NumPy's normalize_vecs: the length summed in order, then each value divided by it, a
+// zero vector left. glam multiplies by the length's reciprocal, which can differ in the last
+// bit, and a tangent rounded after it then lands a step off.
+fn normalized(v: Vec3) -> Vec3 {
+    let length = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt();
+    if length == 0.0 { v } else { Vec3::new(v.x / length, v.y / length, v.z / length) }
+}
+
+fn normalized64(v: DVec3) -> DVec3 {
+    let length = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt();
+    if length == 0.0 { v } else { DVec3::new(v.x / length, v.y / length, v.z / length) }
+}
+
 fn round64(v: DVec3) -> DVec3 {
     (v * DECIMALS).map(f64::round_ties_even) / DECIMALS
 }
 
 fn finite(v: Vec3) -> Vec3 {
     v.map(|x| if x.is_finite() { x } else { 0.0 })
-}
-
-fn quat_of(matrix: Mat4) -> glam::Quat {
-    let (_, rotation, _) = matrix.to_scale_rotation_translation();
-    rotation
 }

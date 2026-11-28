@@ -133,11 +133,18 @@ class Influences(TypedDict):
     joints: Buffer
     """Every vertex's joints by skin index, one vertex after another."""
     weights: Buffer
-    """The weights beside `joints`, those above 0.0001 only."""
+    """The weights beside `joints`, those above 0.0001 only. A vertex needs at least one."""
     object_world: Buffer
     """The mesh object's matrix_world."""
-    armature_world: Buffer
-    """The skinning armature's matrix_world."""
+    normal_matrix: Buffer
+    """armature.matrix_world.to_3x3() @ apply.to_3x3().inverted_safe().transposed(), nine
+    float32s column by column, with apply = armature.matrix_world.inverted_safe() @
+    object.matrix_world: made in Blender's math, as the exporter makes it."""
+    tangent_matrix: Buffer
+    """apply.to_quaternion().to_matrix(), likewise."""
+    float32: bool
+    """Whether the exporter does its math on the moved values in float32, as it does where
+    np.array() of a Blender matrix is float32."""
 
 class ShapeKey(TypedDict):
     name: str

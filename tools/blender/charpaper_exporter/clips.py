@@ -373,8 +373,12 @@ def channel_kinds(obj, track):
     and its bones as the NLA track `track` moves them: "keyed"; "stepped", keyed with Constant
     interpolation on the first key; or "baked", not keyed. Nodes nothing keys are left out.
 
-    The exporter looks for the keys in the action named as the track, whichever action the
-    track plays, and finds none when there is no such action."""
+    Before 4.4 the exporter looks for the keys in the action named as the track, whichever
+    action the track plays, and finds none when there is no such action."""
+    # From 4.4 the exporter samples an NLA track without its action, every channel as baked:
+    # nothing steps, and a camera's file leaves out whatever holds still.
+    if bpy.app.version >= (4, 4):
+        return {}
     action = bpy.data.actions.get(track)
     if action is None:
         return {}

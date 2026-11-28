@@ -12,6 +12,7 @@ use charpaper_gltf::scene::LightKind;
 use charpaper_gltf::scene::Node;
 use charpaper_gltf::scene::Projection;
 use charpaper_gltf::scene::Skin;
+use glam::Mat3;
 use glam::Mat4;
 use glam::Vec2;
 use glam::Vec3;
@@ -85,7 +86,9 @@ fn a_vertex_keeps_its_four_strongest_joints() {
     mesh.skin = Some(SkinData {
         influences: vec![five, vec![(0, 1.0)], vec![(0, 1.0)], vec![(0, 1.0)]],
         object_world: Mat4::IDENTITY,
-        armature_world: Mat4::IDENTITY,
+        normal_matrix: Mat3::IDENTITY,
+        tangent_matrix: Mat3::IDENTITY,
+        float32: false,
     });
     let primitive = &mesh.primitives()[0];
     assert_eq!(primitive.joints[0], [1, 4, 2, 0]);
@@ -104,7 +107,9 @@ fn the_file_holds_the_mesh_its_shape_keys_and_its_skin() {
     mesh.skin = Some(SkinData {
         influences: vec![vec![(0, 1.0)]; 4],
         object_world: Mat4::IDENTITY,
-        armature_world: Mat4::IDENTITY,
+        normal_matrix: Mat3::IDENTITY,
+        tangent_matrix: Mat3::IDENTITY,
+        float32: false,
     });
     let node = |name: &str, children: Vec<usize>, mesh, skin| Node {
         name: name.into(),
@@ -164,7 +169,9 @@ fn an_unweighted_vertex_is_left_to_blender() {
     mesh.skin = Some(SkinData {
         influences: vec![vec![(0, 1.0)], vec![], vec![(0, 1.0)], vec![(0, 1.0)]],
         object_world: Mat4::IDENTITY,
-        armature_world: Mat4::IDENTITY,
+        normal_matrix: Mat3::IDENTITY,
+        tangent_matrix: Mat3::IDENTITY,
+        float32: false,
     });
     let scene = Scene { meshes: vec![mesh], ..Default::default() };
     assert!(scene.to_glb().is_err());

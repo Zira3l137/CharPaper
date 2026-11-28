@@ -31,9 +31,26 @@ Y_UP = Matrix(((1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0.0, -1.0, 0.0, 0.0)
 # own Z-up space: the exporter turns them -90° about X to match.
 TURN = Quaternion((2**0.5 / 2, -(2**0.5) / 2, 0.0, 0.0)).to_matrix().to_4x4()
 MIN_INFLUENCE = 0.0001
+
+
+def _numpy_float32():
+    # The exporter moves a skinned mesh's values by np.array(matrix), whose precision follows
+    # what NumPy makes of a Blender matrix: float64 in 4.2, float32 in 5.3.
+    try:
+        import numpy
+    except ImportError:
+        return False
+    return numpy.array(Matrix.Identity(3)).dtype == numpy.float32
+
+
+NUMPY_FLOAT32 = _numpy_float32()
 TYPES = {"MESH", "EMPTY", "ARMATURE"}
 WATTS_TO_LUMENS = 683
 LIGHT_KINDS = {"POINT": "point", "SPOT": "spot", "SUN": "directional"}
+# Blender's exporter added a light's exposure, normalization and temperature in 4.5, got the
+# temperature right in 5.1, and from 5.2 reads a light's nodes whether or not it uses them,
+# except in a scene that renders with EEVEE.
+NEWER_LIGHTS = bpy.app.version >= (4, 5)
 
 
 class Unsupported(Exception):
@@ -71,6 +88,11 @@ def write(context, iso, path, suite, lights=False, cameras=False, animation=None
             # Read out by now. Kept, they crash Blender once its exporter changes frame below.
             for mesh in meshes:
                 mesh.release()
+        tree.add_neutral_bones()
+        for node in tree.nodes:
+            if node.skin is not None:
+                # Skinning places the vertices already, and the exporter writes no transform.
+                node.local = Matrix.Identity(4)
         description = {
             "name": iso.scene.name,
             "nodes": [node.description() for node in tree.nodes],
@@ -89,35 +111,80 @@ def write(context, iso, path, suite, lights=False, cameras=False, animation=None
         raise Unsupported(str(error)) from error
 
 
-def _shared(index_of, found, data, describe, context):
+def _shared(index_of, found, key, describe, context):
     # One glTF light or camera for each Blender one, however many objects show it.
-    if data not in index_of:
-        description = describe(data, context)
-        index_of[data] = None if description is None else len(found)
+    if key not in index_of:
+        description = describe(key, context)
+        index_of[key] = None if description is None else len(found)
         if description is not None:
             found.append(description)
-    return index_of[data]
+    return index_of[key]
 
 
-def _emits_through_nodes(lamp):
-    tree = lamp.node_tree if getattr(lamp, "use_nodes", False) else None
-    return tree is not None and any(n.type == "EMISSION" for n in tree.nodes)
+def _frozen(matrix):
+    return tuple(tuple(row) for row in matrix)
 
 
-def _light(lamp, settings):
-    """The light as the exporter's gather_lights_punctual makes it; None for an area light,
-    which glTF has no light for."""
+def _emits_through_nodes(lamp, scene):
+    """Whether the exporter takes the light's color and strength from its nodes, as it does
+    from an Emission shader feeding the active Light Output."""
+    if bpy.app.version >= (5, 2):
+        if scene.render.engine == "BLENDER_EEVEE":
+            return False
+        tree = lamp.node_tree
+    else:
+        tree = lamp.node_tree if lamp.use_nodes else None
+    if tree is None:
+        return False
+    outputs = [n for n in tree.nodes if n.type == "OUTPUT_LIGHT" and n.is_active_output]
+    sockets = [n.inputs["Surface"] for n in outputs]
+    seen = set()
+    while sockets:
+        for link in sockets.pop().links:
+            node = link.from_node
+            if node.type == "EMISSION":
+                return True
+            if node not in seen:
+                seen.add(node)
+                sockets.extend(node.inputs)
+    return False
+
+
+def _area(lamp, matrix):
+    # The keyword changed name in 5.2.
+    try:
+        return lamp.area(matrix_world=matrix)
+    except TypeError:
+        return lamp.area(world_matrix=matrix)
+
+
+def _light(key, context):
+    """The light as the exporter's gather_lights_punctual makes it in this Blender; None for
+    an area light, which glTF has no light for."""
+    obj, settings, scene = context
+    lamp = obj.data
     kind = LIGHT_KINDS.get(lamp.type)
     if kind is None:
         return None
-    if _emits_through_nodes(lamp):
+    if _emits_through_nodes(lamp, scene):
         raise Unsupported(f"the light {lamp.name} shines through its nodes")
     intensity = lamp.energy
+    color = list(lamp.color)
+    if NEWER_LIGHTS:
+        if not lamp.normalize:
+            intensity *= _area(lamp, obj.matrix_world.copy().freeze())
+        if lamp.use_temperature:
+            if bpy.app.version < (5, 1):
+                # These versions' exporter multiplies a number by a color here, and fails.
+                raise Unsupported(f"the light {lamp.name} has a temperature")
+            color = [c * t for c, t in zip(color, lamp.temperature_color)]
     if settings.lighting_mode != "RAW":
         if lamp.type != "SUN":
             intensity /= 4 * math.pi
         if settings.lighting_mode == "SPEC":
             intensity *= WATTS_TO_LUMENS
+    if NEWER_LIGHTS:
+        intensity *= 2 ** lamp.exposure
     cone = None
     if lamp.type == "SPOT":
         angle = lamp.spot_size * 0.5
@@ -125,7 +192,7 @@ def _light(lamp, settings):
     return {
         "name": lamp.name,
         "kind": kind,
-        "color": list(lamp.color),
+        "color": color,
         "intensity": intensity,
         "range": lamp.cutoff_distance if lamp.use_custom_distance else None,
         "cone": cone,
@@ -156,7 +223,8 @@ def _camera(camera, scene):
 
 
 def _flat(matrix):
-    return [matrix[row][col] for col in range(4) for row in range(4)]
+    size = len(matrix)
+    return [matrix[row][col] for col in range(size) for row in range(size)]
 
 
 class _Node:
@@ -166,6 +234,8 @@ class _Node:
         self.bone = bone
         self.armature = armature
         self.children = []
+        # An instancer's collection's offset, which the exporter takes off its translation.
+        self.offset = None
         # Bones whose own parent isn't exported: the exporter adds them after the tree is made.
         self.late = []
         self.parent = None
@@ -203,12 +273,13 @@ class _Tree:
         self.turned = {t for t, on in (("LIGHT", lights), ("CAMERA", cameras)) if on}
         self.lights = []
         self.cameras = []
+        self.neutral = set()
         objects = [o for o in scene.objects]
         for obj in objects:
             if obj.type not in TYPES | self.turned:
                 raise Unsupported(f"{obj.name} is a {obj.type.lower()}")
-            if obj.instance_type != "NONE":
-                raise Unsupported(f"{obj.name} instances something")
+            if obj.instance_type not in {"NONE", "COLLECTION"}:
+                raise Unsupported(f"{obj.name} instances its {obj.instance_type.lower()}")
         # Blender's obj.children looks through every object in the file for each call.
         self.children_of = {}
         for obj in bpy.data.objects:
@@ -221,10 +292,17 @@ class _Tree:
             node.children.extend(node.late)
         for node in self.nodes:
             node.local = self._local(node)
+            if node.offset is not None:
+                # Its own transform alone: its objects are placed from the instancer's matrix.
+                node.local = node.local @ Matrix.Translation(-node.offset)
         lights_of, cameras_of = {}, {}
         for node in self.nodes:
             if node.obj is not None and node.obj.type == "LIGHT":
-                node.light = _shared(lights_of, self.lights, node.obj.data, _light, settings)
+                lamp = node.obj.data
+                # From 4.5 the exporter keeps one light per light and object matrix: the
+                # matrix can scale a light that isn't normalized.
+                key = (lamp, _frozen(node.obj.matrix_world)) if NEWER_LIGHTS else lamp
+                node.light = _shared(lights_of, self.lights, key, _light, (node.obj, settings, scene))
             elif node.obj is not None and node.obj.type == "CAMERA":
                 node.camera = _shared(cameras_of, self.cameras, node.obj.data, _camera, scene)
         # Every armature gets its skin, as in Blender's files, used by a mesh or not.
@@ -240,9 +318,11 @@ class _Tree:
         self.nodes.append(node)
         return node
 
-    def _add_object(self, obj, parent):
+    def _add_object(self, obj, parent, space=None):
+        """The object's node and those under it. `space` is the matrix of the instancer showing
+        it, for an object in an instanced collection."""
         node = self._add(_Node(obj.name, obj=obj), parent)
-        node.world = obj.matrix_world.copy()
+        node.world = obj.matrix_world.copy() if space is None else space @ obj.matrix_world
         if parent is not None and parent.bone is not None:
             armature = parent.armature
             pose = armature.matrix_world @ armature.pose.bones[parent.bone.name].matrix @ Y_UP
@@ -259,17 +339,45 @@ class _Tree:
             node.world = node.world @ self._turn(obj)
         if obj.type == "ARMATURE":
             self._add_bones(obj, node)
-        for child in sorted(self.children_of.get(obj, ()), key=lambda c: c.name):
+        children = self.children_of.get(obj, ())
+        if obj.instance_type == "COLLECTION" and obj.instance_collection is not None:
+            if children:
+                # Blender's exporter versions place these differently.
+                raise Unsupported(f"objects are parented to {obj.name}, which instances a collection")
+            self._add_instances(obj, node)
+        for child in sorted(children, key=lambda c: c.name):
+            if space is not None and child.parent_type != "OBJECT":
+                raise Unsupported(f"{child.name} in an instanced collection hangs from a bone")
             if child.parent_type == "BONE":
                 holder = self.bone_nodes.get((obj, child.parent_bone))
                 if holder is None:
                     raise Unsupported(f"{child.name} hangs from bone {child.parent_bone}, which isn't exported")
                 self._add_object(child, holder)
             elif child.parent_type in {"OBJECT", "ARMATURE"}:
-                self._add_object(child, node)
+                self._add_object(child, node, space)
             else:
                 raise Unsupported(f"{child.name} is parented to its {child.parent_type.lower()}")
         return node
+
+    def _add_instances(self, instancer, node):
+        """The objects of the collection the instancer shows, as the exporter adds them: under
+        it, placed by its matrix as the collection's objects are placed in the file."""
+        collection = instancer.instance_collection
+        if len(collection.children) > 0:
+            raise Unsupported(f"{collection.name}, which {instancer.name} instances, holds collections")
+        members = set(collection.objects)
+        for obj in members:
+            if obj.type not in {"MESH", "EMPTY"} or obj.instance_type != "NONE":
+                raise Unsupported(f"{obj.name} in the instanced {collection.name} is a {obj.type.lower()} or instances")
+            if obj.parent is not None and obj.parent not in members:
+                raise Unsupported(f"{obj.name} in the instanced {collection.name} has its parent outside it")
+            for child in self.children_of.get(obj, ()):
+                if child not in members:
+                    raise Unsupported(f"{child.name} is under {obj.name} but outside the instanced {collection.name}")
+        for obj in sorted(members, key=lambda o: o.name):
+            if obj.parent is None:
+                self._add_object(obj, node, space=node.world)
+        node.offset = collection.instance_offset.copy()
 
     def _turn(self, obj):
         return TURN if obj.type in self.turned else Matrix.Identity(4)
@@ -311,17 +419,18 @@ class _Tree:
     def armature_of(self, obj):
         """The armature skinning the object, as the exporter decides: its Armature modifier's,
         unless the object hangs from one of that armature's bones."""
-        for modifier in obj.modifiers:
-            if modifier.type == "ARMATURE":
-                armature = modifier.object
-                if armature is None:
-                    return None
-                if obj.parent_type == "BONE" and obj.parent == armature:
-                    return None
-                if not any(n.obj == armature for n in self.nodes):
-                    return None
-                return armature
-        return None
+        # The exporter keeps modifiers by type, so with two Armature modifiers the last counts.
+        found = [m for m in obj.modifiers if m.type == "ARMATURE"]
+        if not found:
+            return None
+        armature = found[-1].object
+        if armature is None:
+            return None
+        if obj.parent_type == "BONE" and obj.parent == armature:
+            return None
+        if not any(n.obj == armature for n in self.nodes):
+            return None
+        return armature
 
     def skin_of(self, armature):
         """The skin of an armature's exported bones, joints in tree order, made once."""
@@ -337,6 +446,17 @@ class _Tree:
             binds = [(Y_UP @ (armature.matrix_world @ n.bone.matrix_local)).inverted_safe() for n in joints]
             self.skins[armature] = (len(self.skins), joints, binds)
         return self.skins[armature]
+
+    def add_neutral_bones(self):
+        """As the exporter, once every mesh is read: a joint for vertices on no bone, last under
+        the armature, standing in glTF's axes at the armature's origin."""
+        for armature in self.neutral:
+            top = next(n for n in self.nodes if n.obj == armature)
+            node = self._add(_Node("neutral_bone"), top)
+            node.local = Y_UP.copy()
+            _, joints, binds = self.skins[armature]
+            joints.append(node)
+            binds.append((Y_UP @ armature.matrix_world).inverted_safe())
 
     def skin_descriptions(self):
         found = sorted(self.skins.items(), key=lambda item: item[1][0])
@@ -374,6 +494,11 @@ def _mesh_index(meshes, node, tree, settings, depsgraph):
     modifiers = [m for m in obj.modifiers]
     owner = None
     if settings.apply_modifiers and modifiers:
+        # An object an instanced collection shows many times makes one mesh, as in Blender's.
+        key = ("evaluated", obj) if armature is None else None
+        for index, found in enumerate(meshes):
+            if key is not None and found.key == key:
+                return index
         # As the exporter: skinning stays the app's to do, so armatures don't deform the mesh read.
         hidden = [m for m in modifiers if m.type == "ARMATURE" and m.show_viewport]
         for modifier in hidden:
@@ -390,7 +515,6 @@ def _mesh_index(meshes, node, tree, settings, depsgraph):
         materials = tuple(m.original if m is not None else None for m in mesh.materials)
         if len(materials) == 1 and materials[0] is None:
             materials = tuple(slot.material for slot in obj.material_slots)
-        key = None
     else:
         mesh = obj.data
         materials = tuple(slot.material for slot in obj.material_slots)
@@ -408,6 +532,8 @@ def _mesh_index(meshes, node, tree, settings, depsgraph):
         if owner is not None:
             owner.to_mesh_clear()
         raise
+    if description["skin"] is not None and description["skin"].pop("neutral"):
+        tree.neutral.add(armature)
     uv_names = [uv.name for uv in mesh.uv_layers]
     colors = [(c.name, c.domain, c.data_type) for c in mesh.color_attributes]
     active = (mesh.uv_layers.active_index, _render_uv(mesh), mesh.color_attributes.active_color_index,
@@ -503,7 +629,11 @@ def _read_mesh(obj, mesh, armature, joints, settings):
 def _influences(obj, mesh, joints, armature):
     joint_of = {node.name: i for i, node in enumerate(joints)}
     group_joint = [joint_of.get(group.name) for group in obj.vertex_groups]
+    apply = armature.matrix_world.inverted_safe() @ obj.matrix_world
+    normal = armature.matrix_world.to_3x3() @ apply.to_3x3().inverted_safe().transposed()
+    tangent = apply.to_quaternion().to_matrix()
     counts, found, weights = array.array("i"), array.array("i"), array.array("f")
+    unweighted = False
     # Vertex groups have no bulk read, so this is the one loop over vertices left in Python.
     for vertex in mesh.vertices:
         count = 0
@@ -517,13 +647,23 @@ def _influences(obj, mesh, joints, armature):
             found.append(joint)
             weights.append(weight)
             count += 1
+        if count == 0:
+            # On no bone: the exporter gives it to a neutral bone, made once all meshes are read.
+            found.append(len(joints))
+            weights.append(1.0)
+            count = 1
+            unweighted = True
         counts.append(count)
     return {
+        "neutral": unweighted,
         "counts": counts.tobytes(),
         "joints": found.tobytes(),
         "weights": weights.tobytes(),
         "object_world": array.array("f", _flat(obj.matrix_world)).tobytes(),
-        "armature_world": array.array("f", _flat(armature.matrix_world)).tobytes(),
+        # Made here, in Blender's own math, as the exporter makes them: see SkinData.
+        "normal_matrix": array.array("f", _flat(normal)).tobytes(),
+        "tangent_matrix": array.array("f", _flat(tangent)).tobytes(),
+        "float32": NUMPY_FLOAT32,
     }
 
 

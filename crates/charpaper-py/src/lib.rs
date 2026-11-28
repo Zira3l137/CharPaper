@@ -16,6 +16,7 @@ use chr::PACK_FILE;
 use chr::Pack;
 use chr::PackError;
 use chr::PackWriter;
+use glam::Mat3;
 use glam::Mat4;
 use glam::Vec2;
 use glam::Vec3;
@@ -464,7 +465,10 @@ struct InfluencesArg {
     joints: PyBackedBytes,
     weights: PyBackedBytes,
     object_world: PyBackedBytes,
-    armature_world: PyBackedBytes,
+    // Each nine float32s, column by column: see SkinData.
+    normal_matrix: PyBackedBytes,
+    tangent_matrix: PyBackedBytes,
+    float32: bool,
 }
 
 /// Writes a model or skin .glb from what the add-on read out of Blender, with the materials,
@@ -653,7 +657,9 @@ fn mesh_data(mesh: MeshArg) -> PyResult<gltf::mesh::MeshData> {
             Some(gltf::mesh::SkinData {
                 influences,
                 object_world: matrices(&skin.object_world, 1, &name)?[0],
-                armature_world: matrices(&skin.armature_world, 1, &name)?[0],
+                normal_matrix: matrix3(&skin.normal_matrix, &name)?,
+                tangent_matrix: matrix3(&skin.tangent_matrix, &name)?,
+                float32: skin.float32,
             })
         }
     };
@@ -681,6 +687,13 @@ fn ints(bytes: &[u8]) -> Vec<u32> {
 
 fn vec3s(bytes: &[u8]) -> Vec<Vec3> {
     floats(bytes).as_chunks().0.iter().map(|&v| Vec3::from_array(v)).collect()
+}
+
+fn matrix3(bytes: &[u8], what: &str) -> PyResult<Mat3> {
+    match floats(bytes).as_slice() {
+        found @ [_, _, _, _, _, _, _, _, _] => Ok(Mat3::from_cols_slice(found)),
+        _ => Err(PyValueError::new_err(format!("{what}: {} bytes for a 3x3 matrix", bytes.len()))),
+    }
 }
 
 fn matrices(bytes: &[u8], count: usize, what: &str) -> PyResult<Vec<Mat4>> {

@@ -74,11 +74,13 @@ every .blend on the computer.
   shape keys, each light and camera, and a moving camera's motion, and `charpaper_pack` builds
   the file as Blender's exporter would. Materials, textures and images still come from
   Blender's exporter, run on one stand-in triangle per material slot, so they come out exactly
-  as before. A file with
-  something this doesn't cover, such as vertex colors, a curve or text object, instancing, a
-  vertex with no weight on any bone, or a light shining through its nodes, is written by
-  Blender's exporter as before, and the console says why. So is a moving camera with *Force
-  sampling* off, whose keys Blender's exporter writes as they are.
+  as before. Collection instances are written too, each instance's objects under its
+  instancer, as are vertices on no bone, which go to a neutral bone as in Blender's files. A
+  file with something this doesn't cover, such as vertex colors, a curve or text object,
+  particles or other instancing, a collection instanced inside an instanced collection, or a
+  light shining through its nodes, is written by Blender's exporter as before, and the
+  console says why. So is a moving camera with *Force sampling* off, whose keys Blender's
+  exporter writes as they are.
 - Each export prints how long each part took to the system console.
 
 ## What goes where
