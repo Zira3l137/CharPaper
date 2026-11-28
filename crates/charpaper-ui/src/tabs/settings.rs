@@ -795,7 +795,7 @@ fn show_on(screen: &mut ScreenSettings, monitors: &Monitors, id: &str, stage: Op
     if let Some(stage) = stage {
         let name = monitors.get(id).map(|m| m.name.clone());
         let name =
-            name.or_else(|| screen.monitors.iter().find(|c| &c.id == id).map(|c| c.name.clone()));
+            name.or_else(|| screen.monitors.iter().find(|c| c.id == id).map(|c| c.name.clone()));
         picked.push(ChosenMonitor { id: id.to_string(), name: name.unwrap_or_default(), stage });
     }
     screen.monitors = picked;

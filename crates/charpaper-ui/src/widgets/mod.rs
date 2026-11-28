@@ -40,23 +40,9 @@ fn control(builder: ButtonBuilder, size: FontSize) -> ButtonBuilder {
 }
 
 // Left unbuilt, so the caller can restyle it before `build`.
-pub(crate) fn button(text: &str) -> ButtonBuilder {
-    control(ButtonBuilder::new(text), CONTROL_SIZE)
-        .node(|n| n.padding = UiRect::horizontal(Val::Px(14.0)))
-}
-
 pub(crate) fn translated_button(text: Tr) -> ButtonBuilder {
     control(ButtonBuilder::translated(text), CONTROL_SIZE)
         .node(|n| n.padding = UiRect::horizontal(Val::Px(14.0)))
-}
-
-pub(crate) fn icon_button(icon: Icon, action: impl Bundle) -> impl Bundle {
-    control(ButtonBuilder::icon(icon), ICON_SIZE)
-        .node(|n| {
-            n.width = CONTROL_HEIGHT;
-            n.flex_shrink = 0.0;
-        })
-        .build(action)
 }
 
 // A pill with a knob that sits left while off, and right on the accent while on. `paint_switch`
