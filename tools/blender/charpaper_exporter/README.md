@@ -81,6 +81,9 @@ every .blend on the computer.
   light shining through its nodes, is written by Blender's exporter as before, and the
   console says why. So is a moving camera with *Force sampling* off, whose keys Blender's
   exporter writes as they are.
+- Images Blender's exporter encodes, a PNG written as JPEG or a roughness map packed into
+  glTF's metallic-roughness image, are kept for the session: the next export takes them from
+  memory unless their image changed. An image painted and not saved is encoded each time.
 - Each export prints how long each part took to the system console.
 
 ## What goes where

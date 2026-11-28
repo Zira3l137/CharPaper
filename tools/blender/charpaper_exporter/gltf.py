@@ -1,5 +1,7 @@
 import bpy
 
+from . import image_cache
+
 # Settings CharPaper depends on. The rest come from the panel's glTF settings.
 LOCKED = {
     "export_yup": True,
@@ -68,5 +70,6 @@ def export(filepath, options):
             skipped.append(f"{key}={value}")
         else:
             kwargs[key] = value
-    bpy.ops.export_scene.gltf(filepath=filepath, **kwargs)
+    with image_cache.caching():
+        bpy.ops.export_scene.gltf(filepath=filepath, **kwargs)
     return skipped
