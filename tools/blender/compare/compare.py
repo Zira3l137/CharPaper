@@ -19,14 +19,29 @@ class Glb:
         rest = data[20 + length:]
         self.blob = rest[8:8 + struct.unpack_from("<I", rest, 0)[0]] if rest else b""
 
+    def _read(self, view, offset, count, component):
+        view = self.doc["bufferViews"][view]
+        start = view.get("byteOffset", 0) + offset
+        return struct.unpack_from(f"<{count}{_FORMAT[component]}", self.blob, start)
+
     def accessor(self, index):
         accessor = self.doc["accessors"][index]
-        view = self.doc["bufferViews"][accessor["bufferView"]]
         width = _WIDTH[accessor["type"]]
-        start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
         count = accessor["count"] * width
-        values = struct.unpack_from(f"<{count}{_FORMAT[accessor['componentType']]}", self.blob, start)
-        return [values[k:k + width] for k in range(0, len(values), width)]
+        component = accessor["componentType"]
+        if "bufferView" in accessor:
+            values = list(self._read(accessor["bufferView"], accessor.get("byteOffset", 0), count, component))
+        else:
+            # No view: zeros, and Blender writes shape key deltas so when they're mostly still.
+            values = [0.0] * count
+        sparse = accessor.get("sparse")
+        if sparse:
+            at, held = sparse["indices"], sparse["values"]
+            where = self._read(at["bufferView"], at.get("byteOffset", 0), sparse["count"], at["componentType"])
+            moved = self._read(held["bufferView"], held.get("byteOffset", 0), sparse["count"] * width, component)
+            for i, vertex in enumerate(where):
+                values[vertex * width:(vertex + 1) * width] = moved[i * width:(i + 1) * width]
+        return [tuple(values[k:k + width]) for k in range(0, len(values), width)]
 
     def name(self, node):
         return self.doc["nodes"][node]["name"]
@@ -123,13 +138,19 @@ def clips(loose, pack, step=1):
 
 
 def _nodes(glb):
+    """Nodes by name, a list each: every instance of a collection makes nodes of one name."""
     parents = {c: i for i, n in enumerate(glb.doc["nodes"]) for c in n.get("children", [])}
     found = {}
     for i, node in enumerate(glb.doc["nodes"]):
         parent = glb.name(parents[i]) if i in parents else None
         trs = (node.get("translation", (0, 0, 0)), node.get("rotation", (0, 0, 0, 1)), node.get("scale", (1, 1, 1)))
-        found[node["name"]] = ((parent, "mesh" in node, "skin" in node), trs)
+        found.setdefault(node["name"], []).append(((parent, "mesh" in node, "skin" in node), trs))
     return found
+
+
+def _trs_gap(a, b):
+    (t1, r1, s1), (t2, r2, s2) = a, b
+    return max(_gap(t1, t2), _turn_gap(r1, r2), _gap(s1, s2))
 
 
 def _compare_nodes(report, theirs, ours):
@@ -141,10 +162,14 @@ def _compare_nodes(report, theirs, ours):
         if leaked:
             report.differs(f"{side} has stepped-aside objects", leaked, "")
     for name in set(a) & set(b):
-        report.same(f"node {name}", a[name][0], b[name][0])
-        (t1, r1, s1), (t2, r2, s2) = a[name][1], b[name][1]
-        if max(_gap(t1, t2), _turn_gap(r1, r2), _gap(s1, s2)) > CLOSE:
-            report.differs(f"node {name} transform", a[name][1], b[name][1])
+        report.same(f"node {name}", sorted(map(str, (n for n, _ in a[name]))), sorted(map(str, (n for n, _ in b[name]))))
+        left = list(b[name])
+        for node, trs in a[name]:
+            match = next((i for i, (n, t) in enumerate(left) if n == node and _trs_gap(trs, t) <= CLOSE), None)
+            if match is None:
+                report.differs(f"node {name} transform", (node, trs), "no node alike")
+                break
+            left.pop(match)
 
 
 def _lights_and_cameras(glb):
@@ -182,9 +207,11 @@ def _compare_skins(report, theirs, ours):
     skins = theirs.doc.get("skins", []), ours.doc.get("skins", [])
     report.same("skin count", len(skins[0]), len(skins[1]))
     for a, b in zip(*skins):
-        report.same(f"skin {a.get('name')} joints", [theirs.name(j) for j in a["joints"]], [ours.name(j) for j in b["joints"]])
-        binds = zip(theirs.accessor(a["inverseBindMatrices"]), ours.accessor(b["inverseBindMatrices"]))
-        if any(_gap(x, y) > CLOSE for x, y in binds):
+        # By name: their order means nothing, and newer exporters sort bones as the Outliner.
+        binds_a = dict(zip((theirs.name(j) for j in a["joints"]), theirs.accessor(a["inverseBindMatrices"])))
+        binds_b = dict(zip((ours.name(j) for j in b["joints"]), ours.accessor(b["inverseBindMatrices"])))
+        report.same(f"skin {a.get('name')} joints", sorted(binds_a), sorted(binds_b))
+        if any(_gap(binds_a[j], binds_b[j]) > CLOSE for j in set(binds_a) & set(binds_b)):
             report.differs(f"skin {a.get('name')} inverse binds", "", "")
 
 

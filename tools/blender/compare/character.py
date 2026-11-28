@@ -1,15 +1,17 @@
 """Builds a test character in an empty scene, with something of everything a packed export
 writes itself: a ~90-bone rig with bones that don't deform, two skinned bodies with shape keys,
-one smoothed by a modifier on top of its armature, two material slots, a hat on a bone with an
+one smoothed by a modifier on top of its armature, a cape half on no bone, two material slots, a hat on a bone with an
 empty on it, clips, an environment with props moving under one another, lights of every kind,
-a small rig holding a lantern and a lamp on its bones, a still camera, and a moving one on a
-rail that cuts from one shot to the next, with a focus object moving too."""
+a small rig holding a lantern and a lamp on its bones, a collection of shrubs instanced about
+the room, a still camera, and a moving one on a rail that cuts from one shot to the next, with
+a focus object moving too."""
 
 import math
 import os
 import random
 
 import bpy
+from charpaper_exporter import anim
 from mathutils import Matrix
 
 CLIPS = 6
@@ -50,6 +52,16 @@ def build(folder, textures):
     for polygon in body.data.polygons:
         if abs(polygon.center.z - 1.1) < 0.05:
             polygon.material_index = 1
+    # A cape with its lower half on no bone: the exporter adds a neutral bone for those.
+    bpy.ops.mesh.primitive_grid_add(x_subdivisions=4, y_subdivisions=6, size=0.5, location=(0, 0.3, 1.2))
+    cape = _move_to(bpy.context.active_object, "Cape", casual)
+    cape.rotation_euler.x = math.pi / 2
+    cape.data.materials.append(_textured("CapeCloth", 64, textures))
+    cape.parent = rig
+    cape.modifiers.new("Armature", "ARMATURE").object = rig
+    upper = cape.vertex_groups.new(name="Spine3")
+    upper.add([v.index for v in cape.data.vertices if v.co.y > 0], 1.0, "REPLACE")
+
     body = formal.objects["FormalBody"]
     bpy.context.view_layer.objects.active = body
     bpy.ops.object.shape_key_remove(all=True, apply_mix=False)
@@ -208,6 +220,7 @@ def _room(scene, textures):
 
     _lights(room)
     _crane(scene, room)
+    _shrubs(scene, room, material)
     return room
 
 
@@ -227,6 +240,18 @@ def _lights(room):
     lamp("Cone", "SPOT", (-1, 1, 3), energy=500.0, spot_size=0.9, spot_blend=0.3)
     lamp("Sun", "SUN", (0, 0, 5), energy=3.0)
     lamp("Panel", "AREA", (1, -1, 3), energy=100.0)
+    # What newer Blenders read into a light, where they have it: exposure, a light that isn't
+    # normalized so its size counts, and a temperature, from 5.1 when the exporter gets it right.
+    glow = lamp("Ember", "POINT", (-2, -1, 1), energy=80.0, shadow_soft_size=0.3)
+    for key, value in (("exposure", 1.5), ("normalize", False)):
+        if hasattr(glow.data, key):
+            setattr(glow.data, key, value)
+    if hasattr(glow.data, "use_temperature") and bpy.app.version >= (5, 1):
+        glow.data.use_temperature, glow.data.temperature = True, 3200.0
+    # Two lamps sharing one light, one scaled.
+    twin = bpy.data.objects.new("EmberTwin", glow.data)
+    room.objects.link(twin)
+    twin.location, twin.scale = (-3, -1, 1), (2.0, 2.0, 2.0)
 
 
 def _crane(scene, room):
@@ -259,6 +284,33 @@ def _crane(scene, room):
     glow.parent, glow.location = beam, (0, 0, -0.4)
 
 
+def _shrubs(scene, room, material):
+    # Kept out of the view layer, as a collection made to be instanced usually is.
+    shrub = bpy.data.collections.new("Shrub")
+    scene.collection.children.link(shrub)
+    bpy.context.view_layer.layer_collection.children["Shrub"].exclude = True
+    bpy.ops.mesh.primitive_cone_add(radius1=0.3, depth=0.6, location=(5, 5, 0.3))
+    leaves = _move_to(bpy.context.active_object, "ShrubLeaves", shrub)
+    leaves.data.materials.append(material)
+    tip = bpy.data.objects.new("ShrubTip", None)
+    shrub.objects.link(tip)
+    tip.parent, tip.location = leaves, (0, 0, 0.4)
+    shrub.instance_offset = (5.0, 5.0, 0.1)
+    places = (
+        ("ShrubA", None, (1, 3, 0), 0.0, 1.0),
+        ("ShrubB", "Box0", (0.5, 0, 0.6), 0.7, 0.5),
+        ("ShrubC", "Pivot", (0, 1, 0), 1.2, 1.5),
+    )
+    for name, parent, location, turn, size in places:
+        instancer = bpy.data.objects.new(name, None)
+        room.objects.link(instancer)
+        instancer.instance_type, instancer.instance_collection = "COLLECTION", shrub
+        if parent:
+            instancer.parent = bpy.data.objects[parent]
+        instancer.location, instancer.rotation_euler.z = location, turn
+        instancer.scale = (size, size, size)
+
+
 def _cameras(scene):
     still = bpy.data.objects.new("Still", bpy.data.cameras.new("Still"))
     scene.collection.objects.link(still)
@@ -279,7 +331,7 @@ def _cameras(scene):
     for frame, x in ((1, 0.0), (60, 2.0), (FRAMES, 2.5)):
         dolly.location.x = x
         dolly.keyframe_insert("location", frame=frame)
-    for curve in shot.fcurves:
+    for curve in anim.fcurves(shot, getattr(dolly.animation_data, "action_slot", None)):
         if curve.data_path == "location":
             for point in curve.keyframe_points:
                 point.interpolation = "CONSTANT"
