@@ -1,5 +1,6 @@
 """Exports a test character loose, through Blender's glTF exporter, and packed, through
-charpaper_pack, then compares every model, skin and clip file between the two. Run it with
+charpaper_pack, then compares every model, skin, environment, camera and clip file between the
+two. Run it with
 the Blender the add-on is for, with charpaper_pack installed in Blender's Python:
 
     blender -b --factory-startup --python tools/blender/compare/run.py -- <work folder>
@@ -65,7 +66,8 @@ def main(work):
         export(blend, loose, True, settings)
         export(blend, packed, False, settings)
         pack = suite_files.native.Pack(os.path.join(packed, suite_files.native.PACK_FILE))
-        scenes = ["model.glb"] + sorted(p for p in pack.files_in("skins") if p.endswith(".glb"))
+        scenes = ["model.glb", "environment/Room.glb"]
+        scenes += sorted(p for f in ("skins", "cameras") for p in pack.files_in(f) if p.endswith(".glb"))
         for path in scenes:
             problems += compare.scene(loose, pack, path)
         problems += compare.clips(loose, pack, settings.get("frame_step", 1))

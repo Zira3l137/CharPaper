@@ -99,9 +99,14 @@ def clips(loose, pack, step=1):
         for node in meta["nodes"]:
             for prop in worst:
                 a, b = theirs.get((node, prop)), ours.get((node, prop))
-                if a is None or b is None:
-                    report.differs(f"{glb_path} {node} {prop}", a is not None, b is not None)
+                if a is None and b is None:
                     continue
+                if a is None or b is None:
+                    report.differs(f"{glb_path} {node} {prop} is there", a is not None, b is not None)
+                    continue
+                # Keys held still may be written either way, two of them.
+                if len(a[0]) > 2 and len(b[0]) > 2:
+                    report.same(f"{glb_path} {node} {prop} interpolation", a[2], b[2])
                 gap = _turn_gap if prop == "rotation" else _gap
                 for i in range(0, meta["frames"], step):
                     t = i / meta["fps"]
@@ -135,6 +140,37 @@ def _compare_nodes(report, theirs, ours):
         (t1, r1, s1), (t2, r2, s2) = a[name][1], b[name][1]
         if max(_gap(t1, t2), _turn_gap(r1, r2), _gap(s1, s2)) > CLOSE:
             report.differs(f"node {name} transform", a[name][1], b[name][1])
+
+
+def _lights_and_cameras(glb):
+    lights = glb.doc.get("extensions", {}).get("KHR_lights_punctual", {}).get("lights", [])
+    found = {}
+    for node in glb.doc["nodes"]:
+        light = node.get("extensions", {}).get("KHR_lights_punctual", {}).get("light")
+        if light is not None:
+            found[node["name"]] = ("light", lights[light])
+        if "camera" in node:
+            found[node["name"]] = ("camera", glb.doc["cameras"][node["camera"]])
+    return found
+
+
+def _numbers_close(a, b):
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_numbers_close(a[k], b[k]) for k in a)
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(a - b) <= CLOSE * max(1.0, abs(a))
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(_numbers_close(x, y) for x, y in zip(a, b))
+    return a == b
+
+
+def _compare_lights_and_cameras(report, theirs, ours):
+    a, b = _lights_and_cameras(theirs), _lights_and_cameras(ours)
+    report.same("nodes with lights and cameras", sorted(a), sorted(b))
+    for name in set(a) & set(b):
+        if not _numbers_close(a[name], b[name]):
+            report.differs(f"{name}'s {a[name][0]}", a[name][1], b[name][1])
+    report.same("extensions used", sorted(theirs.doc.get("extensionsUsed", [])), sorted(ours.doc.get("extensionsUsed", [])))
 
 
 def _compare_skins(report, theirs, ours):
@@ -244,8 +280,9 @@ def _materials(glb):
 
 
 def scene(loose, pack, path):
-    """A model or skin against Blender's: nodes, skins, meshes vertex by vertex and triangle by
-    triangle, shape keys, materials with their images, and the extensions used."""
+    """A model, skin, environment or camera file against Blender's: nodes, skins, meshes
+    vertex by vertex and triangle by triangle, shape keys, lights, cameras, materials with their
+    images, and the extensions used. What moves in a camera file is for `clips` to compare."""
     report = Report(path)
     with open(f"{loose}/{path}", "rb") as file:
         theirs = Glb(file.read())
@@ -253,7 +290,7 @@ def scene(loose, pack, path):
     _compare_nodes(report, theirs, ours)
     _compare_skins(report, theirs, ours)
     _compare_meshes(report, theirs, ours)
+    _compare_lights_and_cameras(report, theirs, ours)
     report.same("materials", _materials(theirs), _materials(ours))
-    report.same("extensions", theirs.doc.get("extensionsUsed"), ours.doc.get("extensionsUsed"))
     print(f"{path}: {report.problems} problems")
     return report.problems
