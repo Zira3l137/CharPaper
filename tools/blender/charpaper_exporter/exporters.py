@@ -201,7 +201,10 @@ def _environment_scene(context, suite, entry, files):
             lamps[actor.obj] = base
     with isolated(context) as iso, animated.stills(objects):
         for obj in objects:
-            copy = iso.add(obj, own_mesh=_shape_keyed(obj), own_light=True, keep_drivers=True)
+            # Shared: of all the exports, this one may hold thousands of objects.
+            copy = iso.add(
+                obj, own_mesh=_shape_keyed(obj), own_light=True, keep_drivers=True, share=True
+            )
             if copy.type == "LIGHT":
                 copy.data.animation_data_clear()
                 if obj in lamps:

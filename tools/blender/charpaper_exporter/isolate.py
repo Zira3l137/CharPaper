@@ -11,6 +11,10 @@ from mathutils import Matrix
 # glTF names nodes after objects, and the app matches files to each other by those names,
 # so a copy must carry its original's exact name. The original steps aside under a
 # temporary name for the duration of the export.
+#
+# Copying, renaming and removing an object each walk Blender's name-sorted list of objects, so
+# copying thousands, a scattered field of grass, takes minutes. An object the copy would leave
+# unchanged can go into the scene itself instead, as an object can be in two scenes.
 
 
 class Isolation:
@@ -32,6 +36,8 @@ class Isolation:
         self._renamed = []
         self._bridges = {}
         self._finished = False
+        # How each shared object would have been copied, should finish() find it must be.
+        self._shared = {}
 
     def _step_aside(self, block):
         name = block.name
@@ -39,12 +45,25 @@ class Isolation:
         self._renamed.append((block, name))
         return name
 
-    def add(self, obj, own_mesh=False, own_light=False, keep_drivers=False):
+    def add(self, obj, own_mesh=False, own_light=False, keep_drivers=False, share=False):
         """Copies the object into the scene, without its actions and NLA tracks. An export that
         wants them adds tracks to the copy. Drivers go too, unless kept: a driven bone or shape
-        key then still moves when the exporter samples the animation."""
+        key then still moves when the exporter samples the animation.
+
+        With `share`, an object with nothing to strip and no data of its own to get goes into
+        the scene itself, unless finish() finds it under a copied parent or following a copied
+        target. The caller then gets the user's own object, and must not change it."""
         if obj in self.copies:
             return self.copies[obj]
+        owns = (own_mesh and obj.type == "MESH") or (own_light and obj.type == "LIGHT")
+        if share and not owns and not _moves(obj):
+            self.scene.collection.objects.link(obj)
+            self.copies[obj] = obj
+            self._shared[obj] = (own_mesh, own_light, keep_drivers)
+            return obj
+        return self._copy(obj, own_mesh, own_light, keep_drivers)
+
+    def _copy(self, obj, own_mesh, own_light, keep_drivers):
         name = self._step_aside(obj)
         copy = obj.copy()
         copy.name = name
@@ -119,7 +138,10 @@ class Isolation:
         # glTF keeps the scene's name, and a random one would make every export a new file,
         # which a pack would compress again and the app would take new outfit pictures of.
         self.scene.name = "CharPaper export"
+        self._copy_what_must_be()
         for original, copy in self.copies.items():
+            if copy is original:
+                continue
             parent = original.parent
             if parent is not None and parent not in self.copies:
                 copy.parent = None
@@ -138,7 +160,9 @@ class Isolation:
                 for bone in copy.pose.bones:
                     for constraint in bone.constraints:
                         self._retarget(constraint)
-        for copy in list(self.copies.values()):
+        for original, copy in list(self.copies.items()):
+            if copy is original:
+                continue
             parent = copy.parent
             if parent is not None and parent.type in {"CAMERA", "LIGHT"} and _animated(copy):
                 self._bridge(copy)
@@ -160,6 +184,35 @@ class Isolation:
         copy.parent = bridge
         copy.matrix_parent_inverse = inverse
 
+    def _copy_what_must_be(self):
+        # Copying one shared object can leave another under a copy, so until none is left.
+        while True:
+            # obj.children would look through every object in the file for each object.
+            children = {}
+            for obj in bpy.data.objects:
+                if obj.parent in self._shared:
+                    children.setdefault(obj.parent, []).append(obj)
+            found = [obj for obj in self._shared if self._must_copy(obj, children.get(obj, ()))]
+            if not found:
+                return
+            for obj in found:
+                self.scene.collection.objects.unlink(obj)
+                del self.copies[obj]
+                self._copy(obj, *self._shared.pop(obj))
+
+    def _must_copy(self, obj, children):
+        parent = obj.parent
+        if parent is not None and self.copies.get(parent) is not parent:
+            return True
+        # The exporters take an object's children from the whole file, not the scene: a child
+        # left out, or stepped aside for its copy, would come along under a shared object.
+        if any(self.copies.get(child) is not child for child in children):
+            return True
+        holders = [*obj.modifiers, *obj.constraints]
+        if obj.pose:
+            holders += [c for bone in obj.pose.bones for c in bone.constraints]
+        return any(self.copies.get(t, t) is not t for h in holders for t in _targets(h))
+
     def _retarget(self, holder):
         for attr in ("object", "target"):
             target = getattr(holder, attr, None)
@@ -173,18 +226,36 @@ class Isolation:
                 target.target = self.copies[target.target]
 
     def close(self):
-        for copy in [*self.copies.values(), *self._bridges.values()]:
-            bpy.data.objects.remove(copy, do_unlink=True)
-        for data in self._data.values():
-            if data.users == 0:
-                blocks = bpy.data.lights if isinstance(data, bpy.types.Light) else bpy.data.meshes
-                blocks.remove(data)
+        # In one pass: removing objects one at a time looks through the whole file for each.
+        copies = [copy for original, copy in self.copies.items() if copy is not original]
+        bpy.data.batch_remove([*copies, *self._bridges.values()])
+        bpy.data.batch_remove([data for data in self._data.values() if data.users == 0])
         bpy.data.scenes.remove(self.scene)
         for block, name in reversed(self._renamed):
             block.name = name
         self.copies.clear()
         self._data.clear()
         self._bridges.clear()
+        self._shared.clear()
+
+
+def _targets(holder):
+    """The objects a modifier or constraint follows."""
+    for attr in ("object", "target"):
+        target = getattr(holder, attr, None)
+        if isinstance(target, bpy.types.Object):
+            yield target
+    for target in getattr(holder, "targets", ()):
+        if isinstance(getattr(target, "target", None), bpy.types.Object):
+            yield target.target
+
+
+def _moves(obj):
+    # Anything a copy would have stripped: actions, NLA tracks or drivers.
+    data = obj.animation_data
+    return data is not None and (
+        data.action is not None or len(data.nla_tracks) > 0 or len(data.drivers) > 0
+    )
 
 
 def _animated(obj):

@@ -209,6 +209,11 @@ class _Tree:
                 raise Unsupported(f"{obj.name} is a {obj.type.lower()}")
             if obj.instance_type != "NONE":
                 raise Unsupported(f"{obj.name} instances something")
+        # Blender's obj.children looks through every object in the file for each call.
+        self.children_of = {}
+        for obj in bpy.data.objects:
+            if obj.parent is not None:
+                self.children_of.setdefault(obj.parent, []).append(obj)
         in_scene = set(objects)
         roots = [o for o in objects if o.parent not in in_scene]
         self.roots = [self._add_object(o, None).index for o in roots]
@@ -254,7 +259,7 @@ class _Tree:
             node.world = node.world @ self._turn(obj)
         if obj.type == "ARMATURE":
             self._add_bones(obj, node)
-        for child in sorted(obj.children, key=lambda c: c.name):
+        for child in sorted(self.children_of.get(obj, ()), key=lambda c: c.name):
             if child.parent_type == "BONE":
                 holder = self.bone_nodes.get((obj, child.parent_bone))
                 if holder is None:
