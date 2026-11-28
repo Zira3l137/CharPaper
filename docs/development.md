@@ -81,6 +81,36 @@ python -m unittest discover crates/charpaper-py/tests
   `packaging/addon_zips.py` puts each in its own add-on zip.
 - On Windows the rest of the workspace builds without Python installed. On Linux,
   `cargo build` needs a Python 3.11 or newer to link this crate against.
+
+### Working on the add-on from a checkout
+
+Link the add-on's folder into Blender's user extensions, so Blender loads it straight from
+the checkout and every change shows after a restart. On Windows, from the repository root,
+with Blender closed and the add-on not installed from a zip:
+
+```
+cmd /c mklink /J "%APPDATA%\Blender Foundation\Blender\4.2\extensions\user_default\charpaper_exporter" tools\blender\charpaper_exporter
+```
+
+On Linux the folder is `~/.config/blender/4.2/extensions/user_default/`, on macOS
+`~/Library/Application Support/Blender/4.2/extensions/user_default/`, and `ln -s` links it.
+Then enable *CharPaper Exporter* in *Edit > Preferences > Add-ons*.
+
+The link brings the Python files only. Blender installs `charpaper_pack` with the add-on only
+from a zip that carries its wheel, so install the module into Blender's own Python yourself,
+and again after every change to `charpaper-py`, `charpaper-gltf` or `charpaper-pack`:
+
+```
+maturin build -m crates/charpaper-py/Cargo.toml --out dist
+"<blender>/4.2/python/bin/python" -m pip install --force-reinstall --no-deps dist/charpaper_pack-<version>-*.whl
+```
+
+- Close Blender first: on Windows it holds the module's file open, and pip can't replace it.
+- Blender in Program Files needs an administrator's terminal for the second line.
+- Each Blender version has its own Python and extensions folder: do both for each you test.
+- The panel shows *Export unpacked* once Blender finds the module, and says it isn't
+  installed when it doesn't.
+
 ### Checking packed exports against Blender's
 
 A packed export writes the model, skins and clips with `charpaper_pack` instead of Blender's
@@ -94,10 +124,10 @@ vertex by vertex and frame by frame:
 blender -b --factory-startup --python tools/blender/compare/run.py -- <work folder>
 ```
 
-Blender's Python needs `charpaper_pack` for this. Install the wheel into it with
-`<blender>/<version>/python/bin/python -m pip install dist/charpaper_pack-*.whl`, or run the
-script with the [bpy module](https://pypi.org/project/bpy/) from PyPI in a virtual environment
-that has the wheel. It takes about 20 seconds and prints each difference it finds, if any.
+Blender's Python needs `charpaper_pack` for this, installed as
+[above](#working-on-the-add-on-from-a-checkout), or run the script with the
+[bpy module](https://pypi.org/project/bpy/) from PyPI in a virtual environment that has the
+wheel. It takes about 20 seconds and prints each difference it finds, if any.
 Run it after changing `charpaper-gltf`, `gltf_write.py` or `clips.py`, and with each Blender
 version the add-on supports.
 
