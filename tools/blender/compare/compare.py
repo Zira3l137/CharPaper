@@ -135,6 +135,11 @@ def _nodes(glb):
 def _compare_nodes(report, theirs, ours):
     a, b = _nodes(theirs), _nodes(ours)
     report.same("node names", sorted(a), sorted(b))
+    # An object stepped aside for its copy, which leaked into the file under a temporary name.
+    for side, nodes in (("Blender's", a), ("ours", b)):
+        leaked = [name for name in nodes if name.startswith("charpaper~")]
+        if leaked:
+            report.differs(f"{side} has stepped-aside objects", leaked, "")
     for name in set(a) & set(b):
         report.same(f"node {name}", a[name][0], b[name][0])
         (t1, r1, s1), (t2, r2, s2) = a[name][1], b[name][1]
