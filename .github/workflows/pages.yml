@@ -4,7 +4,8 @@ name: Website
 # starts this workflow when it is done. The folder is the website as it is served, apart from
 # the stable download links, which are pointed at the latest release here, and the Blender
 # extensions listing for the latest add-on, written here as blender/index.json: Blender installs
-# an add-on dragged in from the page only from a repository listing it, and offers its updates.
+# an add-on dragged in from the page only from a repository listing it, and offers its updates,
+# each system the zip made for it.
 
 on:
   push:
@@ -41,8 +42,11 @@ jobs:
       # release yet, they stay on the releases page. Pre-releases are never "latest".
       #
       # A link marked data-blender also carries the listing's address and the Blender versions
-      # the add-on fits, which Blender reads from a link dropped into it. Without the add-on in
-      # the release, it stays a plain download.
+      # and platform the add-on fits, which Blender reads from a link dropped into it. It links
+      # the Windows zip, the app's own system; the others are on the release page and in
+      # Blender's list once the repository is added. A release from before the zips were made
+      # one for each platform has a single zip, which the link names instead. Without the
+      # add-on in the release, it stays a plain download.
       - name: Point the stable downloads at the latest release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,23 +55,33 @@ jobs:
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || true)
           echo "latest release: ${tag:-none}"
           if [[ -z $tag ]]; then exit 0; fi
-          addon="charpaper_exporter-$tag.zip"
+          zips="$RUNNER_TEMP/addon"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir "$zips" \
+            --pattern "charpaper_exporter-$tag-*.zip" --pattern "charpaper_exporter-$tag.zip" || true
+          linked="charpaper_exporter-$tag-windows-x64.zip"
+          if [[ ! -f $zips/$linked ]]; then linked="charpaper_exporter-$tag.zip"; fi
           query=""
-          if gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$addon" --dir "$RUNNER_TEMP"; then
-            query=$(python3 packaging/blender_listing.py "$RUNNER_TEMP/$addon" \
-              "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$addon" \
-              "$SITE/blender/index.json" site/blender/index.json)
-            echo "blender listing: $SITE/blender/index.json"
+          if [[ -f $zips/$linked ]]; then
+            others=()
+            for zip in "$zips"/charpaper_exporter-"$tag"-*.zip; do
+              if [[ -f $zip && $zip != "$zips/$linked" ]]; then others+=("$zip"); fi
+            done
+            query=$(python3 packaging/blender_listing.py \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag" \
+              "$SITE/blender/index.json" site/blender/index.json "$zips/$linked" "${others[@]}")
+            echo "blender listing: $SITE/blender/index.json, linking $linked"
           else
-            echo "::warning::$tag has no $addon: the add-on link stays a plain download"
+            echo "::warning::$tag has no add-on zips: the add-on link stays a plain download"
+            linked=""
           fi
-          TAG=$tag QUERY=$query python3 - site/index.html:Version site/ru/index.html:Версия <<'EOF'
+          TAG=$tag QUERY=$query LINKED=$linked python3 - site/index.html:Version site/ru/index.html:Версия <<'EOF'
           import os, re, sys
-          tag, query = os.environ["TAG"], os.environ["QUERY"]
+          tag, query, linked = os.environ["TAG"], os.environ["QUERY"], os.environ["LINKED"]
           base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
 
           def link(m):
-              url = f"{base}/{m[1].replace('{tag}', tag)}"
+              asset = linked if m[2] and linked else m[1].replace("{tag}", tag)
+              url = f"{base}/{asset}"
               if m[2] and query:
                   url += "?" + query.replace("&", "&amp;")
               return f'href="{url}" data-asset="{m[1]}"{m[2] or ""}'

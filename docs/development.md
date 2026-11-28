@@ -60,7 +60,8 @@ The add-on packs suites and bakes skies through `charpaper_pack`, a Python modul
 in Rust, in [`crates/charpaper-py`](../crates/charpaper-py), so it runs the app's own code
 for both. A packed export also writes its model, skin, environment, camera and clip files
 through it, with [`crates/charpaper-gltf`](../crates/charpaper-gltf), which is much faster
-than Blender's glTF exporter. It's built as a wheel with [maturin](https://www.maturin.rs), 1.9.4 or newer:
+than Blender's glTF exporter. It's built as a wheel with [maturin](https://www.maturin.rs),
+1.9.4 or newer:
 
 ```
 pip install maturin
@@ -75,6 +76,9 @@ python -m unittest discover crates/charpaper-py/tests
   Python exception instead of closing Blender.
 - [`charpaper_pack.pyi`](../crates/charpaper-py/charpaper_pack.pyi) describes everything
   the module offers, for editors and for reading.
+- The Build workflow makes and tests a wheel for each platform Blender runs on, Linux's in a
+  manylinux_2_28 container so it runs on every glibc Blender does, and
+  `packaging/addon_zips.py` puts each in its own add-on zip.
 - On Windows the rest of the workspace builds without Python installed. On Linux,
   `cargo build` needs a Python 3.11 or newer to link this crate against.
 ### Checking packed exports against Blender's

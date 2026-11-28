@@ -9,16 +9,25 @@ A Blender add-on (4.2 to 5.2) that exports a whole CharPaper character suite fro
 
 From the website: drag the add-on's *Latest version* link into Blender. The link names the
 website's extensions listing (`blender/index.json`, written by the Pages workflow from the
-release's zip with `packaging/blender_listing.py`), which Blender adds as a repository the
-first time; it then offers each new release as an update.
+release's zips with `packaging/blender_listing.py`), which Blender adds as a repository the
+first time; it then offers each new release as an update. The link is the Windows zip; on
+Linux or macOS, add the repository the same way, then install the add-on from *Get
+Extensions*, which picks the zip for your system.
 
-From disk: zip this folder's contents, with `blender_manifest.toml` at the zip's root, then
-in Blender: *Edit > Preferences > Get Extensions > ⌄ > Install from Disk…* and pick the zip.
-Or build the zip with Blender itself:
+From disk: download `charpaper_exporter-<version>-<your system>.zip` from the
+[Releases page](https://github.com/Zira3l137/CharPaper/releases), then in Blender:
+*Edit > Preferences > Get Extensions > ⌄ > Install from Disk…* and pick the zip.
+
+Each zip carries the add-on's Python module, `charpaper_pack`, as a wheel for its system,
+which Blender installs with it. To make zips from a checkout, build the wheel (see
+[docs/development.md](../../../docs/development.md)) and run:
 
 ```
-blender --command extension build --source-dir tools/blender/charpaper_exporter
+python packaging/addon_zips.py <label> <folder with the wheels> <out folder>
 ```
+
+It writes one zip for each wheel in the folder. Without the module the add-on still exports
+unpacked suites, but refuses to export or change a packed one.
 
 The panel is in the 3D Viewport sidebar (N), tab **CharPaper**. Everything you set there is
 saved in the `.blend`, except **CharPaper app**, which is an add-on preference and shared by
@@ -63,8 +72,9 @@ every .blend on the computer.
 - The model, skins, environments and cameras are written the same way: the add-on reads each
   mesh with its modifiers applied (Armature modifiers left to the app), its vertex groups and
   shape keys, each light and camera, and a moving camera's motion, and `charpaper_pack` builds
-  the file as Blender's exporter would. Materials, textures and images still come from Blender's exporter, run on one
-  stand-in triangle per material slot, so they come out exactly as before. A file with
+  the file as Blender's exporter would. Materials, textures and images still come from
+  Blender's exporter, run on one stand-in triangle per material slot, so they come out exactly
+  as before. A file with
   something this doesn't cover, such as vertex colors, a curve or text object, instancing, a
   vertex with no weight on any bone, or a light shining through its nodes, is written by
   Blender's exporter as before, and the console says why. So is a moving camera with *Force

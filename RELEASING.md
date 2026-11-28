@@ -9,7 +9,10 @@ Two kinds of builds come out of GitHub Actions, both on the
 | Version | a tag like `v0.2.0` is pushed | `v0.2.0`, kept forever | commits since the previous version |
 
 Each one carries the app for every platform (`charpaper-<label>-windows-x64.zip`), the
-Blender add-on (`charpaper_exporter-<label>.zip`) and `SHA256SUMS.txt`.
+Blender add-on for every platform Blender runs on (`charpaper_exporter-<label>-windows-x64.zip`,
+`-linux-x64`, `-macos-arm64`, `-macos-x64`) and `SHA256SUMS.txt`. Each add-on zip carries
+its platform's `charpaper_pack` wheel, which Blender installs with it; the Build workflow
+builds and tests the wheels, then `packaging/addon_zips.py` puts one in each zip.
 
 The notes are written from commit messages, so they read only as well as the messages do.
 `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build` and `ci` each get a section;
