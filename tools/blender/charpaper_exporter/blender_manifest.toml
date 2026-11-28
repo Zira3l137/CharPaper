@@ -15,4 +15,5 @@ license = ["SPDX:GPL-3.0-or-later"]
 copyright = ["2026 Zirael"]
 
 [permissions]
-files = "Writes glTF files, sound files and suite.toml into the suite folder"
+# Blender refuses a reason longer than 64 characters.
+files = "Writes glTF, sound and suite files into the suite folder"
