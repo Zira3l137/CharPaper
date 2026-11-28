@@ -24,7 +24,6 @@ from . import cues
 from . import gltf
 from . import suite_files
 from .actors import TRANSFORM_PATH
-from .actors import shape_keys_of
 from .isolate import isolated
 from .isolate import showing
 from .props import file_stem

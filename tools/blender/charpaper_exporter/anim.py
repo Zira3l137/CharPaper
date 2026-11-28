@@ -1,7 +1,5 @@
 import re
 
-import bpy
-
 # Blender 4.4 moved F-curves into layered actions with slots, and 5.0 dropped the old
 # `Action.fcurves`. Everything here reads both shapes so the rest of the add-on never
 # has to care which Blender it runs in.
@@ -53,30 +51,6 @@ def is_armature_action(action):
 
 def is_shape_key_action(action):
     return bool(key_names(action))
-
-
-def armature_actions(armature):
-    bones = set(armature.data.bones.keys())
-    return [a for a in bpy.data.actions if bone_names(a) & bones]
-
-
-def shape_key_actions(meshes):
-    keys = set()
-    for mesh in meshes:
-        if mesh.data.shape_keys:
-            keys.update(mesh.data.shape_keys.key_blocks.keys())
-    return [a for a in bpy.data.actions if key_names(a) & keys]
-
-
-def shape_key_source(clip):
-    """Where a clip's hand-keyed shape keys come from: the action picked for them, or else the
-    clip's own action when it keys shape keys too, in a slot of their own (Blender 4.4 and
-    newer). None when the clip keys none."""
-    if clip.corrective is not None:
-        return clip.corrective
-    if clip.action is not None and key_names(clip.action):
-        return clip.action
-    return None
 
 
 def shape_keyed_skin_meshes(suite):

@@ -34,25 +34,6 @@ def markers(action):
     return list(getattr(action, "pose_markers", ()))
 
 
-def in_range(action):
-    """Splits an action's pose markers into those inside its frame range and the rest."""
-    start, end = action.frame_range
-    inside, outside = [], []
-    for marker in markers(action):
-        (inside if start <= marker.frame <= end else outside).append(marker)
-    return inside, outside
-
-
-def of(action, fps):
-    """(seconds from the clip's start, sound name) for each pose marker of the action.
-
-    The glTF exporter starts a clip at its action's first frame, so that frame is 0 here too.
-    """
-    start = action.frame_range[0]
-    inside, _ = in_range(action)
-    return sorted((round((m.frame - start) / fps, 4), sound_name(m.name)) for m in inside)
-
-
 def within(action, start, end, fps):
     """(seconds from `start`, sound name) for each pose marker of the action from frame `start`
     to `end`."""
